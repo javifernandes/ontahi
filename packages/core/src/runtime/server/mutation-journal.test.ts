@@ -8,6 +8,7 @@ import {
   relationship,
   relationshipSet,
   toGraphCommandRequest,
+  type CommittedMutation,
   type DataGraphTransactionCapability,
   type EntityMutationCommand,
   type EntityMutationDelta,
@@ -16,6 +17,7 @@ import {
   type RelationshipCommandResult,
 } from '../../data-graph/index.js';
 
+import { configureServerRuntime, resetServerRuntimeForTests } from './config.js';
 import {
   deferDataGraphPostCommitWork,
   withDataGraph,
@@ -27,7 +29,12 @@ import {
 } from './mutation-reaction.js';
 import type { GraphCommandableOntahiApplication } from './ontahi.js';
 import { runServerEffect } from './runtime-effect.js';
-import { getRequiredUnitOfWork } from './unit-of-work.js';
+import {
+  declareGraphMutation,
+  declareSelectionChange,
+  getRequiredUnitOfWork,
+  sealCurrentUnitOfWorkMutationJournal,
+} from './unit-of-work.js';
 
 import { entity, ontahi, relation } from './index.js';
 
@@ -100,6 +107,21 @@ const runWithRuntime = <TValue>(effect: Effect.Effect<TValue, unknown>): Promise
 const transaction = <TValue>(effect: Effect.Effect<TValue, unknown>) =>
   withDataGraphTransaction<TestTransactionRuntime, TValue, unknown>(effect);
 
+const recordedCommand = (mutation: CommittedMutation) =>
+  mutation.effect.kind === 'graph-command' ? mutation.effect.request.command : undefined;
+
+const runWithMutationBudget = async <TValue>(
+  budget: { maxEntries: number; maxBytes: number },
+  effect: Effect.Effect<TValue, unknown>,
+): Promise<TValue> => {
+  configureServerRuntime({ mutationJournal: budget });
+  try {
+    return await runWithRuntime(effect);
+  } finally {
+    resetServerRuntimeForTests();
+  }
+};
+
 describe('UnitOfWork mutation journal', () => {
   it('publishes a sealed child journal only after its transaction commits', async () => {
     const observed = await runWithRuntime(
@@ -117,7 +139,12 @@ describe('UnitOfWork mutation journal', () => {
     expect(observed.inside.mutations).toHaveLength(1);
     expect(observed.after).toMatchObject({
       precision: 'intensional',
-      mutations: [{ provenance: 'captured', command: { command: updateBook } }],
+      mutations: [
+        {
+          provenance: 'captured',
+          effect: { kind: 'graph-command', request: { command: updateBook } },
+        },
+      ],
     });
   });
 
@@ -198,13 +225,14 @@ describe('UnitOfWork mutation journal', () => {
     expect(observed.children).toEqual([1, 1]);
     expect(
       observed.mutations.mutations
-        .map(mutation =>
-          mutation.command.command.kind === 'entity-mutation-command' &&
-          mutation.command.command.action !== 'create' &&
-          'locator' in mutation.command.command.target
-            ? mutation.command.command.target.locator.id
-            : undefined,
-        )
+        .map(mutation => {
+          const command = recordedCommand(mutation);
+          return command?.kind === 'entity-mutation-command' &&
+            command.action !== 'create' &&
+            'locator' in command.target
+            ? command.target.locator.id
+            : undefined;
+        })
         .sort(),
     ).toEqual(['book-1', 'book-2']);
   });
@@ -227,8 +255,8 @@ describe('UnitOfWork mutation journal', () => {
     expect(
       snapshots.map(snapshot =>
         snapshot.mutations.map(mutation => {
-          const command = mutation.command.command;
-          return command.kind === 'entity-mutation-command' &&
+          const command = recordedCommand(mutation);
+          return command?.kind === 'entity-mutation-command' &&
             command.action !== 'create' &&
             'locator' in command.target
             ? command.target.locator.id
@@ -252,8 +280,8 @@ describe('UnitOfWork mutation journal', () => {
 
     expect(
       mutations.mutations.map(mutation => {
-        const command = mutation.command.command;
-        return command.kind === 'entity-mutation-command' &&
+        const command = recordedCommand(mutation);
+        return command?.kind === 'entity-mutation-command' &&
           command.action !== 'create' &&
           'locator' in command.target
           ? command.target.locator.id
@@ -290,7 +318,7 @@ describe('UnitOfWork mutation journal', () => {
       }),
     );
 
-    expect(mutations.mutations.map(mutation => mutation.command.command.kind)).toEqual([
+    expect(mutations.mutations.map(mutation => recordedCommand(mutation)?.kind)).toEqual([
       'entity-mutation-command',
       'relationship-command',
     ]);
@@ -338,7 +366,240 @@ describe('UnitOfWork mutation journal', () => {
     );
 
     expect(mutations.mutations).toHaveLength(1);
-    expect(mutations.mutations[0]?.command.command).toEqual(command);
+    expect(mutations.mutations[0] && recordedCommand(mutations.mutations[0])).toEqual(command);
+  });
+
+  it('declares one constant-size Graph Command for native bulk work', async () => {
+    const bulkCommand: EntityMutationCommand = {
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: 'TodoItem',
+      target: {
+        kind: 'selection',
+        entityName: 'TodoItem',
+        expression: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: 'createdOn',
+          value: '2026-10-08',
+        },
+      },
+      values: { completed: true },
+    };
+    const mutations = await runWithRuntime(
+      Effect.sync(() => {
+        declareGraphMutation(bulkCommand);
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations).toEqual({
+      precision: 'intensional',
+      mutations: [
+        {
+          effect: { kind: 'graph-command', request: toGraphCommandRequest(bulkCommand) },
+          provenance: 'declared',
+        },
+      ],
+    });
+  });
+
+  it('declares an honest non-executable Selection change and rolls it back transactionally', async () => {
+    const changed = {
+      kind: 'selection' as const,
+      entityName: 'TodoItem',
+      expression: {
+        kind: 'predicate' as const,
+        operator: 'eq' as const,
+        fieldName: 'listId',
+        value: 'later',
+      },
+    };
+    const observed = await runWithRuntime(
+      Effect.gen(function* () {
+        yield* transaction(
+          Effect.sync(() => declareSelectionChange(changed)).pipe(
+            Effect.zipRight(Effect.fail('rollback')),
+          ),
+        ).pipe(Effect.either);
+        const afterRollback = getRequiredUnitOfWork().mutations.snapshot();
+        declareSelectionChange(changed);
+        return { afterDeclaration: getRequiredUnitOfWork().mutations.snapshot(), afterRollback };
+      }),
+    );
+
+    expect(observed.afterRollback).toEqual({ mutations: [], precision: 'exact' });
+    expect(observed.afterDeclaration).toEqual({
+      precision: 'intensional',
+      mutations: [
+        { effect: { kind: 'selection-change', selection: changed }, provenance: 'declared' },
+      ],
+    });
+  });
+
+  it('deduplicates equal effects and retains their strongest provenance', async () => {
+    const mutations = await runWithRuntime(
+      Effect.gen(function* () {
+        declareGraphMutation(updateBook);
+        yield* capture();
+        declareGraphMutation(updateBook);
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations.mutations).toHaveLength(1);
+    expect(mutations.mutations[0]).toMatchObject({ provenance: 'captured' });
+  });
+
+  it('widens an over-budget command loop to one conservative Entity root', async () => {
+    const mutations = await runWithMutationBudget(
+      { maxEntries: 2, maxBytes: 4096 },
+      Effect.sync(() => {
+        for (const id of ['book-1', 'book-2', 'book-3', 'book-4']) {
+          declareGraphMutation({ ...updateBook, target: createEntityRef('Book', { id }) });
+        }
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations).toEqual({
+      precision: 'widened',
+      mutations: [
+        {
+          effect: {
+            kind: 'selection-change',
+            selection: { kind: 'selection', entityName: 'Book', expression: { kind: 'all' } },
+          },
+          provenance: 'conservative',
+        },
+      ],
+    });
+  });
+
+  it('widens an oversized command by bytes without retaining its large values', async () => {
+    const mutations = await runWithMutationBudget(
+      { maxEntries: 10, maxBytes: 300 },
+      Effect.sync(() => {
+        declareGraphMutation({ ...updateBook, values: { title: 'x'.repeat(2000) } });
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations.precision).toBe('widened');
+    expect(JSON.stringify(mutations)).not.toContain('x'.repeat(100));
+    expect(mutations.mutations[0]?.effect).toMatchObject({
+      kind: 'selection-change',
+      selection: { entityName: 'Book', expression: { kind: 'all' } },
+    });
+  });
+
+  it('widens relationship commands to both participating Entity roots', async () => {
+    const mutations = await runWithMutationBudget(
+      { maxEntries: 2, maxBytes: 4096 },
+      Effect.sync(() => {
+        for (const id of ['book-1', 'book-2', 'book-3']) {
+          declareGraphMutation({
+            kind: 'relationship-command',
+            action: 'link',
+            relation: {
+              sourceEntityName: 'Book',
+              fieldName: 'author',
+              targetEntityName: 'Author',
+            },
+            source: createEntityRef('Book', { id }),
+            target: createEntityRef('Author', { id: 'author-1' }),
+          });
+        }
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(
+      mutations.mutations.map(mutation =>
+        mutation.effect.kind === 'selection-change' ? mutation.effect.selection.entityName : null,
+      ),
+    ).toEqual(['Author', 'Book']);
+    expect(mutations.precision).toBe('widened');
+  });
+
+  it('merges a widened child set into its parent conservatively', async () => {
+    const mutations = await runWithMutationBudget(
+      { maxEntries: 2, maxBytes: 4096 },
+      Effect.gen(function* () {
+        declareGraphMutation({
+          ...updateBook,
+          entityName: 'Author',
+          target: createEntityRef('Author', { id: 'author-1' }),
+        });
+        yield* transaction(
+          Effect.sync(() => {
+            for (const id of ['book-1', 'book-2', 'book-3']) {
+              declareGraphMutation({ ...updateBook, target: createEntityRef('Book', { id }) });
+            }
+          }),
+        );
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations.precision).toBe('widened');
+    expect(
+      mutations.mutations.map(mutation =>
+        mutation.effect.kind === 'selection-change' ? mutation.effect.selection.entityName : null,
+      ),
+    ).toEqual(['Author', 'Book']);
+  });
+
+  it('falls back to a graph-wide change when conservative Entity roots exceed the budget', async () => {
+    const mutations = await runWithMutationBudget(
+      { maxEntries: 2, maxBytes: 4096 },
+      Effect.sync(() => {
+        for (const entityName of ['Book', 'Author', 'Publisher']) {
+          declareGraphMutation({
+            ...updateBook,
+            entityName,
+            target: createEntityRef(entityName, { id: 'one' }),
+          });
+        }
+        declareGraphMutation({
+          ...updateBook,
+          entityName: 'Store',
+          target: createEntityRef('Store', { id: 'one' }),
+        });
+        return getRequiredUnitOfWork().mutations.snapshot();
+      }),
+    );
+
+    expect(mutations).toEqual({
+      precision: 'widened',
+      mutations: [{ effect: { kind: 'graph-change' }, provenance: 'conservative' }],
+    });
+  });
+
+  it('rejects invalid journal budgets when opening a Unit of Work', async () => {
+    await expect(
+      runWithMutationBudget(
+        { maxEntries: 0, maxBytes: 4096 },
+        Effect.sync(() => getRequiredUnitOfWork()),
+      ),
+    ).rejects.toThrow('maxEntries');
+    await expect(
+      runWithMutationBudget(
+        { maxEntries: 2, maxBytes: 127 },
+        Effect.sync(() => getRequiredUnitOfWork()),
+      ),
+    ).rejects.toThrow('maxBytes');
+  });
+
+  it('does not accept declarations after the journal is sealed', async () => {
+    await expect(
+      runWithRuntime(
+        Effect.sync(() => {
+          sealCurrentUnitOfWorkMutationJournal();
+          declareGraphMutation(updateBook);
+        }),
+      ),
+    ).rejects.toThrow('already sealed');
   });
 
   it('captures every relationship command family dispatched through the Ontahi application', async () => {
@@ -416,7 +677,7 @@ describe('UnitOfWork mutation journal', () => {
 
     expect(mutations.mutations).toEqual(
       [authorCommand, tagCommand, orderedCommand].map(command => ({
-        command: toGraphCommandRequest(command),
+        effect: { kind: 'graph-command', request: toGraphCommandRequest(command) },
         provenance: 'captured',
       })),
     );
