@@ -17,6 +17,7 @@ Related plans:
 9. [153d. LangGraph Task Runtime Comparison](../current/153d-langgraph-task-runtime-comparison.md)
 10. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
 11. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
+12. [154d. Semantic Mutation Journal And Query Invalidation](../next/154d-semantic-mutation-journal-and-query-invalidation.md)
 
 ## Summary
 
@@ -1101,12 +1102,14 @@ first result should clarify identity and state ownership rather than maximize ag
 
 ## Candidate Follow-Up Plans
 
-These are anticipated slices, not created plans yet:
+The `154d` slice has been extracted into a concrete plan. The remaining entries are anticipated
+slices that have not been created yet:
 
 1. `154a`: semantic terms and Operation partial application;
 2. `154b`: typed-hole resolution and generic interaction projection;
 3. `154c`: open Graph Reads and Commands;
-4. `154d`: reactive program evaluation and dependency planning;
+4. [`154d`: semantic mutation journal, conservative dependency matching, and reactive
+   invalidation](../next/154d-semantic-mutation-journal-and-query-invalidation.md);
 5. `154e`: Event waits, reactions, and durable continuation semantics;
 6. `154f`: distributed evaluation and substitution routing;
 7. `154g`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
