@@ -65,6 +65,7 @@ import {
   type ContextualMutationReactionExecutorOptions,
 } from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
+import { recordAppliedGraphCommand } from './unit-of-work.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
 type RuntimeError<TRuntime> =
@@ -738,7 +739,10 @@ export const ontahi = <
           (
             runtime as unknown as RelationshipCommandExecutionRuntime<unknown>
           ).runRelationshipCommand(command),
-        );
+        ).then(result => {
+          if (result.status === 'applied') recordAppliedGraphCommand(command);
+          return result;
+        });
       },
       executeManyToMany: command => {
         const runtime = createDataGraphRuntime();
@@ -749,7 +753,10 @@ export const ontahi = <
           (
             runtime as unknown as ManyToManyRelationshipCommandExecutionRuntime<unknown>
           ).runManyToManyRelationshipCommand(command),
-        );
+        ).then(result => {
+          if (result.status === 'applied') recordAppliedGraphCommand(command);
+          return result;
+        });
       },
       executeOrdered: command => {
         const runtime = createDataGraphRuntime();
@@ -760,7 +767,10 @@ export const ontahi = <
           (
             runtime as unknown as OrderedRelationshipCommandExecutionRuntime<unknown>
           ).runOrderedRelationshipCommand(command),
-        );
+        ).then(result => {
+          if (result.status === 'applied') recordAppliedGraphCommand(command);
+          return result;
+        });
       },
       executeEntityMutation: command => {
         const runtime = createDataGraphRuntime();

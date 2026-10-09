@@ -138,6 +138,7 @@ export {
   withChildUnitOfWork,
   type ChildUnitOfWorkOptions,
   type UnitOfWork,
+  type UnitOfWorkMutationJournalApi,
   type UnitOfWorkRefResolutionApi,
   type UnitOfWorkRefResolutionOptions,
 } from './unit-of-work.js';

@@ -9,6 +9,7 @@ import {
   type AppliedRelationshipMutationResult,
   type InvokeOperationReactionIntent,
   type MutationReaction,
+  type MutationReactionResult,
   type RelationshipMutationResult,
 } from '../../data-graph/mutation-reaction.js';
 import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
@@ -20,6 +21,7 @@ import type {
 } from '../../data-graph/relationship-command.js';
 
 import { deferDataGraphPostCommitWork, getRequiredDataGraphRuntime } from './data-graph.js';
+import { recordAppliedMutationOutcome } from './unit-of-work.js';
 
 export type ContextualMutationReactionExecutorOptions = {
   getReactions: () => readonly MutationReaction[];
@@ -32,6 +34,12 @@ export type ContextualMutationReactionExecutorOptions = {
 let outcomeSequence = 0;
 const createDefaultOutcomeId = () =>
   globalThis.crypto?.randomUUID?.() ?? `mutation-outcome-${Date.now()}-${++outcomeSequence}`;
+
+const recordAppliedReactionOutcomes = (result: MutationReactionResult) => {
+  for (const reaction of result.reactions) {
+    if (reaction.status === 'applied') recordAppliedMutationOutcome(reaction.outcome);
+  }
+};
 
 const createContextualRunner = <TError, TOptions>(
   {
@@ -92,15 +100,20 @@ export const applyContextualEntityMutationReactions = <TError = unknown, TOption
   delta: EntityMutationDelta,
   options: TOptions | undefined,
   configuration: ContextualMutationReactionExecutorOptions,
-) => {
-  const runner = createContextualRunner<TError, TOptions>(configuration, options);
-  const outcome = runner.createAppliedEntityOutcome(command, delta);
-  const process = () => runner.react(outcome).then(() => undefined);
+): Effect.Effect<EntityMutationDelta> =>
+  Effect.suspend(() => {
+    const runner = createContextualRunner<TError, TOptions>(configuration, options);
+    const outcome = runner.createAppliedEntityOutcome(command, delta);
+    recordAppliedMutationOutcome(outcome);
+    const process = () =>
+      runner.react(outcome).then(result => {
+        recordAppliedReactionOutcomes(result);
+      });
 
-  return deferDataGraphPostCommitWork(process)
-    ? Effect.succeed(delta)
-    : Effect.promise(process).pipe(Effect.as(delta));
-};
+    return deferDataGraphPostCommitWork(process)
+      ? Effect.succeed(delta)
+      : Effect.promise(process).pipe(Effect.as(delta));
+  });
 
 export const applyContextualRelationshipMutationReactions = <
   TError = unknown,
@@ -110,25 +123,28 @@ export const applyContextualRelationshipMutationReactions = <
   result: RelationshipCommandResult,
   options: TOptions | undefined,
   configuration: ContextualMutationReactionExecutorOptions,
-): Effect.Effect<RelationshipMutationResult> => {
-  if (result.status === 'not-applied') return Effect.succeed(result);
-  const runner = createContextualRunner<TError, TOptions>(configuration, options);
-  const outcome = runner.createAppliedOutcome(command, result.delta);
-  const reactions: AppliedRelationshipMutationResult['reactions'] = [];
-  const applied: AppliedRelationshipMutationResult = {
-    status: 'applied',
-    outcome,
-    reactions,
-  };
-  const process = async () => {
-    const processed = await runner.react(outcome);
-    reactions.push(...processed.reactions);
-  };
+): Effect.Effect<RelationshipMutationResult> =>
+  Effect.suspend<RelationshipMutationResult, never, never>(() => {
+    if (result.status === 'not-applied') return Effect.succeed(result);
+    const runner = createContextualRunner<TError, TOptions>(configuration, options);
+    const outcome = runner.createAppliedOutcome(command, result.delta);
+    recordAppliedMutationOutcome(outcome);
+    const reactions: AppliedRelationshipMutationResult['reactions'] = [];
+    const applied: AppliedRelationshipMutationResult = {
+      status: 'applied',
+      outcome,
+      reactions,
+    };
+    const process = async () => {
+      const processed = await runner.react(outcome);
+      recordAppliedReactionOutcomes(processed);
+      reactions.push(...processed.reactions);
+    };
 
-  return deferDataGraphPostCommitWork(process)
-    ? Effect.succeed(applied)
-    : Effect.promise(process).pipe(Effect.as(applied));
-};
+    return deferDataGraphPostCommitWork(process)
+      ? Effect.succeed(applied)
+      : Effect.promise(process).pipe(Effect.as(applied));
+  });
 
 export const createContextualMutationReactionExecutor = <TError = unknown, TOptions = undefined>({
   getReactions,

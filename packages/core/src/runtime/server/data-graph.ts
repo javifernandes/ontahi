@@ -13,7 +13,11 @@ import { failOperation } from './failures.js';
 import type { LayerConcern, LayerConcernRuntime } from './layer-types.js';
 import { OPERATION_CACHE_STORE_RESOURCE_KEY } from './operation/cache.js';
 import type { OperationFailure } from './operation/types.js';
-import { withChildUnitOfWork } from './unit-of-work.js';
+import {
+  commitMutationSetToCurrentUnitOfWork,
+  sealCurrentUnitOfWorkMutationJournal,
+  withChildUnitOfWork,
+} from './unit-of-work.js';
 
 export const DATA_GRAPH_RUNTIME_RESOURCE_KEY = 'dataGraph.runtime';
 export const DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR = Symbol(
@@ -76,21 +80,33 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
     const postCommitWork: DataGraphPostCommitWork[] = [];
     return runtime
       .transaction(transactionRuntime =>
-        withChildUnitOfWork(effect, {
-          isolatedResources: [OPERATION_CACHE_STORE_RESOURCE_KEY],
-          resources: [
-            [DATA_GRAPH_RUNTIME_RESOURCE_KEY, transactionRuntime],
-            [DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY, true],
-            [DATA_GRAPH_POST_COMMIT_WORK_RESOURCE_KEY, postCommitWork],
-          ],
-        }),
+        withChildUnitOfWork(
+          effect.pipe(
+            Effect.map(value => ({
+              value,
+              mutations: sealCurrentUnitOfWorkMutationJournal(),
+            })),
+          ),
+          {
+            isolatedResources: [OPERATION_CACHE_STORE_RESOURCE_KEY],
+            resources: [
+              [DATA_GRAPH_RUNTIME_RESOURCE_KEY, transactionRuntime],
+              [DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY, true],
+              [DATA_GRAPH_POST_COMMIT_WORK_RESOURCE_KEY, postCommitWork],
+            ],
+          },
+        ),
       )
       .pipe(
-        Effect.flatMap(value =>
-          Effect.promise(async () => {
-            for (const work of postCommitWork) await work();
-            return value;
-          }),
+        Effect.flatMap(({ value, mutations }) =>
+          Effect.sync(() => commitMutationSetToCurrentUnitOfWork(mutations)).pipe(
+            Effect.zipRight(
+              Effect.promise(async () => {
+                for (const work of postCommitWork) await work();
+                return value;
+              }),
+            ),
+          ),
         ),
       );
   }) as Effect.Effect<
