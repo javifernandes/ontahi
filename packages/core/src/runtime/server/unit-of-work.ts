@@ -117,15 +117,17 @@ const widenMutations = (
     if (!affected) return [graphChange()];
     affected.forEach(name => names.add(name));
   }
-  const widened = [...names].sort().map(
-    (entityName): CommittedMutation => ({
-      effect: {
-        kind: 'selection-change',
-        selection: { kind: 'selection', entityName, expression: { kind: 'all' } },
-      },
-      provenance: 'conservative',
-    }),
-  );
+  const widened = [...names]
+    .sort((left, right) => left.localeCompare(right))
+    .map(
+      (entityName): CommittedMutation => ({
+        effect: {
+          kind: 'selection-change',
+          selection: { kind: 'selection', entityName, expression: { kind: 'all' } },
+        },
+        provenance: 'conservative',
+      }),
+    );
   return widened.length > 0 && fitsMutationBudget(widened, budget) ? widened : [graphChange()];
 };
 

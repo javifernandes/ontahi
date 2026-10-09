@@ -103,11 +103,10 @@ The command is authoritative semantic intent. Evidence may contain a small exact
 Refs already produced by execution, counts, or causal identifiers. Evidence is optional and
 bounded; it must never change which mutations are considered possible.
 
-A conservative escape hatch may require a small command-like `changed(Selection)` term when no
-honest create/update/delete/relationship operator can be declared. That term is not accepted by
-default. The first slice must determine whether an existing no-op/touch command can express it
-without lying about execution. If not, the new term belongs to mutation-effect reporting only, not
-to executable Graph Commands.
+A conservative escape hatch uses a first-class `changed(Selection)` mutation effect when no honest
+create/update/delete/relationship operator can be declared. Native work may report this
+non-executable effect directly; it must not manufacture a no-op/touch Graph Command that lies about
+what executed.
 
 ### Read dependency
 
