@@ -72,6 +72,7 @@ describe('createFetchReflectedOperationInvoker', () => {
           },
           view: BookInfo.toJSON(),
         },
+        accepts: ['committed-mutations.v1'],
       }),
     });
   });

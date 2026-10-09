@@ -15,7 +15,9 @@ import {
 } from '@ontahi/core/runtime/operation-invocation';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
   toOperationProtocolRequest,
+  type RuntimeProtocolExecutionExchangeResult,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 import { useMemo } from 'react';
@@ -66,14 +68,16 @@ const attachFetchBridgeRuntime = <TInput, TData>(
     requiresAuth: operation.authority !== 'server' ? false : operation.exposure !== 'bridge',
   });
 
-type OperationRequest = (request: OperationInvocationRequest) => Promise<unknown>;
+type OperationRequest = (
+  request: OperationInvocationRequest,
+) => Promise<RuntimeProtocolExecutionExchangeResult>;
 
 const postLegacyBridgeRequest = async <TTransportOptions>(
   endpoint: string,
   request: OperationInvocationRequest,
   fetchRequest: typeof globalThis.fetch,
   requestInit: ((options?: TTransportOptions) => Omit<RequestInit, 'body' | 'method'>) | undefined,
-): Promise<unknown> => {
+): Promise<RuntimeProtocolExecutionExchangeResult> => {
   const init = requestInit?.() ?? {};
   const headers = new Headers(init.headers);
   if (!headers.has('content-type')) headers.set('content-type', 'application/json');
@@ -88,7 +92,7 @@ const postLegacyBridgeRequest = async <TTransportOptions>(
   if (!response.ok && !isOperationInvocationProtocolResponse(payload)) {
     throw new Error(`Graph bridge request failed with status ${response.status}.`);
   }
-  return payload;
+  return { body: payload };
 };
 
 const createOperationRequest = <TTransportOptions>(
@@ -105,20 +109,32 @@ const createOperationRequest = <TTransportOptions>(
       );
   }
 
+  const transport =
+    options.runtimeTransport ??
+    createFetchRuntimeTransport<TTransportOptions>({
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+      ...(options.requestInit ? { requestInit: options.requestInit } : {}),
+    });
   const exchange = createRuntimeProtocolExchange({
-    transport:
-      options.runtimeTransport ??
-      createFetchRuntimeTransport<TTransportOptions>({
-        ...(options.fetch ? { fetch: options.fetch } : {}),
-        ...(options.requestInit ? { requestInit: options.requestInit } : {}),
-      }),
+    transport,
     requestId: options.requestId,
   });
-  return request =>
-    exchange({
-      family: 'operation',
-      body: toOperationProtocolRequest(request),
-    });
+  const executionExchange = createRuntimeProtocolExecutionExchange({
+    transport,
+    requestId: options.requestId,
+  });
+  return async request =>
+    request.kind === 'invoke'
+      ? executionExchange({
+          family: 'operation',
+          body: toOperationProtocolRequest(request),
+        })
+      : {
+          body: await exchange({
+            family: 'operation',
+            body: toOperationProtocolRequest(request),
+          }),
+        };
 };
 
 const errorMessage = (error: unknown) =>
@@ -128,12 +144,14 @@ const postBridgeRequest = async <TData>(
   requestOperation: OperationRequest,
   request: OperationInvocationRequest,
 ): Promise<ActionResultLike & { data?: TData }> => {
-  let payload: unknown;
+  let execution: RuntimeProtocolExecutionExchangeResult;
   try {
-    payload = await requestOperation(request);
+    execution = await requestOperation(request);
   } catch (error) {
     return { serverError: errorMessage(error) };
   }
+  const payload = execution.body;
+  const executionMetadata = execution.metadata;
 
   if (!isOperationInvocationProtocolResponse(payload)) {
     return { serverError: 'Graph bridge returned an invalid response.' };
@@ -144,7 +162,10 @@ const postBridgeRequest = async <TData>(
   }
 
   if (request.kind === 'invoke' && payload.kind === 'invocation-result') {
-    return { data: payload.result as TData };
+    return {
+      data: payload.result as TData,
+      ...(executionMetadata ? { executionMetadata } : {}),
+    };
   }
 
   if (request.kind === 'check-permission' && payload.kind === 'permission-result') {

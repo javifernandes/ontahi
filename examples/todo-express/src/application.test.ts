@@ -13,6 +13,7 @@ import {
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
@@ -190,6 +191,37 @@ describe('Ontahi todo portability example', () => {
     } finally {
       websocket.close();
     }
+  });
+
+  it('projects committed Graph Command mutations for an opted-in authorized caller', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Ship semantic refresh', completed: false },
+    ];
+    const transport = createFetchRuntimeTransport({
+      endpoint: `${origin}/runtime`,
+      requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+    });
+    const exchange = createRuntimeProtocolExecutionExchange({ transport });
+    const request = toGraphCommandRequest(
+      mutateEntity(ClientTodoItemSchema).update(
+        createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+        { completed: true },
+      ),
+    );
+
+    await expect(exchange({ family: 'graph.command', body: request })).resolves.toMatchObject({
+      body: { kind: 'graph-command-result' },
+      metadata: {
+        committedMutations: {
+          mutations: [
+            {
+              provenance: 'captured',
+              effect: { kind: 'graph-command', request },
+            },
+          ],
+        },
+      },
+    });
   });
 
   const todoListRef = (id: string) => ({

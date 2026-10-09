@@ -7,7 +7,9 @@ import {
   query,
   relationship,
   view,
+  type CommittedMutationSet,
   type GraphCommandSpec,
+  type GraphReadRequest,
 } from '@ontahi/core/data-graph';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -22,7 +24,30 @@ import {
   useGraphOperation,
   useGraphQuery,
   useOrderedRelationshipCommand,
+  withCanonicalGraphReadMeta,
 } from './index.js';
+
+const bookRead = (slug: string): GraphReadRequest => ({
+  version: 1,
+  kind: 'graph-read',
+  mode: 'count',
+  selection: {
+    kind: 'selection',
+    entityName: 'Book',
+    expression: { kind: 'predicate', operator: 'eq', fieldName: 'slug', value: slug },
+  },
+  orderBy: [],
+});
+
+const changedBook = (slug: string): CommittedMutationSet => ({
+  precision: 'intensional',
+  mutations: [
+    {
+      provenance: 'captured',
+      effect: { kind: 'selection-change', selection: bookRead(slug).selection },
+    },
+  ],
+});
 
 const BookEntity = entity('Book', {
   id: field.id(),
@@ -275,6 +300,52 @@ describe('graph query and command hooks', () => {
     });
   });
 
+  it('prefers semantic Graph Command invalidation over declared query keys', async () => {
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const ontahiKey = ['custom', 'ontahi'] as const;
+    const otherKey = ['custom', 'other'] as const;
+    await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: ontahiKey,
+        queryFn: () => 1,
+        meta: withCanonicalGraphReadMeta(undefined, bookRead('ontahi')),
+      }),
+      queryClient.fetchQuery({
+        queryKey: otherKey,
+        queryFn: () => 1,
+        meta: withCanonicalGraphReadMeta(undefined, bookRead('other')),
+      }),
+    ]);
+    const command: GraphCommandSpec<typeof BookEntity, { title: string }, BookSummary> = {
+      kind: 'command',
+      operation: 'update',
+      root: BookEntity,
+      selection: { kind: 'all' },
+      payload: { title: 'Ontahi Updated' },
+    };
+    graphExecutor.runCommandExecution = vi.fn().mockResolvedValue({
+      value: { slug: 'ontahi', title: 'Ontahi Updated' },
+      metadata: { committedMutations: changedBook('ontahi') },
+    });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(
+      () =>
+        useGraphCommand(() => command, {
+          invalidateQueryKeys: [['Book']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ontahiKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: otherKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Book'] });
+  });
+
   it('runs graph operations as graph commands', async () => {
     const graphExecutor = createExecutorMock();
     const command: GraphCommandSpec<typeof BookEntity, { title: string }, BookSummary> = {
@@ -392,5 +463,61 @@ describe('graph query and command hooks', () => {
     await expect(unsupported.result.current.mutateAsync(undefined)).rejects.toThrow(
       'does not support ordered Relationship Commands',
     );
+  });
+
+  it('invalidates matching reads from ordered Relationship Command metadata', async () => {
+    const List = entity('SemanticList', { id: field.id() });
+    const Item = entity('SemanticItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    const command = relationship(List, 'items', createEntityRef(List, { id: 'list-1' })).prepend(
+      createEntityRef(Item, { id: 'item-2' }),
+    );
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const matchingKey = ['custom', 'matching'] as const;
+    await queryClient.fetchQuery({
+      queryKey: matchingKey,
+      queryFn: () => 1,
+      meta: withCanonicalGraphReadMeta(undefined, {
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: { kind: 'selection', entityName: 'SemanticItem', expression: { kind: 'all' } },
+        orderBy: [],
+      }),
+    });
+    graphExecutor.runOrderedRelationshipCommand = vi.fn();
+    graphExecutor.runOrderedRelationshipCommandExecution = vi.fn().mockResolvedValue({
+      value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
+      metadata: {
+        committedMutations: {
+          precision: 'intensional',
+          mutations: [
+            {
+              provenance: 'captured',
+              effect: {
+                kind: 'graph-command',
+                request: { version: 2, kind: 'graph-command', command },
+              },
+            },
+          ],
+        },
+      },
+    });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(
+      () =>
+        useOrderedRelationshipCommand(() => command, {
+          invalidateQueryKeys: [['broad-fallback']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: matchingKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['broad-fallback'] });
   });
 });

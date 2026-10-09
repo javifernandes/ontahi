@@ -1,3 +1,4 @@
+import type { CommittedMutationSet } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolResponse,
   type RuntimeTransport,
@@ -11,6 +12,27 @@ import {
 } from './model-commands.js';
 
 afterEach(() => vi.unstubAllGlobals());
+const completeLater: CommittedMutationSet = {
+  precision: 'intensional',
+  mutations: [
+    {
+      provenance: 'captured',
+      effect: {
+        kind: 'selection-change',
+        selection: {
+          kind: 'selection',
+          entityName: 'TodoItem',
+          expression: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'list',
+            value: 'inbox',
+          },
+        },
+      },
+    },
+  ],
+};
 it('accepts an informational answer from the HTTP runtime', async () => {
   const result = { ok: true, value: { status: 'answered', message: 'You can create lists.' } };
   vi.stubGlobal(
@@ -83,11 +105,25 @@ it('observes a started Operation before reporting the model command as executed'
     },
   };
   const request = vi.fn(async envelope =>
-    createRuntimeProtocolResponse(envelope, {
-      version: 1,
-      kind: 'model-command-result',
-      result: { status: 'started', message: 'List items completed.', request: invocation, run },
-    }),
+    envelope.family === 'durable.operation'
+      ? createRuntimeProtocolResponse(
+          envelope,
+          {
+            version: 1,
+            kind: 'snapshot',
+            snapshot: {
+              ...run,
+              status: 'completed',
+              updatedAt: '2026-09-29T00:00:01.000Z',
+            },
+          },
+          { committedMutations: completeLater },
+        )
+      : createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'model-command-result',
+          result: { status: 'started', message: 'List items completed.', request: invocation, run },
+        }),
   );
   const observe = vi.fn(async function* () {
     yield {
@@ -114,9 +150,15 @@ it('observes a started Operation before reporting the model command as executed'
       message: 'List items completed.',
       request: invocation,
     },
+    committedMutations: completeLater,
   });
   expect(observe).toHaveBeenCalledWith(run);
-  expect(request).toHaveBeenCalledOnce();
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(request.mock.calls[1]?.[0]).toMatchObject({
+    family: 'durable.operation',
+    accepts: ['committed-mutations.v1'],
+    body: { kind: 'inspect', run },
+  });
 });
 
 it('reports every non-completing started Operation outcome without resubmitting', async () => {

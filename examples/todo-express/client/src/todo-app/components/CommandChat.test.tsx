@@ -507,8 +507,18 @@ it('shows an executed read without refreshing mutation state', async () => {
 });
 
 it('refreshes mutation state when an executed Operation also returns a response', async () => {
+  const committedMutations = {
+    precision: 'intensional' as const,
+    mutations: [
+      {
+        provenance: 'captured' as const,
+        effect: { kind: 'graph-change' as const },
+      },
+    ],
+  };
   execute.mockResolvedValue({
     ok: true,
+    committedMutations,
     value: {
       status: 'executed',
       message: 'Completed 3 items.',
@@ -532,6 +542,7 @@ it('refreshes mutation state when an executed Operation also returns a response'
         operationId: 'TodoList.completeAll',
       }),
     }),
+    committedMutations,
   );
 });
 
