@@ -131,6 +131,29 @@ describe('mayAffectGraphRead', () => {
     ).toBe(false);
   });
 
+  it('proves Ref and equality selections disjoint in either direction', () => {
+    const item = createEntityRef('TodoItem', { id: 'item-1' });
+
+    expect(
+      mayAffectGraphRead(
+        mutation({
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'TodoItem',
+          target: item,
+          values: { completed: true },
+        }),
+        read('TodoItem', equal('id', 'item-2')),
+      ),
+    ).toBe(false);
+    expect(
+      mayAffectGraphRead(
+        update(equal('id', 'item-2')),
+        read('TodoItem', { kind: 'references', refs: [item] }),
+      ),
+    ).toBe(false);
+  });
+
   it('treats an empty Ref selection as disjoint', () => {
     expect(
       mayAffectGraphRead(
@@ -138,6 +161,13 @@ describe('mayAffectGraphRead', () => {
         read('TodoItem', { kind: 'references', refs: [] }),
       ),
     ).toBe(false);
+
+    expect(mayAffectGraphRead(update({ kind: 'references', refs: [] }), read('TodoItem'))).toBe(
+      false,
+    );
+    expect(mayAffectGraphRead(update({ kind: 'all' }), read('TodoItem', { kind: 'none' }))).toBe(
+      false,
+    );
   });
 
   it('matches create and delete by their semantic target', () => {
@@ -201,6 +231,42 @@ describe('mayAffectGraphRead', () => {
     ).toBe(true);
   });
 
+  it('derives count dependencies from broad, Ref, and compound selections', () => {
+    const item = createEntityRef('TodoItem', { id: 'item-1' });
+
+    expect(
+      mayAffectGraphRead(
+        update({ kind: 'all' }, { notes: 'changed' }),
+        read('TodoItem', { kind: 'all' }, { mode: 'count' }),
+      ),
+    ).toBe(false);
+    expect(
+      mayAffectGraphRead(
+        update({ kind: 'all' }, { id: 'item-2' }),
+        read('TodoItem', { kind: 'references', refs: [item] }, { mode: 'count' }),
+      ),
+    ).toBe(true);
+    expect(
+      mayAffectGraphRead(
+        update({ kind: 'all' }, { completed: true }),
+        read(
+          'TodoItem',
+          {
+            kind: 'or',
+            operands: [equal('completed', false), equal('listId', 'later')],
+          },
+          { mode: 'count' },
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      mayAffectGraphRead(
+        update({ kind: 'all' }, { notes: 'changed' }),
+        read('TodoItem', { kind: 'not', operand: equal('completed', true) }, { mode: 'count' }),
+      ),
+    ).toBe(true);
+  });
+
   it.each([
     ['projected', { title: 'changed' }],
     ['filtered', { listId: 'inbox' }],
@@ -234,6 +300,33 @@ describe('mayAffectGraphRead', () => {
     ).toBe(false);
     expect(
       mayAffectGraphRead(update(equal('listId', 'later')), read('TodoItem', inboxOrLater)),
+    ).toBe(true);
+
+    expect(
+      mayAffectGraphRead(
+        update({
+          kind: 'or',
+          operands: [equal('listId', 'other'), equal('listId', 'archive')],
+        }),
+        read('TodoItem', equal('listId', 'inbox')),
+      ),
+    ).toBe(false);
+  });
+
+  it('tracks Entity dependencies reached through relation-image selections', () => {
+    expect(
+      mayAffectGraphRead(
+        update({ kind: 'all' }),
+        read('TodoList', {
+          kind: 'relation-image',
+          relationName: 'list',
+          source: {
+            kind: 'selection',
+            entityName: 'TodoItem',
+            expression: equal('completed', false),
+          },
+        }),
+      ),
     ).toBe(true);
   });
 
