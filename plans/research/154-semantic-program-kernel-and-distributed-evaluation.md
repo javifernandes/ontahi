@@ -1102,7 +1102,8 @@ first result should clarify identity and state ownership rather than maximize ag
 
 ## Candidate Follow-Up Plans
 
-These are anticipated slices, not created plans yet:
+The `154d` slice has been extracted into a concrete plan. The remaining entries are anticipated
+slices that have not been created yet:
 
 1. `154a`: semantic terms and Operation partial application;
 2. `154b`: typed-hole resolution and generic interaction projection;

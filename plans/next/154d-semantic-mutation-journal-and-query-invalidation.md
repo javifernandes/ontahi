@@ -198,13 +198,16 @@ Cross-client distribution is a later delivery concern and must not change the se
 
 A canonical command may contain identities, predicates, or values that are sensitive. Therefore:
 
-1. the first proof returns mutation metadata only to the already-authorized initiating caller;
-2. publication to observation subscribers must use each subscription's authority and scope;
-3. a future shared invalidation bus may use opaque scoped revision identities if the full command
+1. authorization to invoke a mutation does not authorize disclosure of its mutation metadata;
+2. the first proof separately authorizes the metadata contents for the initiating caller and returns
+   only an authority-scoped projection, or withholds metadata that cannot be disclosed safely;
+3. publication to observation subscribers must use each subscription's authority and scope;
+4. a future shared invalidation bus may use opaque scoped revision identities if the full command
    would disclose information;
-4. a client must not infer inaccessible Entity identities from exact evidence;
-5. matching affects refresh decisions only and never grants read or mutation authority;
-6. every refreshed Read executes its ordinary receiver-owned authorization again.
+5. the runtime must not send exact evidence that would let a client infer inaccessible Entity
+   identities;
+6. matching affects refresh decisions only and never grants read or mutation authority;
+7. every refreshed Read executes its ordinary receiver-owned authorization again.
 
 ## Scope
 
@@ -327,7 +330,9 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 8. Runtime Protocol round-trip and backward-compatibility tests.
 9. React tests with several cached Reads, including demonstrably disjoint and uncertain entries.
 10. Todo browser/runtime integration tests for direct, model, and durable Operation execution.
-11. Authority tests proving mutation metadata and subsequent refreshes do not widen access.
+11. Authority tests proving mutation metadata and subsequent refreshes do not widen access,
+    including an invocation that is allowed while its command target falls outside the caller's
+    Graph Read scope and therefore must be projected safely or withheld.
 12. Devtools tests explaining command, provenance, transaction outcome, and precision.
 
 ## Acceptance Checklist
