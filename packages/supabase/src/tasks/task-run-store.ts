@@ -65,6 +65,7 @@ type TaskRunRow = {
   progress: TaskRunSource['progress'] | null;
   checkpoint: TaskRunSource['checkpoint'] | null;
   result: unknown | null;
+  execution_metadata?: TaskRunSource['executionMetadata'] | null;
   error: TaskRunSource['error'] | null;
   created_at: string;
   started_at: string | null;
@@ -123,6 +124,7 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   interaction: source.checkpoint?.interaction,
   error: source.error,
   result: source.result,
+  ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
 });
 
 const toListItem = (source: TaskRunSource): TaskRunListItem => {
@@ -146,6 +148,7 @@ const fromRow = (row: TaskRunRow): TaskRunSource => ({
   progress: row.progress ?? undefined,
   checkpoint: row.checkpoint ?? undefined,
   result: row.result ?? undefined,
+  executionMetadata: row.execution_metadata ?? undefined,
   error: row.error ?? undefined,
   createdAt: row.created_at,
   startedAt: row.started_at ?? undefined,
@@ -181,6 +184,14 @@ const toPatchRow = (
     : (current.progress ?? null),
   checkpoint: 'checkpoint' in patch ? (patch.checkpoint ?? null) : (current.checkpoint ?? null),
   result: patch.result === undefined ? (current.result ?? null) : patch.result,
+  ...('executionMetadata' in patch || current.executionMetadata
+    ? {
+        execution_metadata:
+          patch.executionMetadata === undefined
+            ? (current.executionMetadata ?? null)
+            : patch.executionMetadata,
+      }
+    : {}),
   error: patch.error === undefined ? (current.error ?? null) : patch.error,
   started_at: patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,
   updated_at: patch.updatedAt ?? now,

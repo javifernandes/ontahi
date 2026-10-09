@@ -503,7 +503,8 @@ export const parseDurableOperationProtocolResponse = (
 export const toDurableOperationSnapshotResponse = <TResult>(
   snapshot: TaskSnapshot<TResult>,
 ): DurableOperationSnapshotResponse<TResult> => {
-  const parsed = parseSnapshot(snapshot);
+  const { executionMetadata: _executionMetadata, ...portableSnapshot } = snapshot;
+  const parsed = parseSnapshot(portableSnapshot);
   if (!parsed.success) {
     throw new TypeError('Durable Operation snapshot response is invalid.');
   }

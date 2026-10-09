@@ -273,7 +273,22 @@ describe('createSupabaseTaskStorage', () => {
         runId: 'wrun_1',
       }),
     );
+    const executionMetadata = {
+      committedMutations: {
+        precision: 'widened' as const,
+        mutations: [
+          {
+            effect: { kind: 'graph-change' as const },
+            provenance: 'conservative' as const,
+          },
+        ],
+      },
+    };
+    await Effect.runPromise(store.update(created, { executionMetadata }));
 
+    await expect(Effect.runPromise(store.getSnapshot(created))).resolves.toMatchObject({
+      executionMetadata,
+    });
     await expect(Effect.runPromise(store.getSnapshot(created))).resolves.not.toHaveProperty(
       'input',
     );
@@ -292,6 +307,7 @@ describe('createSupabaseTaskStorage', () => {
         state: { step: 'approve' },
         interaction: { id: 'approve-1', kind: 'approval' },
       },
+      executionMetadata,
     });
 
     await Effect.runPromise(store.update(created, { checkpoint: undefined }));

@@ -6,6 +6,8 @@ import {
   createRuntimeProtocolRequest,
   isRuntimeProtocolError,
   parseRuntimeProtocolResponse,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
+  type RuntimeProtocolExecutionMetadata,
   type RuntimeProtocolError,
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
@@ -57,6 +59,19 @@ export type CreateRuntimeProtocolExchangeOptions<TTransportOptions = unknown> = 
   readonly requestId?: () => string;
 };
 
+export type RuntimeProtocolExecutionExchangeResult = {
+  readonly body: unknown;
+  readonly metadata?: RuntimeProtocolExecutionMetadata;
+};
+
+export type RuntimeProtocolExecutionExchange<TTransportOptions = unknown> = <
+  TFamily extends string,
+  TBody,
+>(
+  request: RuntimeProtocolExchangeRequest<TFamily, TBody>,
+  options?: RuntimeTransportRequestOptions<TTransportOptions>,
+) => Promise<RuntimeProtocolExecutionExchangeResult>;
+
 let fallbackExchangeSequence = 0;
 
 const defaultRequestId = () =>
@@ -79,4 +94,26 @@ export const createRuntimeProtocolExchange =
       throw new Error(parsed.response.error.message);
     }
     return parsed.response.body;
+  };
+
+export const createRuntimeProtocolExecutionExchange =
+  <TTransportOptions = unknown>({
+    transport,
+    requestId = defaultRequestId,
+  }: CreateRuntimeProtocolExchangeOptions<TTransportOptions>): RuntimeProtocolExecutionExchange<TTransportOptions> =>
+  async (input, options) => {
+    const request = createRuntimeProtocolRequest({
+      id: requestId(),
+      ...input,
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    }) as RuntimeProtocolRequestEnvelope;
+    const parsed = parseRuntimeProtocolResponse(await transport.request(request, options), request);
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    if (isRuntimeProtocolError(parsed.response)) {
+      throw new Error(parsed.response.error.message);
+    }
+    return {
+      body: parsed.response.body,
+      ...(parsed.response.metadata === undefined ? {} : { metadata: parsed.response.metadata }),
+    };
   };

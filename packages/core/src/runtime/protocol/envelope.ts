@@ -1,8 +1,20 @@
+import {
+  isCommittedMutationSet,
+  type CommittedMutationSet,
+} from '../../data-graph/mutation-impact.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 
 export const RUNTIME_PROTOCOL_NAME = 'ontahi.runtime' as const;
 export const RUNTIME_PROTOCOL_VERSION = 1 as const;
+
+export const RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY = 'committed-mutations.v1' as const;
+
+export type RuntimeProtocolResponseCapability = string;
+
+export type RuntimeProtocolExecutionMetadata = {
+  readonly committedMutations: CommittedMutationSet;
+};
 
 export type RuntimeProtocolRequestEnvelope<TFamily extends string = string, TBody = JsonValue> = {
   readonly protocol: typeof RUNTIME_PROTOCOL_NAME;
@@ -11,15 +23,17 @@ export type RuntimeProtocolRequestEnvelope<TFamily extends string = string, TBod
   readonly kind: 'request';
   readonly family: TFamily;
   readonly body: TBody;
+  readonly accepts?: readonly RuntimeProtocolResponseCapability[];
 };
 
-export type RuntimeProtocolResponseEnvelope<TFamily extends string = string, TBody = JsonValue> = {
+export type RuntimeProtocolResponseEnvelope<TFamily extends string = string, TBody = unknown> = {
   readonly protocol: typeof RUNTIME_PROTOCOL_NAME;
   readonly version: typeof RUNTIME_PROTOCOL_VERSION;
   readonly id: string;
   readonly kind: 'response';
   readonly family: TFamily;
   readonly body: TBody;
+  readonly metadata?: RuntimeProtocolExecutionMetadata;
 };
 
 export type RuntimeProtocolErrorCode =
@@ -74,8 +88,8 @@ const runtimeProtocolErrorCodes = new Set<RuntimeProtocolErrorCode>([
   'invalid_response',
 ]);
 
-const requestKeys = new Set(['protocol', 'version', 'id', 'kind', 'family', 'body']);
-const responseKeys = new Set(['protocol', 'version', 'id', 'kind', 'family', 'body']);
+const requestKeys = new Set(['protocol', 'version', 'id', 'kind', 'family', 'body', 'accepts']);
+const responseKeys = new Set(['protocol', 'version', 'id', 'kind', 'family', 'body', 'metadata']);
 const protocolErrorKeys = new Set(['protocol', 'version', 'id', 'kind', 'family', 'error']);
 const protocolErrorDetailKeys = new Set(['code', 'message', 'details']);
 
@@ -84,6 +98,24 @@ const hasOnlyKeys = (record: Record<string, unknown>, keys: ReadonlySet<string>)
 
 const isRequestId = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= 256;
+
+const isResponseCapability = (value: unknown): value is RuntimeProtocolResponseCapability =>
+  typeof value === 'string' &&
+  value.length <= 128 &&
+  /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/.test(value);
+
+const isAcceptedResponseCapabilities = (
+  value: unknown,
+): value is readonly RuntimeProtocolResponseCapability[] | undefined =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.every(isResponseCapability) &&
+    new Set(value).size === value.length);
+
+const isExecutionMetadata = (value: unknown): value is RuntimeProtocolExecutionMetadata =>
+  isRecord(value) &&
+  Object.keys(value).every(key => key === 'committedMutations') &&
+  isCommittedMutationSet(value.committedMutations);
 
 export const isRuntimeProtocolFamilyName = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -186,6 +218,12 @@ export const parseRuntimeProtocolRequestEnvelope = (
   if (!isRuntimeProtocolFamilyName(value.family)) {
     return invalidEnvelope('Runtime Protocol request family name is invalid.', value);
   }
+  if (!isAcceptedResponseCapabilities(value.accepts)) {
+    return invalidEnvelope(
+      'Runtime Protocol request accepts invalid response metadata capabilities.',
+      value,
+    );
+  }
   if (!isJsonValue(value.body) || !isJsonValue(value)) {
     return invalidEnvelope('Runtime Protocol request envelope must be JSON-safe.', value);
   }
@@ -200,6 +238,7 @@ export const createRuntimeProtocolRequest = <const TFamily extends string, TBody
   readonly id: string;
   readonly family: TFamily;
   readonly body: TBody;
+  readonly accepts?: readonly RuntimeProtocolResponseCapability[];
 }): RuntimeProtocolRequestEnvelope<TFamily, TBody> => {
   const parsed = parseRuntimeProtocolRequestEnvelope({
     protocol: RUNTIME_PROTOCOL_NAME,
@@ -208,6 +247,7 @@ export const createRuntimeProtocolRequest = <const TFamily extends string, TBody
     kind: 'request',
     family: input.family,
     body: input.body,
+    ...(input.accepts === undefined ? {} : { accepts: input.accepts }),
   });
   if (!parsed.success) throw new TypeError(parsed.error.error.message);
   return parsed.request as RuntimeProtocolRequestEnvelope<TFamily, TBody>;
@@ -216,6 +256,7 @@ export const createRuntimeProtocolRequest = <const TFamily extends string, TBody
 export const createRuntimeProtocolResponse = <const TFamily extends string, TBody>(
   request: Pick<RuntimeProtocolRequestEnvelope<TFamily>, 'id' | 'family'>,
   body: TBody,
+  metadata?: RuntimeProtocolExecutionMetadata,
 ): RuntimeProtocolResponseEnvelope<TFamily, TBody> => {
   const response = {
     protocol: RUNTIME_PROTOCOL_NAME,
@@ -224,7 +265,11 @@ export const createRuntimeProtocolResponse = <const TFamily extends string, TBod
     kind: 'response',
     family: request.family,
     body,
+    ...(metadata === undefined ? {} : { metadata }),
   } as const;
+  if (metadata !== undefined && !isExecutionMetadata(metadata)) {
+    throw new TypeError('Runtime Protocol response metadata is invalid.');
+  }
   if (!isJsonValue(response)) {
     throw new TypeError('Runtime Protocol response envelope must be JSON-safe.');
   }
@@ -261,6 +306,7 @@ export const parseRuntimeProtocolResponse = <TFamily extends string>(
     value.id !== request.id ||
     value.family !== request.family ||
     !isJsonValue(value.body) ||
+    (value.metadata !== undefined && !isExecutionMetadata(value.metadata)) ||
     !isJsonValue(value)
   ) {
     return invalidResponse(request, 'Runtime Protocol response is invalid or mismatched.');

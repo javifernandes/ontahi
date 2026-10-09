@@ -16,12 +16,15 @@ the host application.
 
 ## Task run storage
 
-`createSupabaseTaskStorage` persists explicit execution state in a nullable `checkpoint jsonb`
-column on `task_runs`. The checkpoint is private runtime data; public snapshots expose only its
-pending interaction. Add the column when upgrading an existing host:
+`createSupabaseTaskStorage` persists explicit execution state in nullable `checkpoint jsonb` and
+semantic mutation metadata in nullable `execution_metadata jsonb` columns on `task_runs`. The
+checkpoint is private runtime data; public snapshots expose only its pending interaction. Mutation
+metadata remains server-side until a Runtime Protocol host explicitly projects it for the caller's
+authority. Add the columns when upgrading an existing host:
 
 ```sql
 alter table task_runs add column if not exists checkpoint jsonb;
+alter table task_runs add column if not exists execution_metadata jsonb;
 ```
 
 Keeping the checkpoint in the same row as task status lets a new application process reconstruct a

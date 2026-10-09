@@ -285,6 +285,18 @@ advance.
 Exit condition: the initiating caller can receive a portable bounded MutationSet only after the
 effect is committed.
 
+Implemented protocol boundary:
+
+1. receivers opt in with the additive `committed-mutations.v1` response capability;
+2. mutation data travels in Runtime Protocol response metadata, never in a family business body;
+3. older receivers omit the capability and continue receiving the original envelope shape;
+4. hosts must explicitly project the committed set for the caller's authority; omission withholds
+   it;
+5. direct Graph Commands and synchronous Operations open and seal a protocol-scoped journal;
+6. durable Task execution uses an isolated Unit of Work, accumulates bounded mutations across
+   interactions, persists them with the run, and exposes them on terminal inspection only through
+   the same authority projection.
+
 ### Slice 5: React cache matching
 
 Associate each React Query cache entry produced by Ontahí with its canonical Graph Read. On a
@@ -376,26 +388,30 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 12. Overflow widens deterministically to sorted affected Entity-root Selections, then to a global
     graph change when those roots still exceed the budget. Widening is monotonic and never silently
     drops a possible affected Entity.
+13. Committed mutation metadata belongs to the common Runtime Protocol response envelope rather
+    than to Graph Command, Operation, or durable snapshot business bodies.
+14. `committed-mutations.v1` is an additive receiver-advertised capability; unknown advertised
+    capabilities are preserved and ignored so negotiation can evolve without an envelope bump.
+15. Mutation metadata disclosure is denied by default. A host projector must return the
+    authority-scoped set for the initiating context.
+16. Background Task runs clone or create their own execution resources and journal. Human-in-the-
+    loop resumes merge the previously persisted bounded set before continuing.
 
 ## Open Questions
 
 1. Should the journal retain `AppliedMutationOutcome`, a portable projection of it, or only its
    canonical command plus selected causal metadata?
-2. What is the common capture point shared by direct dispatch, Operations, Tasks, and Mutation
-   Reactions without double recording?
-3. How should create matching evaluate generated/defaulted Fields that were absent from authored
+2. How should create matching evaluate generated/defaulted Fields that were absent from authored
    values?
-4. Which Read dependencies must be extracted for nested relations, aggregates, derived Fields, and
+3. Which Read dependencies must be extracted for nested relations, aggregates, derived Fields, and
    contextual selections?
-5. What exact-evidence limit should be the safe default once evidence is retained?
-6. Should post-commit publication failure fail the caller, become telemetry, or create retryable
+4. What exact-evidence limit should be the safe default once evidence is retained?
+5. Should post-commit publication failure fail the caller, become telemetry, or create retryable
    delivery work after the storage commit can no longer roll back?
-7. Which protocol family owns mutation metadata for direct Graph Commands versus Operations and
-   durable Task completion?
-8. Can server observation consume full commands safely, or does cross-authority delivery require
+6. Can server observation consume full commands safely, or does cross-authority delivery require
    opaque scoped revision tokens?
-9. When may a client reconcile exact bounded evidence locally instead of refetching?
-10. What evidence is required before removing `bridge.invalidate` and explicit query-key options?
+7. When may a client reconcile exact bounded evidence locally instead of refetching?
+8. What evidence is required before removing `bridge.invalidate` and explicit query-key options?
 
 ## Closure And Evolution
 
