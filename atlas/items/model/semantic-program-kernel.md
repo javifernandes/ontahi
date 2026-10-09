@@ -15,6 +15,7 @@ supports:
   - ontahi.runtime-protocol
 relatedPlans:
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
+  - ontahi://plans/154d-semantic-mutation-journal-and-query-invalidation
 ---
 
 The Semantic Program Kernel is the shaping hypothesis that Ontahí Reads, Commands, Operation
@@ -130,3 +131,10 @@ nullable values without reducing them to text; runtime validation keeps the visi
 eventual substitution consistent. Devtools and Todo chat are two projections of that same contract,
 and one compatible named Hole can fill several positions. This does not yet cover nested values,
 contextual producers, or a universal form representation.
+
+Plan 154d extracts the next reactive proof around committed mutation semantics. Its working shape
+reuses canonical Graph Commands and Selections as intensional, bounded mutation descriptions,
+records applied work within Unit of Work, publishes only after commit, and conservatively matches
+those mutations against canonical Graph Reads. Exact deltas remain optional evidence rather than a
+required row changelog; native execution requires a semantic declaration escape hatch instead of
+cache-key metadata.
