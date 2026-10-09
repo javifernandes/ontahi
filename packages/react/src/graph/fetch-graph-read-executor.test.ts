@@ -414,6 +414,48 @@ describe('Fetch graph read executor', () => {
     });
   });
 
+  it('returns committed mutation metadata for Runtime Protocol Relationship Commands', async () => {
+    const List = entity('MetadataList', { id: field.id() });
+    const Item = entity('MetadataItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    const command = relationship(List, 'items', createEntityRef(List, { id: 'list-1' })).prepend(
+      createEntityRef(Item, { id: 'item-2' }),
+    );
+    const result = {
+      status: 'applied' as const,
+      delta: { added: [], removed: [], moved: [] },
+    };
+    const committedMutations = {
+      precision: 'intensional' as const,
+      mutations: [
+        {
+          provenance: 'captured' as const,
+          effect: {
+            kind: 'graph-command' as const,
+            request: { version: 2 as const, kind: 'graph-command' as const, command },
+          },
+        },
+      ],
+    };
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(
+        envelope,
+        { kind: 'graph-command-result', value: result },
+        { committedMutations },
+      ),
+    );
+    const executor = createFetchGraphReadExecutor({ runtimeTransport: { request } });
+
+    await expect(executor.runOrderedRelationshipCommandExecution!(command)).resolves.toEqual({
+      value: result,
+      metadata: { committedMutations },
+    });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      family: 'graph.command',
+      accepts: ['committed-mutations.v1'],
+    });
+  });
+
   it('executes an exact Entity Mutation Command through the graph Command endpoint', async () => {
     const command = mutateEntity(Todo).update(createEntityRef(Todo, { id: 'todo-1' }), {
       title: 'Remote',
@@ -448,6 +490,52 @@ describe('Fetch graph read executor', () => {
         target: { entityName: 'Todo', locator: { id: 'todo-1' } },
         values: { title: 'Remote' },
       },
+    });
+  });
+
+  it('returns committed mutation metadata for Runtime Protocol Graph Commands', async () => {
+    const command = mutateEntity(Todo).update(createEntityRef(Todo, { id: 'todo-1' }), {
+      completed: true,
+    });
+    const delta = {
+      created: [],
+      updated: [
+        {
+          entityName: 'Todo',
+          ref: createEntityRef(Todo, { id: 'todo-1' }),
+          values: { id: 'todo-1', title: 'Remote', completed: true },
+        },
+      ],
+      deleted: [],
+    };
+    const committedMutations = {
+      precision: 'exact' as const,
+      mutations: [
+        {
+          provenance: 'captured' as const,
+          effect: {
+            kind: 'graph-command' as const,
+            request: { version: 1 as const, kind: 'graph-command' as const, command },
+          },
+        },
+      ],
+    };
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(
+        envelope,
+        { kind: 'graph-command-result', value: delta },
+        { committedMutations },
+      ),
+    );
+    const executor = createFetchGraphReadExecutor({ runtimeTransport: { request } });
+
+    await expect(executor.runEntityMutationCommandExecution!(command)).resolves.toEqual({
+      value: delta,
+      metadata: { committedMutations },
+    });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      family: 'graph.command',
+      accepts: ['committed-mutations.v1'],
     });
   });
 

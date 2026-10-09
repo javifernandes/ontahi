@@ -1,3 +1,4 @@
+import type { CommittedMutationSet } from '@ontahi/core/data-graph';
 import type {
   TaskInputValue,
   TaskInteractionResponse,
@@ -63,6 +64,7 @@ export const CommandChat = ({
 }: {
   onExecuted: (
     outcome: Extract<TodoModelCommandResult, { status: 'executed' }>,
+    committedMutations?: CommittedMutationSet,
   ) => Promise<unknown>;
   submit?: ModelCommandSubmitter;
   respond?: ModelCommandResponder;
@@ -112,7 +114,11 @@ export const CommandChat = ({
     );
   };
 
-  const applyOutcome = async (id: number, outcome: TodoModelCommandResult) => {
+  const applyOutcome = async (
+    id: number,
+    outcome: TodoModelCommandResult,
+    committedMutations?: CommittedMutationSet,
+  ) => {
     if (outcome.status === 'pending') {
       voice.speak(outcome.message);
       setEntries(previous =>
@@ -134,7 +140,8 @@ export const CommandChat = ({
     answer(id, outcome.status, outcome.message);
     if (outcome.status === 'executed' && outcome.request?.kind !== 'graph-read') {
       try {
-        await onExecuted(outcome);
+        if (committedMutations) await onExecuted(outcome, committedMutations);
+        else await onExecuted(outcome);
       } catch {
         answer(id, 'executed', `${outcome.message} Refresh the board to see the change.`);
       }
@@ -166,7 +173,7 @@ export const CommandChat = ({
         return;
       }
       const outcome = result.value;
-      await applyOutcome(id, outcome);
+      await applyOutcome(id, outcome, result.committedMutations);
     } catch {
       // A lost response may follow a successful write. Never automatically resubmit.
       answer(id, 'failed', 'The server response was lost. Check the list before submitting again.');
@@ -191,7 +198,7 @@ export const CommandChat = ({
         answer(entry.id, 'failed', result.message ?? 'The response could not be applied.');
         return;
       }
-      await applyOutcome(entry.id, result.value);
+      await applyOutcome(entry.id, result.value, result.committedMutations);
     } catch {
       answer(
         entry.id,

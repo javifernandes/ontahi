@@ -8,8 +8,13 @@ import {
   field,
   graphOutput,
   graphSchema,
+  type CommittedMutationSet,
+  type GraphReadRequest,
 } from '@ontahi/core/data-graph';
-import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
+import {
+  createRuntimeProtocolResponse,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -23,7 +28,33 @@ import {
   useOperation,
   useOperationQuery,
   useReflectedOperationRunner,
+  withCanonicalGraphReadMeta,
 } from './index.js';
+
+const todoItems = (list: string): GraphReadRequest => ({
+  version: 1,
+  kind: 'graph-read',
+  mode: 'run',
+  selection: {
+    kind: 'selection',
+    entityName: 'Todo',
+    expression: { kind: 'predicate', operator: 'eq', fieldName: 'list', value: list },
+  },
+  orderBy: [],
+});
+
+const completeLater: CommittedMutationSet = {
+  precision: 'intensional',
+  mutations: [
+    {
+      provenance: 'captured',
+      effect: {
+        kind: 'selection-change',
+        selection: todoItems('later').selection,
+      },
+    },
+  ],
+};
 
 const createWrapper = (
   bridgeAction = vi.fn(),
@@ -471,6 +502,55 @@ describe('operation hooks', () => {
     });
   });
 
+  it('uses committed mutations instead of broad Operation bridge invalidation', async () => {
+    const queryClient = new QueryClient();
+    const laterKey = ['Todo', 'later'] as const;
+    const inboxKey = ['Todo', 'inbox'] as const;
+    const containingRefKey = ['custom', 'selected-todo'] as const;
+    const TodoEntity = entity('Todo', { id: field.id() });
+    const todoRef = createEntityRef(TodoEntity, { id: 'todo-1' });
+    await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: laterKey,
+        queryFn: () => [],
+        meta: withCanonicalGraphReadMeta(undefined, todoItems('later')),
+      }),
+      queryClient.fetchQuery({
+        queryKey: inboxKey,
+        queryFn: () => [],
+        meta: withCanonicalGraphReadMeta(undefined, todoItems('inbox')),
+      }),
+      queryClient.fetchQuery({
+        queryKey: containingRefKey,
+        queryFn: () => ({ selected: todoRef }),
+      }),
+    ]);
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: { ok: true, kind: 'success', value: { completed: 2 } },
+      executionMetadata: { committedMutations: completeLater },
+    });
+    const operation = defineClientDomainOperationsForEntity(TodoEntity, {
+      completeAll: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: { invalidate: [['Todo']] },
+        input: graphSchema.object({ todo: graphSchema.ref(TodoEntity) }),
+      }),
+    }).completeAll;
+    const { Wrapper } = createWrapper(bridgeAction, createGraphClientCache(), queryClient);
+    const { result } = renderHook(() => useOperation(operation), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.executeAsync({ todo: todoRef });
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: laterKey, exact: true });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: containingRefKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: inboxKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Todo'] });
+  });
+
   it('runs durable bridge operations using TaskRunRef from Ontahi core', async () => {
     const bridgeAction = vi.fn().mockResolvedValue({
       data: {
@@ -613,6 +693,83 @@ describe('operation hooks', () => {
         queryKey: ['Todo'],
       }),
     );
+  });
+
+  it('inspects terminal durable metadata and invalidates matching Graph Reads only', async () => {
+    const queryClient = new QueryClient();
+    const laterKey = ['Todo', 'later'] as const;
+    const inboxKey = ['Todo', 'inbox'] as const;
+    await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: laterKey,
+        queryFn: () => [],
+        meta: withCanonicalGraphReadMeta(undefined, todoItems('later')),
+      }),
+      queryClient.fetchQuery({
+        queryKey: inboxKey,
+        queryFn: () => [],
+        meta: withCanonicalGraphReadMeta(undefined, todoItems('inbox')),
+      }),
+    ]);
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: { taskId: 'Todo.completeAll', runId: 'run-semantic', status: 'queued' },
+    });
+    const operation = defineClientDomainOperationsForEntity('Todo', {
+      completeAll: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        input: graphSchema.void(),
+        bridge: { invalidate: [['Todo']] },
+        durable: { runtime: 'in-process' },
+      }),
+    }).completeAll;
+    const run = { taskId: 'Todo.completeAll', runId: 'run-semantic' };
+    const observe = vi.fn(() =>
+      (async function* () {
+        yield {
+          ...run,
+          status: 'completed' as const,
+          updatedAt: '2026-07-24T00:00:01.000Z',
+          result: { completed: 2 },
+        };
+      })(),
+    );
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(
+        envelope,
+        {
+          version: 1,
+          kind: 'snapshot',
+          snapshot: { ...run, status: 'completed', updatedAt: 'now' },
+        },
+        { committedMutations: completeLater },
+      ),
+    );
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { Wrapper } = createWrapper(
+      bridgeAction,
+      createGraphClientCache(),
+      queryClient,
+      undefined,
+      { request, durableOperation: { observe } } as unknown as RuntimeTransport,
+    );
+    const { result } = renderHook(() => useDurableOperation(operation), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    await waitFor(() => expect(result.current.isCompleted).toBe(true));
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: laterKey, exact: true }),
+    );
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: inboxKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Todo'] });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      family: 'durable.operation',
+      accepts: ['committed-mutations.v1'],
+      body: { kind: 'inspect', run },
+    });
   });
 
   it('aborts an active Runtime Transport observation when reset', async () => {

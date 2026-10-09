@@ -78,6 +78,9 @@ jobs:
     services:
       postgres:
         image: postgres:17-alpine
+        credentials:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_DB: ontahi
           POSTGRES_PASSWORD: postgres

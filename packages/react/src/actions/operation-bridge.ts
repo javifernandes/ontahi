@@ -12,6 +12,7 @@ import {
   type ActionQueryKey,
 } from '@ontahi/core/runtime/actions';
 import type { OperationInvocationResult } from '@ontahi/core/runtime/contracts';
+import type { RuntimeProtocolExecutionMetadata } from '@ontahi/core/runtime/protocol';
 import { isRecord } from '@ontahi/core/value/object';
 import type { QueryKey, UseQueryResult } from '@tanstack/react-query';
 
@@ -21,6 +22,7 @@ export type { OperationInvocationResult };
 
 export type OperationBridgeActionResult<TData> = Omit<ActionResultLike, 'data'> & {
   data?: TData;
+  executionMetadata?: RuntimeProtocolExecutionMetadata;
 };
 
 export type OperationBridgeAction<TInput, TData> = (

@@ -1,3 +1,4 @@
+import type { CommittedMutationSet } from '@ontahi/core/data-graph';
 import type {
   ModelCommandRequest,
   ModelCommandResult,
@@ -7,10 +8,12 @@ import type {
 } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
   isDurableOperationProtocolError,
   parseDurableOperationProtocolResponse,
   parseModelCommandProtocolResponse,
   toDurableOperationInteractionResponseRequest,
+  toDurableOperationProtocolRequest,
   toModelCommandProtocolRequest,
   type RuntimeTransport,
   type ModelCommandCanonicalRequest,
@@ -22,7 +25,7 @@ export type TodoModelCommandResult = ModelCommandResult<
   ModelCommandReadResponse
 >;
 export type ModelCommandSubmitResult =
-  | { ok: true; value: TodoModelCommandResult }
+  | { ok: true; value: TodoModelCommandResult; committedMutations?: CommittedMutationSet }
   | { ok: false; message?: string };
 export type ModelCommandSubmitter = (
   request: ModelCommandRequest,
@@ -58,6 +61,26 @@ const modelResultFromSnapshot = (snapshot: TaskSnapshot): ModelCommandSubmitResu
   };
 };
 
+const inspectCommittedMutations = async (
+  runtimeTransport: RuntimeTransport,
+  run: TaskRunIdentity,
+): Promise<CommittedMutationSet | undefined> => {
+  try {
+    const inspected = await createRuntimeProtocolExecutionExchange({
+      transport: runtimeTransport,
+    })({
+      family: 'durable.operation',
+      body: toDurableOperationProtocolRequest(run),
+    });
+    const parsed = parseDurableOperationProtocolResponse(inspected.body);
+    return parsed.success && !isDurableOperationProtocolError(parsed.response)
+      ? inspected.metadata?.committedMutations
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const settleStartedOperation = async (
   runtimeTransport: RuntimeTransport,
   outcome: Extract<TodoModelCommandResult, { status: 'started' }>,
@@ -71,11 +94,14 @@ const settleStartedOperation = async (
           ok: false,
           message: 'The started Operation requires an interaction that command chat cannot resume.',
         };
-      if (snapshot.status === 'completed')
+      if (snapshot.status === 'completed') {
+        const committedMutations = await inspectCommittedMutations(runtimeTransport, outcome.run);
         return {
           ok: true,
           value: { status: 'executed', message: outcome.message, request: outcome.request },
+          ...(committedMutations ? { committedMutations } : {}),
         };
+      }
       if (snapshot.status === 'failed' || snapshot.status === 'cancelled')
         return {
           ok: false,
@@ -94,11 +120,17 @@ const settleStartedOperation = async (
 const settleModelCommandSnapshot = async (
   runtimeTransport: RuntimeTransport,
   snapshot: TaskSnapshot,
+  committedMutations?: CommittedMutationSet,
 ): Promise<ModelCommandSubmitResult> => {
   const result = modelResultFromSnapshot(snapshot);
-  return result.ok && result.value.status === 'started'
-    ? settleStartedOperation(runtimeTransport, result.value)
-    : result;
+  if (!result.ok) return result;
+  if (result.value.status === 'started') {
+    return settleStartedOperation(runtimeTransport, result.value);
+  }
+  if (result.value.status !== 'executed') return result;
+  const committed =
+    committedMutations ?? (await inspectCommittedMutations(runtimeTransport, snapshot));
+  return committed ? { ...result, committedMutations: committed } : result;
 };
 
 export const createModelCommandSubmitter = (
@@ -122,20 +154,23 @@ export const createModelCommandSubmitter = (
 export const createModelCommandResponder = (
   runtimeTransport: RuntimeTransport,
 ): ModelCommandResponder => {
-  const exchange = createRuntimeProtocolExchange({ transport: runtimeTransport });
+  const exchange = createRuntimeProtocolExecutionExchange({ transport: runtimeTransport });
   return async (run, response) => {
-    const parsed = parseDurableOperationProtocolResponse(
-      await exchange({
-        family: 'durable.operation',
-        body: toDurableOperationInteractionResponseRequest(run, response),
-      }),
-    );
+    const execution = await exchange({
+      family: 'durable.operation',
+      body: toDurableOperationInteractionResponseRequest(run, response),
+    });
+    const parsed = parseDurableOperationProtocolResponse(execution.body);
     if (!parsed.success) throw new Error(parsed.error.error.message);
     if (isDurableOperationProtocolError(parsed.response))
       return { ok: false, message: parsed.response.error.message };
     const initial = parsed.response.snapshot;
     if (initial.interaction || ['completed', 'failed', 'cancelled'].includes(initial.status))
-      return settleModelCommandSnapshot(runtimeTransport, initial);
+      return settleModelCommandSnapshot(
+        runtimeTransport,
+        initial,
+        execution.metadata?.committedMutations,
+      );
     if (!runtimeTransport.durableOperation)
       return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
     for await (const snapshot of runtimeTransport.durableOperation.observe(run)) {

@@ -10,6 +10,12 @@ import type {
 import { normalizeGraphSchemaClientInput } from '@ontahi/core/data-graph';
 import { operationInputInvalid } from '@ontahi/core/runtime/contracts';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import {
+  createRuntimeProtocolExecutionExchange,
+  isDurableOperationProtocolError,
+  parseDurableOperationProtocolResponse,
+  toDurableOperationProtocolRequest,
+} from '@ontahi/core/runtime/protocol';
 import { hasOwn, isRecord } from '@ontahi/core/value/object';
 import {
   useInfiniteQuery,
@@ -26,6 +32,7 @@ import type {
   BridgedOperationLike,
   GraphPermission,
   OperationBridgeAction,
+  OperationBridgeActionResult,
   OperationInvocationResult,
 } from '../actions/index.js';
 import {
@@ -71,6 +78,7 @@ import type {
   OperationRunner,
   ReflectedOperationLike,
 } from './operation-types.js';
+import { invalidateSemanticGraphReads } from './semantic-invalidation.js';
 
 const operationHookOptionKeys = new Set([
   'onExecute',
@@ -208,9 +216,11 @@ export function useOperation<TInput, TData>(
       await currentOptions?.onExecute?.({ input });
 
       let invocation: OperationInvocationResult<TData>;
+      let actionResult: OperationBridgeActionResult<OperationInvocationResult<TData>> | undefined;
 
       try {
-        invocation = toOperationInvocationResult(await executeTransportAsync(transportInput));
+        actionResult = await executeTransportAsync(transportInput);
+        invocation = toOperationInvocationResult(actionResult);
       } catch (error) {
         invocation = operationBridgeErrored(
           error instanceof Error ? error.message : 'Graph operation bridge failed.',
@@ -243,13 +253,21 @@ export function useOperation<TInput, TData>(
         });
 
         if (currentOptions?.invalidateOnSuccess ?? true) {
-          await Promise.all([
-            invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
-            ...resolveOperationBridgeInvalidationQueryKeys(
-              operation as BridgedOperationLike<TInput, TData>,
-              transportInput,
-            ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
-          ]);
+          const committed = actionResult?.executionMetadata?.committedMutations;
+          if (committed) {
+            await Promise.all([
+              invalidateSemanticGraphReads(queryClient, committed),
+              invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
+            ]);
+          } else {
+            await Promise.all([
+              invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
+              ...resolveOperationBridgeInvalidationQueryKeys(
+                operation as BridgedOperationLike<TInput, TData>,
+                transportInput,
+              ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
+            ]);
+          }
         }
       } else {
         setResult(invocation);
@@ -506,14 +524,49 @@ export function useDurableOperation<TInput, TResult = unknown>(
       const invalidationInput = operation.input
         ? (normalizeGraphSchemaClientInput(operation.input, mutation.input) as TInput)
         : (mutation.input as TInput);
-      void Promise.all(
-        resolveOperationBridgeInvalidationQueryKeys(
-          operation as BridgedOperationLike<TInput, TResult>,
-          invalidationInput,
-        ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
-      );
+      const invalidate = async () => {
+        if (runtimeTransport) {
+          try {
+            const execution = await createRuntimeProtocolExecutionExchange({
+              transport: runtimeTransport,
+            })({
+              family: 'durable.operation',
+              body: toDurableOperationProtocolRequest(snapshot),
+            });
+            const parsed = parseDurableOperationProtocolResponse(execution.body);
+            if (
+              parsed.success &&
+              !isDurableOperationProtocolError(parsed.response) &&
+              execution.metadata?.committedMutations
+            ) {
+              await invalidateSemanticGraphReads(
+                queryClient,
+                execution.metadata.committedMutations,
+              );
+              return;
+            }
+          } catch {
+            // Fall through to the compatibility invalidation declared by the Operation.
+          }
+        }
+
+        await Promise.all(
+          resolveOperationBridgeInvalidationQueryKeys(
+            operation as BridgedOperationLike<TInput, TResult>,
+            invalidationInput,
+          ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
+        );
+      };
+      void invalidate();
     }
-  }, [mutation.input, operation, options?.invalidateOnSuccess, queryClient, snapshot]);
+  }, [
+    mutation.input,
+    operation,
+    options?.invalidateOnSuccess,
+    queryClient,
+    runtimeTransport,
+    snapshot,
+  ]);
 
   const reset = useCallback(() => {
     mutation.reset();

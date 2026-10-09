@@ -1,6 +1,14 @@
-import { createEntityRef, entity, field, graphSchema, Selection } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  entity,
+  field,
+  graphSchema,
+  Selection,
+  type CommittedMutationSet,
+} from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolResponse,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
   type RuntimeProtocolRequestEnvelope,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
@@ -21,6 +29,11 @@ const operation: BridgedOperationLike<{ id: string }, { completed: boolean }> = 
   bridge: {},
 };
 
+const committedMutations: CommittedMutationSet = {
+  precision: 'intensional',
+  mutations: [{ provenance: 'conservative', effect: { kind: 'graph-change' } }],
+};
+
 const createQueryWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -36,10 +49,14 @@ const createQueryWrapper = () => {
 describe('Fetch Operation bridge adapter', () => {
   it('invokes Operations through the versioned Operation family', async () => {
     const request = vi.fn<RuntimeTransport['request']>(async envelope =>
-      createRuntimeProtocolResponse(envelope, {
-        kind: 'invocation-result',
-        result: { ok: true, kind: 'success', value: { completed: true } },
-      }),
+      createRuntimeProtocolResponse(
+        envelope,
+        {
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: { completed: true } },
+        },
+        { committedMutations },
+      ),
     );
     const adapter = createFetchOperationBridgeAdapter({
       runtimeTransport: { request },
@@ -54,6 +71,7 @@ describe('Fetch Operation bridge adapter', () => {
 
     expect(invocation).toEqual({
       data: { ok: true, kind: 'success', value: { completed: true } },
+      executionMetadata: { committedMutations },
     });
     expect(request).toHaveBeenCalledWith(
       {
@@ -62,6 +80,7 @@ describe('Fetch Operation bridge adapter', () => {
         id: 'operation-invoke-1',
         kind: 'request',
         family: 'operation',
+        accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
         body: {
           version: 1,
           kind: 'invoke',

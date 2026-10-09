@@ -14,7 +14,13 @@ import type {
   EntityMutationCommand,
   EntityMutationDelta,
 } from '@ontahi/core/data-graph';
+import type { RuntimeProtocolExecutionMetadata } from '@ontahi/core/runtime/protocol';
 import type { QueryKey, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
+
+export type GraphMutationExecution<TResult> = {
+  readonly value: TResult;
+  readonly metadata?: RuntimeProtocolExecutionMetadata;
+};
 
 export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TReadOptions> {
   get<TParams, TResult>(
@@ -36,22 +42,42 @@ export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TR
     command: GraphCommandSpec<any, any, TResult>,
     options?: TCommandOptions,
   ): Promise<TResult>;
+  runCommandExecution?<TResult = void>(
+    command: GraphCommandSpec<any, any, TResult>,
+    options?: TCommandOptions,
+  ): Promise<GraphMutationExecution<TResult>>;
   runRelationshipCommand?(
     command: RelationshipCommand,
     options?: TCommandOptions,
   ): Promise<RelationshipCommandResult>;
+  runRelationshipCommandExecution?(
+    command: RelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<GraphMutationExecution<RelationshipCommandResult>>;
   runManyToManyRelationshipCommand?(
     command: ManyToManyRelationshipCommand,
     options?: TCommandOptions,
   ): Promise<RelationshipCommandResult>;
+  runManyToManyRelationshipCommandExecution?(
+    command: ManyToManyRelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<GraphMutationExecution<RelationshipCommandResult>>;
   runOrderedRelationshipCommand?(
     command: OrderedRelationshipCommand,
     options?: TCommandOptions,
   ): Promise<RelationshipCommandResult>;
+  runOrderedRelationshipCommandExecution?(
+    command: OrderedRelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<GraphMutationExecution<RelationshipCommandResult>>;
   runEntityMutationCommand?(
     command: EntityMutationCommand,
     options?: TCommandOptions,
   ): Promise<EntityMutationDelta>;
+  runEntityMutationCommandExecution?(
+    command: EntityMutationCommand,
+    options?: TCommandOptions,
+  ): Promise<GraphMutationExecution<EntityMutationDelta>>;
 }
 
 export type BuildableRead<TResult> = {

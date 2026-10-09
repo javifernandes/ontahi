@@ -10,10 +10,12 @@ import {
   useGraphExecutorCapability,
   useGraphQuery,
   useCanonicalRequestInvalidation,
+  invalidateSemanticGraphReads,
   useManyToManyRelationshipCommand,
   useOrderedRelationshipCommand,
   useDurableOperation,
 } from '@ontahi/react/graph';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -111,6 +113,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
+  const queryClient = useQueryClient();
   const graphExecutor = useGraphExecutorCapability();
   const invalidateModelCommand = useCanonicalRequestInvalidation(modelCommandOperations);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
@@ -431,8 +434,13 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   return {
     commandChat: {
       enabled: runtime.status === 'ready' && runtime.value.commandChat === true,
-      refresh: async (outcome: { request: Parameters<typeof invalidateModelCommand>[0] }) =>
-        invalidateModelCommand(outcome.request),
+      refresh: async (
+        outcome: { request: Parameters<typeof invalidateModelCommand>[0] },
+        committedMutations?: Parameters<typeof invalidateSemanticGraphReads>[1],
+      ) =>
+        committedMutations
+          ? invalidateSemanticGraphReads(queryClient, committedMutations)
+          : invalidateModelCommand(outcome.request),
     },
     header: {
       runtime,

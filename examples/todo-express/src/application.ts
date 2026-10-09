@@ -32,6 +32,9 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   const runtimeProtocol = createApplicationRuntimeProtocol<TodoRuntimeAuthority>({
     application: TodoApplication,
     policies: todoRuntimePolicies,
+    // This example exposes one shared Todo graph, so authorized callers may receive the same
+    // bounded semantic mutations that their invocation committed.
+    projectCommittedMutations: mutations => mutations,
     ...(modelCommandRuntime ? { modelCommand: { runtime: modelCommandRuntime } } : {}),
     taskInteractionActor: context =>
       context.principal

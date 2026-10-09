@@ -3,12 +3,15 @@
 import {
   getGraphReadOutputDescriptor,
   graphOutput,
+  hasRelationImage,
   isGraphReadExpression,
   normalizeGraphSchemaClientInput,
   resolveQuerySpec,
   toGraphReadRequest,
+  toGraphReadRequestV2,
   type GraphCommandSpec,
   type GraphReadIntent,
+  type GraphReadRequest,
   type ManyToManyRelationshipCommand,
   type OrderedRelationshipCommand,
   type RelationshipCommandResult,
@@ -41,6 +44,11 @@ import type {
   ReadParams,
   ReadResult,
 } from './executor.js';
+import {
+  invalidateSemanticGraphReads,
+  withCanonicalGraphReadMeta,
+  withUnknownGraphReadMeta,
+} from './semantic-invalidation.js';
 
 const isQueryOrView = <TResult>(
   read: Exclude<GraphReadSource<TResult>, { kind: 'graph-read-expression' }>,
@@ -73,6 +81,18 @@ const intentFromMode = (mode: GraphQueryMode): GraphReadIntent | 'many' =>
 
 const modeFromIntent = (intent: GraphReadIntent | 'many'): Exclude<GraphQueryMode, 'exists'> =>
   intent === 'many' ? 'run' : intent === 'count' ? 'count' : 'get';
+
+const canonicalGraphReadRequest = <TResult>(
+  read: PlainGraphReadSource<TResult>,
+  intent: GraphReadIntent | 'many',
+  params: ReadParams<GraphReadSource<TResult>> | undefined,
+): GraphReadRequest => {
+  const spec = resolveQuerySpec(resolveGraphRead(read), params);
+  const mode = modeFromIntent(intent);
+  return hasRelationImage(spec.selection)
+    ? toGraphReadRequestV2(spec, mode)
+    : toGraphReadRequest(spec, mode);
+};
 
 const deriveGraphQueryKey = <TRead>(
   read: PlainGraphReadSource<ReadResult<TRead>>,
@@ -120,12 +140,21 @@ export function useGraphQuery<
   const source = (expression?.read ?? read) as PlainGraphReadSource<ReadResult<TRead>>;
   const mode = options?.mode ?? 'run';
   const intent = expression?.intent ?? intentFromMode(mode);
+  let canonicalRequest: GraphReadRequest | undefined;
+  try {
+    canonicalRequest = canonicalGraphReadRequest(source, intent, options?.params);
+  } catch {
+    // Local/custom executors may support Reads that cannot cross the Runtime Protocol yet.
+  }
   const queryKey =
     options?.queryKey ??
     deriveGraphQueryKey(source, intent, options?.params, executionIdentityCacheKey(identity));
 
   return useQuery({
     ...options,
+    meta: canonicalRequest
+      ? withCanonicalGraphReadMeta(options?.meta, canonicalRequest)
+      : withUnknownGraphReadMeta(options?.meta),
     queryKey,
     queryFn: async () => {
       const resolved = resolveGraphRead(source);
@@ -174,16 +203,23 @@ export function useGraphCommand<
   return useMutation({
     ...options,
     mutationKey: options?.mutationKey,
-    mutationFn: variables =>
-      graphExecutor.runCommand(
-        resolveGraphCommand(buildCommand(variables)),
-        options?.runtimeOptions,
-      ),
-    onSuccess: async (data, variables, onMutateResult, context) => {
-      for (const queryKey of options?.invalidateQueryKeys ?? []) {
-        await queryClient.invalidateQueries({ queryKey });
+    mutationFn: async variables => {
+      const command = resolveGraphCommand(buildCommand(variables));
+      const execution = graphExecutor.runCommandExecution
+        ? await graphExecutor.runCommandExecution(command, options?.runtimeOptions)
+        : {
+            value: await graphExecutor.runCommand(command, options?.runtimeOptions),
+          };
+      if (execution.metadata?.committedMutations) {
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+      } else {
+        for (const queryKey of options?.invalidateQueryKeys ?? []) {
+          await queryClient.invalidateQueries({ queryKey });
+        }
       }
-
+      return execution.value;
+    },
+    onSuccess: async (data, variables, onMutateResult, context) => {
       await options?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -209,19 +245,32 @@ export function useManyToManyRelationshipCommand<
   return useMutation({
     ...options,
     mutationKey: options?.mutationKey,
-    mutationFn: variables => {
+    mutationFn: async variables => {
       if (!graphExecutor.runManyToManyRelationshipCommand) {
         throw new Error('Graph executor does not support many-to-many Relationship Commands.');
       }
-      return graphExecutor.runManyToManyRelationshipCommand(
-        buildCommand(variables),
-        options?.runtimeOptions,
-      );
+      const command = buildCommand(variables);
+      const execution = graphExecutor.runManyToManyRelationshipCommandExecution
+        ? await graphExecutor.runManyToManyRelationshipCommandExecution(
+            command,
+            options?.runtimeOptions,
+          )
+        : {
+            value: await graphExecutor.runManyToManyRelationshipCommand(
+              command,
+              options?.runtimeOptions,
+            ),
+          };
+      if (execution.metadata?.committedMutations) {
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+      } else {
+        for (const queryKey of options?.invalidateQueryKeys ?? []) {
+          await queryClient.invalidateQueries({ queryKey });
+        }
+      }
+      return execution.value;
     },
     onSuccess: async (data, variables, onMutateResult, context) => {
-      for (const queryKey of options?.invalidateQueryKeys ?? []) {
-        await queryClient.invalidateQueries({ queryKey });
-      }
       await options?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });
@@ -247,19 +296,32 @@ export function useOrderedRelationshipCommand<
   return useMutation({
     ...options,
     mutationKey: options?.mutationKey,
-    mutationFn: variables => {
+    mutationFn: async variables => {
       if (!graphExecutor.runOrderedRelationshipCommand) {
         throw new Error('Graph executor does not support ordered Relationship Commands.');
       }
-      return graphExecutor.runOrderedRelationshipCommand(
-        buildCommand(variables),
-        options?.runtimeOptions,
-      );
+      const command = buildCommand(variables);
+      const execution = graphExecutor.runOrderedRelationshipCommandExecution
+        ? await graphExecutor.runOrderedRelationshipCommandExecution(
+            command,
+            options?.runtimeOptions,
+          )
+        : {
+            value: await graphExecutor.runOrderedRelationshipCommand(
+              command,
+              options?.runtimeOptions,
+            ),
+          };
+      if (execution.metadata?.committedMutations) {
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+      } else {
+        for (const queryKey of options?.invalidateQueryKeys ?? []) {
+          await queryClient.invalidateQueries({ queryKey });
+        }
+      }
+      return execution.value;
     },
     onSuccess: async (data, variables, onMutateResult, context) => {
-      for (const queryKey of options?.invalidateQueryKeys ?? []) {
-        await queryClient.invalidateQueries({ queryKey });
-      }
       await options?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

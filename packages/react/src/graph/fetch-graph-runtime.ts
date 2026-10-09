@@ -7,18 +7,24 @@ import {
   isGraphReadProtocolError,
   type DataGraphExecutionRuntime,
   type DataGraphObservationRuntime,
+  type EntityMutationCommand,
   type EntityMutationCommandExecutionRuntime,
   type RemoteDataGraphError,
   type RemoteGraphCommandTransport,
   type RemoteGraphObservationTransport,
   type RemoteGraphReadTransport,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type ManyToManyRelationshipCommand,
+  type OrderedRelationshipCommand,
   type OrderedRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
+  type RelationshipCommand,
 } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
+  type RuntimeProtocolExecutionMetadata,
   type RuntimeTransport,
   type RuntimeTransportRequestOptions,
 } from '@ontahi/core/runtime/protocol';
@@ -124,6 +130,15 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
             createFetchRuntimeTransport<TOptions>({ fetch: fetchRequest, requestInit }),
           requestId,
         });
+  const executionExchange =
+    endpoint && commandEndpoint
+      ? undefined
+      : createRuntimeProtocolExecutionExchange({
+          transport:
+            runtimeTransport ??
+            createFetchRuntimeTransport<TOptions>({ fetch: fetchRequest, requestInit }),
+          requestId,
+        });
   const exchangeOptions = (
     options: TOptions | undefined,
   ): RuntimeTransportRequestOptions<TOptions> | undefined =>
@@ -149,6 +164,52 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
     commandTransport,
     ...(observeTransport ? { observeTransport } : {}),
   });
+  const runtimeCapturingMetadata = (
+    capture: (metadata: RuntimeProtocolExecutionMetadata | undefined) => void,
+  ) =>
+    createRemoteDataGraphRuntime({
+      transport,
+      commandTransport: commandEndpoint
+        ? legacyCommandTransport
+        : async (request, options) => {
+            const execution = await executionExchange!(
+              { family: 'graph.command', body: request },
+              exchangeOptions(options),
+            );
+            capture(execution.metadata);
+            return execution.body;
+          },
+    });
+  const executeRelationshipWithMetadata = async (
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    options?: TOptions,
+  ) => {
+    let metadata: RuntimeProtocolExecutionMetadata | undefined;
+    const executionRuntime = runtimeCapturingMetadata(value => {
+      metadata = value;
+    });
+    const value = await runBrowserEffect(
+      command.kind === 'many-to-many-relationship-command'
+        ? executionRuntime.runManyToManyRelationshipCommand(command, options)
+        : command.kind === 'ordered-relationship-command'
+          ? executionRuntime.runOrderedRelationshipCommand(command, options)
+          : executionRuntime.runRelationshipCommand(command, options),
+    );
+    return { value, ...(metadata ? { metadata } : {}) };
+  };
+  const executeEntityMutationWithMetadata = async (
+    command: EntityMutationCommand,
+    options?: TOptions,
+  ) => {
+    let metadata: RuntimeProtocolExecutionMetadata | undefined;
+    const executionRuntime = runtimeCapturingMetadata(value => {
+      metadata = value;
+    });
+    const value = await runBrowserEffect(
+      executionRuntime.runEntityMutationCommand(command, options),
+    );
+    return { value, ...(metadata ? { metadata } : {}) };
+  };
 
   return {
     runtime,
@@ -159,12 +220,16 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
       runCommand: (command, options) => runBrowserEffect(runtime.runCommand(command, options)),
       runRelationshipCommand: (command, options) =>
         runBrowserEffect(runtime.runRelationshipCommand(command, options)),
+      runRelationshipCommandExecution: executeRelationshipWithMetadata,
       runManyToManyRelationshipCommand: (command, options) =>
         runBrowserEffect(runtime.runManyToManyRelationshipCommand(command, options)),
+      runManyToManyRelationshipCommandExecution: executeRelationshipWithMetadata,
       runOrderedRelationshipCommand: (command, options) =>
         runBrowserEffect(runtime.runOrderedRelationshipCommand(command, options)),
+      runOrderedRelationshipCommandExecution: executeRelationshipWithMetadata,
       runEntityMutationCommand: (command, options) =>
         runBrowserEffect(runtime.runEntityMutationCommand(command, options)),
+      runEntityMutationCommandExecution: executeEntityMutationWithMetadata,
     },
   };
 };

@@ -306,6 +306,20 @@ overlaps. Keep existing manual invalidation options as compatibility and explici
 Exit condition: invalidation uses canonical Reads and mutations; no application query-key prefix is
 required for the proof path.
 
+Implemented client boundary:
+
+1. every `useGraphQuery` cache entry retains its portable canonical `GraphReadRequest` in React
+   Query metadata, independently from its key; local Reads that cannot yet cross the Runtime
+   Protocol retain an explicit unknown dependency and invalidate conservatively;
+2. `invalidateSemanticGraphReads` matches a committed set against current local Graph Reads and
+   invalidates exact cache entries only when `mayAffectGraphRead` cannot prove disjointness;
+3. Runtime Protocol Graph Commands and Operations opt into execution metadata without changing
+   their business results;
+4. direct and durable Operation hooks use semantic invalidation when metadata is present and fall
+   back to existing `bridge.invalidate` declarations when it is absent or unavailable;
+5. terminal durable observations perform one authority-checked inspection to obtain the committed
+   journal, because observation snapshots deliberately do not disclose execution metadata.
+
 ### Slice 6: Todo end-to-end proof
 
 Remove `bridge.invalidate` from `TodoList.completeAll` only after the semantic path passes. Ensure
@@ -321,6 +335,14 @@ Demonstrate:
 
 Exit condition: the stale Todo UI reproduction is fixed without Todo-specific refresh callbacks or
 cache keys.
+
+First end-to-end wiring:
+
+1. the Todo host explicitly projects its bounded committed mutations to authorized callers;
+2. direct durable completion and model-command chat completion inspect the terminal run and feed the
+   returned journal to the shared React matcher;
+3. compatibility invalidation remains declared on `TodoList.completeAll` until browser evidence
+   proves the semantic path across direct, model-triggered, and resumed interaction flows.
 
 ### Slice 7: Relationships, observation, and inspection
 
@@ -396,6 +418,14 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
     authority-scoped set for the initiating context.
 16. Background Task runs clone or create their own execution resources and journal. Human-in-the-
     loop resumes merge the previously persisted bounded set before continuing.
+17. Canonical Graph Reads belong in React Query metadata rather than in, or inferred from, cache
+    keys. Custom query keys therefore do not weaken semantic matching.
+18. A client-authored Read that cannot yet be encoded for the Runtime Protocol is an explicit
+    unknown dependency and invalidates conservatively; absence of a portable encoding must never be
+    interpreted as disjointness.
+19. Durable observation snapshots remain metadata-free. An initiating client that opted into
+    mutation metadata performs one terminal inspection and reuses the same authority projection as
+    synchronous execution.
 
 ## Open Questions
 
