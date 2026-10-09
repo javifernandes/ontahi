@@ -27,6 +27,7 @@ export * from './in-memory/storage.js';
 export * from './mapping-conventions.js';
 export * from './model-expression/index.js';
 export * from './mutation-reaction.js';
+export * from './mutation-impact.js';
 export * from './operations.js';
 export * from './operation-input.js';
 export * from './operation-execution.js';

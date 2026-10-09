@@ -1,6 +1,6 @@
 # 154d. Semantic Mutation Journal And Query Invalidation
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/154d-semantic-mutation-journal-and-query-invalidation`
 
