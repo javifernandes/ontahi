@@ -14,6 +14,11 @@ export type CommittedMutation = {
   readonly provenance: CommittedMutationProvenance;
 };
 
+export type CommittedMutationSet = {
+  readonly mutations: readonly CommittedMutation[];
+  readonly precision: 'exact' | 'intensional' | 'widened';
+};
+
 const isPrimitive = (value: unknown): value is string | number | boolean | null =>
   value === null ||
   typeof value === 'string' ||
