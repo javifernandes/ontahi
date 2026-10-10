@@ -79,6 +79,56 @@ const resolveGraphRead = <TResult>(read: PlainGraphReadSource<TResult>) =>
 const resolveGraphCommand = <TResult>(command: CommandLike<TResult>) =>
   ('build' in command ? command.build() : command) as GraphCommandSpec<any, any, TResult>;
 
+type SemanticMutationExecutor<TCommand, TResult, TCommandOptions> = {
+  readonly run?: (command: TCommand, options?: TCommandOptions) => Promise<TResult>;
+  readonly runExecution?: (
+    command: TCommand,
+    options?: TCommandOptions,
+  ) => Promise<GraphMutationExecution<TResult>>;
+  readonly unsupportedMessage: string;
+};
+
+const executeSemanticMutation = async <TCommand, TResult, TCommandOptions>(
+  command: TCommand,
+  runtimeOptions: TCommandOptions | undefined,
+  executor: SemanticMutationExecutor<TCommand, TResult, TCommandOptions>,
+): Promise<GraphMutationExecution<TResult>> => {
+  if (executor.runExecution) return executor.runExecution(command, runtimeOptions);
+  if (executor.run) return { value: await executor.run(command, runtimeOptions) };
+  throw new Error(executor.unsupportedMessage);
+};
+
+const useSemanticMutationCommand = <TCommand, TResult, TVariables, TContext, TCommandOptions>(
+  buildCommand: (variables: TVariables) => TCommand,
+  executor: SemanticMutationExecutor<TCommand, TResult, TCommandOptions>,
+  options?: GraphCommandHookOptions<TResult, TVariables, TContext, TCommandOptions>,
+): UseMutationResult<TResult, Error, TVariables, TContext> => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    ...options,
+    mutationKey: options?.mutationKey,
+    mutationFn: async variables => {
+      const execution = await executeSemanticMutation(
+        buildCommand(variables),
+        options?.runtimeOptions,
+        executor,
+      );
+      if (execution.metadata?.committedMutations) {
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+      } else {
+        for (const queryKey of options?.invalidateQueryKeys ?? []) {
+          await queryClient.invalidateQueries({ queryKey });
+        }
+      }
+      return execution.value;
+    },
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      await options?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+};
+
 const intentFromMode = (mode: GraphQueryMode): GraphReadIntent | 'many' =>
   mode === 'get' ? 'first' : mode === 'run' ? 'many' : mode;
 
@@ -201,31 +251,20 @@ export function useGraphCommand<
   options?: GraphCommandHookOptions<TResult, TVariables, TContext, TCommandOptions>,
 ): UseMutationResult<TResult, Error, TVariables, TContext> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
-  const queryClient = useQueryClient();
+  const runExecution = graphExecutor.runCommandExecution
+    ? (command: GraphCommandSpec<any, any, TResult>, runtimeOptions?: TCommandOptions) =>
+        graphExecutor.runCommandExecution!<TResult>(command, runtimeOptions)
+    : undefined;
 
-  return useMutation({
-    ...options,
-    mutationKey: options?.mutationKey,
-    mutationFn: async variables => {
-      const command = resolveGraphCommand(buildCommand(variables));
-      const execution = graphExecutor.runCommandExecution
-        ? await graphExecutor.runCommandExecution(command, options?.runtimeOptions)
-        : {
-            value: await graphExecutor.runCommand(command, options?.runtimeOptions),
-          };
-      if (execution.metadata?.committedMutations) {
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
-      } else {
-        for (const queryKey of options?.invalidateQueryKeys ?? []) {
-          await queryClient.invalidateQueries({ queryKey });
-        }
-      }
-      return execution.value;
+  return useSemanticMutationCommand(
+    variables => resolveGraphCommand(buildCommand(variables)),
+    {
+      run: (command, runtimeOptions) => graphExecutor.runCommand<TResult>(command, runtimeOptions),
+      ...(runExecution ? { runExecution } : {}),
+      unsupportedMessage: 'Graph executor does not support Graph Commands.',
     },
-    onSuccess: async (data, variables, onMutateResult, context) => {
-      await options?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
+    options,
+  );
 }
 
 export function useEntityMutationCommand<
@@ -238,39 +277,18 @@ export function useEntityMutationCommand<
   options?: GraphCommandHookOptions<EntityMutationDelta, TVariables, TContext, TCommandOptions>,
 ): UseMutationResult<EntityMutationDelta, Error, TVariables, TContext> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
-  const queryClient = useQueryClient();
+  const run = graphExecutor.runEntityMutationCommand?.bind(graphExecutor);
+  const runExecution = graphExecutor.runEntityMutationCommandExecution?.bind(graphExecutor);
 
-  return useMutation({
-    ...options,
-    mutationKey: options?.mutationKey,
-    mutationFn: async variables => {
-      const command = buildCommand(variables);
-      let execution: GraphMutationExecution<EntityMutationDelta>;
-      if (graphExecutor.runEntityMutationCommandExecution) {
-        execution = await graphExecutor.runEntityMutationCommandExecution(
-          command,
-          options?.runtimeOptions,
-        );
-      } else if (graphExecutor.runEntityMutationCommand) {
-        execution = {
-          value: await graphExecutor.runEntityMutationCommand(command, options?.runtimeOptions),
-        };
-      } else {
-        throw new Error('Graph executor does not support Entity Mutation Commands.');
-      }
-      if (execution.metadata?.committedMutations) {
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
-      } else {
-        for (const queryKey of options?.invalidateQueryKeys ?? []) {
-          await queryClient.invalidateQueries({ queryKey });
-        }
-      }
-      return execution.value;
+  return useSemanticMutationCommand(
+    buildCommand,
+    {
+      ...(run ? { run } : {}),
+      ...(runExecution ? { runExecution } : {}),
+      unsupportedMessage: 'Graph executor does not support Entity Mutation Commands.',
     },
-    onSuccess: async (data, variables, onMutateResult, context) => {
-      await options?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
+    options,
+  );
 }
 
 export function useManyToManyRelationshipCommand<
@@ -288,40 +306,18 @@ export function useManyToManyRelationshipCommand<
   >,
 ): UseMutationResult<RelationshipCommandResult, Error, TVariables, TContext> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
-  const queryClient = useQueryClient();
+  const run = graphExecutor.runManyToManyRelationshipCommand?.bind(graphExecutor);
+  const runExecution = graphExecutor.runManyToManyRelationshipCommandExecution?.bind(graphExecutor);
 
-  return useMutation({
-    ...options,
-    mutationKey: options?.mutationKey,
-    mutationFn: async variables => {
-      if (!graphExecutor.runManyToManyRelationshipCommand) {
-        throw new Error('Graph executor does not support many-to-many Relationship Commands.');
-      }
-      const command = buildCommand(variables);
-      const execution = graphExecutor.runManyToManyRelationshipCommandExecution
-        ? await graphExecutor.runManyToManyRelationshipCommandExecution(
-            command,
-            options?.runtimeOptions,
-          )
-        : {
-            value: await graphExecutor.runManyToManyRelationshipCommand(
-              command,
-              options?.runtimeOptions,
-            ),
-          };
-      if (execution.metadata?.committedMutations) {
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
-      } else {
-        for (const queryKey of options?.invalidateQueryKeys ?? []) {
-          await queryClient.invalidateQueries({ queryKey });
-        }
-      }
-      return execution.value;
+  return useSemanticMutationCommand(
+    buildCommand,
+    {
+      ...(run ? { run } : {}),
+      ...(runExecution ? { runExecution } : {}),
+      unsupportedMessage: 'Graph executor does not support many-to-many Relationship Commands.',
     },
-    onSuccess: async (data, variables, onMutateResult, context) => {
-      await options?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
+    options,
+  );
 }
 
 export function useOrderedRelationshipCommand<
@@ -339,40 +335,18 @@ export function useOrderedRelationshipCommand<
   >,
 ): UseMutationResult<RelationshipCommandResult, Error, TVariables, TContext> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
-  const queryClient = useQueryClient();
+  const run = graphExecutor.runOrderedRelationshipCommand?.bind(graphExecutor);
+  const runExecution = graphExecutor.runOrderedRelationshipCommandExecution?.bind(graphExecutor);
 
-  return useMutation({
-    ...options,
-    mutationKey: options?.mutationKey,
-    mutationFn: async variables => {
-      if (!graphExecutor.runOrderedRelationshipCommand) {
-        throw new Error('Graph executor does not support ordered Relationship Commands.');
-      }
-      const command = buildCommand(variables);
-      const execution = graphExecutor.runOrderedRelationshipCommandExecution
-        ? await graphExecutor.runOrderedRelationshipCommandExecution(
-            command,
-            options?.runtimeOptions,
-          )
-        : {
-            value: await graphExecutor.runOrderedRelationshipCommand(
-              command,
-              options?.runtimeOptions,
-            ),
-          };
-      if (execution.metadata?.committedMutations) {
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
-      } else {
-        for (const queryKey of options?.invalidateQueryKeys ?? []) {
-          await queryClient.invalidateQueries({ queryKey });
-        }
-      }
-      return execution.value;
+  return useSemanticMutationCommand(
+    buildCommand,
+    {
+      ...(run ? { run } : {}),
+      ...(runExecution ? { runExecution } : {}),
+      unsupportedMessage: 'Graph executor does not support ordered Relationship Commands.',
     },
-    onSuccess: async (data, variables, onMutateResult, context) => {
-      await options?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-  });
+    options,
+  );
 }
 
 export function useGraphOperation<

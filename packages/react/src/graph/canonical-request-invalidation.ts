@@ -50,6 +50,10 @@ export const invalidateCanonicalRequest = async (
   return { kind: 'operation', queryKeys };
 };
 
+/**
+ * @deprecated Compatibility fallback for receivers without committed mutation metadata. Prefer
+ * semantic mutation hooks or `invalidateSemanticGraphReads` with Runtime Protocol metadata.
+ */
 export const useCanonicalRequestInvalidation = (
   operations: readonly BridgedOperationLike<any, any>[],
 ) => {

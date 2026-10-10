@@ -606,7 +606,7 @@ describe('graph query and command hooks', () => {
         orderBy: [],
       }),
     });
-    graphExecutor.runOrderedRelationshipCommand = vi.fn();
+    graphExecutor.runOrderedRelationshipCommand = undefined;
     graphExecutor.runOrderedRelationshipCommandExecution = vi.fn().mockResolvedValue({
       value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
       metadata: {
@@ -667,7 +667,7 @@ describe('graph query and command hooks', () => {
         orderBy: [],
       }),
     });
-    graphExecutor.runManyToManyRelationshipCommand = vi.fn();
+    graphExecutor.runManyToManyRelationshipCommand = undefined;
     graphExecutor.runManyToManyRelationshipCommandExecution = vi.fn().mockResolvedValue({
       value: { status: 'applied', delta: { added: [], removed: [] } },
       metadata: {
