@@ -15,6 +15,8 @@ import {
   activityEntryOutcome,
   activityEntryTitle,
   buildActivityEntries,
+  graphReadSummary,
+  isRecord,
   matchesFilter,
 } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
@@ -65,23 +67,15 @@ export const DevtoolsPanel = ({
   const [view, setView] = useState<'activity' | 'console' | 'cache' | 'settings'>('activity');
   const [consoleOpened, setConsoleOpened] = useState(false);
   const [filter, setFilter] = useState('');
-  const [showInternal, setShowInternal] = useState(false);
   const [selected, setSelected] = useState<string>();
   const configurableRuntimeTransport =
     runtimeTransport && isConfigurableRuntimeTransport(runtimeTransport)
       ? runtimeTransport
       : undefined;
-  const activities = useMemo(
-    () => buildActivityEntries(snapshot.events, { includeInternal: true }),
-    [snapshot],
-  );
+  const activities = useMemo(() => buildActivityEntries(snapshot.events), [snapshot]);
   const normalizedFilter = filter.trim().toLowerCase();
-  const visibleActivities = showInternal
-    ? activities
-    : activities.filter(activity => !activity.internal);
-  const internalActivityCount = activities.filter(activity => activity.internal).length;
   const filteredActivities = normalizedFilter
-    ? visibleActivities.filter(activity => {
+    ? activities.filter(activity => {
         const event = activityEntryEvent(activity);
         const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
         return (
@@ -95,12 +89,15 @@ export const DevtoolsPanel = ({
               exchange?.started?.requestId,
               activity.observation?.started?.run.taskId,
               activity.observation?.started?.run.runId,
+              ...(activity.derivedRefreshes?.map(refresh =>
+                isRecord(refresh.request) ? graphReadSummary(refresh.request, dialect) : undefined,
+              ) ?? []),
             ],
             normalizedFilter,
           )
         );
       })
-    : visibleActivities;
+    : activities;
   const selectedActivity = filteredActivities.find(activity => activity.id === selected);
   const activeActivity = selectedActivity ?? filteredActivities[0];
 
@@ -143,17 +140,6 @@ export const DevtoolsPanel = ({
               aria-label='Filter diagnostics'
               placeholder='Filter intent, family, transport, outcome…'
             />
-            {internalActivityCount > 0 ? (
-              <button
-                type='button'
-                style={styles.subtleButton}
-                onClick={() => setShowInternal(current => !current)}
-                aria-pressed={showInternal}
-                title={`${internalActivityCount} internal ${internalActivityCount === 1 ? 'activity' : 'activities'}`}
-              >
-                {showInternal ? 'Hide internals' : 'Show internals'}
-              </button>
-            ) : null}
           </div>
           <ActivityList
             activities={filteredActivities}
@@ -173,10 +159,18 @@ export const DevtoolsPanel = ({
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
             derivedRefreshes={activeActivity.derivedRefreshes}
             mutationCommitId={activeActivity.mutationCommitId}
+            internalExchanges={activeActivity.internalExchanges}
+            internalGraphObservations={activeActivity.internalGraphObservations}
             runtimeTransport={runtimeTransport}
           />
         ) : activeActivity?.kind === 'exchange' ? (
-          <ExchangeDetail activity={activeActivity.exchange} />
+          <ExchangeDetail
+            activity={activeActivity.exchange}
+            derivedRefreshes={activeActivity.derivedRefreshes}
+            mutationCommitId={activeActivity.mutationCommitId}
+            internalExchanges={activeActivity.internalExchanges}
+            internalGraphObservations={activeActivity.internalGraphObservations}
+          />
         ) : (
           <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
         )}

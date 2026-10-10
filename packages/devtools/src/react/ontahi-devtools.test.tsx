@@ -599,8 +599,10 @@ describe('OntahiDevtools', () => {
       expect(screen.getByText('completed · updating')).toBeTruthy();
       expect(screen.getByText('update #1 · 50%')).toBeTruthy();
       expect(screen.getByText('run-1')).toBeTruthy();
-      expect(screen.getByText('Semantic effects')).toBeTruthy();
-      expect(screen.getByText('commit commit-complete-all')).toBeTruthy();
+      expect(screen.getByText('Effects')).toBeTruthy();
+      expect(screen.getByText(/committed application changes/)).toBeTruthy();
+      fireEvent.click(screen.getByText('Technical evidence'));
+      expect(screen.getByText('mutation commit commit-complete-all')).toBeTruthy();
       const timeline = within(screen.getByRole('list', { name: 'Operation progress messages' }));
       expect(timeline.getAllByText('websocket')).toHaveLength(4);
       expect(timeline.getAllByText(/^completed/)).toHaveLength(1);

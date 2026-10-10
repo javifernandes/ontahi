@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ExchangeDiagnosticEvent, ObservationDiagnosticEvent } from '../diagnostics.js';
+import type {
+  ExchangeDiagnosticEvent,
+  ObservationDiagnosticEvent,
+  OntahiDiagnosticEvent,
+} from '../diagnostics.js';
 
 import {
   activityEntryEvent,
@@ -93,6 +97,31 @@ describe('Devtools activity model', () => {
       label: 'running',
       title: 'running',
     });
+    expect(
+      operationProgressState({
+        ...activity(undefined),
+        snapshots: [
+          {
+            observationId: 'observation-1',
+            family: 'durable.operation.observe',
+            run: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+            transportId: 'websocket',
+            transportKind: 'websocket',
+            startedAt: 1,
+            kind: 'observation.snapshot',
+            at: 2,
+            sequence: 2,
+            snapshot: {
+              taskId: 'TodoList.completeAll',
+              runId: 'run-1',
+              status: 'completed',
+              updatedAt: '2026-09-29T00:00:01.000Z',
+              progress: { phase: 'updating', percent: 100 },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'durable operation', title: 'completed' });
   });
 
   it('projects a pending model response as its semantic interaction', () => {
@@ -898,11 +927,20 @@ describe('Devtools activity model', () => {
     expect(entries[0]).toMatchObject({
       kind: 'exchange',
       mutationCommitId: 'commit-1',
-      derivedRefreshes: [{ observationId: 'todos-observation', sequence: 2, rowCount: 3 }],
+      derivedRefreshes: [
+        {
+          id: 'todos-observation',
+          source: 'observation',
+          sequence: 2,
+          rowCount: 3,
+        },
+      ],
+      internalExchanges: [{ id: 'inspect-1' }],
+      internalGraphObservations: [{ id: 'todos-observation' }],
     });
   });
 
-  it('hides successful durable inspection exchanges unless internal activity is requested', () => {
+  it('hides standalone successful durable inspection exchanges from semantic activity', () => {
     const identity = {
       exchangeId: 'inspect-model',
       requestId: 'inspect-model',
@@ -938,12 +976,97 @@ describe('Devtools activity model', () => {
     ] as const;
 
     expect(buildActivityEntries(events)).toEqual([]);
-    const entries = buildActivityEntries(events, { includeInternal: true });
+  });
+
+  it('groups a causally identified graph read exchange under the mutation that refreshed it', () => {
+    const identity = (exchangeId: string, family: string, at: number) => ({
+      exchangeId,
+      requestId: exchangeId,
+      family,
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: at,
+    });
+    const events: OntahiDiagnosticEvent[] = [
+      {
+        ...identity('mutation', 'graph.command', 10),
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'graph.command',
+          body: { kind: 'graph-command' },
+        },
+      },
+      {
+        ...identity('mutation', 'graph.command', 10),
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'graph.command',
+          metadata: { mutationCommitId: 'commit-1' },
+        },
+      },
+      {
+        ...identity('refresh', 'graph.read', 12),
+        kind: 'exchange.started',
+        at: 12,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'graph.read',
+          body: {
+            kind: 'graph-read',
+            selection: { entityName: 'TodoList', expression: { kind: 'all' } },
+          },
+        },
+      },
+      {
+        ...identity('refresh', 'graph.read', 12),
+        kind: 'exchange.settled',
+        at: 15,
+        durationMs: 3,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'graph.read',
+          body: {
+            kind: 'graph-read-result',
+            value: [{ id: 'list-1' }],
+            causedBy: {
+              kind: 'committed-mutations',
+              commitIds: ['commit-1'],
+              overflow: false,
+            },
+          },
+        },
+      },
+    ];
+
+    const entries = buildActivityEntries(events);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      kind: 'exchange',
-      internal: true,
-      exchange: { id: 'inspect-model' },
+      mutationCommitId: 'commit-1',
+      derivedRefreshes: [
+        {
+          id: 'refresh',
+          source: 'exchange',
+          transportId: 'websocket',
+          durationMs: 3,
+          rowCount: 1,
+        },
+      ],
+      internalExchanges: [{ id: 'refresh' }],
     });
   });
 

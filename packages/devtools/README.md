@@ -283,13 +283,14 @@ reruns after invalidation.
 
 Semantic refreshes retain their safe causal identity even when payload capture is disabled. When a
 mutation response or completed durable run exposes the matching `mutationCommitId`, Activity groups
-the derived Graph Read refresh beneath that mutation. A terminal durable inspection can provide the
-commit identity when the progress snapshot does not. Successful durable control exchanges and Graph
-observations already represented as caused refreshes are hidden by default; **Show internals** reveals
-that protocol-level trace without duplicating the semantic story. Durable detail shows the commit and
-its derived refreshes together. Observation detail distinguishes native snapshots from semantic
-refreshes and lists bounded, coalesced causes; it never guesses a relation
-from adjacent timestamps.
+the derived Graph Read refresh inside that mutation, whether the refresh arrived as a request/response
+exchange or a live Graph observation. A terminal durable inspection can provide the commit identity
+when the progress snapshot does not. Correlated durable controls and refreshes are not separate
+top-level Activity rows: the mutation detail explains which active reads Ontahí refreshed, while a
+collapsed Runtime trace preserves the lower-level exchanges and raw envelopes. Commit IDs remain
+collapsed as technical evidence rather than acting as the user-facing explanation. Observation detail
+distinguishes native snapshots from semantic refreshes and lists bounded, coalesced causes; Activity
+never guesses a relation from adjacent timestamps.
 
 With `clientCache` connected, enable **Settings → Record entity history** to capture a baseline and
 subsequent entity writes, invalidations, and cache clears. **Cache → History** shows the timeline,

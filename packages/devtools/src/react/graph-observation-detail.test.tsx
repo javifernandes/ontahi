@@ -147,11 +147,13 @@ describe('query observation Activity', { timeout: 15_000 }, () => {
     render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
 
     expect(screen.getByText('1 semantic refresh')).toBeTruthy();
-    expect(screen.getByText('Graph Read refresh #1')).toBeTruthy();
+    expect(screen.getByText('Effects')).toBeTruthy();
+    expect(screen.getByText(/refreshed 1 active read/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /observe ws completed/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show internals' }));
-    fireEvent.click(screen.getByRole('button', { name: /observe ws completed/ }));
-    expect(screen.getByText(/Semantic refresh caused by 1 commit/)).toBeTruthy();
-    expect(screen.getByText('commit-1')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show internals' })).toBeNull();
+    fireEvent.click(screen.getByText('Technical evidence'));
+    expect(screen.getByText('mutation commit commit-1')).toBeTruthy();
+    fireEvent.click(screen.getByText('Runtime trace · 1 internal step'));
+    expect(screen.getByText('Graph Read refresh #1')).toBeTruthy();
   });
 });

@@ -6,10 +6,11 @@ import {
   toDurableOperationInteractionResponseRequest,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 
 import type { RuntimeDiagnosticOutcome } from '../diagnostics.js';
 
+import { ActivityMessage } from './activity-message.js';
 import {
   formatClock,
   exchangeInteractionState,
@@ -21,9 +22,12 @@ import {
   type ObservationSnapshot,
   type OperationProgressActivity,
 } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
+import { CausalEffects } from './causal-effects.js';
 import { styles } from './devtools-styles.js';
-import { JsonView } from './json-view.js';
+import type { GraphObservationActivity } from './graph-observation-model.js';
 import { OperationInteraction } from './operation-interaction.js';
+import { RuntimeTrace } from './runtime-trace.js';
 
 const snapshotOutcome = (
   status: ObservationSnapshot['snapshot']['status'],
@@ -32,72 +36,24 @@ const snapshotOutcome = (
   return 'pending';
 };
 
-const ActivityMessage = ({
-  direction,
-  outcome,
-  title,
-  time,
-  transport,
-  detail,
-  value,
-  label,
-  response,
-}: {
-  readonly direction: string;
-  readonly outcome: RuntimeDiagnosticOutcome | 'pending';
-  readonly title: string;
-  readonly time: string;
-  readonly transport: string;
-  readonly detail?: string;
-  readonly value: unknown;
-  readonly label: string;
-  readonly response?: { readonly value: unknown; readonly label: string };
-}) => (
-  <li style={styles.message}>
-    <details>
-      <summary style={styles.messageSummary}>
-        <span style={styles.messageDirection}>{direction}</span>
-        <span style={{ ...styles.dot, background: outcomeColor(outcome) }} aria-hidden='true' />
-        <span style={styles.messageTitle}>{title}</span>
-        <span style={styles.messageMeta}>
-          <span>{time}</span>
-          <span>{transport}</span>
-          <span>{detail}</span>
-        </span>
-      </summary>
-      <div style={styles.messagePayload}>
-        {response ? (
-          <div style={styles.exchangePayload}>
-            <section style={styles.exchangePayloadColumn} aria-label='Invocation request'>
-              <span style={styles.semanticLabel}>Request</span>
-              <JsonView value={value} label={label} />
-            </section>
-            <section style={styles.exchangePayloadColumn} aria-label='Invocation response'>
-              <span style={styles.semanticLabel}>Response</span>
-              <JsonView value={response.value} label={response.label} />
-            </section>
-          </div>
-        ) : (
-          <JsonView value={value} label={label} />
-        )}
-      </div>
-    </details>
-  </li>
-);
-
 export const OperationProgressDetail = ({
   activity,
   exchange,
   derivedRefreshes = [],
   mutationCommitId: correlatedMutationCommitId,
+  internalExchanges = [],
+  internalGraphObservations = [],
   runtimeTransport,
 }: {
   readonly activity: OperationProgressActivity;
   readonly exchange?: ExchangeActivity;
   readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
   readonly mutationCommitId?: string;
+  readonly internalExchanges?: readonly ExchangeActivity[];
+  readonly internalGraphObservations?: readonly GraphObservationActivity[];
   readonly runtimeTransport?: RuntimeTransport<any>;
 }) => {
+  const dialect = useContext(AuthoringDialectContext);
   const [responding, setResponding] = useState(false);
   const [responseError, setResponseError] = useState<string>();
   const [answeredInteraction, setAnsweredInteraction] = useState<string>();
@@ -110,8 +66,7 @@ export const OperationProgressDetail = ({
     activity.settled ?? activity.snapshots[activity.snapshots.length - 1] ?? activity.started;
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
-  const title = exchange ? semanticSummary(exchange) : `${event.run.taskId}()`;
-  const isModelCommand = (exchange?.started ?? exchange?.settled)?.family === 'model.command';
+  const title = exchange ? semanticSummary(exchange, dialect) : `${event.run.taskId}()`;
   const state = operationProgressState(activity);
   const initialInteraction = exchange ? exchangeInteractionState(exchange) : undefined;
   const latestSnapshot = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
@@ -174,40 +129,11 @@ export const OperationProgressDetail = ({
         </span>
       </header>
       <div style={styles.runBody}>
-        <div style={styles.runSummary}>
-          <div style={styles.semanticCard}>
-            <span style={styles.semanticLabel}>{isModelCommand ? 'Execution' : 'Operation'}</span>
-            <span style={styles.semanticValue}>
-              {isModelCommand ? 'Model command' : `${event.run.taskId}()`}
-            </span>
-          </div>
-          <div style={styles.semanticCard}>
-            <span style={styles.semanticLabel}>Run</span>
-            <span style={styles.semanticValue}>{event.run.runId}</span>
-          </div>
-          <div style={styles.semanticCard}>
-            <span style={styles.semanticLabel}>State</span>
-            <span style={styles.semanticValue}>{state.title}</span>
-          </div>
+        <div style={styles.runIdentity}>
+          <span style={styles.semanticLabel}>Run</span>
+          <span style={styles.semanticValue}>{event.run.runId}</span>
         </div>
-        {mutationCommitId || derivedRefreshes.length > 0 ? (
-          <div style={{ ...styles.semanticCard, marginBottom: 14 }}>
-            <span style={styles.semanticLabel}>Semantic effects</span>
-            {mutationCommitId ? (
-              <div style={styles.semanticValue}>commit {mutationCommitId}</div>
-            ) : null}
-            {derivedRefreshes.length > 0 ? (
-              <div style={{ ...styles.chips, marginTop: mutationCommitId ? 8 : 0 }}>
-                {derivedRefreshes.map(refresh => (
-                  <span key={`${refresh.observationId}:${refresh.sequence}`} style={styles.chip}>
-                    refreshed Graph Read #{refresh.sequence} · {refresh.rowCount ?? 'unknown'} rows
-                    {refresh.overflow ? ' · coalesced causes' : ''}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        <CausalEffects mutationCommitId={mutationCommitId} refreshes={derivedRefreshes} />
         {interaction ? (
           runtimeExchange ? (
             <OperationInteraction
@@ -300,6 +226,7 @@ export const OperationProgressDetail = ({
             />
           ) : null}
         </ol>
+        <RuntimeTrace exchanges={internalExchanges} graphObservations={internalGraphObservations} />
       </div>
     </section>
   );
