@@ -146,7 +146,12 @@ describe('tasks', () => {
     });
     expect(deliver).toHaveBeenCalledOnce();
     expect(deliver).toHaveBeenCalledWith(
-      expect.objectContaining({ mutations: expect.arrayContaining([expect.any(Object)]) }),
+      expect.objectContaining({
+        id: expect.any(String),
+        mutations: expect.objectContaining({
+          mutations: expect.arrayContaining([expect.any(Object)]),
+        }),
+      }),
     );
   });
 

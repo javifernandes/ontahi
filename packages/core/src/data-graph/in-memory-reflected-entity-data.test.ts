@@ -227,6 +227,7 @@ describe('in-memory reflected entity data', () => {
       relationships,
     });
     const readRelatedEntityData = storage.readRelatedEntityData!;
+    const originalTodoWhere = Reflect.get(Todo, 'where');
 
     await expect(
       readRelatedEntityData({
@@ -250,6 +251,7 @@ describe('in-memory reflected entity data', () => {
       hasPreviousPage: true,
       hasNextPage: false,
     });
+    expect(Reflect.get(Todo, 'where')).toBe(originalTodoWhere);
 
     await expect(
       readRelatedEntityData({

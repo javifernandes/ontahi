@@ -295,6 +295,8 @@ export type TaskInteractionResponseContext = {
 
 export type TaskExecutionMetadata = {
   committedMutations: CommittedMutationSet;
+  /** Stable identity for the terminal commit represented by committedMutations. */
+  mutationCommitId?: string;
 };
 
 export type TaskSnapshot<TResult = unknown> = {

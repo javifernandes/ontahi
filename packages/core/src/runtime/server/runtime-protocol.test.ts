@@ -323,7 +323,11 @@ describe('application Runtime Protocol', () => {
           else signal.addEventListener('abort', () => resolve(), { once: true });
         });
       }) as Application['createGraphReadObserver'];
-    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectCommittedMutations: mutations => mutations,
+    });
     const observerContext: Context = {
       principal: { kind: 'user', subject: 'observer' },
     };
@@ -349,28 +353,44 @@ describe('application Runtime Protocol', () => {
       done: false,
       value: { kind: 'graph-read-result', value: [{ revision: 0 }] },
     });
-    await protocol.dispatcher(
-      request('graph.command', {
-        version: 3,
-        kind: 'graph-command',
-        command: {
-          kind: 'entity-mutation-command',
-          action: 'update',
-          entityName: 'Todo',
-          target: {
-            kind: 'selection',
+    const mutationResponse = await protocol.dispatcher(
+      createRuntimeProtocolRequest({
+        id: 'causal-command',
+        family: 'graph.command',
+        accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+        body: {
+          version: 3,
+          kind: 'graph-command',
+          command: {
+            kind: 'entity-mutation-command',
+            action: 'update',
             entityName: 'Todo',
-            expression: { kind: 'all' },
+            target: {
+              kind: 'selection',
+              entityName: 'Todo',
+              expression: { kind: 'all' },
+            },
+            values: { completed: true },
           },
-          values: { completed: true },
         },
       }),
       { principal: { kind: 'user', subject: 'mutator' } },
     );
 
-    await expect(iterator.next()).resolves.toMatchObject({
+    const refresh = await iterator.next();
+    expect(refresh).toMatchObject({
       done: false,
       value: { kind: 'graph-read-result', value: [{ revision: 1 }] },
+    });
+    expect(refresh.value).toMatchObject({
+      causedBy: {
+        kind: 'committed-mutations',
+        commitIds: [
+          (mutationResponse as { metadata: { mutationCommitId: string } }).metadata
+            .mutationCommitId,
+        ],
+        overflow: false,
+      },
     });
     expect(readAuthorities).toEqual([observerContext]);
 

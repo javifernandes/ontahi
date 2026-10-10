@@ -228,9 +228,12 @@ refresh resolves current policy and scope. Native and semantic refreshes that pr
 snapshot are emitted once.
 
 This is invalidation, not an Event stream or mutation replay log. One pending refresh is retained
-per slow observer, repeated commits coalesce, and teardown releases both semantic and native
-observation work. A multi-process host still needs an external change source; Ontahi does not
-broadcast these process-local commit descriptions across regions or replicas.
+per slow observer. Repeated commits coalesce with up to 16 unique `mutationCommitId` causes plus an
+overflow marker, and the resulting Graph observation snapshot carries those identities as
+`causedBy`. The initiating Runtime Protocol response or terminal durable snapshot carries the same
+identity, so diagnostics can prove causality without timing heuristics. Teardown releases both
+semantic and native observation work. A multi-process host still needs an external change source;
+Ontahi does not broadcast these process-local commit descriptions across regions or replicas.
 
 ## Mount the socket on the host server
 

@@ -1048,7 +1048,7 @@ export const createGraphSelectionAssembly = <
           options?.through,
         );
         return new RelationRootSelection({
-          targetEntity: entityDefinition as RelationRootTargetEntity<
+          targetEntity: boundEntity as unknown as RelationRootTargetEntity<
             TEntity,
             TReadError,
             TReadOptions,

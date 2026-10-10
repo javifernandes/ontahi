@@ -174,6 +174,50 @@ describe('WebSocket Runtime Transport', () => {
     ]);
   });
 
+  it('preserves mutation metadata on request responses', async () => {
+    const pair = createSessionSocketFactory({
+      dispatcher: async input => {
+        const request = input as RuntimeProtocolRequestEnvelope;
+        return createRuntimeProtocolResponse(
+          request,
+          { kind: 'graph-command-result', result: { status: 'applied' } },
+          {
+            mutationCommitId: 'commit-1',
+            committedMutations: {
+              precision: 'widened',
+              mutations: [
+                {
+                  effect: { kind: 'graph-change' },
+                  provenance: 'conservative',
+                },
+              ],
+            },
+          },
+        );
+      },
+      context: undefined,
+    });
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: pair.createWebSocket,
+    });
+    const request = createRuntimeProtocolRequest({
+      id: 'mutation-request',
+      family: 'graph.command',
+      body: { version: 1, kind: 'graph-command' },
+    });
+
+    await expect(transport.request(request)).resolves.toMatchObject({
+      id: 'mutation-request',
+      family: 'graph.command',
+      metadata: {
+        mutationCommitId: 'commit-1',
+        committedMutations: { precision: 'widened' },
+      },
+    });
+    transport.close();
+  });
+
   it('receives pushed Durable progress and terminal result without inspect polling', async () => {
     const pair = createSessionSocketFactory({
       dispatcher: async input =>

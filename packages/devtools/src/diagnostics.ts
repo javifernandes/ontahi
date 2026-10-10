@@ -18,6 +18,7 @@ export type DiagnosticProtocolEnvelope = {
   readonly family?: string;
   readonly body?: unknown;
   readonly error?: unknown;
+  readonly metadata?: { readonly mutationCommitId: string };
 };
 
 export type DiagnosticTaskSnapshot = {
@@ -38,6 +39,7 @@ export type DiagnosticTaskSnapshot = {
   readonly interaction?: unknown;
   readonly error?: { readonly code: string; readonly message: string };
   readonly result?: unknown;
+  readonly mutationCommitId?: string;
 };
 
 export type DiagnosticError = {
@@ -120,6 +122,11 @@ export type GraphObservationDiagnosticEvent = GraphObservationIdentity &
         readonly at: number;
         readonly sequence: number;
         readonly rowCount?: number;
+        readonly causedBy?: {
+          readonly kind: 'committed-mutations';
+          readonly commitIds: readonly string[];
+          readonly overflow: boolean;
+        };
         readonly snapshot?: unknown;
       }
     | {

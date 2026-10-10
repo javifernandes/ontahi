@@ -1,6 +1,6 @@
 # Semantic Mutation Delivery To Active Observations
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/semantic-mutation-delivery-to-active-observations`
 
@@ -44,7 +44,7 @@ conflating mutation occurrence with an Event or row stream.
 - [x] Subscription authority is re-applied during reevaluation.
 - [x] Closing an observation releases every mutation-delivery subscription.
 - [x] Slow consumers and repeated mutations have an explicit bounded policy.
-- [ ] Devtools can relate the committed mutation and refresh through an explicit causal identity.
+- [x] Devtools can relate the committed mutation and refresh through an explicit causal identity.
 
 ## Implemented Slice
 
@@ -63,8 +63,13 @@ This delivery is intentionally process-local and lossy: Graph Read reevaluation 
 truth, not a queued mutation log. Repeated commits coalesce while an observation is slow, and abort
 or iterator teardown releases the registration and native observer.
 
-## Remaining
+## Completed Causal Slice
 
-Plan 148 still needs a portable causal identity relating a committed mutation response or durable
-completion to the observation refresh it caused. That transport and Devtools evidence should be
-added without exposing authority context or turning refreshes into domain Events.
+Each successful commit now receives a portable `mutationCommitId` outside the semantic mutation
+set. The same identity is projected with an initiating response or terminal durable snapshot and
+with every semantic Graph observation refresh it causes. Slow-observer coalescing retains at most
+16 unique identities plus an overflow marker rather than growing a mutation log.
+
+Devtools retains this identity independently of payload capture, groups proven derived refreshes
+under their mutation Activity, and labels observation snapshots as native or semantic. No timing
+heuristic, authority context, or domain Event is introduced.

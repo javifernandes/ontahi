@@ -37,6 +37,14 @@ export type ExchangeActivity = {
   readonly at: number;
 };
 
+export type DerivedGraphRefresh = {
+  readonly observationId: string;
+  readonly sequence: number;
+  readonly at: number;
+  readonly rowCount?: number;
+  readonly overflow: boolean;
+};
+
 export type OperationProgressActivity = {
   readonly id: string;
   readonly started?: ObservationStarted;
@@ -110,6 +118,7 @@ export type ActivityEntry =
       readonly at: number;
       readonly graphObservation: GraphObservationActivity;
       readonly observation?: never;
+      readonly derivedRefreshes?: never;
     }
   | {
       readonly kind: 'exchange';
@@ -117,12 +126,14 @@ export type ActivityEntry =
       readonly at: number;
       readonly exchange: ExchangeActivity;
       readonly observation?: OperationProgressActivity;
+      readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
     }
   | {
       readonly kind: 'observation';
       readonly id: string;
       readonly at: number;
       readonly observation: OperationProgressActivity;
+      readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
     };
 
 export const isRecord = (value: unknown): value is RecordValue =>
@@ -548,31 +559,76 @@ const correlateActivity = (
   return [...exchangeEntries, ...observationEntries].sort((left, right) => right.at - left.at);
 };
 
-export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): ActivityEntry[] =>
-  [
-    ...correlateActivity(
-      buildExchangeActivities(
-        events.filter((event): event is ExchangeDiagnosticEvent =>
-          event.kind.startsWith('exchange.'),
-        ),
-      ).filter(activity => !isSuccessfulDurableControlExchange(activity)),
-      buildOperationProgressActivities(
-        events.filter((event): event is ObservationDiagnosticEvent =>
-          event.kind.startsWith('observation.'),
-        ),
+export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): ActivityEntry[] => {
+  const graphObservations = buildGraphObservationActivities(
+    events.filter((event): event is GraphObservationDiagnosticEvent =>
+      event.kind.startsWith('graph-observation.'),
+    ),
+  );
+  const primary = correlateActivity(
+    buildExchangeActivities(
+      events.filter((event): event is ExchangeDiagnosticEvent =>
+        event.kind.startsWith('exchange.'),
+      ),
+    ).filter(activity => !isSuccessfulDurableControlExchange(activity)),
+    buildOperationProgressActivities(
+      events.filter((event): event is ObservationDiagnosticEvent =>
+        event.kind.startsWith('observation.'),
       ),
     ),
-    ...buildGraphObservationActivities(
-      events.filter((event): event is GraphObservationDiagnosticEvent =>
-        event.kind.startsWith('graph-observation.'),
-      ),
-    ).map(graphObservation => ({
+  );
+  const commitEntry = new Map<string, string>();
+  primary.forEach(entry => {
+    const exchangeCommitId =
+      entry.kind === 'exchange'
+        ? entry.exchange.settled?.response?.metadata?.mutationCommitId
+        : undefined;
+    const durableCommitId = entry.observation?.snapshots
+      .slice()
+      .reverse()
+      .find(snapshot => snapshot.snapshot.mutationCommitId)?.snapshot.mutationCommitId;
+    const commitId = exchangeCommitId ?? durableCommitId;
+    if (commitId) commitEntry.set(commitId, entry.id);
+  });
+  const refreshesByEntry = new Map<string, DerivedGraphRefresh[]>();
+  graphObservations.forEach(observation =>
+    observation.snapshots.forEach(snapshot => {
+      const causedBy = snapshot.causedBy;
+      causedBy?.commitIds.forEach(commitId => {
+        const entryId = commitEntry.get(commitId);
+        if (!entryId) return;
+        const refreshes = refreshesByEntry.get(entryId) ?? [];
+        if (
+          !refreshes.some(
+            item => item.observationId === observation.id && item.sequence === snapshot.sequence,
+          )
+        ) {
+          refreshes.push({
+            observationId: observation.id,
+            sequence: snapshot.sequence,
+            at: snapshot.at,
+            ...(snapshot.rowCount === undefined ? {} : { rowCount: snapshot.rowCount }),
+            overflow: causedBy.overflow,
+          });
+          refreshesByEntry.set(entryId, refreshes);
+        }
+      });
+    }),
+  );
+  const entries = primary.map(entry => {
+    const derivedRefreshes = refreshesByEntry.get(entry.id);
+    return derivedRefreshes ? { ...entry, derivedRefreshes } : entry;
+  });
+  return [
+    ...entries,
+    ...graphObservations.map(graphObservation => ({
       kind: 'graph-observation' as const,
       id: `graph-observation:${graphObservation.id}`,
       at: graphObservation.at,
       graphObservation,
     })),
   ].sort((left, right) => right.at - left.at);
+};
 
 export const activityEntryEvent = (entry: ActivityEntry) =>
   entry.kind === 'graph-observation'

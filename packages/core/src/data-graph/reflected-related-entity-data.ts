@@ -29,7 +29,7 @@ export const createRuntimeReflectedRelatedEntityDataReader = ({
 
     const graph = createRuntimeBoundDataGraphApi(createRuntime);
     const source = graph.bindSelection(Selection.references(sourceEntity, [query.source as never]));
-    const target = graph.bindSelectionEntity(targetEntity);
+    const target = graph.selectionAssembly.bindSelectionEntity(targetEntity, {});
     const through = query.relationName.split('.').at(-1) ?? query.relationName;
     const rows = (await Effect.runPromise(
       target.relatedTo(source as never, { through }).resolveEntityRows(),

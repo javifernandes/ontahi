@@ -482,11 +482,13 @@ ordinary dispatcher again under the subscription's original authority, including
 scope resolution. Native storage observation remains active, and duplicate JSON result snapshots
 from native and semantic sources are collapsed.
 
-Delivery is process-local and deliberately bounded. A slow observation retains at most one pending
-semantic refresh instead of buffering mutation history, because the reevaluated Graph Read is the
-source of truth. Failed work does not publish, and closing or aborting the observation releases its
-registration. Cross-process delivery and portable causal diagnostics are not implied by this
-contract.
+Delivery is process-local and deliberately bounded. A slow observation retains one pending
+semantic refresh and at most 16 unique causal commit identities instead of buffering mutation
+history; further causes set an overflow marker because the reevaluated Graph Read is the source of
+truth. Successful mutation responses and terminal durable snapshots expose the same
+`mutationCommitId` carried by their derived observation refresh. Failed work does not publish, and
+closing or aborting the observation releases its registration. Cross-process delivery still
+requires a host-owned change source.
 
 Portable Graph Read requests may opt into `includeCapabilities: true`. After authorization and a
 successful execution, the dispatcher adds `capabilities: { orderBy: string[] }` alongside `value`.

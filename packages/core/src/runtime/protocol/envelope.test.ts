@@ -52,6 +52,7 @@ describe('Runtime Protocol envelope', () => {
       accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
     });
     const metadata = {
+      mutationCommitId: 'commit-123',
       committedMutations: {
         precision: 'widened' as const,
         mutations: [

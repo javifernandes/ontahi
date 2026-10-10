@@ -55,14 +55,16 @@ const projectProtocolEnvelope = (
   }
 
   const body = projectPayload(value.body);
-  if (body === undefined) return undefined;
+  const mutationCommitId = value.kind === 'response' ? value.metadata?.mutationCommitId : undefined;
+  if (body === undefined && mutationCommitId === undefined) return undefined;
   return {
     protocol: value.protocol,
     version: value.version,
     id: value.id,
     kind: value.kind,
     family: value.family,
-    body,
+    ...(body === undefined ? {} : { body }),
+    ...(mutationCommitId ? { metadata: { mutationCommitId } } : {}),
   };
 };
 
@@ -100,6 +102,9 @@ const projectTaskSnapshot = (
       ? { error: { code: snapshot.error.code, message: snapshot.error.message } }
       : {}),
     ...(result === undefined ? {} : { result }),
+    ...(snapshot.executionMetadata?.mutationCommitId
+      ? { mutationCommitId: snapshot.executionMetadata.mutationCommitId }
+      : {}),
   };
 };
 

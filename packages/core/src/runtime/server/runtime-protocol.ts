@@ -26,7 +26,10 @@ import {
   type RuntimeProtocolGraphObserver,
 } from '../protocol/index.js';
 
-import { createActiveGraphObservationRegistry } from './active-graph-observations.js';
+import {
+  createActiveGraphObservationRegistry,
+  type GraphObservationRefreshCause,
+} from './active-graph-observations.js';
 import { serverContext } from './context.js';
 import type { InvocationContextInput } from './invocation-context.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
@@ -40,6 +43,7 @@ import type {
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
 import {
   COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
+  createCommittedMutationCommit,
   deliverCommittedMutationsToCurrentRuntime,
   sealCurrentUnitOfWorkMutationJournal,
   type CommittedMutationDelivery,
@@ -171,14 +175,14 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
       const previousDelivery = resources.get(COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY) as
         | CommittedMutationDelivery
         | undefined;
-      const delivery: CommittedMutationDelivery = mutations => {
+      const delivery: CommittedMutationDelivery = commit => {
         try {
-          previousDelivery?.(mutations);
+          previousDelivery?.(commit);
         } catch (error) {
           reportError?.(error);
         }
         try {
-          activeGraphObservations.publish(mutations);
+          activeGraphObservations.publish(commit);
         } catch (error) {
           reportError?.(error);
         }
@@ -195,10 +199,13 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
           async () => {
             const body = await run();
             const committedMutations = sealCurrentUnitOfWorkMutationJournal();
-            deliverCommittedMutationsToCurrentRuntime(committedMutations);
+            const commit = createCommittedMutationCommit(committedMutations);
+            deliverCommittedMutationsToCurrentRuntime(commit);
             return withRuntimeProtocolMetadata(
               body,
-              committedMutations.mutations.length === 0 ? undefined : { committedMutations },
+              committedMutations.mutations.length === 0
+                ? undefined
+                : { committedMutations, mutationCommitId: commit.id },
             );
           },
         ),
@@ -217,6 +224,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
 
   const toGraphObservationResponse = (
     response: GraphReadDispatchResponse,
+    causedBy?: GraphObservationRefreshCause,
   ): GraphReadObservationResponse => {
     if (isGraphReadProtocolError(response)) return response;
     if (
@@ -232,6 +240,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     return {
       kind: 'graph-read-result',
       value: response.value,
+      ...(causedBy ? { causedBy } : {}),
       ...(response.capabilities ? { capabilities: response.capabilities } : {}),
     };
   };
@@ -255,12 +264,12 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
       const iterator = native[Symbol.asyncIterator]();
       let nativeNext: Promise<IteratorResult<GraphReadObservationResponse>> | undefined =
         iterator.next();
-      let mutationNext: Promise<boolean> = subscription.wait(signal);
+      let mutationNext = subscription.wait(signal);
       let previousSnapshot: string | undefined;
 
       const emitIfChanged = (body: GraphReadObservationResponse) => {
         if (body.kind !== 'graph-read-result') return body;
-        const snapshot = JSON.stringify(body);
+        const snapshot = JSON.stringify({ kind: body.kind, value: body.value });
         if (snapshot === previousSnapshot) return undefined;
         previousSnapshot = snapshot;
         return body;
@@ -272,7 +281,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             ...(nativeNext
               ? [nativeNext.then(result => ({ kind: 'native' as const, result }))]
               : []),
-            mutationNext.then(changed => ({ kind: 'mutation' as const, changed })),
+            mutationNext.then(causedBy => ({ kind: 'mutation' as const, causedBy })),
           ]);
 
           if (outcome.kind === 'native') {
@@ -286,10 +295,10 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             continue;
           }
 
-          if (!outcome.changed) return;
+          if (!outcome.causedBy) return;
           mutationNext = subscription.wait(signal);
           const refreshed = await withContext(context, () => read(request, { authority: context }));
-          const body = emitIfChanged(toGraphObservationResponse(refreshed));
+          const body = emitIfChanged(toGraphObservationResponse(refreshed, outcome.causedBy));
           if (body) yield body;
         }
       } finally {
@@ -370,7 +379,14 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
               metadata.committedMutations,
               { context, family: request.family },
             );
-            return committedMutations === undefined ? undefined : { committedMutations };
+            return committedMutations === undefined
+              ? undefined
+              : {
+                  committedMutations,
+                  ...(metadata.mutationCommitId
+                    ? { mutationCommitId: metadata.mutationCommitId }
+                    : {}),
+                };
           },
     reportError: error => reportError?.(error),
   });
