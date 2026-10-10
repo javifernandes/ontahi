@@ -1259,9 +1259,26 @@ describe('Ontahi todo portability example', () => {
       progress: { phase: 'updating' },
       result: { completed: 2 },
     });
+    expect(snapshotInspection).not.toHaveBeenCalled();
+    const terminalInspection = await createRuntimeProtocolExecutionExchange({
+      transport: runtimeTransport,
+    })({
+      family: 'durable.operation',
+      body: toDurableOperationProtocolRequest(start.value as TaskRunIdentity),
+    });
+    expect(terminalInspection.metadata).toMatchObject({
+      mutationCommitId: expect.any(String),
+      committedMutations: {
+        mutations: expect.arrayContaining([
+          expect.objectContaining({
+            effect: expect.objectContaining({ kind: 'selection-change' }),
+          }),
+        ]),
+      },
+    });
     expect(getTodoDataset().TodoItem?.find(todo => todo.id === 'todo-3')?.completed).toBe(false);
     expect(socketCount).toBe(1);
-    expect(snapshotInspection).not.toHaveBeenCalled();
+    expect(snapshotInspection).toHaveBeenCalledOnce();
     snapshotInspection.mockRestore();
     runtimeTransport.close();
   });

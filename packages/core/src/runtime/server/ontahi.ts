@@ -11,6 +11,7 @@ import {
   entityMutationReferenceNotFoundDiagnostic,
   query,
   safeParseGraphSchema,
+  selectionAll,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
@@ -65,7 +66,7 @@ import {
   type ContextualMutationReactionExecutorOptions,
 } from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
-import { recordAppliedGraphCommand } from './unit-of-work.js';
+import { getCurrentUnitOfWork, recordAppliedGraphCommand } from './unit-of-work.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
 type RuntimeError<TRuntime> =
@@ -335,6 +336,31 @@ export const ontahi = <
           ) =>
             transaction.call(target, transactionRuntime =>
               work(decorateDataGraphRuntime(transactionRuntime, true)),
+            );
+        }
+        if (property === 'runCommand') {
+          const runCommand = Reflect.get(
+            target,
+            property,
+            receiver,
+          ) as AnyDataGraphRuntime['runCommand'];
+          return (
+            command: Parameters<AnyDataGraphRuntime['runCommand']>[0],
+            commandOptions: Parameters<AnyDataGraphRuntime['runCommand']>[1],
+          ) =>
+            runCommand.call(target, command, commandOptions).pipe(
+              Effect.tap(() =>
+                Effect.sync(() =>
+                  getCurrentUnitOfWork()?.mutations.changed({
+                    kind: 'selection',
+                    entityName: command.root.name,
+                    expression:
+                      command.operation === 'update' || command.operation === 'delete'
+                        ? command.selection
+                        : selectionAll(),
+                  }),
+                ),
+              ),
             );
         }
         if (property !== 'runEntityMutationCommand') {
