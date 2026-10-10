@@ -144,7 +144,7 @@ describe('query observation Activity', { timeout: 15_000 }, () => {
 
     render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
 
-    expect(screen.getByText('1 semantic refreshes')).toBeTruthy();
+    expect(screen.getByText('1 semantic refresh')).toBeTruthy();
     expect(screen.getByText('Graph Read refresh #1')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /observe ws completed/ }));
     expect(screen.getByText(/Semantic refresh caused by 1 commit/)).toBeTruthy();

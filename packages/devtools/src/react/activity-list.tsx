@@ -78,7 +78,10 @@ export const ActivityList = ({
                   ) : null}
                   {observation ? <span>{observation.snapshots.length} updates</span> : null}
                   {activity.derivedRefreshes?.length ? (
-                    <span>{activity.derivedRefreshes.length} semantic refreshes</span>
+                    <span>
+                      {activity.derivedRefreshes.length} semantic{' '}
+                      {activity.derivedRefreshes.length === 1 ? 'refresh' : 'refreshes'}
+                    </span>
                   ) : null}
                   {observation?.settled ? (
                     <span>{observation.settled.durationMs} ms</span>
