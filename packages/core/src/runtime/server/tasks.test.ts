@@ -7,6 +7,7 @@ import {
   validateTaskInputInteractionRequest,
   validateTaskInteractionResponse,
 } from './tasks/execution-interactions.js';
+import { COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY } from './unit-of-work.js';
 
 import {
   architecture,
@@ -45,6 +46,7 @@ const createDeferred = () => {
 
 describe('tasks', () => {
   it('isolates durable execution journals and accumulates mutations across interactions', async () => {
+    const deliver = vi.fn();
     type State = { readonly step: 'choose' } | { readonly step: 'finish' };
     const execution = defineTaskExecution<{}, State, { done: true }>({
       initial: () => ({ step: 'choose' }),
@@ -98,7 +100,7 @@ describe('tasks', () => {
       createExecutionContext: source => ({
         scope: source.taskId,
         telemetrySpanName: source.taskId,
-        resources: new Map(),
+        resources: new Map([[COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY, deliver]]),
       }),
     });
     const trigger = createUserTaskTrigger({ userId: 'user-1' });
@@ -115,6 +117,7 @@ describe('tasks', () => {
         },
       });
     });
+    expect(deliver).not.toHaveBeenCalled();
     await Effect.runPromise(
       respondToTaskInteraction(
         runtime,
@@ -141,6 +144,10 @@ describe('tasks', () => {
         ),
       ).toEqual(['Todo', 'AuditLog']);
     });
+    expect(deliver).toHaveBeenCalledOnce();
+    expect(deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ mutations: expect.arrayContaining([expect.any(Object)]) }),
+    );
   });
 
   it('drives explicit execution steps across interactions without a suspended task function', async () => {
@@ -2189,17 +2196,33 @@ describe('tasks', () => {
 
   it('marks in-process task runs as failed when the task effect fails', async () => {
     const store = createInMemoryTaskStorage();
+    const deliver = vi.fn();
     const adapter = createInProcessTaskRuntime({
       storage: store,
       sleep: async () => {},
+      createExecutionContext: source => ({
+        scope: source.taskId,
+        telemetrySpanName: source.taskId,
+        resources: new Map([[COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY, deliver]]),
+      }),
     });
     const task = defineTask({
       id: 'demo.say-hello',
       run: () =>
-        Effect.fail({
-          reason: 'demo_failed',
-          message: 'Demo task failed.',
-        }),
+        Effect.sync(() =>
+          declareSelectionChange({
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          }),
+        ).pipe(
+          Effect.zipRight(
+            Effect.fail({
+              reason: 'demo_failed',
+              message: 'Demo task failed.',
+            }),
+          ),
+        ),
     });
 
     const run = await Effect.runPromise(startTask(adapter, task, {}, { runId: 'run-failed' }));
@@ -2213,6 +2236,7 @@ describe('tasks', () => {
         },
       });
     });
+    expect(deliver).not.toHaveBeenCalled();
   });
 
   it('exposes a portable task step boundary in task context', async () => {

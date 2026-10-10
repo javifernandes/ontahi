@@ -1,13 +1,19 @@
 import { Cause, Option, Runtime, type Stream } from 'effect';
 
-import type {
-  CommittedMutationSet,
-  EntityMutationCommandPolicy,
-  GraphReadPolicy,
-  ManyToManyRelationshipCommandPolicy,
-  OrderedRelationshipCommandPolicy,
-  RelationshipCommandPolicy,
+import {
+  graphReadProtocolError,
+  isGraphReadProtocolError,
+  parseGraphReadRequest,
+  type CommittedMutationSet,
+  type EntityMutationCommandPolicy,
+  type GraphReadDispatchResponse,
+  type GraphReadObservationResponse,
+  type GraphReadPolicy,
+  type ManyToManyRelationshipCommandPolicy,
+  type OrderedRelationshipCommandPolicy,
+  type RelationshipCommandPolicy,
 } from '../../data-graph/index.js';
+import { isJsonValue } from '../../value/json.js';
 import type { TaskActor, TaskRunIdentity, TaskSnapshot } from '../contracts.js';
 import {
   createRuntimeProtocolDispatcher,
@@ -20,6 +26,7 @@ import {
   type RuntimeProtocolGraphObserver,
 } from '../protocol/index.js';
 
+import { createActiveGraphObservationRegistry } from './active-graph-observations.js';
 import { serverContext } from './context.js';
 import type { InvocationContextInput } from './invocation-context.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
@@ -31,7 +38,12 @@ import type {
   GraphReadableOntahiApplication,
 } from './ontahi.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
-import { sealCurrentUnitOfWorkMutationJournal } from './unit-of-work.js';
+import {
+  COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
+  deliverCommittedMutationsToCurrentRuntime,
+  sealCurrentUnitOfWorkMutationJournal,
+  type CommittedMutationDelivery,
+} from './unit-of-work.js';
 
 type RuntimeProtocolApplication = GraphReadableOntahiApplication &
   GraphObservableOntahiApplication &
@@ -141,7 +153,8 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
   );
   const operation = createOperationInvocationDispatcher(application);
   const read = application.createGraphReadDispatcher<TContext>(graphReadPolicies);
-  const observeGraph = application.createGraphReadObserver<TContext>(graphReadPolicies);
+  const observeNativeGraph = application.createGraphReadObserver<TContext>(graphReadPolicies);
+  const activeGraphObservations = createActiveGraphObservationRegistry();
   const command = application.createGraphCommandDispatcher<TContext>(graphCommandPolicies);
   const withContext = <TValue>(context: TContext, run: () => TValue) =>
     application.app.runtime.withInvocationContext(context, run);
@@ -154,20 +167,41 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
       const invocation = getCurrentInvocationContext();
       if (!invocation) throw new Error('Runtime Protocol invocation context is unavailable.');
 
-      return serverContext.run(
-        {
-          scope,
-          telemetrySpanName: scope,
-          resources: invocation.resources,
-        },
-        async () => {
-          const body = await run();
-          const committedMutations = sealCurrentUnitOfWorkMutationJournal();
-          return withRuntimeProtocolMetadata(
-            body,
-            committedMutations.mutations.length === 0 ? undefined : { committedMutations },
-          );
-        },
+      const resources = new Map(invocation.resources);
+      const previousDelivery = resources.get(COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY) as
+        | CommittedMutationDelivery
+        | undefined;
+      const delivery: CommittedMutationDelivery = mutations => {
+        try {
+          previousDelivery?.(mutations);
+        } catch (error) {
+          reportError?.(error);
+        }
+        try {
+          activeGraphObservations.publish(mutations);
+        } catch (error) {
+          reportError?.(error);
+        }
+      };
+      resources.set(COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY, delivery);
+
+      return withContext({ ...context, resources } as TContext, () =>
+        serverContext.run(
+          {
+            scope,
+            telemetrySpanName: scope,
+            resources,
+          },
+          async () => {
+            const body = await run();
+            const committedMutations = sealCurrentUnitOfWorkMutationJournal();
+            deliverCommittedMutationsToCurrentRuntime(committedMutations);
+            return withRuntimeProtocolMetadata(
+              body,
+              committedMutations.mutations.length === 0 ? undefined : { committedMutations },
+            );
+          },
+        ),
       );
     });
   const durableSnapshotResponse = (snapshot: TaskSnapshot) =>
@@ -180,6 +214,99 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
         ? snapshot.executionMetadata
         : undefined,
     );
+
+  const toGraphObservationResponse = (
+    response: GraphReadDispatchResponse,
+  ): GraphReadObservationResponse => {
+    if (isGraphReadProtocolError(response)) return response;
+    if (
+      response.kind !== 'graph-read-result' ||
+      !Array.isArray(response.value) ||
+      !isJsonValue(response.value)
+    ) {
+      return graphReadProtocolError(
+        'execution_unavailable',
+        'Data graph read execution is temporarily unavailable.',
+      );
+    }
+    return {
+      kind: 'graph-read-result',
+      value: response.value,
+      ...(response.capabilities ? { capabilities: response.capabilities } : {}),
+    };
+  };
+
+  const observeGraph: RuntimeProtocolGraphObserver<TContext> = (request, { context, signal }) => {
+    const parsed = parseGraphReadRequest(request);
+    if (!parsed.success || parsed.request.mode !== 'run') {
+      return observeNativeGraph(request, { authority: context, signal });
+    }
+
+    return (async function* () {
+      const subscription = activeGraphObservations.register(parsed.request);
+      const nativeController = new AbortController();
+      const abortNative = () => nativeController.abort(signal.reason);
+      if (signal.aborted) abortNative();
+      else signal.addEventListener('abort', abortNative, { once: true });
+      const native = observeNativeGraph(request, {
+        authority: context,
+        signal: nativeController.signal,
+      });
+      const iterator = native[Symbol.asyncIterator]();
+      let nativeNext: Promise<IteratorResult<GraphReadObservationResponse>> | undefined =
+        iterator.next();
+      let mutationNext: Promise<boolean> = subscription.wait(signal);
+      let previousSnapshot: string | undefined;
+
+      const emitIfChanged = (body: GraphReadObservationResponse) => {
+        if (body.kind !== 'graph-read-result') return body;
+        const snapshot = JSON.stringify(body);
+        if (snapshot === previousSnapshot) return undefined;
+        previousSnapshot = snapshot;
+        return body;
+      };
+
+      try {
+        while (!signal.aborted) {
+          const outcome = await Promise.race([
+            ...(nativeNext
+              ? [nativeNext.then(result => ({ kind: 'native' as const, result }))]
+              : []),
+            mutationNext.then(changed => ({ kind: 'mutation' as const, changed })),
+          ]);
+
+          if (outcome.kind === 'native') {
+            if (outcome.result.done) {
+              nativeNext = undefined;
+            } else {
+              nativeNext = iterator.next();
+              const body = emitIfChanged(outcome.result.value);
+              if (body) yield body;
+            }
+            continue;
+          }
+
+          if (!outcome.changed) return;
+          mutationNext = subscription.wait(signal);
+          const refreshed = await withContext(context, () => read(request, { authority: context }));
+          const body = emitIfChanged(toGraphObservationResponse(refreshed));
+          if (body) yield body;
+        }
+      } finally {
+        subscription.close();
+        signal.removeEventListener('abort', abortNative);
+        nativeController.abort();
+        if (nativeNext) {
+          try {
+            await nativeNext;
+          } catch {
+            // The native observer may reject while cooperatively handling cancellation.
+          }
+        }
+        await iterator.return?.();
+      }
+    })();
+  };
 
   const dispatcher = createRuntimeProtocolDispatcher<TContext>({
     handlers: {
@@ -254,7 +381,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     graphCommandPolicies,
     observeGraph: (request, { context, signal }) =>
       withAsyncIterableContext(context, withContext, () =>
-        observeGraph(request, { authority: context, signal }),
+        observeGraph(request, { context, signal }),
       ),
     observeDurableOperation: createTaskRunDurableOperationObserver<TContext>({
       observe: (run, context) => withContext(context, () => application.app.task.observe(run)),

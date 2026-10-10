@@ -17,7 +17,7 @@ Related plans:
 9. [153d. LangGraph Task Runtime Comparison](../current/153d-langgraph-task-runtime-comparison.md)
 10. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
 11. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
-12. [154d. Semantic Mutation Journal And Query Invalidation](../next/154d-semantic-mutation-journal-and-query-invalidation.md)
+12. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 
 ## Summary
 

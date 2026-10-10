@@ -5,6 +5,7 @@ import type { OperationRuntimeContext } from '../context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from '../context.js';
 import {
   commitMutationSetToCurrentUnitOfWork,
+  deliverCommittedMutationsToCurrentRuntime,
   getCurrentUnitOfWork,
   sealCurrentUnitOfWorkMutationJournal,
 } from '../unit-of-work.js';
@@ -365,6 +366,11 @@ export const createInProcessTaskRuntime = ({
             ...(executionMetadata ? { executionMetadata } : {}),
             checkpoint: undefined,
           });
+          if (executionMetadata?.committedMutations) {
+            yield* Effect.sync(() =>
+              deliverCommittedMutationsToCurrentRuntime(executionMetadata.committedMutations),
+            );
+          }
           return;
         }
         if (!isTaskExecutionState(transition.state)) {
@@ -494,6 +500,11 @@ export const createInProcessTaskRuntime = ({
             result: parsedResult,
             ...(executionMetadata ? { executionMetadata } : {}),
           });
+          if (executionMetadata?.committedMutations) {
+            yield* Effect.sync(() =>
+              deliverCommittedMutationsToCurrentRuntime(executionMetadata.committedMutations),
+            );
+          }
         }).pipe(
           Effect.catchAllCause(cause => {
             const error = taskFailureFromCause(cause);

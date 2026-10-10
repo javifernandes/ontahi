@@ -1,7 +1,12 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import { field, value } from '../../data-graph/index.js';
+import {
+  field,
+  value,
+  type GraphReadDispatchContext,
+  type GraphReadObservationResponse,
+} from '../../data-graph/index.js';
 import {
   createRuntimeProtocolRequest,
   RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
@@ -18,7 +23,10 @@ import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
 } from './runtime-protocol.js';
-import { declareSelectionChange } from './unit-of-work.js';
+import {
+  COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
+  declareSelectionChange,
+} from './unit-of-work.js';
 
 type Context = { principal: { kind: 'user'; subject: string } | null };
 type Application = ApplicationRuntimeProtocolOptions<Context>['application'];
@@ -247,6 +255,333 @@ describe('application Runtime Protocol', () => {
       'metadata',
     );
     expect(projectCommittedMutations).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports delivery failures without changing an already committed response', async () => {
+    const { application } = createApplication();
+    const reportError = vi.fn();
+    const previousDelivery = vi.fn(() => {
+      throw new Error('delivery failed');
+    });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      reportError,
+    });
+    const context = {
+      principal: { kind: 'user', subject: 'user-1' } as const,
+      resources: new Map([[COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY, previousDelivery]]),
+    } as Context;
+
+    await expect(
+      protocol.dispatcher(
+        request('graph.command', {
+          version: 3,
+          kind: 'graph-command',
+          command: {
+            kind: 'entity-mutation-command',
+            action: 'update',
+            entityName: 'Todo',
+            target: {
+              kind: 'selection',
+              entityName: 'Todo',
+              expression: { kind: 'all' },
+            },
+            values: { completed: true },
+          },
+        }),
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'response',
+      body: { kind: 'graph-command-result' },
+    });
+    expect(previousDelivery).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'delivery failed' }),
+    );
+  });
+
+  it('reauthorizes active Graph Reads after a possibly overlapping commit', async () => {
+    const { application } = createApplication();
+    const readAuthorities: Context[] = [];
+    let revision = 0;
+    application.createGraphReadDispatcher = (<TAuthority>() =>
+      async (_request: unknown, { authority }: GraphReadDispatchContext<TAuthority>) => {
+        readAuthorities.push(authority as Context);
+        revision += 1;
+        return { kind: 'graph-read-result' as const, value: [{ revision }] };
+      }) as Application['createGraphReadDispatcher'];
+    application.createGraphReadObserver = (<TAuthority>() =>
+      async function* (
+        _request: unknown,
+        { signal }: GraphReadDispatchContext<TAuthority> & { readonly signal: AbortSignal },
+      ): AsyncIterable<GraphReadObservationResponse> {
+        yield { kind: 'graph-read-result' as const, value: [{ revision: 0 }] };
+        await new Promise<void>(resolve => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }) as Application['createGraphReadObserver'];
+    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+    const observerContext: Context = {
+      principal: { kind: 'user', subject: 'observer' },
+    };
+    const controller = new AbortController();
+    const iterator = protocol
+      .observeGraph(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+        { context: observerContext, signal: controller.signal },
+      )
+      [Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'graph-read-result', value: [{ revision: 0 }] },
+    });
+    await protocol.dispatcher(
+      request('graph.command', {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          values: { completed: true },
+        },
+      }),
+      { principal: { kind: 'user', subject: 'mutator' } },
+    );
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'graph-read-result', value: [{ revision: 1 }] },
+    });
+    expect(readAuthorities).toEqual([observerContext]);
+
+    controller.abort();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
+  it('does not refresh active Graph Reads when mutation execution fails', async () => {
+    const { application } = createApplication();
+    const read = vi.fn(async () => ({
+      kind: 'graph-read-result' as const,
+      value: [{ revision: 1 }],
+    }));
+    application.createGraphReadDispatcher = (() =>
+      read) as Application['createGraphReadDispatcher'];
+    application.createGraphReadObserver = (<TAuthority>() =>
+      async function* (
+        _request: unknown,
+        { signal }: GraphReadDispatchContext<TAuthority> & { readonly signal: AbortSignal },
+      ): AsyncIterable<GraphReadObservationResponse> {
+        yield { kind: 'graph-read-result', value: [{ revision: 0 }] };
+        await new Promise<void>(resolve => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }) as Application['createGraphReadObserver'];
+    application.createGraphCommandDispatcher = vi.fn(() => async () => {
+      declareSelectionChange({
+        kind: 'selection',
+        entityName: 'Todo',
+        expression: { kind: 'all' },
+      });
+      throw new Error('rolled back');
+    });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+    });
+    const controller = new AbortController();
+    const context: Context = { principal: { kind: 'user', subject: 'observer' } };
+    const iterator = protocol
+      .observeGraph(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+        { context, signal: controller.signal },
+      )
+      [Symbol.asyncIterator]();
+    await iterator.next();
+
+    await protocol.dispatcher(
+      request('graph.command', {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          values: { completed: true },
+        },
+      }),
+      context,
+    );
+    await Promise.resolve();
+
+    expect(read).not.toHaveBeenCalled();
+    controller.abort();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
+  it('keeps semantic observation active after its native source ends', async () => {
+    const { application } = createApplication();
+    application.createGraphReadObserver = vi.fn(() => async function* () {});
+    application.createGraphReadDispatcher = vi.fn(() => async () => ({
+      kind: 'graph-read-result' as const,
+      value: { invalid: true },
+    }));
+    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+    const controller = new AbortController();
+    const context: Context = { principal: { kind: 'user', subject: 'observer' } };
+    const iterator = protocol
+      .observeGraph(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+        { context, signal: controller.signal },
+      )
+      [Symbol.asyncIterator]();
+    const next = iterator.next();
+    await Promise.resolve();
+
+    await protocol.dispatcher(
+      request('graph.command', {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          values: { completed: true },
+        },
+      }),
+      context,
+    );
+
+    await expect(next).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'protocol-error', error: { code: 'execution_unavailable' } },
+    });
+    controller.abort();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
+  it('deduplicates equal native and semantic snapshots for one commit', async () => {
+    const { application } = createApplication();
+    let publishNative!: (body: GraphReadObservationResponse) => void;
+    const nativeUpdate = new Promise<GraphReadObservationResponse>(resolve => {
+      publishNative = resolve;
+    });
+    application.createGraphReadObserver = (<TAuthority>() =>
+      async function* (
+        _request: unknown,
+        { signal }: GraphReadDispatchContext<TAuthority> & { readonly signal: AbortSignal },
+      ): AsyncIterable<GraphReadObservationResponse> {
+        yield { kind: 'graph-read-result', value: [{ revision: 0 }] };
+        yield await nativeUpdate;
+        await new Promise<void>(resolve => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }) as Application['createGraphReadObserver'];
+    application.createGraphReadDispatcher = vi.fn(() => async () => ({
+      kind: 'graph-read-result' as const,
+      value: [{ revision: 1 }],
+    }));
+    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+    const controller = new AbortController();
+    const context: Context = { principal: { kind: 'user', subject: 'observer' } };
+    const iterator = protocol
+      .observeGraph(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+        { context, signal: controller.signal },
+      )
+      [Symbol.asyncIterator]();
+    await iterator.next();
+    await protocol.dispatcher(
+      request('graph.command', {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          values: { completed: true },
+        },
+      }),
+      context,
+    );
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'graph-read-result', value: [{ revision: 1 }] },
+    });
+
+    publishNative({ kind: 'graph-read-result', value: [{ revision: 1 }] });
+    const duplicate = iterator.next();
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(duplicate).resolves.toMatchObject({ done: true });
   });
 
   it('returns committed mutations beside an Operation result without changing its body', async () => {

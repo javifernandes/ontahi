@@ -41,6 +41,20 @@ export type UnitOfWorkMutationJournalApi = {
   snapshot: () => CommittedMutationSet;
 };
 
+export const COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY = 'unitOfWork.committedMutationDelivery';
+
+export type CommittedMutationDelivery = (mutations: CommittedMutationSet) => void;
+
+export const deliverCommittedMutationsToCurrentRuntime = (
+  mutations: CommittedMutationSet,
+): void => {
+  if (mutations.mutations.length === 0) return;
+  const delivery = getOperationRuntimeContext()?.resources.get(
+    COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
+  ) as CommittedMutationDelivery | undefined;
+  delivery?.(mutations);
+};
+
 export type UnitOfWorkRefResolutionOptions<TValue> = {
   readonly key?: string | symbol;
   readonly load: () => TValue;
