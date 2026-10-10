@@ -137,7 +137,14 @@ export const styles: Record<string, CSSProperties> = {
     borderRight: '1px solid #213229',
     background: '#0b120f',
   },
-  filterBar: { padding: 10, borderBottom: '1px solid #213229', background: '#0d1712' },
+  filterBar: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    gap: 7,
+    padding: 10,
+    borderBottom: '1px solid #213229',
+    background: '#0d1712',
+  },
   filter: {
     boxSizing: 'border-box',
     width: '100%',

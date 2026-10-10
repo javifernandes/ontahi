@@ -119,6 +119,8 @@ export type ActivityEntry =
       readonly graphObservation: GraphObservationActivity;
       readonly observation?: never;
       readonly derivedRefreshes?: never;
+      readonly mutationCommitId?: string;
+      readonly internal?: boolean;
     }
   | {
       readonly kind: 'exchange';
@@ -127,6 +129,8 @@ export type ActivityEntry =
       readonly exchange: ExchangeActivity;
       readonly observation?: OperationProgressActivity;
       readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+      readonly mutationCommitId?: string;
+      readonly internal?: boolean;
     }
   | {
       readonly kind: 'observation';
@@ -134,6 +138,8 @@ export type ActivityEntry =
       readonly at: number;
       readonly observation: OperationProgressActivity;
       readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+      readonly mutationCommitId?: string;
+      readonly internal?: boolean;
     };
 
 export const isRecord = (value: unknown): value is RecordValue =>
@@ -518,8 +524,25 @@ const isSuccessfulDurableControlExchange = (activity: ExchangeActivity) => {
     event?.family === 'durable.operation' &&
     activity.settled?.outcome === 'success' &&
     isRecord(body) &&
-    body.kind === 'respond'
+    (body.kind === 'respond' || body.kind === 'inspect')
   );
+};
+
+const durableControlRun = (
+  activity: ExchangeActivity,
+): { readonly taskId: string; readonly runId: string } | undefined => {
+  const event = activity.started ?? activity.settled;
+  const body = activity.started?.request?.body;
+  if (
+    event?.family !== 'durable.operation' ||
+    !isRecord(body) ||
+    (body.kind !== 'respond' && body.kind !== 'inspect') ||
+    !isRecord(body.run)
+  )
+    return undefined;
+  return typeof body.run.taskId === 'string' && typeof body.run.runId === 'string'
+    ? { taskId: body.run.taskId, runId: body.run.runId }
+    : undefined;
 };
 
 const correlateActivity = (
@@ -559,25 +582,43 @@ const correlateActivity = (
   return [...exchangeEntries, ...observationEntries].sort((left, right) => right.at - left.at);
 };
 
-export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): ActivityEntry[] => {
+export const buildActivityEntries = (
+  events: readonly OntahiDiagnosticEvent[],
+  options: { readonly includeInternal?: boolean } = {},
+): ActivityEntry[] => {
   const graphObservations = buildGraphObservationActivities(
     events.filter((event): event is GraphObservationDiagnosticEvent =>
       event.kind.startsWith('graph-observation.'),
     ),
   );
+  const exchanges = buildExchangeActivities(
+    events.filter((event): event is ExchangeDiagnosticEvent => event.kind.startsWith('exchange.')),
+  );
+  const controls = exchanges.filter(isSuccessfulDurableControlExchange);
   const primary = correlateActivity(
-    buildExchangeActivities(
-      events.filter((event): event is ExchangeDiagnosticEvent =>
-        event.kind.startsWith('exchange.'),
-      ),
-    ).filter(activity => !isSuccessfulDurableControlExchange(activity)),
+    exchanges.filter(activity => !isSuccessfulDurableControlExchange(activity)),
     buildOperationProgressActivities(
       events.filter((event): event is ObservationDiagnosticEvent =>
         event.kind.startsWith('observation.'),
       ),
     ),
   );
+  const entryByRun = new Map<string, ActivityEntry>();
+  primary.forEach(entry => {
+    const run =
+      entry.kind === 'exchange'
+        ? exchangeTaskRun(entry.exchange)
+        : entry.observation
+          ? (
+              entry.observation.started ??
+              entry.observation.snapshots[0] ??
+              entry.observation.settled
+            )?.run
+          : undefined;
+    if (run) entryByRun.set(runKey(run), entry);
+  });
   const commitEntry = new Map<string, string>();
+  const commitIdByEntry = new Map<string, string>();
   primary.forEach(entry => {
     const exchangeCommitId =
       entry.kind === 'exchange'
@@ -588,15 +629,29 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       .reverse()
       .find(snapshot => snapshot.snapshot.mutationCommitId)?.snapshot.mutationCommitId;
     const commitId = exchangeCommitId ?? durableCommitId;
-    if (commitId) commitEntry.set(commitId, entry.id);
+    if (commitId) {
+      commitEntry.set(commitId, entry.id);
+      commitIdByEntry.set(entry.id, commitId);
+    }
+  });
+  controls.forEach(control => {
+    const run = durableControlRun(control);
+    const commitId = control.settled?.response?.metadata?.mutationCommitId;
+    const entry = run ? entryByRun.get(runKey(run)) : undefined;
+    if (commitId && entry) {
+      commitEntry.set(commitId, entry.id);
+      commitIdByEntry.set(entry.id, commitId);
+    }
   });
   const refreshesByEntry = new Map<string, DerivedGraphRefresh[]>();
+  const groupedGraphObservations = new Set<string>();
   graphObservations.forEach(observation =>
     observation.snapshots.forEach(snapshot => {
       const causedBy = snapshot.causedBy;
       causedBy?.commitIds.forEach(commitId => {
         const entryId = commitEntry.get(commitId);
         if (!entryId) return;
+        groupedGraphObservations.add(observation.id);
         const refreshes = refreshesByEntry.get(entryId) ?? [];
         if (
           !refreshes.some(
@@ -617,17 +672,45 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
   );
   const entries = primary.map(entry => {
     const derivedRefreshes = refreshesByEntry.get(entry.id);
-    return derivedRefreshes ? { ...entry, derivedRefreshes } : entry;
+    const mutationCommitId = commitIdByEntry.get(entry.id);
+    return {
+      ...entry,
+      ...(derivedRefreshes ? { derivedRefreshes } : {}),
+      ...(mutationCommitId ? { mutationCommitId } : {}),
+    };
   });
-  return [
-    ...entries,
-    ...graphObservations.map(graphObservation => ({
-      kind: 'graph-observation' as const,
-      id: `graph-observation:${graphObservation.id}`,
-      at: graphObservation.at,
-      graphObservation,
+  const internalEntries: ActivityEntry[] = [
+    ...controls.map(exchange => ({
+      kind: 'exchange' as const,
+      id: `exchange:${exchange.id}`,
+      at: exchange.at,
+      exchange,
+      internal: true,
     })),
-  ].sort((left, right) => right.at - left.at);
+    ...graphObservations
+      .filter(graphObservation => groupedGraphObservations.has(graphObservation.id))
+      .map(graphObservation => ({
+        kind: 'graph-observation' as const,
+        id: `graph-observation:${graphObservation.id}`,
+        at: graphObservation.at,
+        graphObservation,
+        internal: true,
+      })),
+  ];
+  const semanticEntries: ActivityEntry[] = [
+    ...entries,
+    ...graphObservations
+      .filter(graphObservation => !groupedGraphObservations.has(graphObservation.id))
+      .map(graphObservation => ({
+        kind: 'graph-observation' as const,
+        id: `graph-observation:${graphObservation.id}`,
+        at: graphObservation.at,
+        graphObservation,
+      })),
+  ];
+  return [...semanticEntries, ...(options.includeInternal ? internalEntries : [])].sort(
+    (left, right) => right.at - left.at,
+  );
 };
 
 export const activityEntryEvent = (entry: ActivityEntry) =>

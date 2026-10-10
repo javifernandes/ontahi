@@ -65,6 +65,7 @@ export const ActivityList = ({
                         ? (operationState?.label ?? event.family)
                         : (operationState?.label ?? 'operation progress')}
                   </span>
+                  {activity.internal ? <span>internal</span> : null}
                   <span>{event.transportId}</span>
                   <span>{formatClock(activity.at)}</span>
                   {graphObservation ? (

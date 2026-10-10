@@ -52,7 +52,9 @@ describe('query observation Activity', { timeout: 15_000 }, () => {
     expect(screen.getByText('First')).toBeTruthy();
     expect(screen.queryByText('Second')).toBeNull();
     expect(
-      within(screen.getByRole('region', { name: 'Runtime traffic' })).getAllByRole('button'),
+      within(screen.getByRole('region', { name: 'Runtime traffic' })).getAllByRole('button', {
+        name: /observe/,
+      }),
     ).toHaveLength(1);
     await act(async () => {
       await iterator.next();
@@ -146,6 +148,8 @@ describe('query observation Activity', { timeout: 15_000 }, () => {
 
     expect(screen.getByText('1 semantic refresh')).toBeTruthy();
     expect(screen.getByText('Graph Read refresh #1')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /observe ws completed/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show internals' }));
     fireEvent.click(screen.getByRole('button', { name: /observe ws completed/ }));
     expect(screen.getByText(/Semantic refresh caused by 1 commit/)).toBeTruthy();
     expect(screen.getByText('commit-1')).toBeTruthy();

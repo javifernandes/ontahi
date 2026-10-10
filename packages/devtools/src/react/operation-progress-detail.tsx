@@ -16,6 +16,7 @@ import {
   operationProgressState,
   outcomeColor,
   semanticSummary,
+  type DerivedGraphRefresh,
   type ExchangeActivity,
   type ObservationSnapshot,
   type OperationProgressActivity,
@@ -87,10 +88,14 @@ const ActivityMessage = ({
 export const OperationProgressDetail = ({
   activity,
   exchange,
+  derivedRefreshes = [],
+  mutationCommitId: correlatedMutationCommitId,
   runtimeTransport,
 }: {
   readonly activity: OperationProgressActivity;
   readonly exchange?: ExchangeActivity;
+  readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+  readonly mutationCommitId?: string;
   readonly runtimeTransport?: RuntimeTransport<any>;
 }) => {
   const [responding, setResponding] = useState(false);
@@ -110,6 +115,12 @@ export const OperationProgressDetail = ({
   const state = operationProgressState(activity);
   const initialInteraction = exchange ? exchangeInteractionState(exchange) : undefined;
   const latestSnapshot = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
+  const mutationCommitId =
+    correlatedMutationCommitId ??
+    activity.snapshots
+      .slice()
+      .reverse()
+      .find(snapshot => snapshot.snapshot.mutationCommitId)?.snapshot.mutationCommitId;
   const settlementDuplicatesLatestSnapshot =
     activity.settled !== undefined && latestSnapshot?.status === activity.settled.outcome;
   let taskSnapshot: TaskSnapshot | undefined;
@@ -179,6 +190,24 @@ export const OperationProgressDetail = ({
             <span style={styles.semanticValue}>{state.title}</span>
           </div>
         </div>
+        {mutationCommitId || derivedRefreshes.length > 0 ? (
+          <div style={{ ...styles.semanticCard, marginBottom: 14 }}>
+            <span style={styles.semanticLabel}>Semantic effects</span>
+            {mutationCommitId ? (
+              <div style={styles.semanticValue}>commit {mutationCommitId}</div>
+            ) : null}
+            {derivedRefreshes.length > 0 ? (
+              <div style={{ ...styles.chips, marginTop: mutationCommitId ? 8 : 0 }}>
+                {derivedRefreshes.map(refresh => (
+                  <span key={`${refresh.observationId}:${refresh.sequence}`} style={styles.chip}>
+                    refreshed Graph Read #{refresh.sequence} · {refresh.rowCount ?? 'unknown'} rows
+                    {refresh.overflow ? ' · coalesced causes' : ''}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {interaction ? (
           runtimeExchange ? (
             <OperationInteraction
