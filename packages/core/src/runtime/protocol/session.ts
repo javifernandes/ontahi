@@ -20,8 +20,10 @@ import {
   type DurableOperationProtocolResponse,
 } from './durable-operation.js';
 import {
+  isRuntimeProtocolFamilyName,
   isRuntimeProtocolError,
   parseRuntimeProtocolRequestEnvelope,
+  parseRuntimeProtocolResponse,
   type RuntimeProtocolError,
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
@@ -362,12 +364,15 @@ const isUncorrelatedRuntimeResponse = (
   value: unknown,
 ): value is RuntimeProtocolResponseEnvelope | RuntimeProtocolError => {
   if (isRuntimeProtocolError(value)) return true;
-  if (!isRecord(value) || value.kind !== 'response') return false;
-  const parsedRequest = parseRuntimeProtocolRequestEnvelope({
-    ...value,
-    kind: 'request',
-  });
-  return parsedRequest.success;
+  if (
+    !isRecord(value) ||
+    value.kind !== 'response' ||
+    !isSessionId(value.id) ||
+    !isRuntimeProtocolFamilyName(value.family)
+  ) {
+    return false;
+  }
+  return parseRuntimeProtocolResponse(value, { id: value.id, family: value.family }).success;
 };
 
 const parseGraphObservationBody = (

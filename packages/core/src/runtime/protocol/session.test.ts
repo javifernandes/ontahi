@@ -87,6 +87,30 @@ describe('Runtime Protocol session frames', () => {
       frame: response,
     });
 
+    const mutationResponse = {
+      ...response,
+      response: createRuntimeProtocolResponse(
+        request.request,
+        { kind: 'graph-command-result', result: { status: 'applied' } },
+        {
+          mutationCommitId: 'commit-1',
+          committedMutations: {
+            precision: 'widened',
+            mutations: [
+              {
+                effect: { kind: 'graph-change' },
+                provenance: 'conservative',
+              },
+            ],
+          },
+        },
+      ),
+    } as const;
+    expect(parseRuntimeProtocolSessionServerFrame(mutationResponse)).toEqual({
+      success: true,
+      frame: mutationResponse,
+    });
+
     const observation = {
       protocol: 'ontahi.runtime.session',
       version: 1,
@@ -229,6 +253,22 @@ describe('Runtime Protocol session frames', () => {
       parseRuntimeProtocolSessionClientFrame({
         ...requestFrame('request-1'),
         unexpected: true,
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'response',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          id: 'request-1',
+          kind: 'response',
+          family: 'graph.command',
+          body: { kind: 'graph-command-result', result: { status: 'applied' } },
+          metadata: { mutationCommitId: 'commit-1' },
+        },
       }),
     ).toMatchObject({ success: false });
     expect(
