@@ -65,15 +65,23 @@ export const DevtoolsPanel = ({
   const [view, setView] = useState<'activity' | 'console' | 'cache' | 'settings'>('activity');
   const [consoleOpened, setConsoleOpened] = useState(false);
   const [filter, setFilter] = useState('');
+  const [showInternal, setShowInternal] = useState(false);
   const [selected, setSelected] = useState<string>();
   const configurableRuntimeTransport =
     runtimeTransport && isConfigurableRuntimeTransport(runtimeTransport)
       ? runtimeTransport
       : undefined;
-  const activities = useMemo(() => buildActivityEntries(snapshot.events), [snapshot]);
+  const activities = useMemo(
+    () => buildActivityEntries(snapshot.events, { includeInternal: true }),
+    [snapshot],
+  );
   const normalizedFilter = filter.trim().toLowerCase();
+  const visibleActivities = showInternal
+    ? activities
+    : activities.filter(activity => !activity.internal);
+  const internalActivityCount = activities.filter(activity => activity.internal).length;
   const filteredActivities = normalizedFilter
-    ? activities.filter(activity => {
+    ? visibleActivities.filter(activity => {
         const event = activityEntryEvent(activity);
         const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
         return (
@@ -92,7 +100,7 @@ export const DevtoolsPanel = ({
           )
         );
       })
-    : activities;
+    : visibleActivities;
   const selectedActivity = filteredActivities.find(activity => activity.id === selected);
   const activeActivity = selectedActivity ?? filteredActivities[0];
 
@@ -135,6 +143,17 @@ export const DevtoolsPanel = ({
               aria-label='Filter diagnostics'
               placeholder='Filter intent, family, transport, outcome…'
             />
+            {internalActivityCount > 0 ? (
+              <button
+                type='button'
+                style={styles.subtleButton}
+                onClick={() => setShowInternal(current => !current)}
+                aria-pressed={showInternal}
+                title={`${internalActivityCount} internal ${internalActivityCount === 1 ? 'activity' : 'activities'}`}
+              >
+                {showInternal ? 'Hide internals' : 'Show internals'}
+              </button>
+            ) : null}
           </div>
           <ActivityList
             activities={filteredActivities}
@@ -152,6 +171,8 @@ export const DevtoolsPanel = ({
             key={activeActivity.id}
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+            derivedRefreshes={activeActivity.derivedRefreshes}
+            mutationCommitId={activeActivity.mutationCommitId}
             runtimeTransport={runtimeTransport}
           />
         ) : activeActivity?.kind === 'exchange' ? (

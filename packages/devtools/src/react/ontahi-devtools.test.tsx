@@ -548,6 +548,10 @@ describe('OntahiDevtools', () => {
           completedAt: '2026-01-01T00:00:01.000Z',
           progress: { phase: 'updating', percent: 100 },
           result: { completed: 3 },
+          executionMetadata: {
+            mutationCommitId: 'commit-complete-all',
+            committedMutations: { precision: 'intensional', mutations: [] },
+          },
         },
       ];
       const transport = instrumentRuntimeTransport({
@@ -595,6 +599,8 @@ describe('OntahiDevtools', () => {
       expect(screen.getByText('completed · updating')).toBeTruthy();
       expect(screen.getByText('update #1 · 50%')).toBeTruthy();
       expect(screen.getByText('run-1')).toBeTruthy();
+      expect(screen.getByText('Semantic effects')).toBeTruthy();
+      expect(screen.getByText('commit commit-complete-all')).toBeTruthy();
       const timeline = within(screen.getByRole('list', { name: 'Operation progress messages' }));
       expect(timeline.getAllByText('websocket')).toHaveLength(4);
       expect(timeline.getAllByText(/^completed/)).toHaveLength(1);

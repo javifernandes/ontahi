@@ -784,7 +784,125 @@ describe('Devtools activity model', () => {
     expect(activityEntryOutcome(entries[0]!)).toBe('completed');
   });
 
-  it('keeps successful durable inspection exchanges visible', () => {
+  it('correlates terminal inspection metadata and caused Graph refreshes into the durable activity', () => {
+    const run = { taskId: 'TodoList.completeAll', runId: 'run-1' };
+    const exchangeIdentity = {
+      requestId: 'invoke-1',
+      family: 'operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 10,
+    } as const;
+    const observationIdentity = {
+      observationId: 'operation-1',
+      family: 'durable.operation.observe',
+      run,
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 12,
+    } as const;
+    const inspectIdentity = {
+      exchangeId: 'inspect-1',
+      requestId: 'inspect-1',
+      family: 'durable.operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 20,
+    } as const;
+    const entries = buildActivityEntries([
+      {
+        ...exchangeIdentity,
+        exchangeId: 'invoke-1',
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'operation',
+          body: { kind: 'invoke', operationId: 'TodoList.completeAll' },
+        },
+      },
+      {
+        ...exchangeIdentity,
+        exchangeId: 'invoke-1',
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'operation',
+          body: { kind: 'invocation-result', result: { ok: true, value: run } },
+        },
+      },
+      { ...observationIdentity, kind: 'observation.started', at: 12 },
+      {
+        ...observationIdentity,
+        kind: 'observation.snapshot',
+        at: 18,
+        sequence: 1,
+        snapshot: {
+          ...run,
+          status: 'completed',
+          updatedAt: '2026-09-29T00:00:01.000Z',
+        },
+      },
+      {
+        ...inspectIdentity,
+        kind: 'exchange.started',
+        at: 20,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'durable.operation',
+          body: { version: 1, kind: 'inspect', run },
+        },
+      },
+      {
+        ...inspectIdentity,
+        kind: 'exchange.settled',
+        at: 21,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'durable.operation',
+          metadata: { mutationCommitId: 'commit-1' },
+        },
+      },
+      {
+        observationId: 'todos-observation',
+        family: 'graph.observe',
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt: 1,
+        kind: 'graph-observation.snapshot',
+        at: 22,
+        sequence: 2,
+        rowCount: 3,
+        causedBy: {
+          kind: 'committed-mutations',
+          commitIds: ['commit-1'],
+          overflow: false,
+        },
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: 'exchange',
+      mutationCommitId: 'commit-1',
+      derivedRefreshes: [{ observationId: 'todos-observation', sequence: 2, rowCount: 3 }],
+    });
+  });
+
+  it('hides successful durable inspection exchanges unless internal activity is requested', () => {
     const identity = {
       exchangeId: 'inspect-model',
       requestId: 'inspect-model',
@@ -793,7 +911,7 @@ describe('Devtools activity model', () => {
       transportKind: 'websocket',
       startedAt: 10,
     } as const;
-    const entries = buildActivityEntries([
+    const events = [
       {
         ...identity,
         kind: 'exchange.started',
@@ -817,10 +935,16 @@ describe('Devtools activity model', () => {
         durationMs: 1,
         outcome: 'success',
       },
-    ]);
+    ] as const;
 
+    expect(buildActivityEntries(events)).toEqual([]);
+    const entries = buildActivityEntries(events, { includeInternal: true });
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ kind: 'exchange', exchange: { id: 'inspect-model' } });
+    expect(entries[0]).toMatchObject({
+      kind: 'exchange',
+      internal: true,
+      exchange: { id: 'inspect-model' },
+    });
   });
 
   it('maps outcomes and filters secondary metadata', () => {
