@@ -15,6 +15,8 @@ import {
   activityEntryOutcome,
   activityEntryTitle,
   buildActivityEntries,
+  graphReadSummary,
+  isRecord,
   matchesFilter,
 } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
@@ -87,6 +89,9 @@ export const DevtoolsPanel = ({
               exchange?.started?.requestId,
               activity.observation?.started?.run.taskId,
               activity.observation?.started?.run.runId,
+              ...(activity.derivedRefreshes?.map(refresh =>
+                isRecord(refresh.request) ? graphReadSummary(refresh.request, dialect) : undefined,
+              ) ?? []),
             ],
             normalizedFilter,
           )
@@ -152,10 +157,20 @@ export const DevtoolsPanel = ({
             key={activeActivity.id}
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+            derivedRefreshes={activeActivity.derivedRefreshes}
+            mutationCommitId={activeActivity.mutationCommitId}
+            internalExchanges={activeActivity.internalExchanges}
+            internalGraphObservations={activeActivity.internalGraphObservations}
             runtimeTransport={runtimeTransport}
           />
         ) : activeActivity?.kind === 'exchange' ? (
-          <ExchangeDetail activity={activeActivity.exchange} />
+          <ExchangeDetail
+            activity={activeActivity.exchange}
+            derivedRefreshes={activeActivity.derivedRefreshes}
+            mutationCommitId={activeActivity.mutationCommitId}
+            internalExchanges={activeActivity.internalExchanges}
+            internalGraphObservations={activeActivity.internalGraphObservations}
+          />
         ) : (
           <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
         )}

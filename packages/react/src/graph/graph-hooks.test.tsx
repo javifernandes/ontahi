@@ -372,9 +372,10 @@ describe('graph query and command hooks', () => {
     });
     const value = { created: [], updated: [], deleted: [] };
     graphExecutor.runEntityMutationCommand = undefined;
+    graphExecutor.associateGraphReadRefreshes = vi.fn();
     graphExecutor.runEntityMutationCommandExecution = vi.fn().mockResolvedValue({
       value,
-      metadata: { committedMutations: changedBook('ontahi') },
+      metadata: { committedMutations: changedBook('ontahi'), mutationCommitId: 'commit-1' },
     });
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const { result } = renderHook(
@@ -392,6 +393,11 @@ describe('graph query and command hooks', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ontahiKey, exact: true });
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: otherKey, exact: true });
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Book'] });
+    expect(graphExecutor.associateGraphReadRefreshes).toHaveBeenCalledWith([bookRead('ontahi')], {
+      kind: 'committed-mutations',
+      commitIds: ['commit-1'],
+      overflow: false,
+    });
   });
 
   it('supports explicit Entity Mutation fallbacks and reports an unavailable executor', async () => {

@@ -228,7 +228,7 @@ describe('Console actions', uiTestOptions, () => {
     );
     expect(onActionExecuted).not.toHaveBeenCalled();
     fireEvent.click(result.getByRole('button', { name: 'JSON' }));
-    expect(result.getByRole('button', { name: 'Copy Durable Operation run JSON' })).toBeDefined();
+    expect(result.getByRole('button', { name: 'Copy Operation run JSON' })).toBeDefined();
     fireEvent.click(result.getByRole('button', { name: 'Visual' }));
     expect(result.getByText('Which list?')).toBeDefined();
     fireEvent.click(result.getByRole('button', { name: 'Later' }));

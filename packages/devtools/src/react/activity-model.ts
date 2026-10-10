@@ -38,8 +38,12 @@ export type ExchangeActivity = {
 };
 
 export type DerivedGraphRefresh = {
-  readonly observationId: string;
-  readonly sequence: number;
+  readonly id: string;
+  readonly source: 'exchange' | 'observation';
+  readonly request?: unknown;
+  readonly transportId: string;
+  readonly durationMs?: number;
+  readonly sequence?: number;
   readonly at: number;
   readonly rowCount?: number;
   readonly overflow: boolean;
@@ -81,6 +85,8 @@ export const operationProgressState = (
     const state = interactionProgressState(latest.interaction);
     if (state) return state;
   }
+  if (latest && ['completed', 'failed', 'cancelled'].includes(latest.status))
+    return { label: 'operation', title: latest.status };
   if (latest?.progress) {
     const detail = latest.progress.message ?? latest.progress.phase;
     if (detail) return { label: 'progress', title: `Progress · ${detail}` };
@@ -119,6 +125,7 @@ export type ActivityEntry =
       readonly graphObservation: GraphObservationActivity;
       readonly observation?: never;
       readonly derivedRefreshes?: never;
+      readonly mutationCommitId?: string;
     }
   | {
       readonly kind: 'exchange';
@@ -127,6 +134,9 @@ export type ActivityEntry =
       readonly exchange: ExchangeActivity;
       readonly observation?: OperationProgressActivity;
       readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+      readonly mutationCommitId?: string;
+      readonly internalExchanges?: readonly ExchangeActivity[];
+      readonly internalGraphObservations?: readonly GraphObservationActivity[];
     }
   | {
       readonly kind: 'observation';
@@ -134,6 +144,9 @@ export type ActivityEntry =
       readonly at: number;
       readonly observation: OperationProgressActivity;
       readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+      readonly mutationCommitId?: string;
+      readonly internalExchanges?: readonly ExchangeActivity[];
+      readonly internalGraphObservations?: readonly GraphObservationActivity[];
     };
 
 export const isRecord = (value: unknown): value is RecordValue =>
@@ -518,8 +531,44 @@ const isSuccessfulDurableControlExchange = (activity: ExchangeActivity) => {
     event?.family === 'durable.operation' &&
     activity.settled?.outcome === 'success' &&
     isRecord(body) &&
-    body.kind === 'respond'
+    (body.kind === 'respond' || body.kind === 'inspect')
   );
+};
+
+const durableControlRun = (
+  activity: ExchangeActivity,
+): { readonly taskId: string; readonly runId: string } | undefined => {
+  const event = activity.started ?? activity.settled;
+  const body = activity.started?.request?.body;
+  if (
+    event?.family !== 'durable.operation' ||
+    !isRecord(body) ||
+    (body.kind !== 'respond' && body.kind !== 'inspect') ||
+    !isRecord(body.run)
+  )
+    return undefined;
+  return typeof body.run.taskId === 'string' && typeof body.run.runId === 'string'
+    ? { taskId: body.run.taskId, runId: body.run.runId }
+    : undefined;
+};
+
+const graphReadRefreshCause = (activity: ExchangeActivity) => {
+  const event = activity.started ?? activity.settled;
+  const body = activity.settled?.response?.body;
+  if (
+    event?.family !== 'graph.read' ||
+    !isRecord(body) ||
+    body.kind !== 'graph-read-result' ||
+    !isRecord(body.causedBy) ||
+    body.causedBy.kind !== 'committed-mutations' ||
+    !Array.isArray(body.causedBy.commitIds)
+  )
+    return undefined;
+  return {
+    commitIds: body.causedBy.commitIds.filter((id): id is string => typeof id === 'string'),
+    overflow: body.causedBy.overflow === true,
+    rowCount: Array.isArray(body.value) ? body.value.length : undefined,
+  };
 };
 
 const correlateActivity = (
@@ -565,19 +614,34 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       event.kind.startsWith('graph-observation.'),
     ),
   );
+  const exchanges = buildExchangeActivities(
+    events.filter((event): event is ExchangeDiagnosticEvent => event.kind.startsWith('exchange.')),
+  );
+  const controls = exchanges.filter(isSuccessfulDurableControlExchange);
   const primary = correlateActivity(
-    buildExchangeActivities(
-      events.filter((event): event is ExchangeDiagnosticEvent =>
-        event.kind.startsWith('exchange.'),
-      ),
-    ).filter(activity => !isSuccessfulDurableControlExchange(activity)),
+    exchanges.filter(activity => !isSuccessfulDurableControlExchange(activity)),
     buildOperationProgressActivities(
       events.filter((event): event is ObservationDiagnosticEvent =>
         event.kind.startsWith('observation.'),
       ),
     ),
   );
+  const entryByRun = new Map<string, ActivityEntry>();
+  primary.forEach(entry => {
+    const run =
+      entry.kind === 'exchange'
+        ? exchangeTaskRun(entry.exchange)
+        : entry.observation
+          ? (
+              entry.observation.started ??
+              entry.observation.snapshots[0] ??
+              entry.observation.settled
+            )?.run
+          : undefined;
+    if (run) entryByRun.set(runKey(run), entry);
+  });
   const commitEntry = new Map<string, string>();
+  const commitIdByEntry = new Map<string, string>();
   primary.forEach(entry => {
     const exchangeCommitId =
       entry.kind === 'exchange'
@@ -588,23 +652,90 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       .reverse()
       .find(snapshot => snapshot.snapshot.mutationCommitId)?.snapshot.mutationCommitId;
     const commitId = exchangeCommitId ?? durableCommitId;
-    if (commitId) commitEntry.set(commitId, entry.id);
+    if (commitId) {
+      commitEntry.set(commitId, entry.id);
+      commitIdByEntry.set(entry.id, commitId);
+    }
+  });
+  controls.forEach(control => {
+    const run = durableControlRun(control);
+    const commitId = control.settled?.response?.metadata?.mutationCommitId;
+    const entry = run ? entryByRun.get(runKey(run)) : undefined;
+    if (commitId && entry) {
+      commitEntry.set(commitId, entry.id);
+      commitIdByEntry.set(entry.id, commitId);
+    }
   });
   const refreshesByEntry = new Map<string, DerivedGraphRefresh[]>();
+  const internalExchangesByEntry = new Map<string, ExchangeActivity[]>();
+  const internalGraphObservationsByEntry = new Map<string, GraphObservationActivity[]>();
+  controls.forEach(control => {
+    const run = durableControlRun(control);
+    const entry = run ? entryByRun.get(runKey(run)) : undefined;
+    if (!entry) return;
+    internalExchangesByEntry.set(entry.id, [
+      ...(internalExchangesByEntry.get(entry.id) ?? []),
+      control,
+    ]);
+  });
+  const groupedPrimaryEntries = new Set<string>();
+  primary.forEach(candidate => {
+    if (candidate.kind !== 'exchange') return;
+    const cause = graphReadRefreshCause(candidate.exchange);
+    if (!cause) return;
+    const entryIds = new Set(
+      cause.commitIds.map(commitId => commitEntry.get(commitId)).filter(Boolean) as string[],
+    );
+    entryIds.forEach(entryId => {
+      if (entryId === candidate.id) return;
+      groupedPrimaryEntries.add(candidate.id);
+      const refreshes = refreshesByEntry.get(entryId) ?? [];
+      refreshes.push({
+        id: candidate.exchange.id,
+        source: 'exchange',
+        request: candidate.exchange.started?.request?.body,
+        transportId:
+          (candidate.exchange.started ?? candidate.exchange.settled)?.transportId ?? 'unknown',
+        ...(candidate.exchange.settled
+          ? { durationMs: candidate.exchange.settled.durationMs }
+          : {}),
+        at: candidate.at,
+        ...(cause.rowCount === undefined ? {} : { rowCount: cause.rowCount }),
+        overflow: cause.overflow,
+      });
+      refreshesByEntry.set(entryId, refreshes);
+      internalExchangesByEntry.set(entryId, [
+        ...(internalExchangesByEntry.get(entryId) ?? []),
+        candidate.exchange,
+      ]);
+    });
+  });
+  const groupedGraphObservations = new Set<string>();
   graphObservations.forEach(observation =>
     observation.snapshots.forEach(snapshot => {
       const causedBy = snapshot.causedBy;
       causedBy?.commitIds.forEach(commitId => {
         const entryId = commitEntry.get(commitId);
         if (!entryId) return;
+        groupedGraphObservations.add(observation.id);
+        const internalObservations = internalGraphObservationsByEntry.get(entryId) ?? [];
+        if (!internalObservations.some(item => item.id === observation.id)) {
+          internalGraphObservationsByEntry.set(entryId, [...internalObservations, observation]);
+        }
         const refreshes = refreshesByEntry.get(entryId) ?? [];
         if (
           !refreshes.some(
-            item => item.observationId === observation.id && item.sequence === snapshot.sequence,
+            item =>
+              item.source === 'observation' &&
+              item.id === observation.id &&
+              item.sequence === snapshot.sequence,
           )
         ) {
           refreshes.push({
-            observationId: observation.id,
+            id: observation.id,
+            source: 'observation',
+            request: graphObservationEvent(observation)?.request,
+            transportId: graphObservationEvent(observation)?.transportId ?? 'unknown',
             sequence: snapshot.sequence,
             at: snapshot.at,
             ...(snapshot.rowCount === undefined ? {} : { rowCount: snapshot.rowCount }),
@@ -615,19 +746,33 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       });
     }),
   );
-  const entries = primary.map(entry => {
-    const derivedRefreshes = refreshesByEntry.get(entry.id);
-    return derivedRefreshes ? { ...entry, derivedRefreshes } : entry;
-  });
-  return [
+  const entries = primary
+    .filter(entry => !groupedPrimaryEntries.has(entry.id))
+    .map(entry => {
+      const derivedRefreshes = refreshesByEntry.get(entry.id);
+      const mutationCommitId = commitIdByEntry.get(entry.id);
+      const internalExchanges = internalExchangesByEntry.get(entry.id);
+      const internalGraphObservations = internalGraphObservationsByEntry.get(entry.id);
+      return {
+        ...entry,
+        ...(derivedRefreshes ? { derivedRefreshes } : {}),
+        ...(mutationCommitId ? { mutationCommitId } : {}),
+        ...(internalExchanges ? { internalExchanges } : {}),
+        ...(internalGraphObservations ? { internalGraphObservations } : {}),
+      };
+    });
+  const semanticEntries: ActivityEntry[] = [
     ...entries,
-    ...graphObservations.map(graphObservation => ({
-      kind: 'graph-observation' as const,
-      id: `graph-observation:${graphObservation.id}`,
-      at: graphObservation.at,
-      graphObservation,
-    })),
-  ].sort((left, right) => right.at - left.at);
+    ...graphObservations
+      .filter(graphObservation => !groupedGraphObservations.has(graphObservation.id))
+      .map(graphObservation => ({
+        kind: 'graph-observation' as const,
+        id: `graph-observation:${graphObservation.id}`,
+        at: graphObservation.at,
+        graphObservation,
+      })),
+  ];
+  return semanticEntries.sort((left, right) => right.at - left.at);
 };
 
 export const activityEntryEvent = (entry: ActivityEntry) =>

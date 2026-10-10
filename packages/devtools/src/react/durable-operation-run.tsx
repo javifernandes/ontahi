@@ -75,7 +75,7 @@ export const DurableOperationRun = ({
 
     const observe = async () => {
       if (!transport.durableOperation) {
-        setError('The configured Runtime Transport cannot observe durable Operations.');
+        setError('The configured Runtime Transport cannot observe this Operation.');
         onObservationFinished?.();
         return;
       }
@@ -130,14 +130,9 @@ export const DurableOperationRun = ({
 
   const interaction = snapshot?.interaction;
   if (view === 'json')
-    return (
-      <JsonView
-        value={snapshot ?? { ...run, status: 'queued' }}
-        label='Durable Operation run JSON'
-      />
-    );
+    return <JsonView value={snapshot ?? { ...run, status: 'queued' }} label='Operation run JSON' />;
   return (
-    <section aria-label='Durable Operation run' style={styles.semanticGrid}>
+    <section aria-label='Operation run' style={styles.semanticGrid}>
       <div style={styles.semanticCard}>
         <span style={styles.semanticLabel}>Task run</span>
         <span style={styles.semanticValue}>{run.taskId}</span>

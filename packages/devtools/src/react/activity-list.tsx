@@ -91,24 +91,6 @@ export const ActivityList = ({
                 </span>
               </span>
             </button>
-            {activity.derivedRefreshes?.length ? (
-              <ol
-                aria-label='Semantic refreshes caused by this mutation'
-                style={{ listStyle: 'none', margin: '0 0 4px 42px', padding: 0 }}
-              >
-                {activity.derivedRefreshes.map(refresh => (
-                  <li
-                    key={`${refresh.observationId}:${refresh.sequence}`}
-                    style={{ ...styles.rowMeta, padding: '4px 8px' }}
-                  >
-                    <span aria-hidden='true'>↳</span>
-                    <span>Graph Read refresh #{refresh.sequence}</span>
-                    <span>{refresh.rowCount ?? 'unknown'} rows</span>
-                    {refresh.overflow ? <span>coalesced causes</span> : null}
-                  </li>
-                ))}
-              </ol>
-            ) : null}
           </li>
         );
       })}

@@ -18,8 +18,10 @@ pnpm todo:dev:local
 ```
 
 `todo:dev` is an alias for the same local-source mode. It builds only the example's Ontahi
-dependencies, regenerates the client, builds the browser bundle, watches package output, and
-restarts Express when framework code changes.
+dependencies, regenerates the client, watches package output, and restarts Express when server-side
+framework code changes. A Vite development server owns the public port and proxies application and
+Runtime requests to Express, so client and Devtools changes update through HMR without rebuilding or
+restarting the example.
 
 Open `http://localhost:3001` for the React UI, open Ontahí Devtools from its ceibo launcher, and
 select **Settings** to configure Runtime transport routing. The controls route Graph reads, Graph
@@ -116,8 +118,9 @@ TODO_SESSION_SECRET=... \
 pnpm todo:dev:registry -- --version 0.1.0-alpha.0 --auth github
 ```
 
-Neither mode changes the example manifest or the repository lockfile. Use `PORT=3002` or another
-port when the default `3001` is already in use.
+Neither mode changes the example manifest or the repository lockfile. Use `PORT=3003` or another
+port when the default `3001` is already in use. Local-source mode reserves the next port for its
+proxied Express server; set `TODO_SERVER_PORT` explicitly when that port is unavailable.
 
 The default remains zero-infrastructure in-memory storage. To exercise the direct PostgreSQL
 adapter with the host-owned migration:

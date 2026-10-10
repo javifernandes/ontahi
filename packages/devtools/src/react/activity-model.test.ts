@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ExchangeDiagnosticEvent, ObservationDiagnosticEvent } from '../diagnostics.js';
+import type {
+  ExchangeDiagnosticEvent,
+  ObservationDiagnosticEvent,
+  OntahiDiagnosticEvent,
+} from '../diagnostics.js';
 
 import {
   activityEntryEvent,
@@ -93,6 +97,31 @@ describe('Devtools activity model', () => {
       label: 'running',
       title: 'running',
     });
+    expect(
+      operationProgressState({
+        ...activity(undefined),
+        snapshots: [
+          {
+            observationId: 'observation-1',
+            family: 'durable.operation.observe',
+            run: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+            transportId: 'websocket',
+            transportKind: 'websocket',
+            startedAt: 1,
+            kind: 'observation.snapshot',
+            at: 2,
+            sequence: 2,
+            snapshot: {
+              taskId: 'TodoList.completeAll',
+              runId: 'run-1',
+              status: 'completed',
+              updatedAt: '2026-09-29T00:00:01.000Z',
+              progress: { phase: 'updating', percent: 100 },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'operation', title: 'completed' });
   });
 
   it('projects a pending model response as its semantic interaction', () => {
@@ -784,7 +813,134 @@ describe('Devtools activity model', () => {
     expect(activityEntryOutcome(entries[0]!)).toBe('completed');
   });
 
-  it('keeps successful durable inspection exchanges visible', () => {
+  it('correlates terminal inspection metadata and caused Graph refreshes into the durable activity', () => {
+    const run = { taskId: 'TodoList.completeAll', runId: 'run-1' };
+    const exchangeIdentity = {
+      requestId: 'invoke-1',
+      family: 'operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 10,
+    } as const;
+    const observationIdentity = {
+      observationId: 'operation-1',
+      family: 'durable.operation.observe',
+      run,
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 12,
+    } as const;
+    const inspectIdentity = {
+      exchangeId: 'inspect-1',
+      requestId: 'inspect-1',
+      family: 'durable.operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 20,
+    } as const;
+    const entries = buildActivityEntries([
+      {
+        ...exchangeIdentity,
+        exchangeId: 'invoke-1',
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'operation',
+          body: { kind: 'invoke', operationId: 'TodoList.completeAll' },
+        },
+      },
+      {
+        ...exchangeIdentity,
+        exchangeId: 'invoke-1',
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'operation',
+          body: { kind: 'invocation-result', result: { ok: true, value: run } },
+        },
+      },
+      { ...observationIdentity, kind: 'observation.started', at: 12 },
+      {
+        ...observationIdentity,
+        kind: 'observation.snapshot',
+        at: 18,
+        sequence: 1,
+        snapshot: {
+          ...run,
+          status: 'completed',
+          updatedAt: '2026-09-29T00:00:01.000Z',
+        },
+      },
+      {
+        ...inspectIdentity,
+        kind: 'exchange.started',
+        at: 20,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'durable.operation',
+          body: { version: 1, kind: 'inspect', run },
+        },
+      },
+      {
+        ...inspectIdentity,
+        kind: 'exchange.settled',
+        at: 21,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'durable.operation',
+          metadata: { mutationCommitId: 'commit-1' },
+        },
+      },
+      {
+        observationId: 'todos-observation',
+        family: 'graph.observe',
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt: 1,
+        kind: 'graph-observation.snapshot',
+        at: 22,
+        sequence: 2,
+        rowCount: 3,
+        causedBy: {
+          kind: 'committed-mutations',
+          commitIds: ['commit-1'],
+          overflow: false,
+        },
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: 'exchange',
+      mutationCommitId: 'commit-1',
+      derivedRefreshes: [
+        {
+          id: 'todos-observation',
+          source: 'observation',
+          sequence: 2,
+          rowCount: 3,
+        },
+      ],
+      internalExchanges: [{ id: 'inspect-1' }],
+      internalGraphObservations: [{ id: 'todos-observation' }],
+    });
+  });
+
+  it('hides standalone successful durable inspection exchanges from semantic activity', () => {
     const identity = {
       exchangeId: 'inspect-model',
       requestId: 'inspect-model',
@@ -793,7 +949,7 @@ describe('Devtools activity model', () => {
       transportKind: 'websocket',
       startedAt: 10,
     } as const;
-    const entries = buildActivityEntries([
+    const events = [
       {
         ...identity,
         kind: 'exchange.started',
@@ -817,10 +973,101 @@ describe('Devtools activity model', () => {
         durationMs: 1,
         outcome: 'success',
       },
-    ]);
+    ] as const;
 
+    expect(buildActivityEntries(events)).toEqual([]);
+  });
+
+  it('groups a causally identified graph read exchange under the mutation that refreshed it', () => {
+    const identity = (exchangeId: string, family: string, at: number) => ({
+      exchangeId,
+      requestId: exchangeId,
+      family,
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: at,
+    });
+    const events: OntahiDiagnosticEvent[] = [
+      {
+        ...identity('mutation', 'graph.command', 10),
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'graph.command',
+          body: { kind: 'graph-command' },
+        },
+      },
+      {
+        ...identity('mutation', 'graph.command', 10),
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'graph.command',
+          metadata: { mutationCommitId: 'commit-1' },
+        },
+      },
+      {
+        ...identity('refresh', 'graph.read', 12),
+        kind: 'exchange.started',
+        at: 12,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'graph.read',
+          body: {
+            kind: 'graph-read',
+            selection: { entityName: 'TodoList', expression: { kind: 'all' } },
+          },
+        },
+      },
+      {
+        ...identity('refresh', 'graph.read', 12),
+        kind: 'exchange.settled',
+        at: 15,
+        durationMs: 3,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'graph.read',
+          body: {
+            kind: 'graph-read-result',
+            value: [{ id: 'list-1' }],
+            causedBy: {
+              kind: 'committed-mutations',
+              commitIds: ['commit-1'],
+              overflow: false,
+            },
+          },
+        },
+      },
+    ];
+
+    const entries = buildActivityEntries(events);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ kind: 'exchange', exchange: { id: 'inspect-model' } });
+    expect(entries[0]).toMatchObject({
+      mutationCommitId: 'commit-1',
+      derivedRefreshes: [
+        {
+          id: 'refresh',
+          source: 'exchange',
+          transportId: 'websocket',
+          durationMs: 3,
+          rowCount: 1,
+        },
+      ],
+      internalExchanges: [{ id: 'refresh' }],
+    });
   });
 
   it('maps outcomes and filters secondary metadata', () => {

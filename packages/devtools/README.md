@@ -282,10 +282,17 @@ These entries describe actual graph transport streams, not React hook instances 
 reruns after invalidation.
 
 Semantic refreshes retain their safe causal identity even when payload capture is disabled. When a
-mutation response or completed durable run exposes the matching `mutationCommitId`, Activity groups
-the derived Graph Read refresh beneath that mutation. Observation detail distinguishes native
-snapshots from semantic refreshes and lists bounded, coalesced causes; it never guesses a relation
-from adjacent timestamps.
+mutation response or completed Operation run exposes the matching `mutationCommitId`, Activity groups
+the derived Graph Read refresh inside that mutation, whether the refresh arrived as a request/response
+exchange or a live Graph observation. A terminal inspection can provide the commit identity when the
+progress snapshot does not. Correlated controls and refreshes are not separate top-level Activity
+rows. Operation detail separates its lifecycle, consequences, and protocol evidence into **Progress**,
+**Effects**, and **Runtime** tabs. Effects explains which active reads Ontahí refreshed, while Runtime
+preserves the lower-level exchanges and raw envelopes. Commit IDs remain collapsed as technical
+evidence rather than acting as the user-facing explanation. Observation detail distinguishes native
+snapshots from semantic refreshes and lists bounded, coalesced causes; Activity never guesses a
+relation from adjacent timestamps. The `durable.operation` name remains visible only where it denotes
+the Runtime Protocol family rather than as the user-facing name of an Operation.
 
 With `clientCache` connected, enable **Settings → Record entity history** to capture a baseline and
 subsequent entity writes, invalidations, and cache clears. **Cache → History** shows the timeline,

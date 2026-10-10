@@ -548,6 +548,10 @@ describe('OntahiDevtools', () => {
           completedAt: '2026-01-01T00:00:01.000Z',
           progress: { phase: 'updating', percent: 100 },
           result: { completed: 3 },
+          executionMetadata: {
+            mutationCommitId: 'commit-complete-all',
+            committedMutations: { precision: 'intensional', mutations: [] },
+          },
         },
       ];
       const transport = instrumentRuntimeTransport({
@@ -591,10 +595,17 @@ describe('OntahiDevtools', () => {
         screen.getByRole('button', { name: 'TodoList.completeAll() websocket completed' }),
       ).toBeTruthy();
       expect(screen.getAllByText('2 updates').length).toBeGreaterThan(0);
+      expect(screen.getByText('Run run-1').closest('header')).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Effects 0' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(screen.getByText(/committed application changes/)).toBeTruthy();
+      fireEvent.click(screen.getByText('Technical evidence'));
+      expect(screen.getByText('mutation commit commit-complete-all')).toBeTruthy();
+      fireEvent.click(screen.getByRole('tab', { name: 'Progress 2' }));
       expect(screen.getByText('running · Updating todos')).toBeTruthy();
       expect(screen.getByText('completed · updating')).toBeTruthy();
       expect(screen.getByText('update #1 · 50%')).toBeTruthy();
-      expect(screen.getByText('run-1')).toBeTruthy();
       const timeline = within(screen.getByRole('list', { name: 'Operation progress messages' }));
       expect(timeline.getAllByText('websocket')).toHaveLength(4);
       expect(timeline.getAllByText(/^completed/)).toHaveLength(1);

@@ -5,12 +5,16 @@ import type { DiagnosticProtocolEnvelope } from '../diagnostics.js';
 import {
   outcomeColor,
   semanticSummary,
+  type DerivedGraphRefresh,
   type ExchangeActivity,
   type RecordValue,
 } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
+import { CausalEffects } from './causal-effects.js';
 import { styles } from './devtools-styles.js';
+import type { GraphObservationActivity } from './graph-observation-model.js';
 import { JsonView } from './json-view.js';
+import { RuntimeTrace } from './runtime-trace.js';
 import { SemanticPayload } from './semantic-payload.js';
 
 type PayloadMode = 'visual' | 'body-json' | 'envelope';
@@ -63,7 +67,19 @@ const PayloadPanel = ({
   );
 };
 
-export const ExchangeDetail = ({ activity }: { readonly activity: ExchangeActivity }) => {
+export const ExchangeDetail = ({
+  activity,
+  derivedRefreshes = [],
+  mutationCommitId,
+  internalExchanges = [],
+  internalGraphObservations = [],
+}: {
+  readonly activity: ExchangeActivity;
+  readonly derivedRefreshes?: readonly DerivedGraphRefresh[];
+  readonly mutationCommitId?: string;
+  readonly internalExchanges?: readonly ExchangeActivity[];
+  readonly internalGraphObservations?: readonly GraphObservationActivity[];
+}) => {
   const dialect = useContext(AuthoringDialectContext);
   const event = activity.settled ?? activity.started;
   if (!event) return null;
@@ -85,13 +101,26 @@ export const ExchangeDetail = ({ activity }: { readonly activity: ExchangeActivi
           </span>
         </span>
       </header>
-      <div style={styles.payloadGrid}>
-        <PayloadPanel title='Request' body={requestEnvelope?.body} envelope={requestEnvelope} />
-        <PayloadPanel
-          title='Response'
-          body={responseBody}
-          envelope={responseEnvelope ?? activity.settled?.error}
-        />
+      <div style={styles.exchangeDetailBody}>
+        {mutationCommitId || derivedRefreshes.length > 0 ? (
+          <div style={styles.exchangeEffects}>
+            <CausalEffects mutationCommitId={mutationCommitId} refreshes={derivedRefreshes} />
+          </div>
+        ) : null}
+        <div style={styles.payloadGrid}>
+          <PayloadPanel title='Request' body={requestEnvelope?.body} envelope={requestEnvelope} />
+          <PayloadPanel
+            title='Response'
+            body={responseBody}
+            envelope={responseEnvelope ?? activity.settled?.error}
+          />
+        </div>
+        <div style={styles.exchangeTrace}>
+          <RuntimeTrace
+            exchanges={internalExchanges}
+            graphObservations={internalGraphObservations}
+          />
+        </div>
       </div>
     </section>
   );

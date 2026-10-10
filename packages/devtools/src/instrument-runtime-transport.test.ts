@@ -15,6 +15,57 @@ const request = (id: string) =>
   createRuntimeProtocolRequest({ id, family: 'graph.read', body: { query: 'todos' } });
 
 describe('instrumentRuntimeTransport', () => {
+  it('annotates the matching client-triggered Graph Read without changing its wire response', async () => {
+    const diagnostics = createOntahiDiagnostics({ capturePayloads: true, redact: value => value });
+    const graphRead = {
+      version: 1 as const,
+      kind: 'graph-read' as const,
+      selection: {
+        kind: 'selection' as const,
+        entityName: 'TodoList',
+        expression: { kind: 'all' as const },
+      },
+      mode: 'run' as const,
+      orderBy: [],
+    };
+    const runtimeRequest = createRuntimeProtocolRequest({
+      id: 'refresh-1',
+      family: 'graph.read',
+      body: graphRead,
+    });
+    const response = createRuntimeProtocolResponse(runtimeRequest, {
+      kind: 'graph-read-result',
+      value: [{ id: 'list-1' }],
+    });
+    const transport: RuntimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: { request: vi.fn().mockResolvedValue(response) },
+    });
+    transport.causality?.associateGraphReadRefreshes([graphRead], {
+      kind: 'committed-mutations',
+      commitIds: ['commit-1'],
+      overflow: false,
+    });
+
+    await expect(transport.request(runtimeRequest)).resolves.toBe(response);
+    expect(response.body).not.toHaveProperty('causedBy');
+    expect(diagnostics.inspect().events.slice(-1)[0]).toMatchObject({
+      kind: 'exchange.settled',
+      response: {
+        body: {
+          kind: 'graph-read-result',
+          causedBy: {
+            kind: 'committed-mutations',
+            commitIds: ['commit-1'],
+            overflow: false,
+          },
+        },
+      },
+    });
+  });
+
   it('records one self-contained exchange without changing its result', async () => {
     let time = 10;
     const diagnostics = createOntahiDiagnostics({ capacity: 2, now: () => time++ });

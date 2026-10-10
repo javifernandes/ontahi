@@ -46,6 +46,7 @@ import type {
   GraphReadSource,
   ReadParams,
   ReadResult,
+  ReactGraphExecutor,
 } from './executor.js';
 import {
   invalidateSemanticGraphReads,
@@ -85,6 +86,7 @@ type SemanticMutationExecutor<TCommand, TResult, TCommandOptions> = {
     command: TCommand,
     options?: TCommandOptions,
   ) => Promise<GraphMutationExecution<TResult>>;
+  readonly associateGraphReadRefreshes?: ReactGraphExecutor['associateGraphReadRefreshes'];
   readonly unsupportedMessage: string;
 };
 
@@ -115,7 +117,21 @@ const useSemanticMutationCommand = <TCommand, TResult, TVariables, TContext, TCo
         executor,
       );
       if (execution.metadata?.committedMutations) {
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+        const mutationCommitId = execution.metadata.mutationCommitId;
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations, {
+          ...(mutationCommitId
+            ? {
+                causedBy: {
+                  kind: 'committed-mutations' as const,
+                  commitIds: [mutationCommitId],
+                  overflow: false,
+                },
+              }
+            : {}),
+          ...(executor.associateGraphReadRefreshes
+            ? { associateRefreshes: executor.associateGraphReadRefreshes }
+            : {}),
+        });
       } else {
         for (const queryKey of options?.invalidateQueryKeys ?? []) {
           await queryClient.invalidateQueries({ queryKey });
@@ -261,6 +277,9 @@ export function useGraphCommand<
     {
       run: (command, runtimeOptions) => graphExecutor.runCommand<TResult>(command, runtimeOptions),
       ...(runExecution ? { runExecution } : {}),
+      ...(graphExecutor.associateGraphReadRefreshes
+        ? { associateGraphReadRefreshes: graphExecutor.associateGraphReadRefreshes }
+        : {}),
       unsupportedMessage: 'Graph executor does not support Graph Commands.',
     },
     options,
@@ -285,6 +304,9 @@ export function useEntityMutationCommand<
     {
       ...(run ? { run } : {}),
       ...(runExecution ? { runExecution } : {}),
+      ...(graphExecutor.associateGraphReadRefreshes
+        ? { associateGraphReadRefreshes: graphExecutor.associateGraphReadRefreshes }
+        : {}),
       unsupportedMessage: 'Graph executor does not support Entity Mutation Commands.',
     },
     options,
@@ -314,6 +336,9 @@ export function useManyToManyRelationshipCommand<
     {
       ...(run ? { run } : {}),
       ...(runExecution ? { runExecution } : {}),
+      ...(graphExecutor.associateGraphReadRefreshes
+        ? { associateGraphReadRefreshes: graphExecutor.associateGraphReadRefreshes }
+        : {}),
       unsupportedMessage: 'Graph executor does not support many-to-many Relationship Commands.',
     },
     options,
@@ -343,6 +368,9 @@ export function useOrderedRelationshipCommand<
     {
       ...(run ? { run } : {}),
       ...(runExecution ? { runExecution } : {}),
+      ...(graphExecutor.associateGraphReadRefreshes
+        ? { associateGraphReadRefreshes: graphExecutor.associateGraphReadRefreshes }
+        : {}),
       unsupportedMessage: 'Graph executor does not support ordered Relationship Commands.',
     },
     options,

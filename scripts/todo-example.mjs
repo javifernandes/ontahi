@@ -92,15 +92,46 @@ const start = (command, commandArgs, options = {}) => {
   });
 };
 
+const stopProcesses = (processes, signal = 'SIGTERM') =>
+  processes.forEach(child => {
+    if (!child.killed) child.kill(signal);
+  });
+
+const waitForStableHttp = async (
+  url,
+  childProcess,
+  { pollIntervalMs = 100, stableForMs = 3_000, timeoutMs = 60_000 } = {},
+) => {
+  const deadline = Date.now() + timeoutMs;
+  let readySince;
+  while (Date.now() < deadline) {
+    if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+      throw new Error(`Todo Express exited before becoming ready at ${url}.`);
+    }
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      await response.body?.cancel();
+      if (response.ok) {
+        readySince ??= Date.now();
+        if (Date.now() - readySince >= stableForMs) return;
+      } else {
+        readySince = undefined;
+      }
+    } catch {
+      readySince = undefined;
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+  throw new Error(`Todo Express did not become stable at ${url} within ${timeoutMs} ms.`);
+};
+
 const waitForProcesses = async processes => {
   let stopRequested = false;
   let terminating = false;
   const terminate = signal => {
     if (terminating) return;
     terminating = true;
-    processes.forEach(child => {
-      if (!child.killed) child.kill(signal);
-    });
+    stopProcesses(processes, signal);
   };
   const requestStop = signal => {
     stopRequested = true;
@@ -147,17 +178,32 @@ const prepareLocalExample = () => {
     { env: exampleEnvironment },
   );
   run('pnpm', ['--filter', todoPackageName, 'run', 'codegen'], { env: exampleEnvironment });
-  run('pnpm', ['--filter', todoPackageName, 'run', 'build:client'], {
-    env: exampleEnvironment,
-  });
 };
 
 const runLocalExample = async () => {
   prepareLocalExample();
-  process.stdout.write(
-    `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at http://localhost:3001\n\n`,
+  const publicPort = Number.parseInt(process.env.PORT ?? '3001', 10);
+  assert(Number.isInteger(publicPort) && publicPort > 0, 'PORT must be a positive integer.');
+  const serverPort = Number.parseInt(process.env.TODO_SERVER_PORT ?? `${publicPort + 1}`, 10);
+  assert(
+    Number.isInteger(serverPort) && serverPort > 0,
+    'TODO_SERVER_PORT must be a positive integer.',
   );
-  await waitForProcesses([
+  assert(serverPort !== publicPort, 'TODO_SERVER_PORT must differ from PORT.');
+  const publicOrigin = `http://localhost:${publicPort}`;
+  const serverOrigin = `http://127.0.0.1:${serverPort}`;
+  const localEnvironment = {
+    ...exampleEnvironment,
+    PORT: `${serverPort}`,
+    TODO_GITHUB_CALLBACK_URL:
+      process.env.TODO_GITHUB_CALLBACK_URL ?? `${publicOrigin}/auth/github/callback`,
+    TODO_SERVER_ORIGIN: serverOrigin,
+  };
+  process.stdout.write(
+    `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at ${publicOrigin}\n` +
+      `Vite forwards Runtime and application APIs to Express at ${serverOrigin}.\n\n`,
+  );
+  const processes = [
     start(
       'pnpm',
       [
@@ -169,12 +215,25 @@ const runLocalExample = async () => {
         'run',
         'build:watch',
       ],
-      { env: exampleEnvironment },
+      { env: localEnvironment },
     ),
     start('pnpm', ['--filter', todoPackageName, 'run', 'dev'], {
-      env: exampleEnvironment,
+      env: localEnvironment,
     }),
-  ]);
+  ];
+  try {
+    process.stdout.write('Waiting for Todo Express to become stable before starting Vite...\n');
+    await waitForStableHttp(`${serverOrigin}/runtime`, processes[1]);
+    processes.push(
+      start('pnpm', ['--filter', todoPackageName, 'run', 'dev:client', '--port', `${publicPort}`], {
+        env: localEnvironment,
+      }),
+    );
+    await waitForProcesses(processes);
+  } catch (error) {
+    stopProcesses(processes);
+    throw error;
+  }
 };
 
 const copyRegistryExample = version => {
