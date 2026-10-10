@@ -12,6 +12,8 @@ import {
   type GraphCommandSpec,
   type GraphReadIntent,
   type GraphReadRequest,
+  type EntityMutationCommand,
+  type EntityMutationDelta,
   type ManyToManyRelationshipCommand,
   type OrderedRelationshipCommand,
   type RelationshipCommandResult,
@@ -209,6 +211,46 @@ export function useGraphCommand<
         ? await graphExecutor.runCommandExecution(command, options?.runtimeOptions)
         : {
             value: await graphExecutor.runCommand(command, options?.runtimeOptions),
+          };
+      if (execution.metadata?.committedMutations) {
+        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
+      } else {
+        for (const queryKey of options?.invalidateQueryKeys ?? []) {
+          await queryClient.invalidateQueries({ queryKey });
+        }
+      }
+      return execution.value;
+    },
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      await options?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useEntityMutationCommand<
+  TVariables,
+  TContext = unknown,
+  TReadOptions = unknown,
+  TCommandOptions = TReadOptions,
+>(
+  buildCommand: (variables: TVariables) => EntityMutationCommand,
+  options?: GraphCommandHookOptions<EntityMutationDelta, TVariables, TContext, TCommandOptions>,
+): UseMutationResult<EntityMutationDelta, Error, TVariables, TContext> {
+  const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    ...options,
+    mutationKey: options?.mutationKey,
+    mutationFn: async variables => {
+      if (!graphExecutor.runEntityMutationCommand) {
+        throw new Error('Graph executor does not support Entity Mutation Commands.');
+      }
+      const command = buildCommand(variables);
+      const execution = graphExecutor.runEntityMutationCommandExecution
+        ? await graphExecutor.runEntityMutationCommandExecution(command, options?.runtimeOptions)
+        : {
+            value: await graphExecutor.runEntityMutationCommand(command, options?.runtimeOptions),
           };
       if (execution.metadata?.committedMutations) {
         await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);

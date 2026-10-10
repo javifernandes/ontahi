@@ -15,6 +15,7 @@ Related plans:
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [146h. WebSocket Runtime Transport And Durable Progress](../done/146h-websocket-runtime-transport-and-durable-progress.md)
 4. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
+5. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 
 ## Summary
 
@@ -68,6 +69,8 @@ A developer opens one unobtrusive launcher and can:
 7. view effective transport settings and, when the host explicitly permits it, change routing for
    subsequent work;
 8. clear bounded diagnostic history without mutating application data or client caches.
+9. inspect committed semantic mutations and the exact local Graph Reads they caused to invalidate
+   or refresh, grouped under the originating Command or Operation rather than as unrelated activity.
 
 ## Scope
 
@@ -97,6 +100,9 @@ A developer opens one unobtrusive launcher and can:
     profiles while retaining WebSocket for capabilities the Fetch transport does not support.
 12. Document development mounting, production exclusion, payload capture, redaction, retention,
     routing changes, and teardown.
+13. Project authority-safe committed mutation metadata and React semantic invalidation outcomes as
+    explicit causal Activity evidence; hide or group resulting refresh exchanges without erasing
+    their inspectable transport details.
 
 ## Non-Goals
 
@@ -326,6 +332,8 @@ but it must not become an arbitrary credentialed endpoint editor.
 - [ ] The Cache view shows normalized records, aliases, outputs, writes, invalidations, and clear
       events without mutating either Ontahí or TanStack Query caches.
 - [ ] Cache events are not attributed to an exchange without an explicit correlation source.
+- [ ] Committed mutations, semantic invalidations, and resulting refresh exchanges are grouped only
+      when Runtime Protocol metadata and the React matcher provide explicit causal evidence.
 - [ ] Effective transport routing and capabilities are visible whenever Devtools receives a
       configurable Runtime Transport.
 - [ ] Development routing controls affect only subsequent work and keep active Durable observation

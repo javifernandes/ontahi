@@ -136,6 +136,21 @@ describe('Console actions', uiTestOptions, () => {
           snapshot: snapshot({ status: 'running' }),
         });
       }
+      if (envelope.family === 'durable.operation' && body.kind === 'inspect')
+        return createRuntimeProtocolResponse(
+          envelope,
+          {
+            version: 1,
+            kind: 'snapshot',
+            snapshot: snapshot({ status: 'completed', result: { updated: 1 } }),
+          },
+          {
+            committedMutations: {
+              precision: 'intensional',
+              mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+            },
+          },
+        );
       return createRuntimeProtocolResponse(envelope, {
         kind: 'protocol-error',
         error: { code: 'invalid_request', message: 'Unexpected request.' },
@@ -231,13 +246,19 @@ describe('Console actions', uiTestOptions, () => {
     await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
     expect(onActionExecuted).toHaveBeenCalledWith({
       execution: expect.objectContaining({ family: 'operation' }),
+      executionMetadata: {
+        committedMutations: {
+          precision: 'intensional',
+          mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+        },
+      },
       response: expect.objectContaining({ ...run, status: 'completed', result: { updated: 1 } }),
     });
 
     const responses = request.mock.calls
       .map(([envelope]) => envelope)
       .filter(envelope => envelope.family === 'durable.operation');
-    expect(responses).toHaveLength(2);
+    expect(responses).toHaveLength(3);
     expect(responses[0]).toMatchObject({
       body: {
         version: 1,
@@ -253,6 +274,10 @@ describe('Console actions', uiTestOptions, () => {
         run,
         response: { interactionId: 'approve-list', decision: 'approve' },
       },
+    });
+    expect(responses[2]).toMatchObject({
+      accepts: ['committed-mutations.v1'],
+      body: { version: 1, kind: 'inspect', run },
     });
   });
 
@@ -299,20 +324,29 @@ describe('Console actions', uiTestOptions, () => {
           entityName: 'List',
           capabilities: { entityMutations: ['update'] },
         });
-      return createRuntimeProtocolResponse(envelope, {
-        kind: 'graph-command-result',
-        value: {
-          created: [],
-          updated: [
-            {
-              entityName: 'List',
-              ref: createEntityRef(ListSchema, { id: 'list-1' }),
-              values: { id: 'list-1', name: 'Today' },
-            },
-          ],
-          deleted: [],
+      return createRuntimeProtocolResponse(
+        envelope,
+        {
+          kind: 'graph-command-result',
+          value: {
+            created: [],
+            updated: [
+              {
+                entityName: 'List',
+                ref: createEntityRef(ListSchema, { id: 'list-1' }),
+                values: { id: 'list-1', name: 'Today' },
+              },
+            ],
+            deleted: [],
+          },
         },
-      });
+        {
+          committedMutations: {
+            precision: 'intensional',
+            mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+          },
+        },
+      );
     });
     render(
       <ConsolePanel
@@ -348,6 +382,7 @@ describe('Console actions', uiTestOptions, () => {
     )![0];
     expect(command).toMatchObject({
       family: 'graph.command',
+      accepts: ['committed-mutations.v1'],
       body: {
         kind: 'graph-command',
         command: {
@@ -364,6 +399,16 @@ describe('Console actions', uiTestOptions, () => {
       true,
     );
     await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(onActionExecuted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionMetadata: {
+          committedMutations: {
+            precision: 'intensional',
+            mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+          },
+        },
+      }),
+    );
     expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
       id: 'list-1',
       name: 'Today',

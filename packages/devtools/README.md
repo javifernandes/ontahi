@@ -230,6 +230,12 @@ createOntahiDiagnostics({
 The Todo example exercises this integration. Transport connection-state evidence remains a later
 Plan 148 slice.
 
+Console Commands and Operations request committed mutation metadata. `onActionExecuted` receives it
+as `executionMetadata`; a host that keeps React Query Graph Reads can pass the contained set to
+`invalidateSemanticGraphReads` instead of clearing all queries or declaring cache keys. A completed
+durable Operation is inspected once after its terminal snapshot so the callback observes the same
+authority-scoped metadata as ordinary execution.
+
 ## Cache: local runtime state
 
 Views are ordered Console (when configured), Activity, Cache, Settings. Activity remains the

@@ -268,7 +268,6 @@ const linkTags = useManyToManyRelationshipCommand(
     const tag = createEntityRef(TagSchema, { id: tagId });
     return relationshipSet(TodoItemSchema, 'tags', todos).add(tag);
   },
-  { onSuccess: () => visibleTodos.refetch() },
 );
 
 await linkTags.mutateAsync({ todoIds: selectedTodoIds, tagId: selectedTagId });
@@ -282,9 +281,10 @@ const reorder = useOrderedRelationshipCommand(({ list, item, before }) =>
 );
 ```
 
-The browser may render an optimistic projection while the command is pending, then refetches the
-nested ordered Relation as the source of truth. The portable command never contains a database
-position or client-owned rank.
+The browser may render an optimistic projection while the command is pending. Once the authority
+commits the command, the hook uses its semantic mutation metadata to refresh every possibly
+affected Read, including Reads whose View traverses the changed Relation. The portable command
+never contains a database position, client-owned rank, or cache key.
 
 The remote path is default-deny and requires an explicit server graph-command policy for that
 Relation and action. The result is `applied` with an exact delta or `not-applied` with a structured
@@ -394,21 +394,30 @@ Entity output can also participate in graph identity.
 > materialized snapshots suitable for ordinary rendering. Ontahí unifies them because they refer
 > to the same Entity, not because every read returns the same object instance.
 
-## Reconcile results, then invalidate observations
+## Committed mutations invalidate matching observations
 
-Operation bridge metadata describes the semantic area a mutation may have changed. After a
-successful invocation, Ontahí first reconciles returned Entity snapshots and then invalidates the
-matching observations:
+Every transport-safe Graph Read keeps its canonical request as dependency metadata beside its
+React Query cache entry. A successful Command or Operation publishes the bounded semantic mutations
+that actually committed. Ontahí compares both programs and invalidates a Read unless it can prove
+they are disjoint:
 
 ```tsx
-const complete = useOperation(TodoItem.domain.complete);
+const complete = useEntityMutationCommand(({ todo }: { todo: EntityRef }) =>
+  mutateEntity(TodoItemSchema).update(todo, { completed: true }),
+);
 
-await complete.executeAsync({ todos: visibleTodos });
+await complete.mutateAsync({ todo });
 ```
 
-Entity-wide invalidation is deliberately coarse. The browser component does not manufacture keys
-or copy a result into each filtered list; React refetches each stale Query through its own canonical
-graph program.
+The mutation description is an existing Graph Command or Selection, not a list of affected rows.
+A bulk update therefore stays constant-size even when it changes millions of Entities. Unknown
+predicates and dependencies refresh conservatively; simple incompatible identity or equality
+predicates can prove that an unrelated Read remains current. The browser component does not
+manufacture query keys, declare invalidation prefixes, or copy a result into filtered lists.
+
+`useEntityMutationCommand`, the Relationship Command hooks, and Operation hooks all apply this
+contract. Legacy `bridge.invalidate` and explicit query-key options remain available only while a
+host migrates from a receiver that cannot return committed mutation metadata.
 
 > [!MARGIN] **TanStack Query is the current React observer.** It schedules requests, exposes loading
 > state, and refetches invalidated observations. Query keys and normalized Entity records are
@@ -423,9 +432,11 @@ a worker, so invalidating at acceptance could refetch the old state.
 consumes one asynchronous snapshot sequence; Fetch currently produces it by polling the versioned
 `durable.operation.inspect` message, while the WebSocket transport receives pushed snapshots from
 an explicitly installed server observer. Neither requires the hook to choose a transport.
-The hook invalidates the Operation's declared observations only after the snapshot reaches
-`completed`; `failed` and `cancelled` runs do not pretend that the intended change happened.
+After the snapshot reaches `completed`, the hook inspects the terminal run once and invalidates
+Reads from its committed mutation journal. `failed` and `cancelled` runs do not publish committed
+mutations or pretend that the intended change happened.
 
-The invariant across ordinary and durable Operations is the same: the projected contract tells the
-browser what was invoked, what kind of value came back, and which observations may now be stale.
-Codegen carries that meaning across the process boundary; the client runtime interprets it.
+The invariant across Commands, ordinary Operations, and durable Operations is the same: domain
+results remain unchanged, while authority-scoped execution metadata tells the initiating client
+which canonical Reads may now be stale. Every refreshed Read performs its ordinary authorization
+again; mutation metadata never grants read access.

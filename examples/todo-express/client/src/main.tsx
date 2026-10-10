@@ -5,6 +5,7 @@ import {
   createFetchRuntimeTransport,
   createRuntimeGraphClient,
   createWebSocketRuntimeTransport,
+  invalidateSemanticGraphReads,
   OntahiGraphProvider,
 } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -80,7 +81,10 @@ const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
   entities: [TodoList, TodoItem, Tag],
   initialDocument: 'TodoItem.where(completed = false).many()',
-  onActionExecuted: () => queryClient.invalidateQueries(),
+  onActionExecuted: async ({ executionMetadata }) => {
+    if (executionMetadata?.committedMutations)
+      await invalidateSemanticGraphReads(queryClient, executionMetadata.committedMutations);
+  },
 } satisfies OntahiDevtoolsConsoleOptions;
 
 const TodoClient = () => {

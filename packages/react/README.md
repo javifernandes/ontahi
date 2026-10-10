@@ -133,22 +133,29 @@ await completeVisible.executeAsync();
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
 
-When a canonical request is executed outside an Operation hook—for example after a model selects
-and runs an Operation—`useCanonicalRequestInvalidation` applies the same declared bridge
-invalidation to React Query:
+Mutation hooks prefer committed semantic metadata returned by Runtime Protocol. Every cached
+`useGraphQuery` retains its canonical `GraphReadRequest` in React Query metadata; after commit,
+Ontahí compares those Reads with the bounded `CommittedMutationSet` and refetches every possible
+overlap. A provably disjoint Read remains current, while an unsupported shape refreshes
+conservatively.
+
+Entity create, update, and delete use the same path as Relationship and ordered Commands:
 
 ```ts
-const invalidateRequest = useCanonicalRequestInvalidation([
-  TodoList.domain.completeAll,
-  TodoItem.domain.deleteFromNamedList,
-]);
+const updateTodo = useEntityMutationCommand(
+  ({ todo, completed }: { todo: EntityRef; completed: boolean }) =>
+    mutateEntity(TodoItemSchema).update(todo, { completed }),
+);
 
-await invalidateRequest(executed.request);
+await updateTodo.mutateAsync({ todo, completed: true });
 ```
 
-Graph Reads are ignored, Graph Commands invalidate their participating Entity roots, and Operation
-invocations use the registered Operation's `bridge.invalidate` metadata. An unregistered Operation
-is reported instead of silently leaving stale client state.
+Applications do not name query keys or call `refetch()` after a successful semantic mutation.
+`useGraphCommand`, `useEntityMutationCommand`, `useManyToManyRelationshipCommand`,
+`useOrderedRelationshipCommand`, Operation hooks, and terminal durable Operation hooks all consume
+the same metadata. Existing `invalidateQueryKeys`, `bridge.invalidate`, and
+`useCanonicalRequestInvalidation` remain compatibility escape hatches for older receivers that do
+not return committed mutations; they are not required by the normal Runtime Protocol path.
 
 Durable Operations use the same invocation bridge to start a run, then observe its lifecycle
 through Runtime Transport:
@@ -221,8 +228,10 @@ Command. The executor supports policy-bounded Relationship Commands and identity
 Mutation Commands; `useGraphExecutorCapability()` lets optional reflective UI discover whether the
 host installed that execution surface without making it mandatory for read-only hosts.
 
-`useOrderedRelationshipCommand` executes `move`/`before`/`after`/`prepend`/`append` commands through
+`useEntityMutationCommand` executes create, update, and delete Commands and invalidates overlapping
+Graph Reads from their committed semantic metadata. `useOrderedRelationshipCommand` executes
+`move`/`before`/`after`/`prepend`/`append` commands through
 the same Fetch or WebSocket Runtime Transport. Its result includes an exact `moved` delta, while a
 stale exact-neighborhood precondition follows the command's fail-or-skip policy. Optimistic UI may
-project the requested order temporarily, but the authoritative sequence should be refetched from
-the ordered Relation after completion.
+project the requested order temporarily; the hook refreshes possibly affected Reads after the
+authority commits the command.

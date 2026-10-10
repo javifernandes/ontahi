@@ -1,6 +1,6 @@
 # 154d. Semantic Mutation Journal And Query Invalidation
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/154d-semantic-mutation-journal-and-query-invalidation`
 
@@ -11,6 +11,7 @@ Related plans:
 3. [148. Ontahí DevTools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
 4. [150. Ontahí DevTools Semantic Console](../current/150-ontahi-devtools-semantic-console.md)
 5. [Operation Output Cache Semantics](../backlog/operation-output-cache-semantics.md)
+6. [Semantic Mutation Delivery To Active Observations](../backlog/semantic-mutation-delivery-to-active-observations.md)
 
 ## Summary
 
@@ -336,13 +337,14 @@ Demonstrate:
 Exit condition: the stale Todo UI reproduction is fixed without Todo-specific refresh callbacks or
 cache keys.
 
-First end-to-end wiring:
+Completed end-to-end wiring:
 
 1. the Todo host explicitly projects its bounded committed mutations to authorized callers;
 2. direct durable completion and model-command chat completion inspect the terminal run and feed the
    returned journal to the shared React matcher;
-3. compatibility invalidation remains declared on `TodoList.completeAll` until browser evidence
-   proves the semantic path across direct, model-triggered, and resumed interaction flows.
+3. direct Entity and Relationship hooks, durable Operation completion, model-command chat, and the
+   Devtools Console all feed authority-scoped committed mutations to the same matcher;
+4. Todo declares no `bridge.invalidate` prefixes and performs no post-success `refetch()` calls.
 
 ### Slice 7: Relationships, observation, and inspection
 
@@ -352,6 +354,13 @@ Show causal journal entries and precision/widening decisions in Devtools Activit
 
 Exit condition: local cached reads and active server observations consume one semantic mutation
 contract, while Event occurrence, mutation effects, and reactive revisions remain distinct.
+
+Relationship membership and order Commands now participate in the same conservative client
+matching contract. The remaining server-observation delivery work was extracted to
+[Semantic Mutation Delivery To Active Observations](../backlog/semantic-mutation-delivery-to-active-observations.md).
+Causal journal and refresh presentation remains owned by
+[Plan 148](../current/148-ontahi-devtools-runtime-inspection.md). Neither follow-up is required for the
+initiating-client cache proof closed by this plan.
 
 ## Verification Strategy
 
@@ -373,24 +382,26 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 
 ## Acceptance Checklist
 
-- [ ] The journal stores semantic mutation programs, not an exhaustive row changelog.
-- [ ] A Selection-targeted bulk command occupies constant space regardless of affected row count.
-- [ ] Applied Entity and relationship commands are captured automatically.
-- [ ] Failed, rejected, interrupted, and rolled-back work publishes no committed mutation.
-- [ ] Nested and concurrent Units of Work remain causally and spatially isolated.
-- [ ] Native work can declare an equivalent command or conservative Selection without cache keys.
-- [ ] Journal overflow widens conservatively and never truncates silently.
-- [ ] Exact deltas are optional bounded evidence, not a correctness requirement.
-- [ ] Cached Reads retain canonical dependency descriptions without being sent on every invocation.
-- [ ] The matcher returns false only for provable disjointness.
-- [ ] Unsupported Selection or mutation forms invalidate conservatively.
-- [ ] Mutation metadata does not modify an Operation's domain output schema.
-- [ ] Runtime Protocol transport is bounded and backward compatible.
-- [ ] React invalidation does not require application-authored query-key prefixes for the proof.
-- [ ] `completeAll(Later)` refreshes affected Reads and skips a provably disjoint Inbox Read.
-- [ ] A refreshed Read is authorized normally and receives no authority from the MutationSet.
-- [ ] Devtools distinguishes captured, declared, conservative, and widened mutations.
-- [ ] Existing manual invalidation remains available until migration evidence supports removal.
+- [x] The journal stores semantic mutation programs, not an exhaustive row changelog.
+- [x] A Selection-targeted bulk command occupies constant space regardless of affected row count.
+- [x] Applied Entity and relationship commands are captured automatically.
+- [x] Failed, rejected, interrupted, and rolled-back work publishes no committed mutation.
+- [x] Nested and concurrent Units of Work remain causally and spatially isolated.
+- [x] Native work can declare an equivalent command or conservative Selection without cache keys.
+- [x] Journal overflow widens conservatively and never truncates silently.
+- [x] Exact deltas are optional bounded evidence, not a correctness requirement.
+- [x] Cached Reads retain canonical dependency descriptions without being sent on every invocation.
+- [x] The matcher returns false only for provable disjointness.
+- [x] Unsupported Selection or mutation forms invalidate conservatively.
+- [x] Mutation metadata does not modify an Operation's domain output schema.
+- [x] Runtime Protocol transport is bounded and backward compatible.
+- [x] React invalidation does not require application-authored query-key prefixes for the proof.
+- [x] `completeAll(Later)` refreshes affected Reads and skips a provably disjoint Inbox Read.
+- [x] A refreshed Read is authorized normally and receives no authority from the MutationSet.
+- [x] Existing manual invalidation remains available as an explicit compatibility escape hatch.
+
+Devtools causal presentation and active server-observation refresh were transferred to the linked
+Plan 148 and observation-delivery follow-up rather than silently dropped.
 
 ## Decisions Recorded
 
@@ -441,7 +452,8 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 6. Can server observation consume full commands safely, or does cross-authority delivery require
    opaque scoped revision tokens?
 7. When may a client reconcile exact bounded evidence locally instead of refetching?
-8. What evidence is required before removing `bridge.invalidate` and explicit query-key options?
+8. What ecosystem evidence is required before removing `bridge.invalidate` and explicit query-key
+   compatibility options from the public packages entirely?
 
 ## Closure And Evolution
 
@@ -451,3 +463,10 @@ mutation, dependency, and Reactive revision. If matching grows beyond cheap cons
 extract a separate Selection-intersection plan rather than expanding this plan into a general query
 optimizer. Distributed delivery, offline clients, and cross-runtime invalidation should likewise be
 follow-up plans built on the committed semantic payload.
+
+The implementation closed with a bounded Unit-of-Work journal, conservative matcher, additive
+Runtime Protocol execution metadata, semantic React invalidation, and Todo proof across direct,
+model-triggered, and durable mutations. Todo no longer declares `bridge.invalidate` keys or
+post-success refetch callbacks. `useEntityMutationCommand` closes the last direct Entity mutation
+hook gap; compatibility invalidation remains framework-owned for older receivers rather than
+application-authored in the proof.

@@ -4,10 +4,11 @@ import {
   relationship,
   relationshipSet,
   Selection,
+  type EntityMutationCommand,
   type OrderedRelationshipPosition,
 } from '@ontahi/core/data-graph';
 import {
-  useGraphExecutorCapability,
+  useEntityMutationCommand,
   useGraphQuery,
   useCanonicalRequestInvalidation,
   invalidateSemanticGraphReads,
@@ -114,17 +115,16 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const queryClient = useQueryClient();
-  const graphExecutor = useGraphExecutorCapability();
+  const entityMutation = useEntityMutationCommand((command: EntityMutationCommand) => command);
+  const executeEntityMutation = entityMutation.mutateAsync;
   const invalidateModelCommand = useCanonicalRequestInvalidation(modelCommandOperations);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
   const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
-  const linkTags = useManyToManyRelationshipCommand(
-    (input: TodoTagMutation) => createTodoTagCommand('add', input),
-    { onSuccess: () => lists.refetch() },
+  const linkTags = useManyToManyRelationshipCommand((input: TodoTagMutation) =>
+    createTodoTagCommand('add', input),
   );
-  const unlinkTags = useManyToManyRelationshipCommand(
-    (input: TodoTagMutation) => createTodoTagCommand('remove', input),
-    { onSuccess: () => lists.refetch() },
+  const unlinkTags = useManyToManyRelationshipCommand((input: TodoTagMutation) =>
+    createTodoTagCommand('remove', input),
   );
 
   useEffect(() => {
@@ -156,8 +156,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setIsCreatingList(true);
     try {
       const result = await createTodoList(
-        graphExecutor,
-        lists.refetch,
+        executeEntityMutation,
         rawName,
         listPastelColors[(lists.data?.length ?? 0) % listPastelColors.length]!,
       );
@@ -172,16 +171,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setRecoloringListId(listId);
     try {
-      if (!graphExecutor?.runEntityMutationCommand) {
-        setActionError('This runtime cannot recolor lists.');
-        return false;
-      }
-      await graphExecutor.runEntityMutationCommand(
+      await executeEntityMutation(
         mutateEntity(TodoListSchema).update(createEntityRef(TodoListSchema, { id: listId }), {
           color,
         }),
       );
-      await lists.refetch();
       return true;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list color could not be changed.'));
@@ -198,16 +192,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setRenamingListId(listId);
     try {
-      if (!graphExecutor?.runEntityMutationCommand) {
-        setActionError('This runtime cannot rename lists.');
-        return false;
-      }
-      await graphExecutor.runEntityMutationCommand(
+      await executeEntityMutation(
         mutateEntity(TodoListSchema).update(createEntityRef(TodoListSchema, { id: listId }), {
           name,
         }),
       );
-      await lists.refetch();
       return true;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be renamed.'));
@@ -221,7 +210,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingListId(listId);
     try {
-      const result = await deleteTodoList(graphExecutor, lists.refetch, listId);
+      const result = await deleteTodoList(executeEntityMutation, listId);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } catch (error) {
@@ -239,7 +228,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setCreatingTodoFor(listId);
     try {
-      const result = await createTodoItem(graphExecutor, lists.refetch, listId, title);
+      const result = await createTodoItem(executeEntityMutation, listId, title);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } catch (error) {
@@ -254,7 +243,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setCompletingTodoId(todoId);
     try {
-      const result = await setTodoItemCompleted(graphExecutor, lists.refetch, todoId, completed);
+      const result = await setTodoItemCompleted(executeEntityMutation, todoId, completed);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } catch (error) {
@@ -269,7 +258,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setRenamingTodoId(todoId);
     try {
-      const result = await renameTodoItem(graphExecutor, lists.refetch, todoId, rawTitle);
+      const result = await renameTodoItem(executeEntityMutation, todoId, rawTitle);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } finally {
@@ -281,7 +270,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingTodoId(todoId);
     try {
-      const result = await deleteTodoItem(graphExecutor, lists.refetch, todoId);
+      const result = await deleteTodoItem(executeEntityMutation, todoId);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } catch (error) {
@@ -315,19 +304,13 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setTaggingTodoId(todoId);
     try {
       const tagId = globalThis.crypto.randomUUID();
-      if (!graphExecutor?.runEntityMutationCommand) {
-        setActionError('This runtime cannot create tags.');
-        return false;
-      }
-      await graphExecutor.runEntityMutationCommand(
+      await executeEntityMutation(
         Tag.create({
           id: tagId,
           name,
           color: tagColors[(tags.data?.length ?? 0) % tagColors.length]!,
         }),
       );
-      await tags.refetch();
-
       await linkTags.mutateAsync({ todoId, tagId });
       return true;
     } catch (error) {
@@ -342,9 +325,8 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingTagId(tagId);
     try {
-      const result = await deleteTodoTag(graphExecutor, tags.refetch, tagId);
+      const result = await deleteTodoTag(executeEntityMutation, tagId);
       setActionError(result.ok ? undefined : result.message);
-      if (result.ok) await lists.refetch();
       return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The tag could not be deleted.'));
@@ -396,11 +378,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setReorderingTodoId(todoId);
     try {
       await reorderTodo.mutateAsync(input);
-      await lists.refetch();
       return true;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo order could not be changed.'));
-      await lists.refetch();
       return false;
     } finally {
       setOptimisticOrder(undefined);

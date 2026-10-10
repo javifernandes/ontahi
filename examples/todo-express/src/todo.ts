@@ -114,7 +114,6 @@ export const TodoList = entity({
         }),
         graphOps: { receiver: 'list' },
         output: CompleteAllOutput,
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         ingress: [
           ingress.http({
             method: 'POST',
@@ -379,7 +378,6 @@ export const TodoItem = entity({
           list: graphSchema.ref(TodoList),
           title: self.fields.title,
         }),
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         run: ({ list, title }) => {
           const command = mutateEntity(self).create({ list, title });
           return getRequiredDataGraphRuntime<EntityMutationCommandExecutionRuntime<unknown>>()
@@ -394,7 +392,6 @@ export const TodoItem = entity({
           listName: TodoList.fields.name,
         }),
         output: DeleteListItemsOutput,
-        bridge: { invalidate: [['TodoList'], ['TodoItem'], ['Tag']] },
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         durable: {
           runtime: 'in-process',
