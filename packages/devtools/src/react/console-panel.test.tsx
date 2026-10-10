@@ -281,6 +281,55 @@ describe('Console actions', uiTestOptions, () => {
     });
   });
 
+  it('still notifies the host when terminal durable inspection fails', async () => {
+    const onActionExecuted = vi.fn();
+    const run = { taskId: 'List.reviewList', runId: 'run-inspection-failed' };
+    const completed = {
+      ...run,
+      status: 'completed' as const,
+      result: { updated: 1 },
+      updatedAt: '2026-09-28T20:00:00.000Z',
+    };
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      if (envelope.family === 'operation')
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: { ...run, status: 'queued' } },
+        });
+      throw new Error('Terminal inspection unavailable.');
+    });
+    const observe = async function* <TResult = JsonValue>() {
+      yield completed as TaskSnapshot<TResult>;
+    };
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDocument: 'List.reviewList({ name: "Inbox" })',
+          onActionExecuted,
+        }}
+        runtimeTransport={{ request, durableOperation: { observe } }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start & observe' }));
+    expect(
+      await within(screen.getByLabelText('Console result')).findByText('completed'),
+    ).toBeDefined();
+    await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(onActionExecuted).toHaveBeenCalledWith({
+      execution: expect.objectContaining({ family: 'operation' }),
+      response: completed,
+    });
+    expect(
+      request.mock.calls.some(
+        ([envelope]) =>
+          envelope.family === 'durable.operation' &&
+          (envelope.body as { kind?: string }).kind === 'inspect',
+      ),
+    ).toBe(true);
+  });
+
   it('reports an unsuccessful Operation result without publishing action success', async () => {
     const onActionExecuted = vi.fn();
     const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>

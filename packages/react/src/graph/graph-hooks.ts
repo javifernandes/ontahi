@@ -36,6 +36,7 @@ import type {
   CommandLike,
   GraphCommandBuilder,
   GraphCommandHookOptions,
+  GraphMutationExecution,
   GraphOperationLike,
   GraphOperationClientInput,
   GraphOperationResult,
@@ -243,15 +244,20 @@ export function useEntityMutationCommand<
     ...options,
     mutationKey: options?.mutationKey,
     mutationFn: async variables => {
-      if (!graphExecutor.runEntityMutationCommand) {
+      const command = buildCommand(variables);
+      let execution: GraphMutationExecution<EntityMutationDelta>;
+      if (graphExecutor.runEntityMutationCommandExecution) {
+        execution = await graphExecutor.runEntityMutationCommandExecution(
+          command,
+          options?.runtimeOptions,
+        );
+      } else if (graphExecutor.runEntityMutationCommand) {
+        execution = {
+          value: await graphExecutor.runEntityMutationCommand(command, options?.runtimeOptions),
+        };
+      } else {
         throw new Error('Graph executor does not support Entity Mutation Commands.');
       }
-      const command = buildCommand(variables);
-      const execution = graphExecutor.runEntityMutationCommandExecution
-        ? await graphExecutor.runEntityMutationCommandExecution(command, options?.runtimeOptions)
-        : {
-            value: await graphExecutor.runEntityMutationCommand(command, options?.runtimeOptions),
-          };
       if (execution.metadata?.committedMutations) {
         await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations);
       } else {

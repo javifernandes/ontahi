@@ -371,7 +371,7 @@ describe('graph query and command hooks', () => {
       title: 'Ontahi Updated',
     });
     const value = { created: [], updated: [], deleted: [] };
-    graphExecutor.runEntityMutationCommand = vi.fn();
+    graphExecutor.runEntityMutationCommand = undefined;
     graphExecutor.runEntityMutationCommandExecution = vi.fn().mockResolvedValue({
       value,
       metadata: { committedMutations: changedBook('ontahi') },

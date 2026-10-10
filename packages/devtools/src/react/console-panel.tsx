@@ -1738,14 +1738,21 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
         onDurableOperationCompleted={async snapshot => {
           const execution = result.snapshot?.execution;
           if (execution?.family !== 'operation') return;
-          if (!executionExchange) return;
-          const inspected = await executionExchange({
-            family: 'durable.operation',
-            body: toDurableOperationProtocolRequest(snapshot),
-          });
+          let executionMetadata: RuntimeProtocolExecutionMetadata | undefined;
+          if (executionExchange) {
+            try {
+              const inspected = await executionExchange({
+                family: 'durable.operation',
+                body: toDurableOperationProtocolRequest(snapshot),
+              });
+              executionMetadata = inspected.metadata;
+            } catch {
+              // Terminal inspection is additive; completion reconciliation must still run.
+            }
+          }
           return options.onActionExecuted?.({
             execution,
-            ...(inspected.metadata ? { executionMetadata: inspected.metadata } : {}),
+            ...(executionMetadata ? { executionMetadata } : {}),
             response: snapshot,
           });
         }}
