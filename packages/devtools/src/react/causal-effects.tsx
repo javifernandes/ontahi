@@ -7,15 +7,17 @@ import { styles } from './devtools-styles.js';
 export const CausalEffects = ({
   mutationCommitId,
   refreshes,
+  showHeading = true,
 }: {
   readonly mutationCommitId?: string;
   readonly refreshes: readonly DerivedGraphRefresh[];
+  readonly showHeading?: boolean;
 }) => {
   const dialect = useContext(AuthoringDialectContext);
   if (!mutationCommitId && refreshes.length === 0) return null;
   return (
     <section style={styles.effectsCard} aria-label='Operation effects'>
-      <span style={styles.semanticLabel}>Effects</span>
+      {showHeading ? <span style={styles.semanticLabel}>Effects</span> : null}
       <p style={styles.effectsSummary}>
         {refreshes.length > 0
           ? `Ontahí refreshed ${refreshes.length} active ${refreshes.length === 1 ? 'read' : 'reads'} affected by this mutation.`

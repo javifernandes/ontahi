@@ -1591,7 +1591,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
               }
               title={
                 durableInvocation
-                  ? 'Start this durable Operation and observe its run until it finishes.'
+                  ? 'Start this Operation and observe its run until it finishes.'
                   : undefined
               }
               onClick={run}

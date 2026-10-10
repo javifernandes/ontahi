@@ -54,6 +54,11 @@ export const OperationProgressDetail = ({
   readonly runtimeTransport?: RuntimeTransport<any>;
 }) => {
   const dialect = useContext(AuthoringDialectContext);
+  const hasCorrelatedEffects = Boolean(correlatedMutationCommitId || derivedRefreshes.length > 0);
+  const runtimeStepCount = internalExchanges.length + internalGraphObservations.length;
+  const [activeSection, setActiveSection] = useState<'progress' | 'effects' | 'runtime'>(() =>
+    hasCorrelatedEffects ? 'effects' : 'progress',
+  );
   const [responding, setResponding] = useState(false);
   const [responseError, setResponseError] = useState<string>();
   const [answeredInteraction, setAnsweredInteraction] = useState<string>();
@@ -133,100 +138,162 @@ export const OperationProgressDetail = ({
           <span style={styles.semanticLabel}>Run</span>
           <span style={styles.semanticValue}>{event.run.runId}</span>
         </div>
-        <CausalEffects mutationCommitId={mutationCommitId} refreshes={derivedRefreshes} />
-        {interaction ? (
-          runtimeExchange ? (
-            <OperationInteraction
-              interaction={interaction}
-              responding={responding}
-              respond={response => void respond(response)}
-            />
-          ) : (
-            <span role='alert' style={styles.consoleError}>
-              The configured Runtime Transport cannot answer this Interaction.
-            </span>
-          )
-        ) : null}
-        {responseError ? (
-          <span role='alert' style={styles.consoleError}>
-            {responseError}
-          </span>
-        ) : null}
-        <ol style={styles.messageList} aria-label='Operation progress messages'>
-          {exchange?.started ? (
-            <ActivityMessage
-              direction='→'
-              outcome={initialInteraction ? 'pending' : (exchange.settled?.outcome ?? 'pending')}
-              title={initialInteraction?.title ?? 'invoke'}
-              time={formatClock(exchange.started.at)}
-              transport={exchange.started.transportId}
-              detail={
-                initialInteraction?.optionCount === undefined
-                  ? undefined
-                  : `${initialInteraction.optionCount} options`
-              }
-              value={exchange.started.request}
-              label='Invocation request JSON'
-              response={
-                exchange.started.transportKind === 'fetch' && exchange.settled?.response
-                  ? { value: exchange.settled.response, label: 'Invocation response JSON' }
-                  : undefined
-              }
-            />
+        <nav style={styles.operationTabs} role='tablist' aria-label='Operation detail sections'>
+          <button
+            type='button'
+            role='tab'
+            aria-selected={activeSection === 'progress'}
+            style={{
+              ...styles.operationTab,
+              ...(activeSection === 'progress' ? styles.activeOperationTab : {}),
+            }}
+            onClick={() => setActiveSection('progress')}
+          >
+            Progress <span style={styles.operationTabCount}>{activity.snapshots.length}</span>
+          </button>
+          {mutationCommitId || derivedRefreshes.length > 0 ? (
+            <button
+              type='button'
+              role='tab'
+              aria-selected={activeSection === 'effects'}
+              style={{
+                ...styles.operationTab,
+                ...(activeSection === 'effects' ? styles.activeOperationTab : {}),
+              }}
+              onClick={() => setActiveSection('effects')}
+            >
+              Effects <span style={styles.operationTabCount}>{derivedRefreshes.length}</span>
+            </button>
           ) : null}
-          {activity.started ? (
-            <ActivityMessage
-              direction='←'
-              outcome='pending'
-              title='progress stream opened'
-              time={formatClock(activity.started.at)}
-              transport={activity.started.transportId}
-              value={activity.started}
-              label='Progress start JSON'
-            />
+          {runtimeStepCount > 0 ? (
+            <button
+              type='button'
+              role='tab'
+              aria-selected={activeSection === 'runtime'}
+              style={{
+                ...styles.operationTab,
+                ...(activeSection === 'runtime' ? styles.activeOperationTab : {}),
+              }}
+              onClick={() => setActiveSection('runtime')}
+            >
+              Runtime <span style={styles.operationTabCount}>{runtimeStepCount}</span>
+            </button>
           ) : null}
-          {activity.snapshots.map(snapshot => {
-            const progress = snapshot.snapshot.progress;
-            const detail = progress?.message ?? progress?.phase;
-            const snapshotState = operationProgressState({
-              ...activity,
-              snapshots: [snapshot],
-              settled: undefined,
-            });
-            return (
-              <ActivityMessage
-                key={`${snapshot.observationId}:${snapshot.sequence}`}
-                direction='←'
-                outcome={snapshotOutcome(snapshot.snapshot.status)}
-                title={
-                  snapshot.snapshot.interaction
-                    ? snapshotState.title
-                    : `${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`
-                }
-                time={formatClock(snapshot.at)}
-                transport={snapshot.transportId}
-                detail={`update #${snapshot.sequence}${
-                  typeof progress?.percent === 'number' ? ` · ${progress.percent}%` : ''
-                }`}
-                value={snapshot.snapshot}
-                label={`Progress update ${snapshot.sequence} JSON`}
-              />
-            );
-          })}
-          {activity.settled && !settlementDuplicatesLatestSnapshot ? (
-            <ActivityMessage
-              direction='—'
-              outcome={activity.settled.outcome}
-              title={activity.settled.outcome}
-              time={formatClock(activity.settled.at)}
-              transport={activity.settled.transportId}
-              detail={`${activity.settled.durationMs} ms`}
-              value={activity.settled}
-              label='Progress settlement JSON'
+        </nav>
+        {activeSection === 'effects' ? (
+          <div role='tabpanel' aria-label='Operation effects'>
+            <CausalEffects
+              mutationCommitId={mutationCommitId}
+              refreshes={derivedRefreshes}
+              showHeading={false}
             />
-          ) : null}
-        </ol>
-        <RuntimeTrace exchanges={internalExchanges} graphObservations={internalGraphObservations} />
+          </div>
+        ) : activeSection === 'runtime' ? (
+          <div role='tabpanel' aria-label='Operation runtime trace'>
+            <RuntimeTrace
+              exchanges={internalExchanges}
+              graphObservations={internalGraphObservations}
+              collapsible={false}
+            />
+          </div>
+        ) : (
+          <div role='tabpanel' aria-label='Operation progress'>
+            {interaction ? (
+              runtimeExchange ? (
+                <OperationInteraction
+                  interaction={interaction}
+                  responding={responding}
+                  respond={response => void respond(response)}
+                />
+              ) : (
+                <span role='alert' style={styles.consoleError}>
+                  The configured Runtime Transport cannot answer this Interaction.
+                </span>
+              )
+            ) : null}
+            {responseError ? (
+              <span role='alert' style={styles.consoleError}>
+                {responseError}
+              </span>
+            ) : null}
+            <ol style={styles.messageList} aria-label='Operation progress messages'>
+              {exchange?.started ? (
+                <ActivityMessage
+                  direction='→'
+                  outcome={
+                    initialInteraction ? 'pending' : (exchange.settled?.outcome ?? 'pending')
+                  }
+                  title={initialInteraction?.title ?? 'invoke'}
+                  time={formatClock(exchange.started.at)}
+                  transport={exchange.started.transportId}
+                  detail={
+                    initialInteraction?.optionCount === undefined
+                      ? undefined
+                      : `${initialInteraction.optionCount} options`
+                  }
+                  value={exchange.started.request}
+                  label='Invocation request JSON'
+                  response={
+                    exchange.started.transportKind === 'fetch' && exchange.settled?.response
+                      ? { value: exchange.settled.response, label: 'Invocation response JSON' }
+                      : undefined
+                  }
+                />
+              ) : null}
+              {activity.started ? (
+                <ActivityMessage
+                  direction='←'
+                  outcome='pending'
+                  title='progress stream opened'
+                  time={formatClock(activity.started.at)}
+                  transport={activity.started.transportId}
+                  value={activity.started}
+                  label='Progress start JSON'
+                />
+              ) : null}
+              {activity.snapshots.map(snapshot => {
+                const progress = snapshot.snapshot.progress;
+                const detail = progress?.message ?? progress?.phase;
+                const snapshotState = operationProgressState({
+                  ...activity,
+                  snapshots: [snapshot],
+                  settled: undefined,
+                });
+                return (
+                  <ActivityMessage
+                    key={`${snapshot.observationId}:${snapshot.sequence}`}
+                    direction='←'
+                    outcome={snapshotOutcome(snapshot.snapshot.status)}
+                    title={
+                      snapshot.snapshot.interaction
+                        ? snapshotState.title
+                        : `${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`
+                    }
+                    time={formatClock(snapshot.at)}
+                    transport={snapshot.transportId}
+                    detail={`update #${snapshot.sequence}${
+                      typeof progress?.percent === 'number' ? ` · ${progress.percent}%` : ''
+                    }`}
+                    value={snapshot.snapshot}
+                    label={`Progress update ${snapshot.sequence} JSON`}
+                  />
+                );
+              })}
+              {activity.settled && !settlementDuplicatesLatestSnapshot ? (
+                <ActivityMessage
+                  direction='—'
+                  outcome={activity.settled.outcome}
+                  title={activity.settled.outcome}
+                  time={formatClock(activity.settled.at)}
+                  transport={activity.settled.transportId}
+                  detail={`${activity.settled.durationMs} ms`}
+                  value={activity.settled}
+                  label='Progress settlement JSON'
+                />
+              ) : null}
+            </ol>
+          </div>
+        )}
       </div>
     </section>
   );

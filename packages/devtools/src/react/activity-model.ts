@@ -86,7 +86,7 @@ export const operationProgressState = (
     if (state) return state;
   }
   if (latest && ['completed', 'failed', 'cancelled'].includes(latest.status))
-    return { label: 'durable operation', title: latest.status };
+    return { label: 'operation', title: latest.status };
   if (latest?.progress) {
     const detail = latest.progress.message ?? latest.progress.phase;
     if (detail) return { label: 'progress', title: `Progress · ${detail}` };

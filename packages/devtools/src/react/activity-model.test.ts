@@ -121,7 +121,7 @@ describe('Devtools activity model', () => {
           },
         ],
       }),
-    ).toEqual({ label: 'durable operation', title: 'completed' });
+    ).toEqual({ label: 'operation', title: 'completed' });
   });
 
   it('projects a pending model response as its semantic interaction', () => {
