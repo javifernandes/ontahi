@@ -595,7 +595,7 @@ describe('OntahiDevtools', () => {
         screen.getByRole('button', { name: 'TodoList.completeAll() websocket completed' }),
       ).toBeTruthy();
       expect(screen.getAllByText('2 updates').length).toBeGreaterThan(0);
-      expect(screen.getByText('run-1')).toBeTruthy();
+      expect(screen.getByText('Run run-1').closest('header')).toBeTruthy();
       expect(screen.getByRole('tab', { name: 'Effects 0' }).getAttribute('aria-selected')).toBe(
         'true',
       );

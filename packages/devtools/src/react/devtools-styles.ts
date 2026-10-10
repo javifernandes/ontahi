@@ -237,7 +237,14 @@ export const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  detailMeta: { display: 'flex', gap: 9, color: '#6f897c', fontSize: 10 },
+  detailMeta: { display: 'flex', minWidth: 0, gap: 9, color: '#6f897c', fontSize: 10 },
+  operationRunId: {
+    minWidth: 0,
+    overflow: 'hidden',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   exchangeDetailBody: {
     display: 'grid',
     minWidth: 0,
@@ -366,12 +373,6 @@ export const styles: Record<string, CSSProperties> = {
     padding: 16,
     background: '#09100d',
     scrollbarGutter: 'stable',
-  },
-  runIdentity: {
-    display: 'flex',
-    gap: 8,
-    alignItems: 'baseline',
-    marginBottom: 14,
   },
   operationTabs: {
     display: 'flex',

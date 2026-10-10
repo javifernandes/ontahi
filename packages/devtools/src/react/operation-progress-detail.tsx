@@ -126,6 +126,9 @@ export const OperationProgressDetail = ({
           <h3 style={styles.detailTitle}>{title}</h3>
           <span style={styles.detailMeta}>
             <span style={styles.family}>{state.label}</span>
+            <span style={styles.operationRunId} title={`Run ${event.run.runId}`}>
+              Run {event.run.runId}
+            </span>
             <span>{event.transportId}</span>
             <span>{activity.snapshots.length} updates</span>
             <span>{activity.settled?.durationMs ?? '…'} ms</span>
@@ -134,10 +137,6 @@ export const OperationProgressDetail = ({
         </span>
       </header>
       <div style={styles.runBody}>
-        <div style={styles.runIdentity}>
-          <span style={styles.semanticLabel}>Run</span>
-          <span style={styles.semanticValue}>{event.run.runId}</span>
-        </div>
         <nav style={styles.operationTabs} role='tablist' aria-label='Operation detail sections'>
           <button
             type='button'
