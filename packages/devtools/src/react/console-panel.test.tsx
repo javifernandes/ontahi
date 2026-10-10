@@ -136,6 +136,21 @@ describe('Console actions', uiTestOptions, () => {
           snapshot: snapshot({ status: 'running' }),
         });
       }
+      if (envelope.family === 'durable.operation' && body.kind === 'inspect')
+        return createRuntimeProtocolResponse(
+          envelope,
+          {
+            version: 1,
+            kind: 'snapshot',
+            snapshot: snapshot({ status: 'completed', result: { updated: 1 } }),
+          },
+          {
+            committedMutations: {
+              precision: 'intensional',
+              mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+            },
+          },
+        );
       return createRuntimeProtocolResponse(envelope, {
         kind: 'protocol-error',
         error: { code: 'invalid_request', message: 'Unexpected request.' },
@@ -231,13 +246,19 @@ describe('Console actions', uiTestOptions, () => {
     await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
     expect(onActionExecuted).toHaveBeenCalledWith({
       execution: expect.objectContaining({ family: 'operation' }),
+      executionMetadata: {
+        committedMutations: {
+          precision: 'intensional',
+          mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+        },
+      },
       response: expect.objectContaining({ ...run, status: 'completed', result: { updated: 1 } }),
     });
 
     const responses = request.mock.calls
       .map(([envelope]) => envelope)
       .filter(envelope => envelope.family === 'durable.operation');
-    expect(responses).toHaveLength(2);
+    expect(responses).toHaveLength(3);
     expect(responses[0]).toMatchObject({
       body: {
         version: 1,
@@ -254,6 +275,59 @@ describe('Console actions', uiTestOptions, () => {
         response: { interactionId: 'approve-list', decision: 'approve' },
       },
     });
+    expect(responses[2]).toMatchObject({
+      accepts: ['committed-mutations.v1'],
+      body: { version: 1, kind: 'inspect', run },
+    });
+  });
+
+  it('still notifies the host when terminal durable inspection fails', async () => {
+    const onActionExecuted = vi.fn();
+    const run = { taskId: 'List.reviewList', runId: 'run-inspection-failed' };
+    const completed = {
+      ...run,
+      status: 'completed' as const,
+      result: { updated: 1 },
+      updatedAt: '2026-09-28T20:00:00.000Z',
+    };
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      if (envelope.family === 'operation')
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: { ...run, status: 'queued' } },
+        });
+      throw new Error('Terminal inspection unavailable.');
+    });
+    const observe = async function* <TResult = JsonValue>() {
+      yield completed as TaskSnapshot<TResult>;
+    };
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDocument: 'List.reviewList({ name: "Inbox" })',
+          onActionExecuted,
+        }}
+        runtimeTransport={{ request, durableOperation: { observe } }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start & observe' }));
+    expect(
+      await within(screen.getByLabelText('Console result')).findByText('completed'),
+    ).toBeDefined();
+    await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(onActionExecuted).toHaveBeenCalledWith({
+      execution: expect.objectContaining({ family: 'operation' }),
+      response: completed,
+    });
+    expect(
+      request.mock.calls.some(
+        ([envelope]) =>
+          envelope.family === 'durable.operation' &&
+          (envelope.body as { kind?: string }).kind === 'inspect',
+      ),
+    ).toBe(true);
   });
 
   it('reports an unsuccessful Operation result without publishing action success', async () => {
@@ -299,20 +373,29 @@ describe('Console actions', uiTestOptions, () => {
           entityName: 'List',
           capabilities: { entityMutations: ['update'] },
         });
-      return createRuntimeProtocolResponse(envelope, {
-        kind: 'graph-command-result',
-        value: {
-          created: [],
-          updated: [
-            {
-              entityName: 'List',
-              ref: createEntityRef(ListSchema, { id: 'list-1' }),
-              values: { id: 'list-1', name: 'Today' },
-            },
-          ],
-          deleted: [],
+      return createRuntimeProtocolResponse(
+        envelope,
+        {
+          kind: 'graph-command-result',
+          value: {
+            created: [],
+            updated: [
+              {
+                entityName: 'List',
+                ref: createEntityRef(ListSchema, { id: 'list-1' }),
+                values: { id: 'list-1', name: 'Today' },
+              },
+            ],
+            deleted: [],
+          },
         },
-      });
+        {
+          committedMutations: {
+            precision: 'intensional',
+            mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+          },
+        },
+      );
     });
     render(
       <ConsolePanel
@@ -348,6 +431,7 @@ describe('Console actions', uiTestOptions, () => {
     )![0];
     expect(command).toMatchObject({
       family: 'graph.command',
+      accepts: ['committed-mutations.v1'],
       body: {
         kind: 'graph-command',
         command: {
@@ -364,6 +448,16 @@ describe('Console actions', uiTestOptions, () => {
       true,
     );
     await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(onActionExecuted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionMetadata: {
+          committedMutations: {
+            precision: 'intensional',
+            mutations: [{ provenance: 'captured', effect: { kind: 'graph-change' } }],
+          },
+        },
+      }),
+    );
     expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
       id: 'list-1',
       name: 'Today',

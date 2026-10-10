@@ -274,18 +274,16 @@ The generated client preserves operation input and output schemas, so React infe
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
-const graph = useGraphExecutorCapability();
+const mutateTodo = useEntityMutationCommand(command => command);
 const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
-graph?.runEntityMutationCommand?.(
+mutateTodo.mutate(
   mutateEntity(TodoItemSchema).create({
     list: TodoListSchema.refById(selectedListId),
     title: 'Read the guide',
   }),
 );
-graph?.runEntityMutationCommand?.(
-  mutateEntity(TodoItemSchema).updateSelection(visibleTodos, { completed: true }),
-);
+mutateTodo.mutate(mutateEntity(TodoItemSchema).updateSelection(visibleTodos, { completed: true }));
 completeAll.execute({ list: TodoList.refById(selectedListId) });
 ```
 
@@ -294,6 +292,12 @@ many-row execution mode and a canonical Entity-prefixed cache key. The applicati
 current `ExecutionIdentity` to `OntahiGraphProvider`, so authenticated, public, and session-loading
 reads cannot reuse each other's cache entries; the server still authenticates every request from
 trusted request context.
+
+Mutation hooks retain no Todo-authored cache keys. Runtime Protocol returns the bounded semantic
+commands that committed, and `@ontahi/react` conservatively matches them against the canonical
+Graph Reads held by React Query. Todo therefore declares neither `bridge.invalidate` prefixes nor
+post-success `refetch()` callbacks for Entity, Relation, Operation, model-triggered, or durable
+mutation paths.
 
 Deletion uses the same command surface. Explicit members can be addressed by Ref, while a settled
 Selection can delete a complete population:

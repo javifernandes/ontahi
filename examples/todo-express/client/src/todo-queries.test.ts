@@ -1,6 +1,8 @@
 import { toGraphReadRequest } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
+import { TodoItem, TodoList } from '../../src/generated/client-entities.js';
+
 import { todoListsQuery } from './todo-queries.js';
 
 describe('Todo client Queries', () => {
@@ -28,5 +30,11 @@ describe('Todo client Queries', () => {
         },
       },
     });
+  });
+
+  it('projects Operations without application-authored cache invalidation keys', () => {
+    expect(TodoList.domain.completeAll.bridge).toEqual({});
+    expect(TodoItem.domain.addItem.bridge).toEqual({});
+    expect(TodoItem.domain.deleteFromNamedList.bridge).toEqual({});
   });
 });

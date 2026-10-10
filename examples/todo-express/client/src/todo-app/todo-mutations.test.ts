@@ -19,7 +19,7 @@ import {
 
 describe('Todo entity mutations', () => {
   it('creates a list with receiver-owned identity and returns that identity', async () => {
-    const runEntityMutationCommand = vi.fn().mockResolvedValue({
+    const execute = vi.fn().mockResolvedValue({
       created: [
         {
           entityName: 'TodoList',
@@ -30,57 +30,47 @@ describe('Todo entity mutations', () => {
       updated: [],
       deleted: [],
     });
-    const refetchTodos = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      createTodoList({ runEntityMutationCommand }, refetchTodos, '  Reading  ', '#dcebdc'),
-    ).resolves.toEqual({ ok: true, id: 'generated-list' });
-    expect(runEntityMutationCommand).toHaveBeenCalledWith(
+    await expect(createTodoList(execute, '  Reading  ', '#dcebdc')).resolves.toEqual({
+      ok: true,
+      id: 'generated-list',
+    });
+    expect(execute).toHaveBeenCalledWith(
       mutateEntity(TodoListSchema).create({ name: 'Reading', color: '#dcebdc' }),
     );
-    expect(refetchTodos).toHaveBeenCalledOnce();
   });
 
   it('creates through one Entity Mutation Command without client-owned defaults or identity', async () => {
-    const runEntityMutationCommand = vi.fn().mockResolvedValue({});
-    const refetchTodos = vi.fn().mockResolvedValue(undefined);
+    const execute = vi.fn().mockResolvedValue({});
 
-    await expect(
-      createTodoItem({ runEntityMutationCommand }, refetchTodos, 'list-1', '  Buy milk  '),
-    ).resolves.toEqual({ ok: true });
+    await expect(createTodoItem(execute, 'list-1', '  Buy milk  ')).resolves.toEqual({ ok: true });
 
-    expect(runEntityMutationCommand).toHaveBeenCalledWith(
+    expect(execute).toHaveBeenCalledWith(
       mutateEntity(TodoItemSchema).create({
         list: createEntityRef(TodoListSchema, { id: 'list-1' }),
         title: 'Buy milk',
       }),
     );
-    expect(refetchTodos).toHaveBeenCalledOnce();
   });
 
-  it('renames through one exact Entity Mutation Command and refreshes todos', async () => {
-    const runEntityMutationCommand = vi.fn().mockResolvedValue({});
-    const refetchTodos = vi.fn().mockResolvedValue(undefined);
+  it('renames through one exact Entity Mutation Command', async () => {
+    const execute = vi.fn().mockResolvedValue({});
 
-    await expect(
-      renameTodoItem({ runEntityMutationCommand }, refetchTodos, 'todo-1', '  Renamed todo  '),
-    ).resolves.toEqual({ ok: true });
+    await expect(renameTodoItem(execute, 'todo-1', '  Renamed todo  ')).resolves.toEqual({
+      ok: true,
+    });
 
-    expect(runEntityMutationCommand).toHaveBeenCalledWith(
+    expect(execute).toHaveBeenCalledWith(
       mutateEntity(TodoItemSchema).update(createEntityRef(TodoItemSchema, { id: 'todo-1' }), {
         title: 'Renamed todo',
       }),
     );
-    expect(refetchTodos).toHaveBeenCalledOnce();
   });
 
   it.each([
     {
       label: 'updates completion',
-      invoke: (
-        executor: Parameters<typeof setTodoItemCompleted>[0],
-        refetch: () => Promise<void>,
-      ) => setTodoItemCompleted(executor, refetch, 'todo-1', true),
+      invoke: (execute: Parameters<typeof setTodoItemCompleted>[0]) =>
+        setTodoItemCompleted(execute, 'todo-1', true),
       command: mutateEntity(TodoItemSchema).update(
         createEntityRef(TodoItemSchema, { id: 'todo-1' }),
         { completed: true },
@@ -88,59 +78,43 @@ describe('Todo entity mutations', () => {
     },
     {
       label: 'deletes an item',
-      invoke: (executor: Parameters<typeof deleteTodoItem>[0], refetch: () => Promise<void>) =>
-        deleteTodoItem(executor, refetch, 'todo-1'),
+      invoke: (execute: Parameters<typeof deleteTodoItem>[0]) => deleteTodoItem(execute, 'todo-1'),
       command: mutateEntity(TodoItemSchema).delete(
         createEntityRef(TodoItemSchema, { id: 'todo-1' }),
       ),
     },
     {
       label: 'deletes a list',
-      invoke: (executor: Parameters<typeof deleteTodoList>[0], refetch: () => Promise<void>) =>
-        deleteTodoList(executor, refetch, 'list-1'),
+      invoke: (execute: Parameters<typeof deleteTodoList>[0]) => deleteTodoList(execute, 'list-1'),
       command: mutateEntity(TodoListSchema).delete(
         createEntityRef(TodoListSchema, { id: 'list-1' }),
       ),
     },
     {
       label: 'deletes a tag',
-      invoke: (executor: Parameters<typeof deleteTodoTag>[0], refetch: () => Promise<void>) =>
-        deleteTodoTag(executor, refetch, 'tag-1'),
+      invoke: (execute: Parameters<typeof deleteTodoTag>[0]) => deleteTodoTag(execute, 'tag-1'),
       command: mutateEntity(TagSchema).delete(createEntityRef(TagSchema, { id: 'tag-1' })),
     },
-  ])('$label through an Entity Mutation Command and refreshes data', async testCase => {
-    const runEntityMutationCommand = vi.fn().mockResolvedValue({});
-    const refetch = vi.fn().mockResolvedValue(undefined);
+  ])('$label through an Entity Mutation Command', async testCase => {
+    const execute = vi.fn().mockResolvedValue({});
 
-    await expect(testCase.invoke({ runEntityMutationCommand }, refetch)).resolves.toEqual({
-      ok: true,
-    });
-    expect(runEntityMutationCommand).toHaveBeenCalledWith(testCase.command);
-    expect(refetch).toHaveBeenCalledOnce();
+    await expect(testCase.invoke(execute)).resolves.toEqual({ ok: true });
+    expect(execute).toHaveBeenCalledWith(testCase.command);
   });
 
   it('rejects blank titles before dispatch', async () => {
-    const runEntityMutationCommand = vi.fn();
+    const execute = vi.fn();
 
-    await expect(
-      renameTodoItem({ runEntityMutationCommand }, vi.fn(), 'todo-1', '   '),
-    ).resolves.toEqual({ ok: false, message: 'The todo title cannot be empty.' });
-    expect(runEntityMutationCommand).not.toHaveBeenCalled();
+    await expect(renameTodoItem(execute, 'todo-1', '   ')).resolves.toEqual({
+      ok: false,
+      message: 'The todo title cannot be empty.',
+    });
+    expect(execute).not.toHaveBeenCalled();
   });
 
-  it('reports unavailable and failed mutation runtimes', async () => {
-    await expect(renameTodoItem(undefined, vi.fn(), 'todo-1', 'Renamed')).resolves.toEqual({
-      ok: false,
-      message: 'This runtime cannot rename todos.',
-    });
-
+  it('reports failed mutation execution', async () => {
     await expect(
-      renameTodoItem(
-        { runEntityMutationCommand: vi.fn().mockRejectedValue(new Error('Remote rejected')) },
-        vi.fn(),
-        'todo-1',
-        'Renamed',
-      ),
+      renameTodoItem(vi.fn().mockRejectedValue(new Error('Remote rejected')), 'todo-1', 'Renamed'),
     ).resolves.toEqual({ ok: false, message: 'Remote rejected' });
   });
 });

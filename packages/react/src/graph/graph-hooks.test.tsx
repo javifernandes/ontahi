@@ -4,6 +4,7 @@ import {
   entity,
   field,
   graphSchema,
+  mutateEntity,
   query,
   relationship,
   relationshipSet,
@@ -22,6 +23,7 @@ import {
   OntahiGraphProvider,
   type ReactGraphExecutor,
   useGraphCommand,
+  useEntityMutationCommand,
   useGraphOperation,
   useGraphQuery,
   useManyToManyRelationshipCommand,
@@ -348,6 +350,83 @@ describe('graph query and command hooks', () => {
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Book'] });
   });
 
+  it('invalidates matching reads from Entity Mutation Command metadata', async () => {
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const ontahiKey = ['custom', 'ontahi-entity'] as const;
+    const otherKey = ['custom', 'other-entity'] as const;
+    await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: ontahiKey,
+        queryFn: () => 1,
+        meta: withCanonicalGraphReadMeta(undefined, bookRead('ontahi')),
+      }),
+      queryClient.fetchQuery({
+        queryKey: otherKey,
+        queryFn: () => 1,
+        meta: withCanonicalGraphReadMeta(undefined, bookRead('other')),
+      }),
+    ]);
+    const command = mutateEntity(BookEntity).update(createEntityRef(BookEntity, { id: 'book-1' }), {
+      title: 'Ontahi Updated',
+    });
+    const value = { created: [], updated: [], deleted: [] };
+    graphExecutor.runEntityMutationCommand = undefined;
+    graphExecutor.runEntityMutationCommandExecution = vi.fn().mockResolvedValue({
+      value,
+      metadata: { committedMutations: changedBook('ontahi') },
+    });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(
+      () =>
+        useEntityMutationCommand(() => command, {
+          invalidateQueryKeys: [['Book']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(undefined)).resolves.toBe(value);
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ontahiKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: otherKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Book'] });
+  });
+
+  it('supports explicit Entity Mutation fallbacks and reports an unavailable executor', async () => {
+    const command = mutateEntity(BookEntity).delete(createEntityRef(BookEntity, { id: 'book-1' }));
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    graphExecutor.runEntityMutationCommand = vi
+      .fn()
+      .mockResolvedValue({ created: [], updated: [], deleted: [] });
+    const { result } = renderHook(
+      () =>
+        useEntityMutationCommand(() => command, {
+          invalidateQueryKeys: [['legacy-books']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(graphExecutor.runEntityMutationCommand).toHaveBeenCalledWith(command, undefined);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['legacy-books'] });
+
+    const unsupportedExecutor = createExecutorMock();
+    unsupportedExecutor.runEntityMutationCommand = undefined;
+    const unsupported = renderHook(() => useEntityMutationCommand(() => command), {
+      wrapper: createWrapper(unsupportedExecutor),
+    });
+    await expect(unsupported.result.current.mutateAsync(undefined)).rejects.toThrow(
+      'does not support Entity Mutation Commands',
+    );
+  });
+
   it('runs graph operations as graph commands', async () => {
     const graphExecutor = createExecutorMock();
     const command: GraphCommandSpec<typeof BookEntity, { title: string }, BookSummary> = {
@@ -527,7 +606,7 @@ describe('graph query and command hooks', () => {
         orderBy: [],
       }),
     });
-    graphExecutor.runOrderedRelationshipCommand = vi.fn();
+    graphExecutor.runOrderedRelationshipCommand = undefined;
     graphExecutor.runOrderedRelationshipCommandExecution = vi.fn().mockResolvedValue({
       value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
       metadata: {
@@ -588,7 +667,7 @@ describe('graph query and command hooks', () => {
         orderBy: [],
       }),
     });
-    graphExecutor.runManyToManyRelationshipCommand = vi.fn();
+    graphExecutor.runManyToManyRelationshipCommand = undefined;
     graphExecutor.runManyToManyRelationshipCommandExecution = vi.fn().mockResolvedValue({
       value: { status: 'applied', delta: { added: [], removed: [] } },
       metadata: {

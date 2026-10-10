@@ -132,9 +132,15 @@ eventual substitution consistent. Devtools and Todo chat are two projections of 
 and one compatible named Hole can fill several positions. This does not yet cover nested values,
 contextual producers, or a universal form representation.
 
-Plan 154d extracts the next reactive proof around committed mutation semantics. Its working shape
-reuses canonical Graph Commands and Selections as intensional, bounded mutation descriptions,
-records applied work within Unit of Work, publishes only after commit, and conservatively matches
-those mutations against canonical Graph Reads. Exact deltas remain optional evidence rather than a
-required row changelog; native execution requires a semantic declaration escape hatch instead of
-cache-key metadata.
+Plan 154d proved the first reactive dependency boundary. Canonical Graph Commands and Selections
+are intensional, bounded mutation descriptions recorded inside the effect-owning Unit of Work and
+published only after commit. Runtime Protocol carries their authority-scoped
+`CommittedMutationSet` as execution metadata without changing domain outputs. React caches retain
+canonical Graph Reads independently from query keys and refresh unless the shared matcher can
+prove a mutation disjoint. Bulk effects remain constant-size, exact deltas remain optional
+evidence, and native execution declares semantic changes rather than cache keys.
+
+This proves mutation-to-dependency reevaluation for an initiating client; it does not yet make a
+Query a general live value. Delivery to active server observations, cross-client distribution, and
+causal Devtools presentation remain separate work. Event occurrence, mutation effect, observation
+revision, and Operation progress must stay distinct as those capabilities evolve.

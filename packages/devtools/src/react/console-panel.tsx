@@ -34,6 +34,9 @@ import {
 } from '@ontahi/core/runtime/identity';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
+  toDurableOperationProtocolRequest,
+  type RuntimeProtocolExecutionMetadata,
   type RuntimeTransport,
   type RuntimeProtocolGraphObservationBody,
 } from '@ontahi/core/runtime/protocol';
@@ -104,6 +107,7 @@ export type OntahiDevtoolsConsoleOptions = {
   /** Reconcile host-owned read caches after a Console Command or Operation succeeds. */
   readonly onActionExecuted?: (event: {
     readonly execution: Exclude<ConsoleRequest, { readonly family: 'graph.read' }>;
+    readonly executionMetadata?: RuntimeProtocolExecutionMetadata;
     readonly response: unknown;
   }) => void | Promise<void>;
 };
@@ -1033,6 +1037,13 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
     [runtimeTransport],
   );
+  const executionExchange = useMemo(
+    () =>
+      runtimeTransport
+        ? createRuntimeProtocolExecutionExchange({ transport: runtimeTransport })
+        : undefined,
+    [runtimeTransport],
+  );
   const draftSyntax = useMemo(
     () => parseConsoleDocument(document, dialect).syntax.expression,
     [document, dialect],
@@ -1173,17 +1184,30 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       }
       if (controller.signal.aborted) throw new Error('Console execution was cancelled.');
       if (execution.family === 'graph.read')
-        return exchange(
-          { family: 'graph.read', body: { ...execution.body, includeCapabilities: true } },
-          { signal: controller.signal },
-        );
-      if (execution.family === 'graph.command')
-        return exchange(execution, { signal: controller.signal });
-      return exchange(execution, { signal: controller.signal });
+        return {
+          body: await exchange(
+            { family: 'graph.read', body: { ...execution.body, includeCapabilities: true } },
+            { signal: controller.signal },
+          ),
+          metadata: undefined,
+        };
+      if (!executionExchange) {
+        throw new Error('Console action execution requires a configured Runtime Transport.');
+      }
+      return execution.family === 'graph.command'
+        ? executionExchange(
+            { family: 'graph.command', body: execution.body },
+            { signal: controller.signal },
+          )
+        : executionExchange(
+            { family: 'operation', body: execution.body },
+            { signal: controller.signal },
+          );
     };
     void execute()
-      .then(async response => {
+      .then(async actionExecution => {
         if (controller.signal.aborted) return;
+        const response = actionExecution.body;
         if (execution.family !== 'graph.read') {
           if (isRecord(response) && response.kind === 'protocol-error') {
             const error = response.error;
@@ -1221,7 +1245,12 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           const taskRun =
             execution.family === 'operation' ? operationTaskRunIdentity(response) : undefined;
           if (taskRun) setActiveDurableRun(taskRun);
-          else await options.onActionExecuted?.({ execution, response });
+          else
+            await options.onActionExecuted?.({
+              execution,
+              ...(actionExecution.metadata ? { executionMetadata: actionExecution.metadata } : {}),
+              response,
+            });
           setResult({
             status: 'success',
             snapshot: {
@@ -1706,10 +1735,26 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           disabledReason: sortDisabledReason,
           onSort: sortBy,
         }}
-        onDurableOperationCompleted={snapshot => {
+        onDurableOperationCompleted={async snapshot => {
           const execution = result.snapshot?.execution;
           if (execution?.family !== 'operation') return;
-          return options.onActionExecuted?.({ execution, response: snapshot });
+          let executionMetadata: RuntimeProtocolExecutionMetadata | undefined;
+          if (executionExchange) {
+            try {
+              const inspected = await executionExchange({
+                family: 'durable.operation',
+                body: toDurableOperationProtocolRequest(snapshot),
+              });
+              executionMetadata = inspected.metadata;
+            } catch {
+              // Terminal inspection is additive; completion reconciliation must still run.
+            }
+          }
+          return options.onActionExecuted?.({
+            execution,
+            ...(executionMetadata ? { executionMetadata } : {}),
+            response: snapshot,
+          });
         }}
         onDurableObservationFinished={() => setActiveDurableRun(undefined)}
       />
