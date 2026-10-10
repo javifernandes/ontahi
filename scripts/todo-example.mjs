@@ -147,15 +147,30 @@ const prepareLocalExample = () => {
     { env: exampleEnvironment },
   );
   run('pnpm', ['--filter', todoPackageName, 'run', 'codegen'], { env: exampleEnvironment });
-  run('pnpm', ['--filter', todoPackageName, 'run', 'build:client'], {
-    env: exampleEnvironment,
-  });
 };
 
 const runLocalExample = async () => {
   prepareLocalExample();
+  const publicPort = Number.parseInt(process.env.PORT ?? '3001', 10);
+  assert(Number.isInteger(publicPort) && publicPort > 0, 'PORT must be a positive integer.');
+  const serverPort = Number.parseInt(process.env.TODO_SERVER_PORT ?? `${publicPort + 1}`, 10);
+  assert(
+    Number.isInteger(serverPort) && serverPort > 0,
+    'TODO_SERVER_PORT must be a positive integer.',
+  );
+  assert(serverPort !== publicPort, 'TODO_SERVER_PORT must differ from PORT.');
+  const publicOrigin = `http://localhost:${publicPort}`;
+  const serverOrigin = `http://127.0.0.1:${serverPort}`;
+  const localEnvironment = {
+    ...exampleEnvironment,
+    PORT: `${serverPort}`,
+    TODO_GITHUB_CALLBACK_URL:
+      process.env.TODO_GITHUB_CALLBACK_URL ?? `${publicOrigin}/auth/github/callback`,
+    TODO_SERVER_ORIGIN: serverOrigin,
+  };
   process.stdout.write(
-    `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at http://localhost:3001\n\n`,
+    `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at ${publicOrigin}\n` +
+      `Vite forwards Runtime and application APIs to Express at ${serverOrigin}.\n\n`,
   );
   await waitForProcesses([
     start(
@@ -169,10 +184,13 @@ const runLocalExample = async () => {
         'run',
         'build:watch',
       ],
-      { env: exampleEnvironment },
+      { env: localEnvironment },
     ),
     start('pnpm', ['--filter', todoPackageName, 'run', 'dev'], {
-      env: exampleEnvironment,
+      env: localEnvironment,
+    }),
+    start('pnpm', ['--filter', todoPackageName, 'run', 'dev:client', '--port', `${publicPort}`], {
+      env: localEnvironment,
     }),
   ]);
 };
