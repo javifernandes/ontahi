@@ -6,6 +6,7 @@ import {
   type RuntimeProtocolError,
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
+  type RuntimeProtocolGraphRefreshCause,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 
@@ -127,6 +128,34 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
   transport,
 }: InstrumentRuntimeTransportOptions<TTransport>): TTransport => {
   const { createId, now, projectPayload, publish } = getOntahiDiagnosticsInternals(diagnostics);
+  const pendingGraphReadRefreshes: Array<{
+    readonly requestKey: string;
+    readonly causedBy: RuntimeProtocolGraphRefreshCause;
+    readonly registeredAt: number;
+  }> = [];
+  const canonicalJson = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonicalJson);
+    if (typeof value !== 'object' || value === null) return value;
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, canonicalJson(item)]),
+    );
+  };
+  const requestKey = (value: unknown) => JSON.stringify(canonicalJson(value));
+  const consumeGraphReadRefreshCause = (runtimeRequest: RuntimeProtocolRequestEnvelope) => {
+    if (runtimeRequest.family !== 'graph.read') return undefined;
+    const currentTime = Date.now();
+    for (let index = pendingGraphReadRefreshes.length - 1; index >= 0; index -= 1) {
+      if (currentTime - pendingGraphReadRefreshes[index]!.registeredAt > 30_000)
+        pendingGraphReadRefreshes.splice(index, 1);
+    }
+    const index = pendingGraphReadRefreshes.findIndex(
+      expected => expected.requestKey === requestKey(runtimeRequest.body),
+    );
+    if (index < 0) return undefined;
+    return pendingGraphReadRefreshes.splice(index, 1)[0]?.causedBy;
+  };
   const request: AnyRuntimeTransport['request'] = async (runtimeRequest, options) => {
     const startedAt = now();
     const identity = {
@@ -144,18 +173,29 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
       ...identity,
       ...(projectedRequest ? { request: projectedRequest } : {}),
     });
+    const expectedRefreshCause = consumeGraphReadRefreshCause(runtimeRequest);
 
     try {
       const response = await transport.request(runtimeRequest, options);
       const at = now();
       const projectedResponse = projectProtocolEnvelope(response, projectPayload);
+      const responseWithCause =
+        expectedRefreshCause && projectedResponse?.kind === 'response'
+          ? {
+              ...projectedResponse,
+              body:
+                typeof projectedResponse.body === 'object' && projectedResponse.body !== null
+                  ? { ...projectedResponse.body, causedBy: expectedRefreshCause }
+                  : { kind: 'graph-read-result', causedBy: expectedRefreshCause },
+            }
+          : projectedResponse;
       publish({
         kind: 'exchange.settled',
         at,
         ...identity,
         durationMs: Math.max(0, at - startedAt),
         outcome: isRuntimeProtocolError(response) ? 'protocol-error' : 'success',
-        ...(projectedResponse ? { response: projectedResponse } : {}),
+        ...(responseWithCause ? { response: responseWithCause } : {}),
       });
       return response;
     } catch (error) {
@@ -270,6 +310,21 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
         }
       : {}),
     ...(durableOperation ? { durableOperation } : {}),
+    causality: {
+      associateGraphReadRefreshes: (requests, causedBy) => {
+        const registeredAt = Date.now();
+        requests.forEach(refreshRequest => {
+          pendingGraphReadRefreshes.push({
+            requestKey: requestKey(refreshRequest),
+            causedBy,
+            registeredAt,
+          });
+        });
+        if (pendingGraphReadRefreshes.length > 128) {
+          pendingGraphReadRefreshes.splice(0, pendingGraphReadRefreshes.length - 128);
+        }
+      },
+    },
     ...(routing ? { routing } : {}),
   } as TTransport;
 };

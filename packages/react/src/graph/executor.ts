@@ -2,6 +2,7 @@ import type {
   GraphCommandSpec,
   GraphOperationDeclaration,
   GraphReadExpression,
+  GraphReadRequest,
   GraphReadIntent,
   GraphSchemaLike,
   InferGraphSchemaClientInput,
@@ -14,7 +15,10 @@ import type {
   EntityMutationCommand,
   EntityMutationDelta,
 } from '@ontahi/core/data-graph';
-import type { RuntimeProtocolExecutionMetadata } from '@ontahi/core/runtime/protocol';
+import type {
+  RuntimeProtocolExecutionMetadata,
+  RuntimeProtocolGraphRefreshCause,
+} from '@ontahi/core/runtime/protocol';
 import type { QueryKey, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 
 export type GraphMutationExecution<TResult> = {
@@ -23,6 +27,10 @@ export type GraphMutationExecution<TResult> = {
 };
 
 export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TReadOptions> {
+  associateGraphReadRefreshes?(
+    requests: readonly GraphReadRequest[],
+    causedBy: RuntimeProtocolGraphRefreshCause,
+  ): void;
   get<TParams, TResult>(
     read: QueryOrView<TParams, TResult>,
     params: TParams,

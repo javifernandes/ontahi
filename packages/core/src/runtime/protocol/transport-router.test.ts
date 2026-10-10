@@ -46,8 +46,10 @@ const createTransport = ({
       change: { kind: 'invalidate' },
     } as never;
   };
+  const associateGraphReadRefreshes = vi.fn();
   return {
     request,
+    causality: { associateGraphReadRefreshes },
     ...(durable ? { durableOperation: { observe: observeDurable } } : {}),
     ...(graph ? { graph: { observe: observeGraph } } : {}),
   };
@@ -118,6 +120,28 @@ describe('Runtime Transport router', () => {
     expect(websocket.request.mock.calls.map(([request]) => request.family)).toEqual([
       'graph.command',
     ]);
+    const refreshRequest = {
+      version: 1 as const,
+      kind: 'graph-read' as const,
+      selection: {
+        kind: 'selection' as const,
+        entityName: 'TodoList',
+        expression: { kind: 'all' as const },
+      },
+      mode: 'run' as const,
+      orderBy: [],
+    };
+    const causedBy = {
+      kind: 'committed-mutations' as const,
+      commitIds: ['commit-1'],
+      overflow: false,
+    };
+    transport.causality?.associateGraphReadRefreshes([refreshRequest], causedBy);
+    expect(http.causality.associateGraphReadRefreshes).toHaveBeenCalledWith(
+      [refreshRequest],
+      causedBy,
+    );
+    expect(websocket.causality.associateGraphReadRefreshes).not.toHaveBeenCalled();
     expect(graphUpdates).toHaveLength(1);
     await expect(
       transport.request(

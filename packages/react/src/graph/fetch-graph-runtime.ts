@@ -214,6 +214,11 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
   return {
     runtime,
     graphExecutor: {
+      ...(runtimeTransport?.causality
+        ? {
+            associateGraphReadRefreshes: runtimeTransport.causality.associateGraphReadRefreshes,
+          }
+        : {}),
       get: (read, params, options) => runBrowserEffect(runtime.get(read, params, options)),
       run: (read, params, options) => runBrowserEffect(runtime.run(read, params, options)),
       count: (read, params, options) => runBrowserEffect(runtime.count(read, params, options)),

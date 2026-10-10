@@ -742,16 +742,21 @@ describe('operation hooks', () => {
           kind: 'snapshot',
           snapshot: { ...run, status: 'completed', updatedAt: 'now' },
         },
-        { committedMutations: completeLater },
+        { committedMutations: completeLater, mutationCommitId: 'commit-1' },
       ),
     );
+    const associateGraphReadRefreshes = vi.fn();
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const { Wrapper } = createWrapper(
       bridgeAction,
       createGraphClientCache(),
       queryClient,
       undefined,
-      { request, durableOperation: { observe } } as unknown as RuntimeTransport,
+      {
+        request,
+        durableOperation: { observe },
+        causality: { associateGraphReadRefreshes },
+      } as unknown as RuntimeTransport,
     );
     const { result } = renderHook(() => useDurableOperation(operation), { wrapper: Wrapper });
 
@@ -765,6 +770,11 @@ describe('operation hooks', () => {
     );
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: inboxKey, exact: true });
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Todo'] });
+    expect(associateGraphReadRefreshes).toHaveBeenCalledWith([todoItems('later')], {
+      kind: 'committed-mutations',
+      commitIds: ['commit-1'],
+      overflow: false,
+    });
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       family: 'durable.operation',
       accepts: ['committed-mutations.v1'],

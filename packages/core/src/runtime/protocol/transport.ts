@@ -1,4 +1,4 @@
-import type { GraphReadRequestV1 } from '../../data-graph/read-protocol.js';
+import type { GraphReadRequest, GraphReadRequestV1 } from '../../data-graph/read-protocol.js';
 import type { JsonValue } from '../../value/json.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
 
@@ -12,7 +12,10 @@ import {
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
 } from './envelope.js';
-import type { RuntimeProtocolGraphObservationBody } from './session.js';
+import type {
+  RuntimeProtocolGraphObservationBody,
+  RuntimeProtocolGraphRefreshCause,
+} from './session.js';
 
 export type RuntimeTransportRequestOptions<TTransportOptions = unknown> = {
   readonly signal?: AbortSignal;
@@ -35,6 +38,13 @@ export type GraphObservationCapability<TTransportOptions = unknown> = {
   ): AsyncIterable<RuntimeProtocolGraphObservationBody>;
 };
 
+export type RuntimeTransportCausalityCapability = {
+  associateGraphReadRefreshes(
+    requests: readonly GraphReadRequest[],
+    causedBy: RuntimeProtocolGraphRefreshCause,
+  ): void;
+};
+
 export type RuntimeTransport<TTransportOptions = unknown> = {
   request(
     request: RuntimeProtocolRequestEnvelope,
@@ -42,6 +52,8 @@ export type RuntimeTransport<TTransportOptions = unknown> = {
   ): Promise<RuntimeProtocolResponseEnvelope | RuntimeProtocolError>;
   readonly durableOperation?: DurableOperationObservationCapability;
   readonly graph?: GraphObservationCapability<TTransportOptions>;
+  /** Client-local causal context used by diagnostics; it is never sent over the wire. */
+  readonly causality?: RuntimeTransportCausalityCapability;
 };
 
 export type RuntimeProtocolExchangeRequest<TFamily extends string, TBody> = {

@@ -189,6 +189,7 @@ export function useOperation<TInput, TData>(
   const adapter = useDefaultOperationBridgeAdapter();
   const clientCache = useGraphClientCache();
   const queryClient = useQueryClient();
+  const runtimeTransport = useRuntimeTransportCapability();
   const action = adapter.useBridgeAction<TInput, TData>(
     operation as Parameters<typeof adapter.useBridgeAction<TInput, TData>>[0],
   ) as OperationBridgeAction<TInput, TData>;
@@ -255,8 +256,24 @@ export function useOperation<TInput, TData>(
         if (currentOptions?.invalidateOnSuccess ?? true) {
           const committed = actionResult?.executionMetadata?.committedMutations;
           if (committed) {
+            const mutationCommitId = actionResult?.executionMetadata?.mutationCommitId;
             await Promise.all([
-              invalidateSemanticGraphReads(queryClient, committed),
+              invalidateSemanticGraphReads(queryClient, committed, {
+                ...(mutationCommitId
+                  ? {
+                      causedBy: {
+                        kind: 'committed-mutations' as const,
+                        commitIds: [mutationCommitId],
+                        overflow: false,
+                      },
+                    }
+                  : {}),
+                ...(runtimeTransport?.causality
+                  ? {
+                      associateRefreshes: runtimeTransport.causality.associateGraphReadRefreshes,
+                    }
+                  : {}),
+              }),
               invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
             ]);
           } else {
@@ -286,7 +303,7 @@ export function useOperation<TInput, TData>(
 
       return invocation;
     },
-    [clientCache, executeTransportAsync, operation, queryClient],
+    [clientCache, executeTransportAsync, operation, queryClient, runtimeTransport],
   );
 
   const executeAsync = useCallback(
@@ -542,6 +559,22 @@ export function useDurableOperation<TInput, TResult = unknown>(
               await invalidateSemanticGraphReads(
                 queryClient,
                 execution.metadata.committedMutations,
+                {
+                  ...(execution.metadata.mutationCommitId
+                    ? {
+                        causedBy: {
+                          kind: 'committed-mutations' as const,
+                          commitIds: [execution.metadata.mutationCommitId],
+                          overflow: false,
+                        },
+                      }
+                    : {}),
+                  ...(runtimeTransport.causality
+                    ? {
+                        associateRefreshes: runtimeTransport.causality.associateGraphReadRefreshes,
+                      }
+                    : {}),
+                },
               );
               return;
             }

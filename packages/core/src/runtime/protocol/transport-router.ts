@@ -193,11 +193,17 @@ export const createRuntimeTransportRouter = <
           transportFor('graph.observe').graph!.observe(...args),
       }
     : undefined;
+  const causality = {
+    associateGraphReadRefreshes: (
+      ...args: Parameters<NonNullable<RuntimeTransport['causality']>['associateGraphReadRefreshes']>
+    ) => transportFor('graph.read').causality?.associateGraphReadRefreshes(...args),
+  };
 
   return {
     request,
     ...(durableOperation ? { durableOperation } : {}),
     ...(graph ? { graph } : {}),
+    causality,
     routing: {
       inspect: () => snapshot,
       subscribe: listener => {
