@@ -92,15 +92,46 @@ const start = (command, commandArgs, options = {}) => {
   });
 };
 
+const stopProcesses = (processes, signal = 'SIGTERM') =>
+  processes.forEach(child => {
+    if (!child.killed) child.kill(signal);
+  });
+
+const waitForStableHttp = async (
+  url,
+  childProcess,
+  { pollIntervalMs = 100, stableForMs = 3_000, timeoutMs = 60_000 } = {},
+) => {
+  const deadline = Date.now() + timeoutMs;
+  let readySince;
+  while (Date.now() < deadline) {
+    if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+      throw new Error(`Todo Express exited before becoming ready at ${url}.`);
+    }
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      await response.body?.cancel();
+      if (response.ok) {
+        readySince ??= Date.now();
+        if (Date.now() - readySince >= stableForMs) return;
+      } else {
+        readySince = undefined;
+      }
+    } catch {
+      readySince = undefined;
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+  throw new Error(`Todo Express did not become stable at ${url} within ${timeoutMs} ms.`);
+};
+
 const waitForProcesses = async processes => {
   let stopRequested = false;
   let terminating = false;
   const terminate = signal => {
     if (terminating) return;
     terminating = true;
-    processes.forEach(child => {
-      if (!child.killed) child.kill(signal);
-    });
+    stopProcesses(processes, signal);
   };
   const requestStop = signal => {
     stopRequested = true;
@@ -172,7 +203,7 @@ const runLocalExample = async () => {
     `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at ${publicOrigin}\n` +
       `Vite forwards Runtime and application APIs to Express at ${serverOrigin}.\n\n`,
   );
-  await waitForProcesses([
+  const processes = [
     start(
       'pnpm',
       [
@@ -189,10 +220,20 @@ const runLocalExample = async () => {
     start('pnpm', ['--filter', todoPackageName, 'run', 'dev'], {
       env: localEnvironment,
     }),
-    start('pnpm', ['--filter', todoPackageName, 'run', 'dev:client', '--port', `${publicPort}`], {
-      env: localEnvironment,
-    }),
-  ]);
+  ];
+  try {
+    process.stdout.write('Waiting for Todo Express to become stable before starting Vite...\n');
+    await waitForStableHttp(`${serverOrigin}/runtime`, processes[1]);
+    processes.push(
+      start('pnpm', ['--filter', todoPackageName, 'run', 'dev:client', '--port', `${publicPort}`], {
+        env: localEnvironment,
+      }),
+    );
+    await waitForProcesses(processes);
+  } catch (error) {
+    stopProcesses(processes);
+    throw error;
+  }
 };
 
 const copyRegistryExample = version => {
