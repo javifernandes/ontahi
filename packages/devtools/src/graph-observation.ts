@@ -41,6 +41,9 @@ export const instrumentGraphObservation = (
           at: now(),
           sequence,
           ...(body.kind === 'graph-read-result' ? { rowCount: body.value.length } : {}),
+          ...(body.kind === 'graph-read-result' && body.causedBy
+            ? { causedBy: body.causedBy }
+            : {}),
           ...(snapshot === undefined ? {} : { snapshot }),
         });
         yield body;

@@ -43,16 +43,32 @@ export type UnitOfWorkMutationJournalApi = {
 
 export const COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY = 'unitOfWork.committedMutationDelivery';
 
-export type CommittedMutationDelivery = (mutations: CommittedMutationSet) => void;
+export type CommittedMutationCommit = {
+  readonly id: string;
+  readonly mutations: CommittedMutationSet;
+};
+
+export type CommittedMutationDelivery = (commit: CommittedMutationCommit) => void;
+
+let mutationCommitSequence = 0;
+
+export const createCommittedMutationCommit = (
+  mutations: CommittedMutationSet,
+): CommittedMutationCommit => ({
+  id:
+    globalThis.crypto?.randomUUID?.() ??
+    `ontahi-mutation-${Date.now()}-${(mutationCommitSequence += 1)}`,
+  mutations,
+});
 
 export const deliverCommittedMutationsToCurrentRuntime = (
-  mutations: CommittedMutationSet,
+  commit: CommittedMutationCommit,
 ): void => {
-  if (mutations.mutations.length === 0) return;
+  if (commit.mutations.mutations.length === 0) return;
   const delivery = getOperationRuntimeContext()?.resources.get(
     COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
   ) as CommittedMutationDelivery | undefined;
-  delivery?.(mutations);
+  delivery?.(commit);
 };
 
 export type UnitOfWorkRefResolutionOptions<TValue> = {

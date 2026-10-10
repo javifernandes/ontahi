@@ -5,6 +5,7 @@ import type { OperationRuntimeContext } from '../context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from '../context.js';
 import {
   commitMutationSetToCurrentUnitOfWork,
+  createCommittedMutationCommit,
   deliverCommittedMutationsToCurrentRuntime,
   getCurrentUnitOfWork,
   sealCurrentUnitOfWorkMutationJournal,
@@ -142,7 +143,9 @@ export const createInProcessTaskRuntime = ({
   const captureExecutionMetadata = (): TaskRunSource['executionMetadata'] => {
     if (!getCurrentUnitOfWork()) return undefined;
     const committedMutations = sealCurrentUnitOfWorkMutationJournal();
-    return committedMutations.mutations.length === 0 ? undefined : { committedMutations };
+    if (committedMutations.mutations.length === 0) return undefined;
+    const commit = createCommittedMutationCommit(committedMutations);
+    return { committedMutations, mutationCommitId: commit.id };
   };
   const createTaskOperationContext = (
     source: TaskRunSource,
@@ -368,7 +371,12 @@ export const createInProcessTaskRuntime = ({
           });
           if (executionMetadata?.committedMutations) {
             yield* Effect.sync(() =>
-              deliverCommittedMutationsToCurrentRuntime(executionMetadata.committedMutations),
+              deliverCommittedMutationsToCurrentRuntime({
+                id:
+                  executionMetadata.mutationCommitId ??
+                  createCommittedMutationCommit(executionMetadata.committedMutations).id,
+                mutations: executionMetadata.committedMutations,
+              }),
             );
           }
           return;
@@ -502,7 +510,12 @@ export const createInProcessTaskRuntime = ({
           });
           if (executionMetadata?.committedMutations) {
             yield* Effect.sync(() =>
-              deliverCommittedMutationsToCurrentRuntime(executionMetadata.committedMutations),
+              deliverCommittedMutationsToCurrentRuntime({
+                id:
+                  executionMetadata.mutationCommitId ??
+                  createCommittedMutationCommit(executionMetadata.committedMutations).id,
+                mutations: executionMetadata.committedMutations,
+              }),
             );
           }
         }).pipe(

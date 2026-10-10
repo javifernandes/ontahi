@@ -73,6 +73,16 @@ export const GraphObservationDetail = ({
             <p>
               Snapshot #{selected.sequence} · {selected.rowCount ?? 'unknown'} rows
             </p>
+            {selected.causedBy ? (
+              <p>
+                Semantic refresh caused by {selected.causedBy.commitIds.length}{' '}
+                {selected.causedBy.commitIds.length === 1 ? 'commit' : 'commits'}:{' '}
+                <code>{selected.causedBy.commitIds.join(', ')}</code>
+                {selected.causedBy.overflow ? ' (additional causes coalesced)' : ''}
+              </p>
+            ) : (
+              <p>Native observation snapshot.</p>
+            )}
             {selected.snapshot === undefined ? (
               <p>Snapshot payload was not captured.</p>
             ) : mode === 'visual' ? (

@@ -5,9 +5,11 @@ import {
   query,
   toGraphReadRequest,
 } from '@ontahi/core/data-graph';
-import type {
-  RuntimeTransport,
-  RuntimeProtocolGraphObservationBody,
+import {
+  createRuntimeProtocolRequest,
+  createRuntimeProtocolResponse,
+  type RuntimeTransport,
+  type RuntimeProtocolGraphObservationBody,
 } from '@ontahi/core/runtime/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +22,15 @@ const request = toGraphReadRequest(query(Book), 'run');
 const body: RuntimeProtocolGraphObservationBody = {
   kind: 'graph-read-result',
   value: [{ id: 'b1', title: 'Secret' }],
+};
+
+const causedBody: RuntimeProtocolGraphObservationBody = {
+  ...body,
+  causedBy: {
+    kind: 'committed-mutations',
+    commitIds: ['commit-1'],
+    overflow: false,
+  },
 };
 
 describe('graph observation diagnostics', () => {
@@ -100,6 +111,52 @@ describe('graph observation diagnostics', () => {
     expect(closed).toHaveBeenCalledOnce();
     expect(diagnostics.inspect().events[0]).toMatchObject({ outcome: 'aborted', sequence: 1 });
     expect(buildActivityEntries(diagnostics.inspect().events)).toHaveLength(1);
+  });
+
+  it('retains safe causal identity without capturing result payloads', async () => {
+    const diagnostics = createOntahiDiagnostics();
+    const runtimeRequest = createRuntimeProtocolRequest({
+      id: 'mutation-1',
+      family: 'graph.command',
+      body: { version: 3, kind: 'graph-command' },
+    });
+    const mutationResponse = createRuntimeProtocolResponse(
+      runtimeRequest,
+      { ok: true },
+      {
+        mutationCommitId: 'commit-1',
+        committedMutations: { precision: 'exact', mutations: [] },
+      },
+    );
+    const transport: RuntimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'ws',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn().mockResolvedValue(mutationResponse),
+        graph: {
+          observe: async function* () {
+            yield causedBody;
+          },
+        },
+      },
+    });
+
+    await transport.request(runtimeRequest);
+    for await (const _ of transport.graph!.observe(request)) {
+      // consume the causal refresh
+    }
+
+    const entries = buildActivityEntries(diagnostics.inspect().events);
+    const mutation = entries.find(entry => entry.kind === 'exchange');
+    expect(mutation).toMatchObject({
+      derivedRefreshes: [{ sequence: 1, rowCount: 1, overflow: false }],
+    });
+    const snapshot = diagnostics
+      .inspect()
+      .events.find(event => event.kind === 'graph-observation.snapshot');
+    expect(snapshot).toMatchObject({ causedBy: causedBody.causedBy });
+    expect(snapshot).not.toHaveProperty('snapshot');
   });
 
   it('preserves thrown errors and protocol errors while redacting before delivery', async () => {

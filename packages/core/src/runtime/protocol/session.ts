@@ -96,8 +96,18 @@ export type RuntimeProtocolSessionGraphUnobserveFrame = {
 };
 
 export type RuntimeProtocolGraphObservationBody =
-  | { readonly kind: 'graph-read-result'; readonly value: JsonValue[] }
+  | {
+      readonly kind: 'graph-read-result';
+      readonly value: JsonValue[];
+      readonly causedBy?: RuntimeProtocolGraphRefreshCause;
+    }
   | GraphReadProtocolError;
+
+export type RuntimeProtocolGraphRefreshCause = {
+  readonly kind: 'committed-mutations';
+  readonly commitIds: readonly string[];
+  readonly overflow: boolean;
+};
 
 export type RuntimeProtocolSessionGraphObservationFrame = {
   readonly protocol: typeof RUNTIME_PROTOCOL_SESSION_NAME;
@@ -178,7 +188,8 @@ const observationCompleteFrameKeys = new Set([...commonFrameKeys, 'id', 'sequenc
 const graphObserveFrameKeys = new Set([...commonFrameKeys, 'id', 'request']);
 const errorFrameKeys = new Set([...commonFrameKeys, 'id', 'error']);
 const errorKeys = new Set(['code', 'message']);
-const graphReadResultKeys = new Set(['kind', 'value']);
+const graphReadResultKeys = new Set(['kind', 'value', 'causedBy']);
+const graphRefreshCauseKeys = new Set(['kind', 'commitIds', 'overflow']);
 
 const hasOnlyKeys = (record: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(record).every(key => keys.has(key));
@@ -363,12 +374,23 @@ const parseGraphObservationBody = (
   value: unknown,
 ): RuntimeProtocolGraphObservationBody | undefined => {
   if (isGraphReadProtocolError(value)) return cloneJson(value);
+  const causedBy = isRecord(value) ? value.causedBy : undefined;
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, graphReadResultKeys) ||
     value.kind !== 'graph-read-result' ||
     !Array.isArray(value.value) ||
-    !isJsonValue(value.value)
+    !isJsonValue(value.value) ||
+    (causedBy !== undefined &&
+      (!isRecord(causedBy) ||
+        !hasOnlyKeys(causedBy, graphRefreshCauseKeys) ||
+        causedBy.kind !== 'committed-mutations' ||
+        !Array.isArray(causedBy.commitIds) ||
+        causedBy.commitIds.length === 0 ||
+        causedBy.commitIds.length > 16 ||
+        causedBy.commitIds.some(id => !isSessionId(id)) ||
+        new Set(causedBy.commitIds).size !== causedBy.commitIds.length ||
+        typeof causedBy.overflow !== 'boolean'))
   ) {
     return undefined;
   }

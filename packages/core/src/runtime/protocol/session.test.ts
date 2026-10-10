@@ -118,6 +118,11 @@ describe('Runtime Protocol session frames', () => {
       body: {
         kind: 'graph-read-result',
         value: [{ id: 'todo-1', title: 'Observe me' }],
+        causedBy: {
+          kind: 'committed-mutations',
+          commitIds: ['commit-1'],
+          overflow: false,
+        },
       },
     } as const;
     expect(parseRuntimeProtocolSessionClientFrame(graphObserveFrame())).toEqual({
@@ -151,6 +156,23 @@ describe('Runtime Protocol session frames', () => {
   it('fails closed for unknown keys, versions, kinds, and malformed snapshots', () => {
     expect(
       parseRuntimeProtocolSessionClientFrame({ ...observeFrame(), authority: 'admin' }),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_frame' } },
+    });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'graph-observation',
+        id: 'graph-observation-1',
+        sequence: 1,
+        body: {
+          kind: 'graph-read-result',
+          value: [],
+          causedBy: { kind: 'committed-mutations', commitIds: [], overflow: false },
+        },
+      }),
     ).toMatchObject({
       success: false,
       error: { error: { code: 'invalid_frame' } },

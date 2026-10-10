@@ -281,6 +281,12 @@ Activity store can evict older snapshots; the detail reports when the selected s
 These entries describe actual graph transport streams, not React hook instances or every query that
 reruns after invalidation.
 
+Semantic refreshes retain their safe causal identity even when payload capture is disabled. When a
+mutation response or completed durable run exposes the matching `mutationCommitId`, Activity groups
+the derived Graph Read refresh beneath that mutation. Observation detail distinguishes native
+snapshots from semantic refreshes and lists bounded, coalesced causes; it never guesses a relation
+from adjacent timestamps.
+
 With `clientCache` connected, enable **Settings → Record entity history** to capture a baseline and
 subsequent entity writes, invalidations, and cache clears. **Cache → History** shows the timeline,
 field differences from the previous retained snapshot in that recording segment, and a detached

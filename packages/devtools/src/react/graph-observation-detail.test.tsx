@@ -1,5 +1,9 @@
 import { entity, field, query, toGraphReadRequest } from '@ontahi/core/data-graph';
-import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
+import {
+  createRuntimeProtocolRequest,
+  createRuntimeProtocolResponse,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -94,5 +98,56 @@ describe('query observation Activity', { timeout: 15_000 }, () => {
     expect(screen.getByText('Request payload was not captured.')).toBeTruthy();
     expect(screen.queryByText(/hidden/)).toBeNull();
     expect(screen.getByText('Snapshot #1 · 1 rows')).toBeTruthy();
+  });
+
+  it('groups a causally identified semantic refresh under its mutation', async () => {
+    const diagnostics = createOntahiDiagnostics();
+    const mutation = createRuntimeProtocolRequest({
+      id: 'mutation-1',
+      family: 'graph.command',
+      body: { version: 3, kind: 'graph-command' },
+    });
+    const transport: RuntimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'ws',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn().mockResolvedValue(
+          createRuntimeProtocolResponse(
+            mutation,
+            { kind: 'graph-command-result' },
+            {
+              mutationCommitId: 'commit-1',
+              committedMutations: { precision: 'exact', mutations: [] },
+            },
+          ),
+        ),
+        graph: {
+          observe: async function* () {
+            yield {
+              kind: 'graph-read-result' as const,
+              value: [{ id: 'b1' }],
+              causedBy: {
+                kind: 'committed-mutations' as const,
+                commitIds: ['commit-1'],
+                overflow: false,
+              },
+            };
+          },
+        },
+      },
+    });
+    await transport.request(mutation);
+    for await (const _ of transport.graph!.observe(request)) {
+      // Consume the derived refresh.
+    }
+
+    render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
+
+    expect(screen.getByText('1 semantic refreshes')).toBeTruthy();
+    expect(screen.getByText('Graph Read refresh #1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /observe ws completed/ }));
+    expect(screen.getByText(/Semantic refresh caused by 1 commit/)).toBeTruthy();
+    expect(screen.getByText('commit-1')).toBeTruthy();
   });
 });

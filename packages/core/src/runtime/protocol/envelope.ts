@@ -14,6 +14,7 @@ export type RuntimeProtocolResponseCapability = string;
 
 export type RuntimeProtocolExecutionMetadata = {
   readonly committedMutations: CommittedMutationSet;
+  readonly mutationCommitId?: string;
 };
 
 export type RuntimeProtocolRequestEnvelope<TFamily extends string = string, TBody = JsonValue> = {
@@ -114,7 +115,8 @@ const isAcceptedResponseCapabilities = (
 
 const isExecutionMetadata = (value: unknown): value is RuntimeProtocolExecutionMetadata =>
   isRecord(value) &&
-  Object.keys(value).every(key => key === 'committedMutations') &&
+  Object.keys(value).every(key => key === 'committedMutations' || key === 'mutationCommitId') &&
+  (value.mutationCommitId === undefined || isRequestId(value.mutationCommitId)) &&
   isCommittedMutationSet(value.committedMutations);
 
 export const isRuntimeProtocolFamilyName = (value: unknown): value is string =>
