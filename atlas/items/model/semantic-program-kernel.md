@@ -144,3 +144,11 @@ This proves mutation-to-dependency reevaluation for an initiating client; it doe
 Query a general live value. Delivery to active server observations, cross-client distribution, and
 causal Devtools presentation remain separate work. Event occurrence, mutation effect, observation
 revision, and Operation progress must stay distinct as those capabilities evolve.
+
+The first server-observation delivery proof now registers canonical Graph Reads inside one
+application Runtime Protocol and feeds them successful direct and in-process durable commit
+descriptions. The shared conservative matcher suppresses only proven disjointness; possible overlap
+is reevaluated through the authorized dispatcher under the subscription's original authority.
+Native provider observation remains a parallel change source and equal snapshots are deduplicated.
+Delivery is process-local and lossy with one pending refresh per slow observer, not a mutation log
+or distributed broker. Portable causal identity and Devtools grouping remain unproven.

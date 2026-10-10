@@ -220,6 +220,18 @@ result snapshots, not a generic database change feed or Entity audit log. The ho
 observer that preserves Graph Read policy and a change source appropriate to its storage. The
 current observation contract is Graph Read v1; contextual v2 navigation remains a one-shot read.
 
+The application Runtime Protocol augments that storage source with committed semantic mutations
+from Commands and Operations in the same process. It uses the canonical observed Read and the
+shared conservative mutation matcher: only a proven disjoint mutation is ignored. A possible
+overlap reruns the normal Graph Read dispatcher with the observation's original authority, so every
+refresh resolves current policy and scope. Native and semantic refreshes that produce the same JSON
+snapshot are emitted once.
+
+This is invalidation, not an Event stream or mutation replay log. One pending refresh is retained
+per slow observer, repeated commits coalesce, and teardown releases both semantic and native
+observation work. A multi-process host still needs an external change source; Ontahi does not
+broadcast these process-local commit descriptions across regions or replicas.
+
 ## Mount the socket on the host server
 
 Creating a browser transport does not install a WebSocket endpoint. HTTP middleware alone cannot

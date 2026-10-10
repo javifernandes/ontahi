@@ -474,6 +474,20 @@ ordering set. This describes available ordering Fields, not authorization of a p
 Graph observation continue to accept data reads only. Standalone Express/Next.js Graph Read
 handlers accept discovery as well.
 
+An application Runtime Protocol also connects committed semantic mutations to its active Graph
+Read observations. After a successful Command, Operation, or in-process durable Operation, the
+receiver compares the bounded `CommittedMutationSet` with each canonical observed Read and
+reevaluates every possible overlap. Provably disjoint Reads are skipped; the rest pass through the
+ordinary dispatcher again under the subscription's original authority, including fresh policy and
+scope resolution. Native storage observation remains active, and duplicate JSON result snapshots
+from native and semantic sources are collapsed.
+
+Delivery is process-local and deliberately bounded. A slow observation retains at most one pending
+semantic refresh instead of buffering mutation history, because the reevaluated Graph Read is the
+source of truth. Failed work does not publish, and closing or aborting the observation releases its
+registration. Cross-process delivery and portable causal diagnostics are not implied by this
+contract.
+
 Portable Graph Read requests may opt into `includeCapabilities: true`. After authorization and a
 successful execution, the dispatcher adds `capabilities: { orderBy: string[] }` alongside `value`.
 The names are root Fields allowed by the same ordering policy checks used to authorize queries,
