@@ -82,7 +82,9 @@ changing the query identity aborts the observation. Scalar terminal intents rema
 Live observation is opt-in. Ordinary `useGraphQuery(query)` retains one-shot execution plus
 semantic mutation invalidation. An active live Query is not redundantly invalidated after a
 mutation because its runtime observation already receives the committed revision. Contextual
-Selection observation is not supported yet.
+Selection observation is not supported yet. Live and one-shot evaluations use distinct internal
+React Query keys, including when the application supplies the same custom key, so both lifecycles
+may consume one authored Query simultaneously.
 
 With an observation-capable Runtime Transport, `client.graph.bindVariantSelection(Chapter.all())`
 supports `.exec().observe()`. Complete snapshots recalculate membership, ordering and limits;

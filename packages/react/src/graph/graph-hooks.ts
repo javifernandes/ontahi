@@ -197,6 +197,13 @@ const deriveGraphQueryKey = <TRead>(
   }
 };
 
+/** Give a live evaluation its own React Query lifecycle without changing the caller's key parts. */
+const liveGraphQueryKey = (queryKey: QueryKey): QueryKey => [
+  ...queryKey,
+  { scope: 'ontahi.graph-read', lifecycle: 'live' },
+];
+
+/** Reconcile every complete observed value before exposing it as the current query snapshot. */
 const observedSnapshots = async function* <TValue>(
   snapshots: AsyncIterable<TValue>,
   write: (snapshot: TValue) => void,
@@ -229,10 +236,11 @@ export function useGraphQuery<
   } catch {
     // Local/custom executors may support Reads that cannot cross the Runtime Protocol yet.
   }
-  const queryKey =
+  const lifecycle = options?.observation === 'live' ? 'live' : 'once';
+  const baseQueryKey =
     options?.queryKey ??
     deriveGraphQueryKey(source, intent, options?.params, executionIdentityCacheKey(identity));
-  const lifecycle = options?.observation === 'live' ? 'live' : 'once';
+  const queryKey = lifecycle === 'live' ? liveGraphQueryKey(baseQueryKey) : baseQueryKey;
   const resolved = resolveGraphRead(source);
   const params = options?.params as any;
   const descriptor =

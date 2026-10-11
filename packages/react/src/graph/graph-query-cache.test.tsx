@@ -152,6 +152,48 @@ describe('Graph Query cache reconciliation', () => {
     expect(executor.run).not.toHaveBeenCalled();
   });
 
+  it('keeps one-shot and live lifecycles distinct even with the same custom key', async () => {
+    const { executor, queryClient, wrapper } = setup();
+    const observation = createControlledObservation<any[]>();
+    const observe = vi.fn(
+      (
+        _read: unknown,
+        _params: unknown,
+        _options: unknown,
+        lifecycle?: { readonly signal?: AbortSignal },
+      ) => {
+        lifecycle?.signal?.addEventListener('abort', observation.close, { once: true });
+        return observation.iterable;
+      },
+    );
+    executor.observe = observe as unknown as NonNullable<ReactGraphExecutor['observe']>;
+    vi.mocked(executor.run).mockResolvedValue([{ id: 'l1', name: 'Once', items: [] }]);
+    const customKey = ['custom', 'lists'] as const;
+
+    const { result, unmount } = renderHook(
+      () => ({
+        once: useGraphQuery(read, { queryKey: customKey }),
+        live: useGraphQuery(read, { queryKey: customKey, observation: 'live' }),
+      }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.once.data?.[0]?.name).toBe('Once'));
+    act(() => observation.emit([{ id: 'l2', name: 'Live', items: [] }]));
+    await waitFor(() => expect(result.current.live.data?.[0]?.name).toBe('Live'));
+
+    expect(executor.run).toHaveBeenCalledOnce();
+    expect(observe).toHaveBeenCalledOnce();
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map(query => query.queryKey),
+    ).toEqual([customKey, [...customKey, { scope: 'ontahi.graph-read', lifecycle: 'live' }]]);
+
+    unmount();
+    await waitFor(() => expect(observation.close).toHaveBeenCalledOnce());
+  });
+
   it('surfaces observation failures after retaining the last complete snapshot', async () => {
     const { executor, wrapper } = setup();
     const list = { id: 'l1', name: 'Inbox', items: [] };
