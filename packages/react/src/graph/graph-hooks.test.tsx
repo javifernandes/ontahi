@@ -14,7 +14,12 @@ import {
   type GraphReadRequest,
 } from '@ontahi/core/data-graph';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createRuntimeProtocolExecutionExchange,
+  createRuntimeProtocolResponse,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -109,6 +114,59 @@ const createWrapper = (
   };
 
 describe('graph query and command hooks', () => {
+  it('refreshes affected active reads for execution effects observed by the provider', async () => {
+    const queryClient = new QueryClient();
+    const read = vi.fn().mockResolvedValue(1);
+    const associateGraphReadRefreshes = vi.fn();
+    const runtimeTransport: RuntimeTransport = {
+      request: async envelope =>
+        createRuntimeProtocolResponse(
+          envelope,
+          { kind: 'command-result' },
+          {
+            committedMutations: changedBook('ontahi'),
+            mutationCommitId: 'commit-1',
+          },
+        ),
+      causality: { associateGraphReadRefreshes },
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider
+          runtime={{ name: 'test-runtime' }}
+          runtimeTransport={runtimeTransport}
+          client={false}
+        >
+          {children}
+        </OntahiGraphProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () =>
+        useQuery({
+          queryKey: ['book', 'ontahi'],
+          queryFn: read,
+          meta: withCanonicalGraphReadMeta(undefined, bookRead('ontahi')),
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    await act(async () => {
+      await createRuntimeProtocolExecutionExchange({ transport: runtimeTransport })({
+        family: 'graph.command',
+        body: { version: 1, kind: 'graph-command' },
+      });
+    });
+
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(associateGraphReadRefreshes).toHaveBeenCalledWith([bookRead('ontahi')], {
+      kind: 'committed-mutations',
+      commitIds: ['commit-1'],
+      overflow: false,
+    });
+  });
+
   it('infers a many read and a canonical identity-scoped key from a client Entity Query', async () => {
     const graphExecutor = createExecutorMock();
     const queryClient = new QueryClient();

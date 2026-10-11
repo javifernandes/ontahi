@@ -5,7 +5,6 @@ import {
   createFetchRuntimeTransport,
   createRuntimeGraphClient,
   createWebSocketRuntimeTransport,
-  invalidateSemanticGraphReads,
   OntahiGraphProvider,
 } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -16,7 +15,6 @@ import { Tag, TodoItem, TodoList } from '../../src/generated/client-entities.js'
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
-import { createModelCommandResponder, createModelCommandSubmitter } from './model-commands.js';
 import {
   loadAuthenticationSession,
   type AuthenticationSession,
@@ -74,17 +72,11 @@ const runtimeTransport = createRuntimeTransportRouter({
     'durable.operation.observe': 'websocket',
   },
 });
-const submitModelCommand = createModelCommandSubmitter(runtimeTransport);
-const respondToModelCommand = createModelCommandResponder(runtimeTransport);
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
   entities: [TodoList, TodoItem, Tag],
   initialDocument: 'TodoItem.where(completed = false).many()',
-  onActionExecuted: async ({ executionMetadata }) => {
-    if (executionMetadata?.committedMutations)
-      await invalidateSemanticGraphReads(queryClient, executionMetadata.committedMutations);
-  },
 } satisfies OntahiDevtoolsConsoleOptions;
 
 const TodoClient = () => {
@@ -114,12 +106,7 @@ const TodoClient = () => {
       {isExplorer ? (
         <Explorer />
       ) : (
-        <App
-          authentication={authentication}
-          setAuthentication={setAuthentication}
-          submitModelCommand={submitModelCommand}
-          respondToModelCommand={respondToModelCommand}
-        />
+        <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
       {diagnostics ? (
         <OntahiDevtools

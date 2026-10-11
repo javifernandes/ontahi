@@ -46,6 +46,10 @@ the browser. Passing bare Entity schemas remains supported for a read-only Conso
 diagnostics/client once per intended client lifetime, not on every render, and mount the panel only
 in the development contexts where this inspection is appropriate.
 
+Console mutations executed with the provider's Runtime Transport participate in the same semantic
+cache invalidation as application hooks. No Console-specific `onActionExecuted` callback is needed:
+committed mutation metadata refreshes overlapping active Graph Reads automatically.
+
 This Fetch example supports Run. For Observe, use a transport exposing `graph.observe`, with an
 authorized server observer; see [WebSocket transport](../03-runtimes/03-transport-and-http-ingress.md#mount-the-socket-on-the-host-server).
 A transport router can combine both. Devtools Settings projects that router's configuration; it

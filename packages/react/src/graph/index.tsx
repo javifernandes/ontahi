@@ -7,6 +7,7 @@ export * from './fetch-graph-read-executor.js';
 export * from './fetch-runtime-transport.js';
 export * from './fetch-graph-client.js';
 export * from './graph-hooks.js';
+export * from './model-command-hooks.js';
 export * from './operation-cache.js';
 export * from './operation-hooks.js';
 export * from './operation-types.js';

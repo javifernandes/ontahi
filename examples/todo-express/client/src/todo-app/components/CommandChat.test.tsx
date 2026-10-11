@@ -5,13 +5,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { CommandChat } from './CommandChat.js';
 
-const execute = vi.hoisted(() => vi.fn());
-vi.mock('../../model-commands.js', () => ({ submitModelCommand: execute }));
+const { execute, respond } = vi.hoisted(() => ({ execute: vi.fn(), respond: vi.fn() }));
+vi.mock('@ontahi/react/graph', () => ({
+  useModelCommand: () => ({ submit: execute, respond }),
+}));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 let container: HTMLDivElement;
 let root: Root;
-const refresh = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(async () => {
   const stored = new Map<string, string>();
@@ -20,11 +21,11 @@ beforeEach(async () => {
     setItem: (key: string, value: string) => stored.set(key, value),
   });
   execute.mockReset();
-  refresh.mockClear();
+  respond.mockReset();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(<CommandChat onExecuted={refresh} />));
+  await act(async () => root.render(<CommandChat />));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -48,7 +49,7 @@ const submit = async () =>
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
 
-it('waits for actual execution before refreshing', async () => {
+it('waits for actual execution before showing the result', async () => {
   expect(container.querySelector('[aria-label="Current list"]')).toBeNull();
   expect(container.querySelector('button')!.disabled).toBe(true);
   let finish!: (value: unknown) => void;
@@ -60,7 +61,6 @@ it('waits for actual execution before refreshing', async () => {
   await write();
   await submit();
   expect(container.querySelector('[aria-label="Interpreting…"]')).not.toBeNull();
-  expect(refresh).not.toHaveBeenCalled();
   await submit();
   expect(execute).toHaveBeenCalledOnce();
   expect(execute.mock.calls[0]![0]).toEqual({
@@ -71,7 +71,6 @@ it('waits for actual execution before refreshing', async () => {
     finish({ ok: true, value: { status: 'executed', message: 'Item added.' } }),
   );
   expect(container.textContent).toContain('Item added.');
-  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it('shows an unresolved result without claiming an effect', async () => {
@@ -79,11 +78,10 @@ it('shows an unresolved result without claiming an effect', async () => {
   await write();
   await submit();
   expect(container.textContent).toContain('Which item?');
-  expect(refresh).not.toHaveBeenCalled();
 });
 
 it('shows and resolves a durable model approval in the conversation', async () => {
-  const respond = vi.fn().mockResolvedValue({
+  respond.mockResolvedValue({
     ok: true,
     value: {
       status: 'executed',
@@ -110,14 +108,11 @@ it('shows and resolves a durable model approval in the conversation', async () =
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
   expect(container.textContent).toContain('Approve this operation?');
   expect(container.textContent).toContain('Rename Inbox to Today.');
-  expect(refresh).not.toHaveBeenCalled();
 
   await act(async () =>
     (
@@ -129,11 +124,10 @@ it('shows and resolves a durable model approval in the conversation', async () =
     { interactionId: 'approve-model-command', decision: 'approve' },
   );
   expect(container.textContent).toContain('List renamed.');
-  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it('shows a model choice and continues with the selected option', async () => {
-  const respond = vi.fn().mockResolvedValue({
+  respond.mockResolvedValue({
     ok: true,
     value: { status: 'executed', message: 'Item added.' },
   });
@@ -155,9 +149,7 @@ it('shows a model choice and continues with the selected option', async () => {
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
   expect(container.textContent).toContain('Which list?');
@@ -172,11 +164,10 @@ it('shows a model choice and continues with the selected option', async () => {
     { interactionId: 'choose-model-command', optionId: 'later' },
   );
   expect(container.textContent).toContain('Item added.');
-  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it('collects a durable string Hole and continues the same exchange', async () => {
-  const respond = vi.fn().mockResolvedValue({
+  respond.mockResolvedValue({
     ok: true,
     value: { status: 'executed', message: 'Item added.' },
   });
@@ -195,9 +186,7 @@ it('collects a durable string Hole and continues the same exchange', async () =>
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
 
@@ -218,11 +207,10 @@ it('collects a durable string Hole and continues the same exchange', async () =>
     { interactionId: 'TodoItem.addItem:title', value: 'Buy milk' },
   );
   expect(container.textContent).toContain('Item added.');
-  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it('collects a typed finite-choice Hole', async () => {
-  const respond = vi.fn().mockResolvedValue({
+  respond.mockResolvedValue({
     ok: true,
     value: { status: 'executed', message: 'Item updated.' },
   });
@@ -241,9 +229,7 @@ it('collects a typed finite-choice Hole', async () => {
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
 
@@ -265,8 +251,7 @@ it('collects a typed finite-choice Hole', async () => {
 });
 
 it('clears input state when the same exchange advances to another typed Hole', async () => {
-  const respond = vi
-    .fn()
+  respond
     .mockResolvedValueOnce({
       ok: true,
       value: {
@@ -316,9 +301,7 @@ it('clears input state when the same exchange advances to another typed Hole', a
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
 
@@ -368,7 +351,7 @@ it('clears input state when the same exchange advances to another typed Hole', a
 });
 
 it('submits numeric Hole values without coercing an empty input', async () => {
-  const respond = vi.fn().mockResolvedValue({
+  respond.mockResolvedValue({
     ok: true,
     value: { status: 'executed', message: 'Estimate saved.' },
   });
@@ -387,9 +370,7 @@ it('submits numeric Hole values without coercing an empty input', async () => {
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
 
@@ -416,8 +397,7 @@ it('submits numeric Hole values without coercing an empty input', async () => {
 });
 
 it('keeps one exchange open across consecutive Hole choices', async () => {
-  const respond = vi
-    .fn()
+  respond
     .mockResolvedValueOnce({
       ok: true,
       value: {
@@ -458,9 +438,7 @@ it('keeps one exchange open across consecutive Hole choices', async () => {
       },
     },
   });
-  await act(async () =>
-    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
-  );
+  await act(async () => root.render(<CommandChat />));
   await write();
   await submit();
 
@@ -470,7 +448,6 @@ it('keeps one exchange open across consecutive Hole choices', async () => {
   await act(async () => inboxB.click());
   expect(container.textContent).toContain('Which destination?');
   expect(container.textContent).not.toContain('Which source?');
-  expect(refresh).not.toHaveBeenCalled();
 
   const laterA = [...container.querySelectorAll('.command-chat-approval button')].find(
     button => button.textContent === 'Later A',
@@ -487,10 +464,9 @@ it('keeps one exchange open across consecutive Hole choices', async () => {
     { taskId: 'ontahi.model-command', runId: 'run-dialogue' },
     { interactionId: 'Document.move:destination', optionId: 'later-a' },
   );
-  expect(refresh).toHaveBeenCalledOnce();
 });
 
-it('shows an executed read without refreshing mutation state', async () => {
+it('shows an executed read result', async () => {
   execute.mockResolvedValue({
     ok: true,
     value: {
@@ -503,22 +479,11 @@ it('shows an executed read without refreshing mutation state', async () => {
   await write();
   await submit();
   expect(container.textContent).toContain('buy bread');
-  expect(refresh).not.toHaveBeenCalled();
 });
 
-it('refreshes mutation state when an executed Operation also returns a response', async () => {
-  const committedMutations = {
-    precision: 'intensional' as const,
-    mutations: [
-      {
-        provenance: 'captured' as const,
-        effect: { kind: 'graph-change' as const },
-      },
-    ],
-  };
+it('shows an executed Operation that also returns a response', async () => {
   execute.mockResolvedValue({
     ok: true,
-    committedMutations,
     value: {
       status: 'executed',
       message: 'Completed 3 items.',
@@ -533,17 +498,6 @@ it('refreshes mutation state when an executed Operation also returns a response'
   await write();
   await submit();
   expect(container.textContent).toContain('Completed 3 items.');
-  expect(refresh).toHaveBeenCalledOnce();
-  expect(refresh).toHaveBeenCalledWith(
-    expect.objectContaining({
-      status: 'executed',
-      request: expect.objectContaining({
-        kind: 'invoke',
-        operationId: 'TodoList.completeAll',
-      }),
-    }),
-    committedMutations,
-  );
 });
 
 it('does not retry an unknown transport outcome', async () => {
@@ -552,7 +506,6 @@ it('does not retry an unknown transport outcome', async () => {
   await submit();
   expect(container.textContent).toContain('Check the list before submitting again.');
   expect(execute).toHaveBeenCalledOnce();
-  expect(refresh).not.toHaveBeenCalled();
 });
 
 it('submits with Command+Enter without requiring a current list', async () => {
@@ -656,7 +609,7 @@ it('dictates into the draft without sending and replaces interim results', async
     (container.querySelector('[aria-label="Chat language"]') as HTMLSelectElement).disabled,
   ).toBe(true);
   await act(async () => root.render(<div />));
-  await act(async () => root.render(<CommandChat onExecuted={refresh} />));
+  await act(async () => root.render(<CommandChat />));
   expect((container.querySelector('[aria-label="Chat language"]') as HTMLSelectElement).value).toBe(
     'es-ES',
   );
@@ -765,7 +718,6 @@ it('reads answers only when enabled, using the selected language, and cancels on
   await write();
   await submit();
   expect(speak).not.toHaveBeenCalled();
-  expect(refresh).not.toHaveBeenCalled();
   await act(async () => {
     const language = container.querySelector('select')!;
     language.value = 'es-ES';

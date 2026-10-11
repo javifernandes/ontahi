@@ -21,6 +21,7 @@ import {
   type ViewDefinition,
 } from '@ontahi/core/data-graph';
 import { executionIdentityCacheKey } from '@ontahi/core/runtime/identity';
+import { wasRuntimeProtocolExecutionObserved } from '@ontahi/core/runtime/protocol';
 import {
   useMutation,
   useQuery,
@@ -117,21 +118,23 @@ const useSemanticMutationCommand = <TCommand, TResult, TVariables, TContext, TCo
         executor,
       );
       if (execution.metadata?.committedMutations) {
-        const mutationCommitId = execution.metadata.mutationCommitId;
-        await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations, {
-          ...(mutationCommitId
-            ? {
-                causedBy: {
-                  kind: 'committed-mutations' as const,
-                  commitIds: [mutationCommitId],
-                  overflow: false,
-                },
-              }
-            : {}),
-          ...(executor.associateGraphReadRefreshes
-            ? { associateRefreshes: executor.associateGraphReadRefreshes }
-            : {}),
-        });
+        if (!wasRuntimeProtocolExecutionObserved(execution.metadata)) {
+          const mutationCommitId = execution.metadata.mutationCommitId;
+          await invalidateSemanticGraphReads(queryClient, execution.metadata.committedMutations, {
+            ...(mutationCommitId
+              ? {
+                  causedBy: {
+                    kind: 'committed-mutations' as const,
+                    commitIds: [mutationCommitId],
+                    overflow: false,
+                  },
+                }
+              : {}),
+            ...(executor.associateGraphReadRefreshes
+              ? { associateRefreshes: executor.associateGraphReadRefreshes }
+              : {}),
+          });
+        }
       } else {
         for (const queryKey of options?.invalidateQueryKeys ?? []) {
           await queryClient.invalidateQueries({ queryKey });

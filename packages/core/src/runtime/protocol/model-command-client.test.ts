@@ -1,17 +1,11 @@
-import type { CommittedMutationSet } from '@ontahi/core/data-graph';
+import type { CommittedMutationSet } from '../../data-graph/index.js';
 import {
+  createRuntimeModelCommandClient,
   createRuntimeProtocolResponse,
+  subscribeRuntimeProtocolExecutions,
   type RuntimeTransport,
-} from '@ontahi/core/runtime/protocol';
-import { afterEach, expect, it, vi } from 'vitest';
-
-import {
-  createModelCommandResponder,
-  createModelCommandSubmitter,
-  submitModelCommand,
-} from './model-commands.js';
-
-afterEach(() => vi.unstubAllGlobals());
+} from './index.js';
+import { expect, it, vi } from 'vitest';
 const completeLater: CommittedMutationSet = {
   precision: 'intensional',
   mutations: [
@@ -33,26 +27,6 @@ const completeLater: CommittedMutationSet = {
     },
   ],
 };
-it('accepts an informational answer from the HTTP runtime', async () => {
-  const result = { ok: true, value: { status: 'answered', message: 'You can create lists.' } };
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({ json: async () => result })),
-  );
-  expect(await submitModelCommand({ text: 'What can I do?' })).toEqual(result);
-});
-it('rejects an unknown result status', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      json: async () => ({ ok: true, value: { status: 'unknown', message: 'Done' } }),
-    })),
-  );
-  await expect(submitModelCommand({ text: 'What can I do?' })).rejects.toThrow(
-    'Invalid model command response.',
-  );
-});
-
 it('submits through the model.command Runtime Protocol family', async () => {
   const request = vi.fn(async envelope =>
     createRuntimeProtocolResponse(envelope, {
@@ -61,7 +35,7 @@ it('submits through the model.command Runtime Protocol family', async () => {
       result: { status: 'answered', message: 'You can create lists.' },
     }),
   );
-  const submit = createModelCommandSubmitter({ request });
+  const { submit } = createRuntimeModelCommandClient({ request });
 
   await expect(submit({ text: 'What can I do?', language: 'en-US' })).resolves.toEqual({
     ok: true,
@@ -70,12 +44,46 @@ it('submits through the model.command Runtime Protocol family', async () => {
   expect(request).toHaveBeenCalledOnce();
   expect(request.mock.calls[0]![0]).toMatchObject({
     family: 'model.command',
+    accepts: ['committed-mutations.v1'],
     body: {
       version: 1,
       kind: 'model-command',
       text: 'What can I do?',
       language: 'en-US',
     },
+  });
+});
+
+it('publishes effects from an immediately executed model command', async () => {
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(
+      envelope,
+      {
+        version: 1,
+        kind: 'model-command-result',
+        result: {
+          status: 'executed',
+          message: 'List items completed.',
+          request: {
+            kind: 'invoke',
+            operationId: 'TodoList.completeAll',
+            input: {},
+          },
+        },
+      },
+      { committedMutations: completeLater },
+    ),
+  );
+  const runtimeTransport = { request };
+  const execution = vi.fn();
+  subscribeRuntimeProtocolExecutions(runtimeTransport, execution);
+
+  await expect(
+    createRuntimeModelCommandClient(runtimeTransport).submit({ text: 'Complete every item' }),
+  ).resolves.toMatchObject({ ok: true, value: { status: 'executed' } });
+  expect(execution).toHaveBeenCalledWith({
+    request: expect.objectContaining({ family: 'model.command' }),
+    metadata: { committedMutations: completeLater },
   });
 });
 
@@ -87,7 +95,7 @@ it('preserves an expected model command failure from the protocol family', async
       error: { code: 'command_unauthorized', message: 'Sign in first.' },
     }),
   );
-  const submit = createModelCommandSubmitter({ request });
+  const { submit } = createRuntimeModelCommandClient({ request });
 
   await expect(submit({ text: 'delete everything' })).resolves.toEqual({
     ok: false,
@@ -138,7 +146,7 @@ it('observes a started Operation before reporting the model command as executed'
       result: { completed: 2 },
     };
   });
-  const submit = createModelCommandSubmitter({
+  const { submit } = createRuntimeModelCommandClient({
     request,
     durableOperation: { observe },
   } as unknown as RuntimeTransport);
@@ -150,7 +158,6 @@ it('observes a started Operation before reporting the model command as executed'
       message: 'List items completed.',
       request: invocation,
     },
-    committedMutations: completeLater,
   });
   expect(observe).toHaveBeenCalledWith(run);
   expect(request).toHaveBeenCalledTimes(2);
@@ -176,10 +183,10 @@ it('reports every non-completing started Operation outcome without resubmitting'
     }),
   );
   const submitWith = (observe?: () => AsyncIterable<unknown>) =>
-    createModelCommandSubmitter({
+    createRuntimeModelCommandClient({
       request,
       ...(observe ? { durableOperation: { observe } } : {}),
-    } as unknown as RuntimeTransport)({ text: 'Complete Inbox' });
+    } as unknown as RuntimeTransport).submit({ text: 'Complete Inbox' });
 
   await expect(submitWith()).resolves.toEqual({
     ok: false,
@@ -247,7 +254,7 @@ it('responds through durable.operation and observes the model Task to completion
       },
     };
   });
-  const respond = createModelCommandResponder({
+  const { respond } = createRuntimeModelCommandClient({
     request,
     durableOperation: { observe },
   } as unknown as RuntimeTransport);
@@ -309,7 +316,7 @@ it('observes an Operation started after a model interaction before reporting exe
       result: { completed: 3 },
     };
   });
-  const respond = createModelCommandResponder({
+  const { respond } = createRuntimeModelCommandClient({
     request,
     durableOperation: { observe },
   } as unknown as RuntimeTransport);
@@ -353,7 +360,7 @@ it('returns a pending follow-up interaction directly from the durable response',
   );
 
   await expect(
-    createModelCommandResponder({ request })(run, {
+    createRuntimeModelCommandClient({ request }).respond(run, {
       interactionId: 'approve-model-command',
       decision: 'approve',
     }),
@@ -378,19 +385,21 @@ it('reports unavailable or exhausted durable observation', async () => {
   );
   const response = { interactionId: 'approve-model-command', decision: 'reject' as const };
 
-  await expect(createModelCommandResponder({ request })(run, response)).resolves.toMatchObject({
+  await expect(
+    createRuntimeModelCommandClient({ request }).respond(run, response),
+  ).resolves.toMatchObject({
     ok: false,
     message: expect.stringContaining('cannot observe'),
   });
   await expect(
-    createModelCommandResponder({
+    createRuntimeModelCommandClient({
       request,
       durableOperation: { observe: async function* () {} },
-    })(run, response),
+    }).respond(run, response),
   ).resolves.toMatchObject({ ok: false, message: expect.stringContaining('ended') });
 });
 
-it('preserves expected durable protocol errors and legacy HTTP failures', async () => {
+it('preserves expected durable protocol errors', async () => {
   const run = { taskId: 'ontahi.model-command', runId: 'run-4' };
   const request = vi.fn(async envelope =>
     createRuntimeProtocolResponse(envelope, {
@@ -399,18 +408,9 @@ it('preserves expected durable protocol errors and legacy HTTP failures', async 
     }),
   );
   await expect(
-    createModelCommandResponder({ request })(run, {
+    createRuntimeModelCommandClient({ request }).respond(run, {
       interactionId: 'approve-model-command',
       decision: 'approve',
     }),
   ).resolves.toEqual({ ok: false, message: 'Approval denied.' });
-
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({ json: async () => ({ ok: false, message: 'Model unavailable.' }) })),
-  );
-  await expect(submitModelCommand({ text: 'rename list' })).resolves.toEqual({
-    ok: false,
-    message: 'Model unavailable.',
-  });
 });

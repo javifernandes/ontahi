@@ -844,6 +844,12 @@ policies still apply at dispatch. Help is rendered from exposed descriptions thr
 `formatHelp`. A validated BCP 47 `language` guides user-facing reasons and host localization.
 Request `context` is host-defined interaction context, not authority.
 
+Browser and other transport clients can use
+`createRuntimeModelCommandClient(runtimeTransport)` from `@ontahi/core/runtime/protocol`. Its
+`submit` and `respond` methods own Runtime Protocol exchange, durable observation and terminal
+inspection while leaving conversation presentation to the caller. Execution metadata is published
+through the same transport-local stream used by framework integrations for semantic refreshes.
+
 Model-proposed Operation applications may leave Entity Ref and string arguments as typed Holes.
 The runtime resolves named Refs through authorized reads, offers disclosed candidates when the Ref
 was omitted, and checkpoints string input as a durable interaction. Each response substitutes one

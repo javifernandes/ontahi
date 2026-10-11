@@ -10,11 +10,16 @@ import {
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import { anonymousExecutionIdentity, type ExecutionIdentity } from '@ontahi/core/runtime/identity';
-import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
+import {
+  subscribeRuntimeProtocolExecutions,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
+import { QueryClientContext } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -29,6 +34,7 @@ import {
   createReflectedOperationInvoker,
   type ReflectedGraphOperationLike,
 } from './reflected-operation-invoker.js';
+import { invalidateSemanticGraphReads } from './semantic-invalidation.js';
 
 const noReflectedGraphOperations: readonly ReflectedGraphOperationLike[] = [];
 
@@ -96,6 +102,7 @@ export function OntahiGraphProvider<
   const configuredReflectedOperationInvoker =
     reflectedOperationInvoker ?? graphClient?.reflectedOperationInvoker;
   const graphClientCache = clientCache ?? graphClient?.clientCache ?? defaultClientCache;
+  const queryClient = useContext(QueryClientContext);
   const bridgeAdapterMap = useMemo(
     () => new Map(resolvedOperationBridgeAdapters.map(adapter => [adapter.name, adapter])),
     [resolvedOperationBridgeAdapters],
@@ -111,6 +118,28 @@ export function OntahiGraphProvider<
         : (configuredReflectedOperationInvoker ?? null),
     [configuredReflectedOperationInvoker, reflectedGraphOperations, resolvedGraphExecutor],
   );
+
+  useEffect(() => {
+    if (!resolvedRuntimeTransport || !queryClient) return;
+    return subscribeRuntimeProtocolExecutions(resolvedRuntimeTransport, async ({ metadata }) => {
+      await invalidateSemanticGraphReads(queryClient, metadata.committedMutations, {
+        ...(metadata.mutationCommitId
+          ? {
+              causedBy: {
+                kind: 'committed-mutations' as const,
+                commitIds: [metadata.mutationCommitId],
+                overflow: false,
+              },
+            }
+          : {}),
+        ...(resolvedRuntimeTransport.causality
+          ? {
+              associateRefreshes: resolvedRuntimeTransport.causality.associateGraphReadRefreshes,
+            }
+          : {}),
+      });
+    });
+  }, [queryClient, resolvedRuntimeTransport]);
 
   return (
     <ExecutionIdentityContext.Provider value={identity}>
