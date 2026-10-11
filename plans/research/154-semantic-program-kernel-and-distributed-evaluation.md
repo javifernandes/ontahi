@@ -1125,9 +1125,10 @@ slices that have not been created yet:
 3. `154c`: open Graph Reads and Commands;
 4. [`154d`: semantic mutation journal, conservative dependency matching, and reactive
    invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md);
-5. `154e`: Event waits, reactions, and durable continuation semantics;
-6. `154f`: distributed evaluation and substitution routing;
-7. `154g`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
+5. [`154e`: run-once and reactive evaluation of one canonical Query](../done/154e-reactive-program-evaluation.md);
+6. `154f`: Event waits, reactions, and durable continuation semantics;
+7. `154g`: distributed evaluation and substitution routing;
+8. `154h`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
 
 ## Open Questions
 

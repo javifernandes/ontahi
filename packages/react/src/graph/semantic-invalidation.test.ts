@@ -111,6 +111,27 @@ describe('semantic Graph Read invalidation', () => {
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 
+  it('does not restart a live Graph observation that is already receiving revisions', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['live', 'later'] as const;
+    const pending = queryClient
+      .fetchQuery({
+        queryKey: key,
+        queryFn: () => new Promise<never>(() => undefined),
+        meta: withCanonicalGraphReadMeta(undefined, items('list-later'), 'live'),
+      })
+      .catch(() => undefined);
+
+    expect(queryClient.getQueryState(key)?.fetchStatus).toBe('fetching');
+    expect(await invalidateSemanticGraphReads(queryClient, completedLater)).toEqual({
+      queryKeys: [],
+    });
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+
+    await queryClient.cancelQueries({ queryKey: key, exact: true });
+    await pending;
+  });
+
   it('preserves an unknown Graph Read when no mutations were committed', async () => {
     const queryClient = new QueryClient();
     const key = ['unknown-graph-read'] as const;

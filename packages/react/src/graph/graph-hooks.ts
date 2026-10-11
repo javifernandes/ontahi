@@ -23,6 +23,7 @@ import {
 import { executionIdentityCacheKey } from '@ontahi/core/runtime/identity';
 import { wasRuntimeProtocolExecutionObserved } from '@ontahi/core/runtime/protocol';
 import {
+  experimental_streamedQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -196,6 +197,16 @@ const deriveGraphQueryKey = <TRead>(
   }
 };
 
+const observedSnapshots = async function* <TValue>(
+  snapshots: AsyncIterable<TValue>,
+  write: (snapshot: TValue) => void,
+): AsyncIterable<TValue> {
+  for await (const snapshot of snapshots) {
+    write(snapshot);
+    yield snapshot;
+  }
+};
+
 export function useGraphQuery<
   TRead extends GraphReadSource<any>,
   TMode extends GraphQueryMode = 'run',
@@ -221,41 +232,71 @@ export function useGraphQuery<
   const queryKey =
     options?.queryKey ??
     deriveGraphQueryKey(source, intent, options?.params, executionIdentityCacheKey(identity));
+  const lifecycle = options?.observation === 'live' ? 'live' : 'once';
+  const resolved = resolveGraphRead(source);
+  const params = options?.params as any;
+  const descriptor =
+    intent === 'count' || intent === 'exists'
+      ? graphOutput.opaque()
+      : getGraphReadOutputDescriptor(resolved, params);
+  const writeOutput = (value: GraphQueryData<TRead, TMode>) => {
+    clientCache.writeOutput(
+      queryKey,
+      descriptor.kind === 'graph-output.array' && intent !== 'many'
+        ? graphOutput.nullable(descriptor.item)
+        : descriptor,
+      value,
+      { kind: 'graph-read', name: resolveQuerySpec(resolved, params).root.name },
+    );
+  };
+  const queryFn =
+    lifecycle === 'live'
+      ? experimental_streamedQuery<
+          GraphQueryData<TRead, TMode>,
+          GraphQueryData<TRead, TMode>,
+          QueryKey
+        >({
+          streamFn: context => {
+            if (intent !== 'many') {
+              throw new Error('Live Graph observation only supports many-result Queries.');
+            }
+            if (!graphExecutor.observe) {
+              throw new Error('Graph executor does not support Query observation.');
+            }
+            const snapshots = graphExecutor.observe(resolved, params, options?.runtimeOptions, {
+              signal: context.signal,
+            });
+            return observedSnapshots(
+              snapshots as AsyncIterable<GraphQueryData<TRead, TMode>>,
+              writeOutput,
+            );
+          },
+          reducer: (_current, snapshot) => snapshot,
+          initialValue: [] as GraphQueryData<TRead, TMode>,
+          refetchMode: 'reset',
+        })
+      : async () => {
+          const value =
+            intent === 'many'
+              ? await graphExecutor.run(resolved, params, options?.runtimeOptions)
+              : intent === 'count'
+                ? await graphExecutor.count(resolved, params, options?.runtimeOptions)
+                : intent === 'exists'
+                  ? (await graphExecutor.get(resolved, params, options?.runtimeOptions)) != null
+                  : await graphExecutor.get(resolved, params, options?.runtimeOptions);
+
+          writeOutput(value as GraphQueryData<TRead, TMode>);
+          return value as GraphQueryData<TRead, TMode>;
+        };
+  const { observation: _observation, ...queryOptions } = options ?? {};
 
   return useQuery({
-    ...options,
+    ...queryOptions,
     meta: canonicalRequest
-      ? withCanonicalGraphReadMeta(options?.meta, canonicalRequest)
-      : withUnknownGraphReadMeta(options?.meta),
+      ? withCanonicalGraphReadMeta(options?.meta, canonicalRequest, lifecycle)
+      : withUnknownGraphReadMeta(options?.meta, lifecycle),
     queryKey,
-    queryFn: async () => {
-      const resolved = resolveGraphRead(source);
-      const params = options?.params as any;
-
-      const value =
-        intent === 'many'
-          ? await graphExecutor.run(resolved, params, options?.runtimeOptions)
-          : intent === 'count'
-            ? await graphExecutor.count(resolved, params, options?.runtimeOptions)
-            : intent === 'exists'
-              ? (await graphExecutor.get(resolved, params, options?.runtimeOptions)) != null
-              : await graphExecutor.get(resolved, params, options?.runtimeOptions);
-
-      const descriptor =
-        intent === 'count' || intent === 'exists'
-          ? graphOutput.opaque()
-          : getGraphReadOutputDescriptor(resolved, params);
-      clientCache.writeOutput(
-        queryKey,
-        descriptor.kind === 'graph-output.array' && intent !== 'many'
-          ? graphOutput.nullable(descriptor.item)
-          : descriptor,
-        value,
-        { kind: 'graph-read', name: resolveQuerySpec(resolved, params).root.name },
-      );
-
-      return value as GraphQueryData<TRead, TMode>;
-    },
+    queryFn,
   });
 }
 

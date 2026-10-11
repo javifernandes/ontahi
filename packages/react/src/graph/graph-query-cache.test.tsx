@@ -5,9 +5,10 @@ import {
   entity,
   field,
 } from '@ontahi/core/data-graph';
+import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { OntahiGraphProvider, useGraphQuery, type ReactGraphExecutor } from './index.js';
@@ -26,6 +27,38 @@ const listView = Lists.view('ListCard', {
   items: { id: true, title: true, completed: true, tags: { id: true, name: true } },
 });
 const read = Lists.all().as(listView);
+
+const createControlledObservation = <T,>() => {
+  const queued: T[] = [];
+  const waiting: Array<(result: IteratorResult<T>) => void> = [];
+  let closed = false;
+  const close = vi.fn(() => {
+    closed = true;
+    for (const resolve of waiting.splice(0)) resolve({ done: true, value: undefined });
+  });
+  const iterator: AsyncIterator<T> = {
+    next: () => {
+      const value = queued.shift();
+      if (value !== undefined) return Promise.resolve({ done: false, value });
+      if (closed) return Promise.resolve({ done: true, value: undefined });
+      return new Promise(resolve => waiting.push(resolve));
+    },
+    return: async () => {
+      close();
+      return { done: true, value: undefined };
+    },
+  };
+  return {
+    iterable: { [Symbol.asyncIterator]: () => iterator } as AsyncIterable<T>,
+    emit(value: T) {
+      const resolve = waiting.shift();
+      if (resolve) resolve({ done: false, value });
+      else queued.push(value);
+    },
+    close,
+  };
+};
+
 const setup = () => {
   const cache = createGraphClientCache();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -48,6 +81,145 @@ const setup = () => {
 afterEach(cleanup);
 
 describe('Graph Query cache reconciliation', () => {
+  it('keeps one Query current from complete snapshots and cancels it on unmount', async () => {
+    const { cache, executor, wrapper: GraphWrapper } = setup();
+    type Snapshot = Array<{
+      id: string;
+      name: string;
+      items: Array<{ id: string; title: string; completed: boolean; tags: never[] }>;
+    }>;
+    const observations: Array<ReturnType<typeof createControlledObservation<Snapshot>>> = [];
+    const observe = vi.fn(
+      (
+        _read: unknown,
+        _params: unknown,
+        _options: unknown,
+        lifecycle?: { readonly signal?: AbortSignal },
+      ) => {
+        const observation = createControlledObservation<Snapshot>();
+        observations.push(observation);
+        lifecycle?.signal?.addEventListener('abort', observation.close, { once: true });
+        return observation.iterable;
+      },
+    );
+    executor.observe = observe as unknown as NonNullable<ReactGraphExecutor['observe']>;
+    const first = {
+      id: 'l1',
+      name: 'Inbox',
+      items: [{ id: 'i1', title: 'First', completed: false, tags: [] as never[] }],
+    };
+    const updated = {
+      ...first,
+      items: [{ ...first.items[0]!, completed: true }],
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <StrictMode>
+        <GraphWrapper>{children}</GraphWrapper>
+      </StrictMode>
+    );
+    const { result, unmount } = renderHook(() => useGraphQuery(read, { observation: 'live' }), {
+      wrapper,
+    });
+    expect(executor.run).not.toHaveBeenCalled();
+    await waitFor(() => expect(observe).toHaveBeenCalledTimes(2));
+    expect(observations[0]!.close).toHaveBeenCalledOnce();
+    const observation = observations[1]!;
+
+    act(() => observation.emit([first]));
+    await waitFor(() => expect(result.current.data).toEqual([first]));
+    expect(cache.readEntity(createEntityRef(Item, { id: 'i1' }))).toEqual(first.items[0]);
+
+    act(() => observation.emit([updated]));
+    await waitFor(() => expect(result.current.data).toEqual([updated]));
+    expect(cache.readEntity(createEntityRef(Item, { id: 'i1' }))).toEqual(updated.items[0]);
+    expect(cache.inspect().outputs).toHaveLength(1);
+
+    unmount();
+    await waitFor(() => expect(observation.close).toHaveBeenCalledOnce());
+    expect(observe).toHaveBeenCalledTimes(2);
+    expect(executor.run).not.toHaveBeenCalled();
+  });
+
+  it('fails live mode explicitly when the executor cannot observe', async () => {
+    const { executor, wrapper } = setup();
+    const { result } = renderHook(() => useGraphQuery(read, { observation: 'live' }), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe(
+      'Graph executor does not support Query observation.',
+    );
+    expect(executor.run).not.toHaveBeenCalled();
+  });
+
+  it('surfaces observation failures after retaining the last complete snapshot', async () => {
+    const { executor, wrapper } = setup();
+    const list = { id: 'l1', name: 'Inbox', items: [] };
+    executor.observe = async function* () {
+      yield [list];
+      throw new Error('Observation disconnected');
+    } as ReactGraphExecutor['observe'];
+
+    const { result } = renderHook(() => useGraphQuery(read, { observation: 'live' }), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toEqual([list]);
+    expect(result.current.error?.message).toBe('Observation disconnected');
+  });
+
+  it('replaces and cancels the observation when execution identity changes', async () => {
+    const { cache, queryClient, executor } = setup();
+    const observations = [
+      createControlledObservation<any[]>(),
+      createControlledObservation<any[]>(),
+    ];
+    const observe = vi.fn(
+      (
+        _read: unknown,
+        _params: unknown,
+        _options: unknown,
+        lifecycle?: { readonly signal?: AbortSignal },
+      ) => {
+        const observation = observations[observe.mock.calls.length - 1]!;
+        lifecycle?.signal?.addEventListener('abort', observation.close, { once: true });
+        return observation.iterable;
+      },
+    );
+    executor.observe = observe as unknown as NonNullable<ReactGraphExecutor['observe']>;
+    let identity: ExecutionIdentity = {
+      principal: { kind: 'user', issuer: 'test', subject: 'alice' },
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider
+          runtime={{}}
+          client={false}
+          graphExecutor={executor}
+          clientCache={cache}
+          identity={identity}
+        >
+          {children}
+        </OntahiGraphProvider>
+      </QueryClientProvider>
+    );
+    const { result, rerender, unmount } = renderHook(
+      () => useGraphQuery(read, { observation: 'live' }),
+      { wrapper },
+    );
+    observations[0]!.emit([{ id: 'l1', name: 'Alice', items: [] }]);
+    await waitFor(() => expect(result.current.data?.[0]?.name).toBe('Alice'));
+
+    identity = { principal: { kind: 'user', issuer: 'test', subject: 'bob' } };
+    rerender();
+    await waitFor(() => expect(observations[0]!.close).toHaveBeenCalledOnce());
+    observations[1]!.emit([{ id: 'l2', name: 'Bob', items: [] }]);
+    await waitFor(() => expect(result.current.data?.[0]?.name).toBe('Bob'));
+    expect(observe).toHaveBeenCalledTimes(2);
+
+    unmount();
+    await waitFor(() => expect(observations[1]!.close).toHaveBeenCalledOnce());
+  });
+
   it('normalizes the initial nested read and refreshes values and ordering after refetches', async () => {
     const { cache, queryClient, executor, wrapper } = setup();
     const first = {

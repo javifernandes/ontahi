@@ -41,6 +41,13 @@ export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TR
     params: TParams,
     options?: TReadOptions,
   ): Promise<TResult[]>;
+  /** Observe complete-current result snapshots for the same authored Query used by `run`. */
+  observe?<TParams, TResult>(
+    read: QueryOrView<TParams, TResult>,
+    params: TParams,
+    options?: TReadOptions,
+    lifecycle?: { readonly signal?: AbortSignal },
+  ): AsyncIterable<TResult[]>;
   count<TParams, TResult>(
     read: QueryOrView<TParams, TResult>,
     params: TParams,
@@ -144,6 +151,12 @@ export type GraphQueryOptions<
   'queryKey' | 'queryFn'
 > & {
   mode?: TRead extends GraphReadExpression<any, any, any> ? never : TMode;
+  /** Keep a many-result Query current until the hook unmounts or its identity changes. */
+  observation?: TRead extends GraphReadExpression<any, any, any>
+    ? never
+    : TMode extends 'run'
+      ? 'live'
+      : never;
   params?: ReadParams<TRead>;
   queryKey?: QueryKey;
   runtimeOptions?: TReadOptions;
