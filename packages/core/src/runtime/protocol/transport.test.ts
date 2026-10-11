@@ -121,7 +121,7 @@ describe('Runtime Protocol exchange', () => {
       request: async envelope =>
         createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
     };
-    const listener = vi.fn(async () => undefined);
+    const listener = vi.fn(async () => true);
     const unsubscribe = subscribeRuntimeProtocolExecutions(transport, listener);
     const exchange = createRuntimeProtocolExecutionExchange({
       transport,
@@ -139,6 +139,29 @@ describe('Runtime Protocol exchange', () => {
     unsubscribe();
     await exchange({ family: 'graph.command', body: { kind: 'another-command' } });
     expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('does not mark metadata handled when observers only record the execution', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'exact' as const,
+        mutations: [],
+      },
+    };
+    const transport: RuntimeTransport = {
+      request: async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
+    };
+    const listener = vi.fn(async () => undefined);
+    subscribeRuntimeProtocolExecutions(transport, listener);
+
+    const result = await createRuntimeProtocolExecutionExchange({ transport })({
+      family: 'graph.command',
+      body: { kind: 'command' },
+    });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(wasRuntimeProtocolExecutionObserved(result.metadata!)).toBe(false);
   });
 
   it('does not turn an observer failure into an execution failure', async () => {

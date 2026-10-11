@@ -86,12 +86,7 @@ const settleStartedOperation = async (
     return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
   try {
     for await (const snapshot of runtimeTransport.durableOperation.observe(outcome.run)) {
-      if (snapshot.interaction)
-        return {
-          ok: false,
-          message:
-            'The started Operation requires an interaction that this Model Command exchange cannot resume.',
-        };
+      if (snapshot.interaction) return modelResultFromSnapshot(snapshot);
       if (snapshot.status === 'completed') {
         await inspectExecution(runtimeTransport, outcome.run);
         return {
@@ -132,6 +127,20 @@ export const createRuntimeModelCommandClient = (
   runtimeTransport: RuntimeTransport,
 ): RuntimeModelCommandClient => {
   const executionExchange = createRuntimeProtocolExecutionExchange({ transport: runtimeTransport });
+  const pendingStartedOperations = new Map<
+    string,
+    Extract<RuntimeModelCommandResult, { status: 'started' }>
+  >();
+  const runKey = (run: TaskRunIdentity) => `${run.taskId}\0${run.runId}`;
+  const retainPendingStartedOperation = (
+    outcome: Extract<RuntimeModelCommandResult, { status: 'started' }>,
+    result: RuntimeModelCommandOutcome,
+  ) => {
+    const key = runKey(outcome.run);
+    if (result.ok && result.value.status === 'pending') pendingStartedOperations.set(key, outcome);
+    else pendingStartedOperations.delete(key);
+    return result;
+  };
 
   return {
     submit: async request => {
@@ -143,9 +152,12 @@ export const createRuntimeModelCommandClient = (
       if (!parsed.success) throw new Error(parsed.error.error.message);
       if (parsed.response.kind === 'protocol-error')
         return { ok: false, message: parsed.response.error.message };
-      return parsed.response.result.status === 'started'
-        ? settleStartedOperation(runtimeTransport, parsed.response.result)
-        : { ok: true, value: parsed.response.result };
+      if (parsed.response.result.status !== 'started')
+        return { ok: true, value: parsed.response.result };
+      return retainPendingStartedOperation(
+        parsed.response.result,
+        await settleStartedOperation(runtimeTransport, parsed.response.result),
+      );
     },
     respond: async (run, response) => {
       const execution = await executionExchange({
@@ -157,6 +169,28 @@ export const createRuntimeModelCommandClient = (
       if (isDurableOperationProtocolError(parsed.response))
         return { ok: false, message: parsed.response.error.message };
       const initial = parsed.response.snapshot;
+      const startedOperation = pendingStartedOperations.get(runKey(run));
+      if (startedOperation) {
+        let result: RuntimeModelCommandOutcome;
+        if (initial.interaction) result = modelResultFromSnapshot(initial);
+        else if (initial.status === 'completed') {
+          if (execution.metadata === undefined) await inspectExecution(runtimeTransport, run);
+          result = {
+            ok: true,
+            value: {
+              status: 'executed',
+              message: startedOperation.message,
+              request: startedOperation.request,
+            },
+          };
+        } else if (initial.status === 'failed' || initial.status === 'cancelled')
+          result = {
+            ok: false,
+            message: initial.error?.message ?? `Operation ${initial.status}.`,
+          };
+        else result = await settleStartedOperation(runtimeTransport, startedOperation);
+        return retainPendingStartedOperation(startedOperation, result);
+      }
       if (initial.interaction || ['completed', 'failed', 'cancelled'].includes(initial.status))
         return settleModelCommandSnapshot(
           runtimeTransport,

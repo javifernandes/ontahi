@@ -17,6 +17,7 @@ import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   createRuntimeProtocolExecutionExchange,
   createRuntimeProtocolResponse,
+  wasRuntimeProtocolExecutionObserved,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -152,14 +153,16 @@ describe('graph query and command hooks', () => {
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    let execution: Awaited<ReturnType<ReturnType<typeof createRuntimeProtocolExecutionExchange>>>;
     await act(async () => {
-      await createRuntimeProtocolExecutionExchange({ transport: runtimeTransport })({
+      execution = await createRuntimeProtocolExecutionExchange({ transport: runtimeTransport })({
         family: 'graph.command',
         body: { version: 1, kind: 'graph-command' },
       });
     });
 
     await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(wasRuntimeProtocolExecutionObserved(execution!.metadata!)).toBe(true);
     expect(associateGraphReadRefreshes).toHaveBeenCalledWith([bookRead('ontahi')], {
       kind: 'committed-mutations',
       commitIds: ['commit-1'],

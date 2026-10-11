@@ -89,7 +89,7 @@ export type RuntimeProtocolExecution = {
 
 export type RuntimeProtocolExecutionListener = (
   execution: RuntimeProtocolExecution,
-) => void | Promise<void>;
+) => boolean | void | Promise<boolean | void>;
 
 export type RuntimeProtocolExecutionExchange<TTransportOptions = unknown> = <
   TFamily extends string,
@@ -130,7 +130,7 @@ const publishRuntimeProtocolExecution = async (
   const outcomes = await Promise.allSettled(
     listeners.map(listener => Promise.resolve().then(() => listener(execution))),
   );
-  if (outcomes.some(outcome => outcome.status === 'fulfilled'))
+  if (outcomes.some(outcome => outcome.status === 'fulfilled' && outcome.value === true))
     observedExecutionMetadata.add(execution.metadata);
 };
 

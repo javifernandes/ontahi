@@ -157,6 +157,7 @@ export function OntahiGraphProvider<
             }
           : {}),
       });
+      return true;
     });
   }, [queryClient, resolvedRuntimeTransport]);
 

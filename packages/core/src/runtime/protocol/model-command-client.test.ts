@@ -171,8 +171,165 @@ it('observes a started Operation before reporting the model command as executed'
   });
 });
 
-it('reports every non-completing started Operation outcome without resubmitting', async () => {
+it('resumes an interaction raised by a started Operation', async () => {
   const run = { taskId: 'TodoList.completeAll', runId: 'complete-all-2' };
+  const invocation = {
+    kind: 'invoke' as const,
+    operationId: 'TodoList.completeAll',
+    input: {},
+  };
+  const interaction = {
+    id: 'approve-complete-all',
+    kind: 'approval' as const,
+    prompt: 'Complete every item?',
+    proposal: { id: 'complete-all', summary: 'Complete all items.', requests: [invocation] },
+    createdAt: '2026-09-29T00:00:00.000Z',
+  };
+  const request = vi
+    .fn()
+    .mockImplementationOnce(async envelope =>
+      createRuntimeProtocolResponse(envelope, {
+        version: 1,
+        kind: 'model-command-result',
+        result: { status: 'started', message: 'List items completed.', request: invocation, run },
+      }),
+    )
+    .mockImplementationOnce(async envelope =>
+      createRuntimeProtocolResponse(
+        envelope,
+        {
+          version: 1,
+          kind: 'snapshot',
+          snapshot: {
+            ...run,
+            status: 'completed',
+            updatedAt: '2026-09-29T00:00:01.000Z',
+            result: { completed: 2 },
+          },
+        },
+        { committedMutations: completeLater },
+      ),
+    );
+  const observe = vi.fn(async function* () {
+    yield {
+      ...run,
+      status: 'running' as const,
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      interaction,
+    };
+  });
+  const client = createRuntimeModelCommandClient({
+    request,
+    durableOperation: { observe },
+  } as unknown as RuntimeTransport);
+
+  await expect(client.submit({ text: 'Complete Inbox' })).resolves.toEqual({
+    ok: true,
+    value: { status: 'pending', message: interaction.prompt, run, interaction },
+  });
+  await expect(
+    client.respond(run, { interactionId: interaction.id, decision: 'approve' }),
+  ).resolves.toEqual({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'List items completed.',
+      request: invocation,
+    },
+  });
+  expect(request.mock.calls[1]?.[0]).toMatchObject({
+    family: 'durable.operation',
+    body: {
+      kind: 'respond',
+      run,
+      response: { interactionId: interaction.id, decision: 'approve' },
+    },
+  });
+  expect(request).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  {
+    name: 'reports a failed interaction response',
+    responseSnapshot: {
+      status: 'failed' as const,
+      error: { code: 'update_failed', message: 'The update failed.' },
+    },
+    expected: { ok: false, message: 'The update failed.' },
+  },
+  {
+    name: 'continues observing a running interaction response',
+    responseSnapshot: { status: 'running' as const },
+    expected: {
+      ok: true,
+      value: {
+        status: 'executed',
+        message: 'List items completed.',
+        request: { kind: 'invoke', operationId: 'TodoList.completeAll', input: {} },
+      },
+    },
+  },
+])('$name for a started Operation', async ({ responseSnapshot, expected }) => {
+  const run = { taskId: 'TodoList.completeAll', runId: `complete-all-${responseSnapshot.status}` };
+  const invocation = {
+    kind: 'invoke' as const,
+    operationId: 'TodoList.completeAll',
+    input: {},
+  };
+  const interaction = {
+    id: 'approve-complete-all',
+    kind: 'approval' as const,
+    prompt: 'Complete every item?',
+    proposal: { id: 'complete-all', summary: 'Complete all items.', requests: [invocation] },
+    createdAt: '2026-09-29T00:00:00.000Z',
+  };
+  const request = vi.fn(async envelope =>
+    envelope.family === 'model.command'
+      ? createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'model-command-result',
+          result: { status: 'started', message: 'List items completed.', request: invocation, run },
+        })
+      : createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'snapshot',
+          snapshot: {
+            ...run,
+            ...responseSnapshot,
+            updatedAt: '2026-09-29T00:00:01.000Z',
+          },
+        }),
+  );
+  const observe = vi.fn(async function* () {
+    if (observe.mock.calls.length === 1)
+      yield {
+        ...run,
+        status: 'running' as const,
+        updatedAt: '2026-09-29T00:00:00.000Z',
+        interaction,
+      };
+    else
+      yield {
+        ...run,
+        status: 'completed' as const,
+        updatedAt: '2026-09-29T00:00:02.000Z',
+        result: { completed: 2 },
+      };
+  });
+  const client = createRuntimeModelCommandClient({
+    request,
+    durableOperation: { observe },
+  } as unknown as RuntimeTransport);
+
+  await client.submit({ text: 'Complete Inbox' });
+
+  await expect(
+    client.respond(run, { interactionId: interaction.id, decision: 'approve' }),
+  ).resolves.toEqual(expected);
+});
+
+it('reports every non-completing started Operation outcome without resubmitting', async () => {
+  const run = { taskId: 'TodoList.completeAll', runId: 'complete-all-3' };
   const invocation = {
     kind: 'invoke' as const,
     operationId: 'TodoList.completeAll',
@@ -194,19 +351,6 @@ it('reports every non-completing started Operation outcome without resubmitting'
   await expect(submitWith()).resolves.toEqual({
     ok: false,
     message: 'The configured Runtime Transport cannot observe this run.',
-  });
-  await expect(
-    submitWith(async function* () {
-      yield {
-        ...run,
-        status: 'running',
-        updatedAt: '2026-09-29T00:00:00.000Z',
-        interaction: { id: 'approval' },
-      };
-    }),
-  ).resolves.toMatchObject({
-    ok: false,
-    message: expect.stringContaining('requires an interaction'),
   });
   await expect(
     submitWith(async function* () {
