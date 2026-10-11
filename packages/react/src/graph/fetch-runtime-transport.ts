@@ -124,6 +124,7 @@ export const createFetchRuntimeTransport = <TTransportOptions = undefined>({
   };
 
   return {
+    descriptor: { kind: 'fetch' },
     request,
     durableOperation: { observe },
   };

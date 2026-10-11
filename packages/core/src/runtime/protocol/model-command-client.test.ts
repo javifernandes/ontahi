@@ -1,11 +1,14 @@
+import { expect, it, vi } from 'vitest';
+
 import type { CommittedMutationSet } from '../../data-graph/index.js';
+
 import {
   createRuntimeModelCommandClient,
   createRuntimeProtocolResponse,
   subscribeRuntimeProtocolExecutions,
   type RuntimeTransport,
 } from './index.js';
-import { expect, it, vi } from 'vitest';
+
 const completeLater: CommittedMutationSet = {
   precision: 'intensional',
   mutations: [

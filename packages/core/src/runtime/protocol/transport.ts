@@ -45,7 +45,13 @@ export type RuntimeTransportCausalityCapability = {
   ): void;
 };
 
+export type RuntimeTransportDescriptor = {
+  /** Stable implementation kind for tooling and host composition (for example, fetch or websocket). */
+  readonly kind: string;
+};
+
 export type RuntimeTransport<TTransportOptions = unknown> = {
+  readonly descriptor?: RuntimeTransportDescriptor;
   request(
     request: RuntimeProtocolRequestEnvelope,
     options?: RuntimeTransportRequestOptions<TTransportOptions>,

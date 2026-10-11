@@ -37,6 +37,28 @@ afterAll(() => {
 });
 
 describe('OntahiDevtools', () => {
+  it('discovers diagnostics associated with its Runtime Transport', async () => {
+    const diagnostics = createOntahiDiagnostics();
+    const runtimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: vi.fn() },
+    });
+
+    const rendered = render(<OntahiDevtools runtimeTransport={runtimeTransport} />);
+
+    expect(screen.getByRole('button', { name: 'Open Ontahí Devtools' })).toBeTruthy();
+    rendered.unmount();
+  });
+
+  it('stays unmounted when its Runtime Transport has diagnostics disabled', () => {
+    const rendered = render(<OntahiDevtools runtimeTransport={{ request: vi.fn() }} />);
+
+    expect(screen.queryByRole('button', { name: 'Open Ontahí Devtools' })).toBeNull();
+    rendered.unmount();
+  });
+
   it(
     'leads with application intent and separates visual, body, and envelope detail',
     async () => {

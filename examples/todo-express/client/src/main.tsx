@@ -1,5 +1,4 @@
-import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
-import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
+import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
 import { OntahiDevtools, type OntahiDevtoolsConsoleOptions } from '@ontahi/devtools/react';
 import {
   createFetchRuntimeTransport,
@@ -35,34 +34,18 @@ const redactTodoDiagnosticValue = (value: unknown): unknown => {
     ]),
   );
 };
-const diagnostics =
-  import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)
-    ? createOntahiDiagnostics({
-        capacity: 500,
-        capturePayloads: true,
-        redact: redactTodoDiagnosticValue,
-      })
-    : undefined;
-const baseHttpTransport = createFetchRuntimeTransport<never>();
-const baseWebSocketTransport = createWebSocketRuntimeTransport();
-const runtimeTransport = createRuntimeTransportRouter({
+const runtimeTransport = createDiagnosticRuntimeTransportRouter({
+  diagnostics:
+    import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)
+      ? {
+          capacity: 500,
+          capturePayloads: true,
+          redact: redactTodoDiagnosticValue,
+        }
+      : false,
   transports: {
-    http: diagnostics
-      ? instrumentRuntimeTransport({
-          diagnostics,
-          id: 'http',
-          kind: 'fetch',
-          transport: baseHttpTransport,
-        })
-      : baseHttpTransport,
-    websocket: diagnostics
-      ? instrumentRuntimeTransport({
-          diagnostics,
-          id: 'websocket',
-          kind: 'websocket',
-          transport: baseWebSocketTransport,
-        })
-      : baseWebSocketTransport,
+    http: createFetchRuntimeTransport<never>(),
+    websocket: createWebSocketRuntimeTransport(),
   },
   routing: {
     'graph.read': 'websocket',
@@ -108,14 +91,11 @@ const TodoClient = () => {
       ) : (
         <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
-      {diagnostics ? (
-        <OntahiDevtools
-          console={{ ...devtoolsConsole, identity }}
-          clientCache={graphClient.clientCache}
-          diagnostics={diagnostics}
-          runtimeTransport={runtimeTransport}
-        />
-      ) : null}
+      <OntahiDevtools
+        console={{ ...devtoolsConsole, identity }}
+        clientCache={graphClient.clientCache}
+        runtimeTransport={runtimeTransport}
+      />
     </OntahiGraphProvider>
   );
 };

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
 import { createEntityHistory } from '../entity-history.js';
+import { getRuntimeTransportDiagnostics } from '../instrument-runtime-transport.js';
 
 import type { OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { DevtoolsPanel } from './devtools-panel.js';
@@ -16,7 +17,7 @@ import { defaultDevtoolsPanelHeight } from './panel-resizer.js';
 export type OntahiDevtoolsProps = {
   readonly clientCache?: GraphClientCache;
   readonly console?: OntahiDevtoolsConsoleOptions;
-  readonly diagnostics: OntahiDiagnostics;
+  readonly diagnostics?: OntahiDiagnostics;
   readonly initiallyOpen?: boolean;
   readonly runtimeTransport?: RuntimeTransport<any>;
 };
@@ -28,6 +29,9 @@ export const OntahiDevtools = ({
   initiallyOpen = false,
   runtimeTransport,
 }: OntahiDevtoolsProps) => {
+  const resolvedDiagnostics =
+    diagnostics ??
+    (runtimeTransport ? getRuntimeTransportDiagnostics(runtimeTransport) : undefined);
   const history = useMemo(
     () => (clientCache ? createEntityHistory(clientCache) : undefined),
     [clientCache],
@@ -35,12 +39,13 @@ export const OntahiDevtools = ({
   useEffect(() => () => history?.dispose(), [history]);
   const [open, setOpen] = useState(initiallyOpen);
   const [height, setHeight] = useState(defaultDevtoolsPanelHeight);
+  if (!resolvedDiagnostics) return null;
   return open ? (
     <DevtoolsPanel
       history={history}
       clientCache={clientCache}
       consoleOptions={console}
-      diagnostics={diagnostics}
+      diagnostics={resolvedDiagnostics}
       runtimeTransport={runtimeTransport}
       height={height}
       resize={setHeight}

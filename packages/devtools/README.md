@@ -20,8 +20,7 @@ Operation labels remain unchanged until those authoring dialects are defined.
 
 ```tsx
 import { entity, field } from '@ontahi/core/data-graph';
-import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
-import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
+import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
 import { createFetchRuntimeTransport, createWebSocketRuntimeTransport } from '@ontahi/react/graph';
 
@@ -29,21 +28,11 @@ const TodoItem = entity('TodoItem', {
   id: field.id(),
   completed: field.boolean(),
 });
-const diagnostics = createOntahiDiagnostics();
-const runtimeTransport = createRuntimeTransportRouter({
+const runtimeTransport = createDiagnosticRuntimeTransportRouter({
+  diagnostics: {},
   transports: {
-    http: instrumentRuntimeTransport({
-      diagnostics,
-      id: 'http',
-      kind: 'fetch',
-      transport: createFetchRuntimeTransport(),
-    }),
-    websocket: instrumentRuntimeTransport({
-      diagnostics,
-      id: 'websocket',
-      kind: 'websocket',
-      transport: createWebSocketRuntimeTransport(),
-    }),
+    http: createFetchRuntimeTransport(),
+    websocket: createWebSocketRuntimeTransport(),
   },
   routing: {
     'graph.read': 'websocket',
@@ -58,7 +47,6 @@ const runtimeTransport = createRuntimeTransportRouter({
     entities: [TodoItem],
     initialDocument: 'TodoItem.where(completed = false).many()',
   }}
-  diagnostics={diagnostics}
   runtimeTransport={runtimeTransport}
 />;
 ```
@@ -170,8 +158,12 @@ initial routing and may subscribe for application policies such as cache invalid
 persistence. Changing a setting never replays requests or moves an active observation between
 transports.
 
-`instrumentRuntimeTransport(...)` preserves and delegates this routing capability when it wraps a
-configurable transport.
+`createDiagnosticRuntimeTransportRouter(...)` instruments every registered transport, using its
+registration key as the diagnostic id and its own descriptor as the implementation kind. It
+associates the diagnostics store with the returned router, so `OntahiDevtools` only needs that
+Runtime Transport. Pass `diagnostics: false` to keep the same composition while disabling both
+capture and the panel. The lower-level `createOntahiDiagnostics(...)` and
+`instrumentRuntimeTransport(...)` APIs remain available for custom composition.
 
 The default Visual detail projects Operation requests to their input and successful responses to
 their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep
@@ -221,9 +213,12 @@ Hosts must keep passing the same `console.identity` as their transport's executi
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
 ```ts
-createOntahiDiagnostics({
-  capturePayloads: true,
-  redact: value => removeApplicationSecrets(value),
+createDiagnosticRuntimeTransportRouter({
+  diagnostics: {
+    capturePayloads: true,
+    redact: value => removeApplicationSecrets(value),
+  },
+  transports,
 });
 ```
 
@@ -243,7 +238,7 @@ Views are ordered Console (when configured), Activity, Cache, Settings. Activity
 initial view. Pass the same `clientCache` used by the application's graph provider/client:
 
 ```tsx
-<OntahiDevtools diagnostics={diagnostics} clientCache={graphClient.clientCache} />
+<OntahiDevtools runtimeTransport={runtimeTransport} clientCache={graphClient.clientCache} />
 ```
 
 Cache is a live, read-only view of canonical entity records, locator aliases, freshness markers,

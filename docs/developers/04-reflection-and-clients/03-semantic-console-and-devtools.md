@@ -12,23 +12,19 @@ Instrument the transport supplied to the application's graph client, then pass t
 and cache to the development-only panel:
 
 ```tsx
-import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
+import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
 import { createFetchRuntimeTransport, createRuntimeGraphClient } from '@ontahi/react/graph';
 import { TodoItem, TodoList, Tag } from './generated/client-entities.js';
 
-const diagnostics = createOntahiDiagnostics();
-const runtimeTransport = instrumentRuntimeTransport({
-  diagnostics,
-  id: 'http',
-  kind: 'fetch',
-  transport: createFetchRuntimeTransport(),
+const runtimeTransport = createDiagnosticRuntimeTransportRouter({
+  diagnostics: {},
+  transports: { http: createFetchRuntimeTransport() },
 });
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 
 // Supply graphClient to the application's OntahiGraphProvider as well.
 <OntahiDevtools
-  diagnostics={diagnostics}
   runtimeTransport={runtimeTransport}
   clientCache={graphClient.clientCache}
   console={{
@@ -43,8 +39,10 @@ Here `identity` is the same execution identity given to the graph provider. Keep
 when the session or cache scope changes. Generated client Entities supply their schemas, portable
 Operation metadata and input Graph Schema descriptors without importing server implementations into
 the browser. Passing bare Entity schemas remains supported for a read-only Console. Instantiate the
-diagnostics/client once per intended client lifetime, not on every render, and mount the panel only
-in the development contexts where this inspection is appropriate.
+runtime client once per intended client lifetime, not on every render. The registered transport
+supplies its implementation kind while the router registration supplies its id; Devtools discovers
+the associated diagnostics store from that same runtime object. Pass `diagnostics: false` in builds
+where capture and the panel must remain disabled.
 
 Console mutations executed with the provider's Runtime Transport participate in the same semantic
 cache invalidation as application hooks. No Console-specific `onActionExecuted` callback is needed:
