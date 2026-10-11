@@ -133,11 +133,12 @@ await completeVisible.executeAsync();
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
 
-Mutation hooks prefer committed semantic metadata returned by Runtime Protocol. Every cached
-`useGraphQuery` retains its canonical `GraphReadRequest` in React Query metadata; after commit,
-Ontahí compares those Reads with the bounded `CommittedMutationSet` and refetches every possible
-overlap. A provably disjoint Read remains current, while an unsupported shape refreshes
-conservatively.
+`OntahiGraphProvider` consumes committed semantic metadata from every execution exchange on its
+Runtime Transport. Every cached `useGraphQuery` retains its canonical `GraphReadRequest` in React
+Query metadata; after commit, Ontahí compares those Reads with the bounded
+`CommittedMutationSet` and refetches every possible overlap. A provably disjoint Read remains
+current, while an unsupported shape refreshes conservatively. This applies equally to hooks,
+Devtools Console executions, and other clients using the provider's transport.
 
 Entity create, update, and delete use the same path as Relationship and ordered Commands:
 
@@ -150,12 +151,32 @@ const updateTodo = useEntityMutationCommand(
 await updateTodo.mutateAsync({ todo, completed: true });
 ```
 
-Applications do not name query keys or call `refetch()` after a successful semantic mutation.
+Applications do not name query keys, forward mutation callbacks, or call `refetch()` after a
+successful semantic mutation.
 `useGraphCommand`, `useEntityMutationCommand`, `useManyToManyRelationshipCommand`,
 `useOrderedRelationshipCommand`, Operation hooks, and terminal durable Operation hooks all consume
 the same metadata. Existing `invalidateQueryKeys`, `bridge.invalidate`, and
 `useCanonicalRequestInvalidation` remain compatibility escape hatches for older receivers that do
 not return committed mutations; they are not required by the normal Runtime Protocol path.
+
+Model Commands use the same transport and invalidation path without application wiring:
+
+```tsx
+const modelCommand = useModelCommand();
+
+const outcome = await modelCommand.submit({ text: 'Complete every item in Inbox' });
+if (outcome.ok && outcome.value.status === 'pending') {
+  await modelCommand.respond(outcome.value.run, {
+    interactionId: outcome.value.interaction.id,
+    optionId: selectedOption,
+  });
+}
+```
+
+`useModelCommand()` observes started Operations and resumes durable interactions. Terminal
+inspection uses the same execution exchange, so its committed effects refresh active reads through
+the provider. The UI owns conversation presentation and input state, not transport orchestration or
+cache invalidation.
 
 Durable Operations use the same invocation bridge to start a run, then observe its lifecycle
 through Runtime Transport:
@@ -186,8 +207,16 @@ For a WebSocket host, compose the same graph client around the push-capable tran
 
 ```ts
 const runtimeTransport = createWebSocketRuntimeTransport({ url: 'wss://app.example/runtime' });
-const client = createRuntimeGraphClient({ runtimeTransport });
+const client = createRuntimeGraphClient({
+  application: clientApplication,
+  runtimeTransport,
+});
 ```
+
+`clientApplication` is emitted by `@ontahi/codegen`. Retaining it on the client lets integrations
+inside `OntahiGraphProvider`, including Devtools, discover the same browser-safe Entity and
+Operation catalog without repeating it in component props. The provider likewise exposes its
+resolved identity, cache, and transport as one client-session context.
 
 The transport opens one lazy session, correlates concurrent Runtime Protocol requests, and sends
 one Durable observation control frame per run. Sequenced snapshots are pushed over that socket;

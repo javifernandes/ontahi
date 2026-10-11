@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  ClientApplication,
   GraphClientCache,
   ReflectedEntityDataReader,
   ReflectedEntityDataResult,
@@ -44,6 +45,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
   >;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
   clientCache?: GraphClientCache;
+  application?: ClientApplication;
   runtimeTransport?: RuntimeTransport<TReadOptions | TCommandOptions>;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;

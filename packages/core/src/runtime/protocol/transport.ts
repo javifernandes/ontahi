@@ -45,7 +45,13 @@ export type RuntimeTransportCausalityCapability = {
   ): void;
 };
 
+export type RuntimeTransportDescriptor = {
+  /** Stable implementation kind for tooling and host composition (for example, fetch or websocket). */
+  readonly kind: string;
+};
+
 export type RuntimeTransport<TTransportOptions = unknown> = {
+  readonly descriptor?: RuntimeTransportDescriptor;
   request(
     request: RuntimeProtocolRequestEnvelope,
     options?: RuntimeTransportRequestOptions<TTransportOptions>,
@@ -76,6 +82,15 @@ export type RuntimeProtocolExecutionExchangeResult = {
   readonly metadata?: RuntimeProtocolExecutionMetadata;
 };
 
+export type RuntimeProtocolExecution = {
+  readonly request: RuntimeProtocolExchangeRequest<string, unknown>;
+  readonly metadata: RuntimeProtocolExecutionMetadata;
+};
+
+export type RuntimeProtocolExecutionListener = (
+  execution: RuntimeProtocolExecution,
+) => boolean | void | Promise<boolean | void>;
+
 export type RuntimeProtocolExecutionExchange<TTransportOptions = unknown> = <
   TFamily extends string,
   TBody,
@@ -85,6 +100,39 @@ export type RuntimeProtocolExecutionExchange<TTransportOptions = unknown> = <
 ) => Promise<RuntimeProtocolExecutionExchangeResult>;
 
 let fallbackExchangeSequence = 0;
+
+const executionListeners = new WeakMap<RuntimeTransport, Set<RuntimeProtocolExecutionListener>>();
+const observedExecutionMetadata = new WeakSet<RuntimeProtocolExecutionMetadata>();
+
+export const subscribeRuntimeProtocolExecutions = (
+  transport: RuntimeTransport,
+  listener: RuntimeProtocolExecutionListener,
+) => {
+  const listeners =
+    executionListeners.get(transport) ?? new Set<RuntimeProtocolExecutionListener>();
+  listeners.add(listener);
+  executionListeners.set(transport, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) executionListeners.delete(transport);
+  };
+};
+
+export const wasRuntimeProtocolExecutionObserved = (metadata: RuntimeProtocolExecutionMetadata) =>
+  observedExecutionMetadata.has(metadata);
+
+const publishRuntimeProtocolExecution = async (
+  transport: RuntimeTransport,
+  execution: RuntimeProtocolExecution,
+) => {
+  const listeners = [...(executionListeners.get(transport) ?? [])];
+  if (listeners.length === 0) return;
+  const outcomes = await Promise.allSettled(
+    listeners.map(listener => Promise.resolve().then(() => listener(execution))),
+  );
+  if (outcomes.some(outcome => outcome.status === 'fulfilled' && outcome.value === true))
+    observedExecutionMetadata.add(execution.metadata);
+};
 
 const defaultRequestId = () =>
   globalThis.crypto?.randomUUID?.() ??
@@ -124,8 +172,15 @@ export const createRuntimeProtocolExecutionExchange =
     if (isRuntimeProtocolError(parsed.response)) {
       throw new Error(parsed.response.error.message);
     }
-    return {
+    const result = {
       body: parsed.response.body,
       ...(parsed.response.metadata === undefined ? {} : { metadata: parsed.response.metadata }),
     };
+    if (parsed.response.metadata) {
+      await publishRuntimeProtocolExecution(transport, {
+        request: input,
+        metadata: parsed.response.metadata,
+      });
+    }
+    return result;
   };

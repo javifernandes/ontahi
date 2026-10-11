@@ -2,6 +2,7 @@ export * from './authority.js';
 export * from './binding.js';
 export * from './client/cache/index.js';
 export * from './client-input.js';
+export * from './client-application.js';
 export * from './client/operation-cache/index.js';
 export * from './command-binding.js';
 export * from './command-dispatcher.js';

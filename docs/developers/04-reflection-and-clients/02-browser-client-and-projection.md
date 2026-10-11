@@ -203,6 +203,13 @@ const client = createFetchGraphClient({
 Individual provider props remain available as lower-level overrides. `client={false}` disables the
 conventional bundle for a fully explicit host.
 
+When the provider is nested under `QueryClientProvider`, it also listens to successful execution
+metadata on that Runtime Transport. Commands, Operations, durable completion, Model Commands and
+Devtools Console actions therefore share one semantic cache path: the provider compares committed
+mutations with active canonical Graph Reads and refreshes every possible overlap. Application code
+does not pass refresh callbacks or declare React Query keys. Receivers must explicitly project
+committed mutations; this convenience does not weaken the server's policy or authority boundary.
+
 `compatibility.operation`, `compatibility.graphRead`, and `compatibility.graphCommand` can select
 the old `/operations`, `/graph/reads`, and `/graph/commands` contracts independently during
 migration. Unlisted families remain on Runtime Transport, and failures never cause automatic

@@ -121,6 +121,10 @@ afterEach(() => {
 });
 
 describe('WebSocket Runtime Transport', () => {
+  it('describes its transport implementation for composition tooling', () => {
+    expect(createWebSocketRuntimeTransport().descriptor).toEqual({ kind: 'websocket' });
+  });
+
   it('correlates concurrent request/response families over one lazy session', async () => {
     const pending = new Map<string, (body: { readonly source: string }) => void>();
     const dispatcher: RuntimeProtocolDispatcher<{ principal: string }> = (input, context) => {

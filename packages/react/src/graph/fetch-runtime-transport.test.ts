@@ -19,6 +19,10 @@ const jsonResponse = (payload: unknown, options?: { ok?: boolean; status?: numbe
   }) as Response;
 
 describe('Fetch Runtime Transport', () => {
+  it('describes its transport implementation for composition tooling', () => {
+    expect(createFetchRuntimeTransport().descriptor).toEqual({ kind: 'fetch' });
+  });
+
   it('applies per-exchange request initialization and abort through the shared request path', async () => {
     const fetchRequest = vi.fn(async (_endpoint: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;

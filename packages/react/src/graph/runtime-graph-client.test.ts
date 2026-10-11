@@ -1,5 +1,11 @@
 import { runCollectArray } from '@ontahi/core/computation/stream';
-import { entity, field, query } from '@ontahi/core/data-graph';
+import {
+  defineClientApplication,
+  defineClientEntity,
+  entity,
+  field,
+  query,
+} from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +13,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRuntimeGraphClient } from './runtime-graph-client.js';
 
 describe('Runtime Graph client', () => {
+  it('retains the generated Client Application catalog', () => {
+    const Todo = defineClientEntity(entity('Todo', { id: field.id() }));
+    const application = defineClientApplication({ entities: [Todo] });
+
+    const client = createRuntimeGraphClient({
+      runtimeTransport: { request: vi.fn() },
+      application,
+    });
+
+    expect(client.application).toBe(application);
+  });
+
   it('assembles graph and operation capabilities around one Runtime Transport', () => {
     const runtimeTransport = { request: vi.fn() } as unknown as RuntimeTransport;
     const requestId = () => 'request-1';

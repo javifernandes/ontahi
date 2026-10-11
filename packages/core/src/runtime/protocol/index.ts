@@ -4,6 +4,7 @@ export * from './durable-operation.js';
 export * from './envelope.js';
 export * from './families.js';
 export * from './model-command.js';
+export * from './model-command-client.js';
 export * from './operation.js';
 export * from './registry.js';
 export * from './session.js';

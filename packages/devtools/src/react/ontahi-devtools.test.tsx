@@ -1,4 +1,10 @@
-import { entity, field } from '@ontahi/core/data-graph';
+import {
+  createGraphClientCache,
+  defineClientApplication,
+  defineClientEntity,
+  entity,
+  field,
+} from '@ontahi/core/data-graph';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeTransportRouter,
@@ -6,6 +12,7 @@ import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolRequestEnvelope,
 } from '@ontahi/core/runtime/protocol';
+import { OntahiGraphProvider } from '@ontahi/react/graph';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +44,81 @@ afterAll(() => {
 });
 
 describe('OntahiDevtools', () => {
+  it('discovers transport, cache, identity, and Entities from its Graph Provider', () => {
+    const diagnostics = createOntahiDiagnostics();
+    const runtimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: vi.fn() },
+    });
+    const TodoItem = defineClientEntity(entity('TodoItem', { id: field.id() }));
+    const application = defineClientApplication({ entities: [TodoItem] });
+
+    const rendered = render(
+      <OntahiGraphProvider
+        runtime={{ name: 'test-runtime' }}
+        identity={{ principal: null, cacheScope: 'test-session' }}
+        client={{ application, clientCache: createGraphClientCache(), runtimeTransport }}
+      >
+        <OntahiDevtools initiallyOpen />
+      </OntahiGraphProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Console' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cache' })).toBeTruthy();
+    rendered.unmount();
+  });
+
+  it('allows the discovered Console to be disabled explicitly', () => {
+    const diagnostics = createOntahiDiagnostics();
+    const runtimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: vi.fn() },
+    });
+    const TodoItem = defineClientEntity(entity('TodoItem', { id: field.id() }));
+
+    const rendered = render(
+      <OntahiGraphProvider
+        runtime={{ name: 'test-runtime' }}
+        client={{
+          application: defineClientApplication({ entities: [TodoItem] }),
+          runtimeTransport,
+        }}
+      >
+        <OntahiDevtools console={false} initiallyOpen />
+      </OntahiGraphProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Console' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Activity/ })).toBeTruthy();
+    rendered.unmount();
+  });
+
+  it('discovers diagnostics associated with its Runtime Transport', async () => {
+    const diagnostics = createOntahiDiagnostics();
+    const runtimeTransport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: vi.fn() },
+    });
+
+    const rendered = render(<OntahiDevtools runtimeTransport={runtimeTransport} />);
+
+    expect(screen.getByRole('button', { name: 'Open Ontahí Devtools' })).toBeTruthy();
+    rendered.unmount();
+  });
+
+  it('stays unmounted when its Runtime Transport has diagnostics disabled', () => {
+    const rendered = render(<OntahiDevtools runtimeTransport={{ request: vi.fn() }} />);
+
+    expect(screen.queryByRole('button', { name: 'Open Ontahí Devtools' })).toBeNull();
+    rendered.unmount();
+  });
+
   it(
     'leads with application intent and separates visual, body, and envelope detail',
     async () => {

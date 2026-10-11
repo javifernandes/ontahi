@@ -4,6 +4,7 @@
 
 import {
   defineClientDomainOperation,
+  defineClientApplication,
   defineClientEntity,
   entity as defineEntitySchema,
   field,
@@ -123,4 +124,8 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       },
     }),
   },
+});
+
+export const clientApplication = defineClientApplication({
+  entities: [TodoList, Tag, TodoItem],
 });

@@ -435,6 +435,7 @@ export const renderGeneratedClientEntityModule = ({
     ...(entities.some(entity => entity.operations.length > 0)
       ? ['defineClientDomainOperation']
       : []),
+    'defineClientApplication',
     'defineClientEntity',
     ...schemaCoreImports,
     ...(usesField && !schemaImportsField ? ['field'] : []),
@@ -444,6 +445,16 @@ export const renderGeneratedClientEntityModule = ({
     ...(usesQueryRef ? ['queryRef'] : []),
     ...(usesValue ? ['value'] : []),
   ];
+
+  const applicationEntities = entities.filter(
+    entity =>
+      entity.entitySchemaProjection ||
+      entity.entityDefinitionLocalName ||
+      entity.entityDefinitionName,
+  );
+  const clientApplicationExport = `export const clientApplication = defineClientApplication({
+  entities: [${applicationEntities.map(entity => entity.entityName).join(', ')}],
+});`;
 
   return hoistClientBridgeQueryInputTypes(`'use client';
 
@@ -462,5 +473,7 @@ ${
   }${namedValueDefinitionTexts.join('\n\n')}${
     namedValueDefinitionTexts.length > 0 ? '\n\n' : ''
   }${helperSection}${entityExports}
+
+${clientApplicationExport}
 `);
 };

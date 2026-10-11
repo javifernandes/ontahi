@@ -645,6 +645,7 @@ export const createWebSocketRuntimeTransport = ({
   };
 
   return {
+    descriptor: { kind: 'websocket' },
     request,
     durableOperation: { observe: observeDurable },
     graph: { observe: observeGraph },

@@ -15,6 +15,7 @@ import {
   isDurableOperationProtocolError,
   parseDurableOperationProtocolResponse,
   toDurableOperationProtocolRequest,
+  wasRuntimeProtocolExecutionObserved,
 } from '@ontahi/core/runtime/protocol';
 import { hasOwn, isRecord } from '@ontahi/core/value/object';
 import {
@@ -254,26 +255,32 @@ export function useOperation<TInput, TData>(
         });
 
         if (currentOptions?.invalidateOnSuccess ?? true) {
-          const committed = actionResult?.executionMetadata?.committedMutations;
-          if (committed) {
-            const mutationCommitId = actionResult?.executionMetadata?.mutationCommitId;
+          const executionMetadata = actionResult?.executionMetadata;
+          const committed = executionMetadata?.committedMutations;
+          if (committed && executionMetadata) {
+            const mutationCommitId = executionMetadata.mutationCommitId;
             await Promise.all([
-              invalidateSemanticGraphReads(queryClient, committed, {
-                ...(mutationCommitId
-                  ? {
-                      causedBy: {
-                        kind: 'committed-mutations' as const,
-                        commitIds: [mutationCommitId],
-                        overflow: false,
-                      },
-                    }
-                  : {}),
-                ...(runtimeTransport?.causality
-                  ? {
-                      associateRefreshes: runtimeTransport.causality.associateGraphReadRefreshes,
-                    }
-                  : {}),
-              }),
+              ...(wasRuntimeProtocolExecutionObserved(executionMetadata)
+                ? []
+                : [
+                    invalidateSemanticGraphReads(queryClient, committed, {
+                      ...(mutationCommitId
+                        ? {
+                            causedBy: {
+                              kind: 'committed-mutations' as const,
+                              commitIds: [mutationCommitId],
+                              overflow: false,
+                            },
+                          }
+                        : {}),
+                      ...(runtimeTransport?.causality
+                        ? {
+                            associateRefreshes:
+                              runtimeTransport.causality.associateGraphReadRefreshes,
+                          }
+                        : {}),
+                    }),
+                  ]),
               invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
             ]);
           } else {
@@ -556,26 +563,28 @@ export function useDurableOperation<TInput, TResult = unknown>(
               !isDurableOperationProtocolError(parsed.response) &&
               execution.metadata?.committedMutations
             ) {
-              await invalidateSemanticGraphReads(
-                queryClient,
-                execution.metadata.committedMutations,
-                {
-                  ...(execution.metadata.mutationCommitId
-                    ? {
-                        causedBy: {
-                          kind: 'committed-mutations' as const,
-                          commitIds: [execution.metadata.mutationCommitId],
-                          overflow: false,
-                        },
-                      }
-                    : {}),
-                  ...(runtimeTransport.causality
-                    ? {
-                        associateRefreshes: runtimeTransport.causality.associateGraphReadRefreshes,
-                      }
-                    : {}),
-                },
-              );
+              if (!wasRuntimeProtocolExecutionObserved(execution.metadata))
+                await invalidateSemanticGraphReads(
+                  queryClient,
+                  execution.metadata.committedMutations,
+                  {
+                    ...(execution.metadata.mutationCommitId
+                      ? {
+                          causedBy: {
+                            kind: 'committed-mutations' as const,
+                            commitIds: [execution.metadata.mutationCommitId],
+                            overflow: false,
+                          },
+                        }
+                      : {}),
+                    ...(runtimeTransport.causality
+                      ? {
+                          associateRefreshes:
+                            runtimeTransport.causality.associateGraphReadRefreshes,
+                        }
+                      : {}),
+                  },
+                );
               return;
             }
           } catch {

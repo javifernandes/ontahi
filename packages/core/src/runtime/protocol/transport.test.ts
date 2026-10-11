@@ -4,6 +4,8 @@ import { createRuntimeProtocolResponse, runtimeProtocolError } from './envelope.
 import {
   createRuntimeProtocolExchange,
   createRuntimeProtocolExecutionExchange,
+  subscribeRuntimeProtocolExecutions,
+  wasRuntimeProtocolExecutionObserved,
   type RuntimeTransport,
   type RuntimeTransportRequestOptions,
 } from './transport.js';
@@ -105,6 +107,84 @@ describe('Runtime Protocol exchange', () => {
     expect(request.mock.calls[0]?.[0]).toMatchObject({
       accepts: ['committed-mutations.v1'],
     });
+  });
+
+  it('publishes successful execution metadata to transport-local observers', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'exact' as const,
+        mutations: [],
+      },
+      mutationCommitId: 'commit-1',
+    };
+    const transport: RuntimeTransport = {
+      request: async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
+    };
+    const listener = vi.fn(async () => true);
+    const unsubscribe = subscribeRuntimeProtocolExecutions(transport, listener);
+    const exchange = createRuntimeProtocolExecutionExchange({
+      transport,
+      requestId: () => 'execution-observed',
+    });
+
+    const result = await exchange({ family: 'graph.command', body: { kind: 'command' } });
+
+    expect(listener).toHaveBeenCalledWith({
+      request: { family: 'graph.command', body: { kind: 'command' } },
+      metadata,
+    });
+    expect(wasRuntimeProtocolExecutionObserved(result.metadata!)).toBe(true);
+
+    unsubscribe();
+    await exchange({ family: 'graph.command', body: { kind: 'another-command' } });
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('does not mark metadata handled when observers only record the execution', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'exact' as const,
+        mutations: [],
+      },
+    };
+    const transport: RuntimeTransport = {
+      request: async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
+    };
+    const listener = vi.fn(async () => undefined);
+    subscribeRuntimeProtocolExecutions(transport, listener);
+
+    const result = await createRuntimeProtocolExecutionExchange({ transport })({
+      family: 'graph.command',
+      body: { kind: 'command' },
+    });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(wasRuntimeProtocolExecutionObserved(result.metadata!)).toBe(false);
+  });
+
+  it('does not turn an observer failure into an execution failure', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'exact' as const,
+        mutations: [],
+      },
+    };
+    const transport: RuntimeTransport = {
+      request: async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
+    };
+    subscribeRuntimeProtocolExecutions(transport, () => {
+      throw new Error('observer failed');
+    });
+
+    const result = await createRuntimeProtocolExecutionExchange({ transport })({
+      family: 'operation',
+      body: { kind: 'invoke' },
+    });
+    expect(result).toEqual({ body: { kind: 'family-result' }, metadata });
+    expect(wasRuntimeProtocolExecutionObserved(result.metadata!)).toBe(false);
   });
 
   it('accepts execution responses without metadata and surfaces protocol errors', async () => {

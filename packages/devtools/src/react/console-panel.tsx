@@ -85,11 +85,11 @@ type ConsoleOperationSource = {
   readonly entityName: string;
   readonly name: string;
   readonly description?: string;
-  readonly input?: GraphSchemaDefinition;
+  readonly input?: unknown;
   readonly durable?: unknown;
 };
 
-type ConsoleEntitySource =
+export type ConsoleEntitySource =
   | AnyEntityDefinition
   | {
       readonly definition: AnyEntityDefinition;
@@ -110,6 +110,14 @@ export type OntahiDevtoolsConsoleOptions = {
     readonly executionMetadata?: RuntimeProtocolExecutionMetadata;
     readonly response: unknown;
   }) => void | Promise<void>;
+};
+
+export type OntahiDevtoolsConsoleConfiguration = Omit<
+  OntahiDevtoolsConsoleOptions,
+  'entities' | 'identity'
+> & {
+  readonly entities?: readonly ConsoleEntitySource[];
+  readonly identity?: ExecutionIdentity;
 };
 
 export type ConsolePanelProps = {
@@ -177,7 +185,9 @@ const reflectConsoleOperations = (
           entityName: operation.entityName,
           name: operation.name,
           ...(operation.description ? { description: operation.description } : {}),
-          ...(operation.input ? { input: toGraphSchemaDescriptor(operation.input) } : {}),
+          ...(operation.input
+            ? { input: toGraphSchemaDescriptor(operation.input as GraphSchemaDefinition) }
+            : {}),
         }))
       : [],
   );
@@ -1408,7 +1418,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
   const changeDialect = (nextDialect: ConsoleDialect, focus = true): boolean => {
     const view = viewRef.current;
     if (!view) return false;
-    const currentDialect = view.state.field(consoleExpressionDialect);
+    const currentDialect = view.state.field(consoleExpressionDialect) as ConsoleDialect;
     if (nextDialect === currentDialect) return true;
     const source = view.state.doc.toString();
     const converted =

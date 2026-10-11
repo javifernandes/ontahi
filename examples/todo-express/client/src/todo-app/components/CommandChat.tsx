@@ -1,4 +1,3 @@
-import type { CommittedMutationSet } from '@ontahi/core/data-graph';
 import type {
   TaskInputValue,
   TaskInteractionResponse,
@@ -6,6 +5,8 @@ import type {
   TaskPendingInteraction,
   TaskRunIdentity,
 } from '@ontahi/core/runtime/contracts';
+import type { RuntimeModelCommandResult } from '@ontahi/core/runtime/protocol';
+import { useModelCommand } from '@ontahi/react/graph';
 import {
   ArrowUp,
   ChevronDown,
@@ -18,13 +19,6 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-
-import {
-  submitModelCommand,
-  type ModelCommandResponder,
-  type ModelCommandSubmitter,
-  type TodoModelCommandResult,
-} from '../../model-commands.js';
 
 import { useDictationCountdown } from './useDictationCountdown.js';
 import { useSpeechInput } from './useSpeechInput.js';
@@ -57,18 +51,8 @@ const inputValue = (
   return options.find(option => encodeInputOption(option) === raw);
 };
 
-export const CommandChat = ({
-  onExecuted,
-  submit: execute = submitModelCommand,
-  respond,
-}: {
-  onExecuted: (
-    outcome: Extract<TodoModelCommandResult, { status: 'executed' }>,
-    committedMutations?: CommittedMutationSet,
-  ) => Promise<unknown>;
-  submit?: ModelCommandSubmitter;
-  respond?: ModelCommandResponder;
-}) => {
+export const CommandChat = () => {
+  const { submit: execute, respond } = useModelCommand();
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [pending, setPending] = useState(false);
@@ -114,11 +98,7 @@ export const CommandChat = ({
     );
   };
 
-  const applyOutcome = async (
-    id: number,
-    outcome: TodoModelCommandResult,
-    committedMutations?: CommittedMutationSet,
-  ) => {
+  const applyOutcome = (id: number, outcome: RuntimeModelCommandResult) => {
     if (outcome.status === 'pending') {
       voice.speak(outcome.message);
       setEntries(previous =>
@@ -138,14 +118,6 @@ export const CommandChat = ({
       return;
     }
     answer(id, outcome.status, outcome.message);
-    if (outcome.status === 'executed' && outcome.request?.kind !== 'graph-read') {
-      try {
-        if (committedMutations) await onExecuted(outcome, committedMutations);
-        else await onExecuted(outcome);
-      } catch {
-        answer(id, 'executed', `${outcome.message} Refresh the board to see the change.`);
-      }
-    }
   };
 
   const submit = async (event: FormEvent) => {
@@ -173,7 +145,7 @@ export const CommandChat = ({
         return;
       }
       const outcome = result.value;
-      await applyOutcome(id, outcome, result.committedMutations);
+      applyOutcome(id, outcome);
     } catch {
       // A lost response may follow a successful write. Never automatically resubmit.
       answer(id, 'failed', 'The server response was lost. Check the list before submitting again.');
@@ -184,7 +156,7 @@ export const CommandChat = ({
   };
 
   const respondToInteraction = async (entry: Entry, response: TaskInteractionResponse) => {
-    if (!respond || !entry.run || !entry.interaction || busy.current) return;
+    if (!entry.run || !entry.interaction || busy.current) return;
     busy.current = true;
     setPending(true);
     setEntries(previous =>
@@ -198,7 +170,7 @@ export const CommandChat = ({
         answer(entry.id, 'failed', result.message ?? 'The response could not be applied.');
         return;
       }
-      await applyOutcome(entry.id, result.value, result.committedMutations);
+      applyOutcome(entry.id, result.value);
     } catch {
       answer(
         entry.id,
@@ -255,7 +227,7 @@ export const CommandChat = ({
                     entry.reply
                   )}
                 </p>
-                {entry.status === 'interaction' && entry.interaction && respond ? (
+                {entry.status === 'interaction' && entry.interaction ? (
                   <div
                     className='command-chat-approval'
                     aria-label={

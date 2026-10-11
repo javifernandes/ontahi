@@ -1,22 +1,19 @@
-import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
-import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
-import { OntahiDevtools, type OntahiDevtoolsConsoleOptions } from '@ontahi/devtools/react';
+import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
+import { OntahiDevtools } from '@ontahi/devtools/react';
 import {
   createFetchRuntimeTransport,
   createRuntimeGraphClient,
   createWebSocketRuntimeTransport,
-  invalidateSemanticGraphReads,
   OntahiGraphProvider,
 } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { Tag, TodoItem, TodoList } from '../../src/generated/client-entities.js';
+import { clientApplication } from '../../src/generated/client-entities.js';
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
-import { createModelCommandResponder, createModelCommandSubmitter } from './model-commands.js';
 import {
   loadAuthenticationSession,
   type AuthenticationSession,
@@ -37,34 +34,18 @@ const redactTodoDiagnosticValue = (value: unknown): unknown => {
     ]),
   );
 };
-const diagnostics =
-  import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)
-    ? createOntahiDiagnostics({
-        capacity: 500,
-        capturePayloads: true,
-        redact: redactTodoDiagnosticValue,
-      })
-    : undefined;
-const baseHttpTransport = createFetchRuntimeTransport<never>();
-const baseWebSocketTransport = createWebSocketRuntimeTransport();
-const runtimeTransport = createRuntimeTransportRouter({
+const runtimeTransport = createDiagnosticRuntimeTransportRouter({
+  diagnostics:
+    import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)
+      ? {
+          capacity: 500,
+          capturePayloads: true,
+          redact: redactTodoDiagnosticValue,
+        }
+      : false,
   transports: {
-    http: diagnostics
-      ? instrumentRuntimeTransport({
-          diagnostics,
-          id: 'http',
-          kind: 'fetch',
-          transport: baseHttpTransport,
-        })
-      : baseHttpTransport,
-    websocket: diagnostics
-      ? instrumentRuntimeTransport({
-          diagnostics,
-          id: 'websocket',
-          kind: 'websocket',
-          transport: baseWebSocketTransport,
-        })
-      : baseWebSocketTransport,
+    http: createFetchRuntimeTransport<never>(),
+    websocket: createWebSocketRuntimeTransport(),
   },
   routing: {
     'graph.read': 'websocket',
@@ -74,18 +55,11 @@ const runtimeTransport = createRuntimeTransportRouter({
     'durable.operation.observe': 'websocket',
   },
 });
-const submitModelCommand = createModelCommandSubmitter(runtimeTransport);
-const respondToModelCommand = createModelCommandResponder(runtimeTransport);
-const graphClient = createRuntimeGraphClient({ runtimeTransport });
+const graphClient = createRuntimeGraphClient({ runtimeTransport, application: clientApplication });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
-  entities: [TodoList, TodoItem, Tag],
   initialDocument: 'TodoItem.where(completed = false).many()',
-  onActionExecuted: async ({ executionMetadata }) => {
-    if (executionMetadata?.committedMutations)
-      await invalidateSemanticGraphReads(queryClient, executionMetadata.committedMutations);
-  },
-} satisfies OntahiDevtoolsConsoleOptions;
+};
 
 const TodoClient = () => {
   const [authentication, setAuthentication] = useState<BootstrapState<AuthenticationSession>>({
@@ -114,21 +88,9 @@ const TodoClient = () => {
       {isExplorer ? (
         <Explorer />
       ) : (
-        <App
-          authentication={authentication}
-          setAuthentication={setAuthentication}
-          submitModelCommand={submitModelCommand}
-          respondToModelCommand={respondToModelCommand}
-        />
+        <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
-      {diagnostics ? (
-        <OntahiDevtools
-          console={{ ...devtoolsConsole, identity }}
-          clientCache={graphClient.clientCache}
-          diagnostics={diagnostics}
-          runtimeTransport={runtimeTransport}
-        />
-      ) : null}
+      <OntahiDevtools console={devtoolsConsole} />
     </OntahiGraphProvider>
   );
 };

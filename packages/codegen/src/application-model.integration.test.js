@@ -60,12 +60,12 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(analysis.diagnostics).toEqual([]);
     expect(analysis.clientEntities).toMatchObject([{ entityName: 'Tag', operations: [] }]);
-    expect(
-      renderGeneratedClientEntityModule({
-        entities: analysis.clientEntities,
-        schemaEntities: analysis.entities,
-      }),
-    ).toContain('export const Tag = defineClientEntity(TagSchema');
+    const source = renderGeneratedClientEntityModule({
+      entities: analysis.clientEntities,
+      schemaEntities: analysis.entities,
+    });
+    expect(source).toContain('export const Tag = defineClientEntity(TagSchema');
+    expect(source).toContain('export const clientApplication = defineClientApplication({');
   });
 
   it('inventories one imported Value declaration reused by multiple Operations', async () => {

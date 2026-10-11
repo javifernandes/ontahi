@@ -2,6 +2,7 @@
 
 import {
   createGraphClientCache,
+  type ClientApplication,
   type GraphClientCache,
   type OperationExecutionAffordance,
   type ReflectedEntityDataReader,
@@ -10,11 +11,16 @@ import {
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import { anonymousExecutionIdentity, type ExecutionIdentity } from '@ontahi/core/runtime/identity';
-import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
+import {
+  subscribeRuntimeProtocolExecutions,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
+import { QueryClientContext } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -29,6 +35,7 @@ import {
   createReflectedOperationInvoker,
   type ReflectedGraphOperationLike,
 } from './reflected-operation-invoker.js';
+import { invalidateSemanticGraphReads } from './semantic-invalidation.js';
 
 const noReflectedGraphOperations: readonly ReflectedGraphOperationLike[] = [];
 
@@ -44,6 +51,15 @@ const ReflectedEntityDataReaderContext = createContext<ReflectedEntityDataReader
 const ReflectedRelatedEntityDataReaderContext =
   createContext<ReflectedRelatedEntityDataReader | null>(null);
 const ReflectedOperationInvokerContext = createContext<ReflectedOperationInvoker | null>(null);
+
+export type OntahiClientContextValue = {
+  readonly application?: ClientApplication;
+  readonly clientCache: GraphClientCache;
+  readonly identity: ExecutionIdentity;
+  readonly runtimeTransport?: RuntimeTransport;
+};
+
+const OntahiClientContext = createContext<OntahiClientContextValue | undefined>(undefined);
 
 export type OntahiGraphProviderProps<
   TGraphRuntime = unknown,
@@ -96,6 +112,16 @@ export function OntahiGraphProvider<
   const configuredReflectedOperationInvoker =
     reflectedOperationInvoker ?? graphClient?.reflectedOperationInvoker;
   const graphClientCache = clientCache ?? graphClient?.clientCache ?? defaultClientCache;
+  const clientContext = useMemo<OntahiClientContextValue>(
+    () => ({
+      ...(graphClient?.application ? { application: graphClient.application } : {}),
+      clientCache: graphClientCache,
+      identity,
+      ...(resolvedRuntimeTransport ? { runtimeTransport: resolvedRuntimeTransport } : {}),
+    }),
+    [graphClient?.application, graphClientCache, identity, resolvedRuntimeTransport],
+  );
+  const queryClient = useContext(QueryClientContext);
   const bridgeAdapterMap = useMemo(
     () => new Map(resolvedOperationBridgeAdapters.map(adapter => [adapter.name, adapter])),
     [resolvedOperationBridgeAdapters],
@@ -112,32 +138,59 @@ export function OntahiGraphProvider<
     [configuredReflectedOperationInvoker, reflectedGraphOperations, resolvedGraphExecutor],
   );
 
+  useEffect(() => {
+    if (!resolvedRuntimeTransport || !queryClient) return;
+    return subscribeRuntimeProtocolExecutions(resolvedRuntimeTransport, async ({ metadata }) => {
+      await invalidateSemanticGraphReads(queryClient, metadata.committedMutations, {
+        ...(metadata.mutationCommitId
+          ? {
+              causedBy: {
+                kind: 'committed-mutations' as const,
+                commitIds: [metadata.mutationCommitId],
+                overflow: false,
+              },
+            }
+          : {}),
+        ...(resolvedRuntimeTransport.causality
+          ? {
+              associateRefreshes: resolvedRuntimeTransport.causality.associateGraphReadRefreshes,
+            }
+          : {}),
+      });
+      return true;
+    });
+  }, [queryClient, resolvedRuntimeTransport]);
+
   return (
-    <ExecutionIdentityContext.Provider value={identity}>
-      <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
-        <ReflectedRelatedEntityDataReaderContext.Provider
-          value={resolvedReflectedRelatedEntityDataReader ?? null}
-        >
-          <ReflectedEntityDataReaderContext.Provider
-            value={resolvedReflectedEntityDataReader ?? null}
+    <OntahiClientContext.Provider value={clientContext}>
+      <ExecutionIdentityContext.Provider value={identity}>
+        <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
+          <ReflectedRelatedEntityDataReaderContext.Provider
+            value={resolvedReflectedRelatedEntityDataReader ?? null}
           >
-            <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
-              <RuntimeTransportContext.Provider value={resolvedRuntimeTransport ?? null}>
-                <GraphClientCacheContext.Provider value={graphClientCache}>
-                  <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
-                    <GraphRuntimeContext.Provider value={runtime}>
-                      {children}
-                    </GraphRuntimeContext.Provider>
-                  </GraphExecutorContext.Provider>
-                </GraphClientCacheContext.Provider>
-              </RuntimeTransportContext.Provider>
-            </OperationBridgeAdaptersContext.Provider>
-          </ReflectedEntityDataReaderContext.Provider>
-        </ReflectedRelatedEntityDataReaderContext.Provider>
-      </ReflectedOperationInvokerContext.Provider>
-    </ExecutionIdentityContext.Provider>
+            <ReflectedEntityDataReaderContext.Provider
+              value={resolvedReflectedEntityDataReader ?? null}
+            >
+              <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
+                <RuntimeTransportContext.Provider value={resolvedRuntimeTransport ?? null}>
+                  <GraphClientCacheContext.Provider value={graphClientCache}>
+                    <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
+                      <GraphRuntimeContext.Provider value={runtime}>
+                        {children}
+                      </GraphRuntimeContext.Provider>
+                    </GraphExecutorContext.Provider>
+                  </GraphClientCacheContext.Provider>
+                </RuntimeTransportContext.Provider>
+              </OperationBridgeAdaptersContext.Provider>
+            </ReflectedEntityDataReaderContext.Provider>
+          </ReflectedRelatedEntityDataReaderContext.Provider>
+        </ReflectedOperationInvokerContext.Provider>
+      </ExecutionIdentityContext.Provider>
+    </OntahiClientContext.Provider>
   );
 }
+
+export const useOntahiClientContext = () => useContext(OntahiClientContext);
 
 export const useExecutionIdentity = () => useContext(ExecutionIdentityContext);
 

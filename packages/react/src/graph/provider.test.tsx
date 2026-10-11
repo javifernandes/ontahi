@@ -28,6 +28,7 @@ import {
   useHasReflectedOperationInvoker,
   useHasOperationBridgeRuntime,
   useOperationBridgeAdapter,
+  useOntahiClientContext,
   useReflectedEntityDataReader,
   useReflectedOperationExecutionAffordance,
   useReflectedOperationInvoker,
@@ -118,6 +119,23 @@ describe('OntahiGraphProvider', () => {
 
     expect(anonymous.result.current).toEqual({ principal: null });
     expect(authenticated.result.current).toBe(identity);
+  });
+
+  it('exposes the resolved client session as one optional integration context', () => {
+    const identity: ExecutionIdentity = {
+      principal: { subject: 'user:one', kind: 'user' },
+      cacheScope: 'session-1',
+    };
+    const clientCache = createGraphClientCache();
+    const runtimeTransport = { request: vi.fn() };
+    const application = { entities: [] };
+    const client = { clientCache, runtimeTransport, application };
+
+    const { result } = renderHook(() => useOntahiClientContext(), {
+      wrapper: createWrapper({ runtime: { name: 'browser' }, identity, client }),
+    });
+
+    expect(result.current).toEqual({ application, clientCache, identity, runtimeTransport });
   });
 
   it('exposes the host-supplied graph runtime and client cache', () => {

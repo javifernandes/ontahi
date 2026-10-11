@@ -8,43 +8,50 @@ evaluator.
 
 ## Connect the actual client
 
-Instrument the transport supplied to the application's graph client, then pass the same transport
-and cache to the development-only panel:
+Instrument the transport supplied to the application's graph client and retain the generated
+client application on that client. `OntahiGraphProvider` then owns the active client session and
+the development-only panel discovers its model, identity, cache and transport:
 
 ```tsx
-import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
+import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
-import { createFetchRuntimeTransport, createRuntimeGraphClient } from '@ontahi/react/graph';
-import { TodoItem, TodoList, Tag } from './generated/client-entities.js';
+import {
+  createFetchRuntimeTransport,
+  createRuntimeGraphClient,
+  OntahiGraphProvider,
+} from '@ontahi/react/graph';
+import { clientApplication } from './generated/client-entities.js';
 
-const diagnostics = createOntahiDiagnostics();
-const runtimeTransport = instrumentRuntimeTransport({
-  diagnostics,
-  id: 'http',
-  kind: 'fetch',
-  transport: createFetchRuntimeTransport(),
+const runtimeTransport = createDiagnosticRuntimeTransportRouter({
+  diagnostics: {},
+  transports: { http: createFetchRuntimeTransport() },
 });
-const graphClient = createRuntimeGraphClient({ runtimeTransport });
+const graphClient = createRuntimeGraphClient({
+  application: clientApplication,
+  runtimeTransport,
+});
 
-// Supply graphClient to the application's OntahiGraphProvider as well.
-<OntahiDevtools
-  diagnostics={diagnostics}
-  runtimeTransport={runtimeTransport}
-  clientCache={graphClient.clientCache}
-  console={{
-    entities: [TodoList, TodoItem, Tag],
-    identity,
-    initialDocument: 'TodoItem.where(completed = false).many()',
-  }}
-/>;
+<OntahiGraphProvider runtime={runtime} client={graphClient} identity={identity}>
+  <App />
+  <OntahiDevtools console={{ initialDocument: 'TodoItem.where(completed = false).many()' }} />
+</OntahiGraphProvider>;
 ```
 
-Here `identity` is the same execution identity given to the graph provider. Keep it synchronized
-when the session or cache scope changes. Generated client Entities supply their schemas, portable
-Operation metadata and input Graph Schema descriptors without importing server implementations into
-the browser. Passing bare Entity schemas remains supported for a read-only Console. Instantiate the
-diagnostics/client once per intended client lifetime, not on every render, and mount the panel only
-in the development contexts where this inspection is appropriate.
+Generated client Entities supply their schemas, portable Operation metadata and input Graph Schema
+descriptors without importing server implementations into the browser. The generated
+`clientApplication` groups that browser-safe inventory for client integrations. Instantiate the
+runtime client once per intended client lifetime, not on every render. The registered transport
+supplies its implementation kind while the router registration supplies its id; Devtools discovers
+the associated diagnostics store from that same runtime object. Pass `diagnostics: false` in builds
+where capture and the panel must remain disabled.
+
+Explicit Devtools `runtimeTransport`, `clientCache`, `console.entities`, and `console.identity`
+options remain overrides for standalone or unusual compositions. `console={false}` disables the
+automatically discovered Console while leaving the other diagnostic views available.
+
+Console mutations executed with the provider's Runtime Transport participate in the same semantic
+cache invalidation as application hooks. No Console-specific `onActionExecuted` callback is needed:
+committed mutation metadata refreshes overlapping active Graph Reads automatically.
 
 This Fetch example supports Run. For Observe, use a transport exposing `graph.observe`, with an
 authorized server observer; see [WebSocket transport](../03-runtimes/03-transport-and-http-ingress.md#mount-the-socket-on-the-host-server).

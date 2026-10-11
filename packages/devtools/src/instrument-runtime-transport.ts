@@ -22,6 +22,19 @@ import { instrumentGraphObservation } from './graph-observation.js';
 
 type AnyRuntimeTransport = RuntimeTransport<any>;
 
+const diagnosticsByRuntimeTransport = new WeakMap<AnyRuntimeTransport, OntahiDiagnostics>();
+
+export const getRuntimeTransportDiagnostics = (
+  transport: AnyRuntimeTransport,
+): OntahiDiagnostics | undefined => diagnosticsByRuntimeTransport.get(transport);
+
+export const associateRuntimeTransportDiagnostics = (
+  transport: AnyRuntimeTransport,
+  diagnostics: OntahiDiagnostics,
+) => {
+  diagnosticsByRuntimeTransport.set(transport, diagnostics);
+};
+
 export type InstrumentRuntimeTransportOptions<TTransport extends AnyRuntimeTransport> = {
   readonly diagnostics: OntahiDiagnostics;
   readonly id: string;
@@ -296,7 +309,7 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
       }
     : undefined;
 
-  return {
+  const instrumented = {
     ...transport,
     request,
     ...(transport.graph
@@ -327,4 +340,6 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
     },
     ...(routing ? { routing } : {}),
   } as TTransport;
+  associateRuntimeTransportDiagnostics(instrumented, diagnostics);
+  return instrumented;
 };
