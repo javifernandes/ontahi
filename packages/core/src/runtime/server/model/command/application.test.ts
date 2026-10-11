@@ -62,6 +62,85 @@ describe('Model Graph Command applications', () => {
     ).toBeUndefined();
   });
 
+  it('rejects malformed and closed command applications', () => {
+    const wrapped = (request: unknown, bindings: unknown = proposal.bindings) => ({
+      application: { kind: 'graph-command-application', request },
+      bindings,
+    });
+    const baseRequest = application.request;
+    const baseCommand = baseRequest.command;
+    if (baseCommand.kind !== 'entity-mutation-command' || baseCommand.action === 'create')
+      throw new Error('Expected an update command fixture.');
+
+    expect(parseModelGraphCommandApplication(undefined)).toBeUndefined();
+    expect(parseModelGraphCommandApplication({ application: null, bindings: {} })).toBeUndefined();
+    expect(parseModelGraphCommandApplication({ application, bindings: null })).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication({
+        application: { kind: 'graph-read-application', request: baseRequest },
+        bindings: proposal.bindings,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication({
+        application: { kind: 'graph-command-application', request: null },
+        bindings: proposal.bindings,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(wrapped({ ...baseRequest, kind: 'graph-read' })),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(wrapped({ ...baseRequest, version: 2 })),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(wrapped({ ...baseRequest, command: null })),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(
+        wrapped({ ...baseRequest, command: { ...baseCommand, kind: 'relation-command' } }),
+      ),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(
+        wrapped({ ...baseRequest, command: { ...baseCommand, action: 'create' } }),
+      ),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(
+        wrapped({ ...baseRequest, command: { ...baseCommand, target: null } }),
+      ),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(
+        wrapped({
+          ...baseRequest,
+          command: { ...baseCommand, target: { ...baseCommand.target, kind: 'ref' } },
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication(
+        wrapped({
+          ...baseRequest,
+          command: {
+            ...baseCommand,
+            target: { ...baseCommand.target, expression: null },
+          },
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphCommandApplication({
+        application: {
+          kind: 'graph-command-application',
+          request,
+        },
+        bindings: {},
+      }),
+    ).toBeUndefined();
+  });
+
   it('projects reference predicate Holes as authorized entity matches', () => {
     expect(modelGraphCommandApplicationEntityMatches(proposal, [List, Item])).toEqual([
       { target: List, match: { kind: 'entity-match', text: 'Later' } },
