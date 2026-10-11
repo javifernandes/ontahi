@@ -19,10 +19,14 @@ import {
   parseModelOperationApplication,
   type ModelOperationApplicationProposal,
 } from './application/operation.js';
+import {
+  parseModelGraphCommandApplication,
+  type ModelGraphCommandApplicationProposal,
+} from './command/application.js';
 import { validateModelGraphCommand, type ModelGraphCommandExposure } from './command/graph.js';
 import { createModelContextSchema } from './context-schema.js';
 import {
-  openModelGraphReadSchema,
+  openModelEntityReferenceSchema,
   parseModelGraphReadApplication,
   type ModelGraphReadApplicationProposal,
 } from './read/application.js';
@@ -36,6 +40,16 @@ export type ModelRequest = {
   signal: AbortSignal;
 };
 export type ModelProvider = { generate(request: ModelRequest): Promise<unknown> };
+
+const isSelectionTargetedCommandSchema = (schema: GraphJsonSchema): boolean => {
+  if (!('properties' in schema) || !isRecord(schema.properties)) return false;
+  const command = schema.properties.command;
+  if (!isRecord(command) || !isRecord(command.properties)) return false;
+  const target = command.properties.target;
+  if (!isRecord(target) || !isRecord(target.properties)) return false;
+  const kind = target.properties.kind;
+  return isRecord(kind) && kind.const === 'selection';
+};
 
 const modelOperationHoleBindingSchema: GraphJsonSchema = {
   anyOf: [
@@ -94,6 +108,7 @@ export type ModelInterpretationValue =
     }
   | ({ status: 'application' } & (
       | ModelGraphReadApplicationProposal
+      | ModelGraphCommandApplicationProposal
       | ModelOperationApplicationProposal
     ))
   | { status: 'help' }
@@ -140,7 +155,10 @@ export const parseModelInterpretation = (raw: unknown): ModelInterpretationValue
       if (request) return { status: 'resolved', request };
     }
     if (raw.status === 'application' && keys.length === 3) {
-      const proposal = parseModelGraphReadApplication(raw) ?? parseModelOperationApplication(raw);
+      const proposal =
+        parseModelGraphReadApplication(raw) ??
+        parseModelGraphCommandApplication(raw) ??
+        parseModelOperationApplication(raw);
       if (proposal) return { status: 'application', ...proposal };
     }
     if (
@@ -253,10 +271,14 @@ export const interpretModelRequest = async ({
       input: project(toGraphJsonSchema(operation.input as GraphSchemaDefinition)),
     };
   });
-  const commandCatalog = commands.map(command => ({
-    description: command.description,
-    request: project(toGraphJsonSchema(command.request)),
-  }));
+  const commandCatalog = commands.map(command => {
+    const request = toGraphJsonSchema(command.request);
+    return {
+      description: command.description,
+      request: project(request),
+      acceptsApplication: isSelectionTargetedCommandSchema(request),
+    };
+  });
   const readCatalog = reads.map(read => ({
     description: read.description,
     request: project(toGraphJsonSchema(read.request)),
@@ -264,7 +286,7 @@ export const interpretModelRequest = async ({
   const serialized = JSON.stringify({
     context,
     reads: readCatalog,
-    commands: commandCatalog,
+    commands: commandCatalog.map(({ description, request }) => ({ description, request })),
     operations: catalog,
   });
   if (serialized.length > maxContextCharacters)
@@ -306,7 +328,7 @@ export const interpretModelRequest = async ({
             required: ['kind', 'request'],
             properties: {
               kind: { const: 'graph-read-application' },
-              request: openModelGraphReadSchema(read.request),
+              request: openModelEntityReferenceSchema(read.request),
             },
           },
           bindings: {
@@ -323,6 +345,37 @@ export const interpretModelRequest = async ({
           },
         },
       })),
+      ...commandCatalog
+        .filter(command => command.acceptsApplication)
+        .map(command => ({
+          type: 'object' as const,
+          additionalProperties: false,
+          required: ['status', 'application', 'bindings'],
+          properties: {
+            status: { const: 'application' },
+            application: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['kind', 'request'],
+              properties: {
+                kind: { const: 'graph-command-application' },
+                request: openModelEntityReferenceSchema(command.request),
+              },
+            },
+            bindings: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['kind', 'text'],
+                properties: {
+                  kind: { const: 'entity-match' },
+                  text: { type: 'string', minLength: 1 },
+                },
+              },
+            },
+          },
+        })),
       ...catalog.map(operation => ({
         type: 'object' as const,
         additionalProperties: false,
@@ -376,11 +429,12 @@ export const interpretModelRequest = async ({
     'Interpret the user request. Return JSON only.',
     'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
     'For a graph read whose entity reference is named but not supplied as a canonical Ref, return {status:"application",application:{kind:"graph-read-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put {kind:"hole",id:"holeId"} only in the unresolved reference predicate value. Keep all known predicates closed. Hole ids identify slots only; put the user wording in bindings.',
+    'For a selection-targeted graph command whose reference predicate is named but unresolved, return the advertised request as {status:"application",application:{kind:"graph-command-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put the Hole only in the unresolved reference predicate. Preserve the command action, closed predicates, and mutation values exactly.',
     'For an advertised operation with missing arguments, return the advertised operation-application form. Wrap known arguments as {kind:"value",value:...} and missing arguments as {kind:"hole",id:"..."}. For a named unresolved Entity Ref bind {kind:"entity-match",text:"..."}; for an omitted Entity Ref bind {kind:"entity-choice",prompt:"..."}; for an omitted string bind {kind:"free-input",prompt:"..."}. Provide exactly one binding per Hole.',
     'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
-    'For advertised reads and operations, prefer an application with entity-match when the user names an Entity target, even if context also contains its canonical Ref. For graph commands, copy entity references and selections from the supplied context. Use declared input fields directly. Never replace canonical references with names or invent IDs.',
+    'For advertised reads, selection-targeted graph commands, and operations, prefer an application with entity-match when the user names an Entity target, even if context also contains its canonical Ref. Use declared input fields directly. Never replace canonical references with names or invent IDs.',
     'Preserve user-supplied entity names and string field values exactly, including casing, accents, and spelling. Never translate, correct, or normalize them.',
     'For missing or ambiguous targets, unsupported requests, or multiple actions return status "unresolved" and a reason explaining the specific problem to the user. Never guess a target or execute part of a request.',
     'When exactly one required argument is missing or ambiguous and every valid value is present in context, return {status:"choice",prompt:"...",options:[...]}. Each option must have a stable context-derived id, a concise natural-language label, and the complete canonical request that should execute if selected. All options must represent the same action and differ only in the ambiguous argument. Never use choice to ask for confirmation.',

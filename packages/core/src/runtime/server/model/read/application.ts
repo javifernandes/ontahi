@@ -60,22 +60,22 @@ const isRefSchema = (schema: GraphJsonSchema): boolean => {
 };
 
 /** Adds a Hole alternative wherever an advertised request accepts an Entity Ref. */
-export const openModelGraphReadSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
+export const openModelEntityReferenceSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   if (isRefSchema(schema)) return { anyOf: [schema, holeSchema] };
   if ('anyOf' in schema && Array.isArray(schema.anyOf))
-    return { ...schema, anyOf: schema.anyOf.map(openModelGraphReadSchema) };
+    return { ...schema, anyOf: schema.anyOf.map(openModelEntityReferenceSchema) };
   if ('properties' in schema && isRecord(schema.properties))
     return {
       ...schema,
       properties: Object.fromEntries(
         Object.entries(schema.properties).map(([key, value]) => [
           key,
-          openModelGraphReadSchema(value as GraphJsonSchema),
+          openModelEntityReferenceSchema(value as GraphJsonSchema),
         ]),
       ),
     };
   if ('items' in schema && isRecord(schema.items))
-    return { ...schema, items: openModelGraphReadSchema(schema.items as GraphJsonSchema) };
+    return { ...schema, items: openModelEntityReferenceSchema(schema.items as GraphJsonSchema) };
   return schema;
 };
 

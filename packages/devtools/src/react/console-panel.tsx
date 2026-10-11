@@ -20,10 +20,15 @@ import {
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
 import {
+  graphCommandApplicationHoles,
+  graphCommandApplicationHolePositions,
   graphReadApplicationHoles,
   graphReadApplicationHolePositions,
+  lowerGraphCommandApplication,
   lowerGraphReadApplication,
+  substituteGraphCommandApplication,
   substituteGraphReadApplication,
+  type GraphCommandApplication,
   type GraphReadApplication,
 } from '@ontahi/core/experimental/semantic-program';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
@@ -258,7 +263,9 @@ const parseConsoleHoleInput = (input: string): unknown => {
   return value;
 };
 
-type PreparedOpenGraphRead =
+type ConsoleOpenApplication = GraphReadApplication | GraphCommandApplication;
+
+type PreparedOpenApplication =
   | { readonly execution?: undefined; readonly error?: undefined }
   | { readonly execution: ConsoleRequest; readonly error?: undefined }
   | { readonly execution?: undefined; readonly error: string };
@@ -266,14 +273,19 @@ type PreparedOpenGraphRead =
 const consoleHoleBinding = (inputs: Readonly<Record<string, unknown>>, holeId: string): unknown =>
   Object.prototype.hasOwnProperty.call(inputs, holeId) ? inputs[holeId] : undefined;
 
-const prepareOpenGraphRead = (
-  application: GraphReadApplication | undefined,
+const applicationHoles = (application: ConsoleOpenApplication): readonly string[] =>
+  application.kind === 'graph-read-application'
+    ? graphReadApplicationHoles(application)
+    : graphCommandApplicationHoles(application);
+
+const prepareOpenApplication = (
+  application: ConsoleOpenApplication | undefined,
   entities: readonly AnyEntityDefinition[],
   inputs: Readonly<Record<string, unknown>>,
-): PreparedOpenGraphRead => {
+): PreparedOpenApplication => {
   if (!application) return {};
   let current = application;
-  for (const holeId of graphReadApplicationHoles(application)) {
+  for (const holeId of applicationHoles(application)) {
     const binding = consoleHoleBinding(inputs, holeId);
     if (binding === undefined || (typeof binding === 'string' && !binding.trim())) return {};
     let parsedValue: unknown = binding;
@@ -286,9 +298,15 @@ const prepareOpenGraphRead = (
         return { error: `?${holeId} is not valid JSON.` };
       }
     }
-    let substituted = substituteGraphReadApplication(current, entities, holeId, parsedValue);
+    let substituted =
+      current.kind === 'graph-read-application'
+        ? substituteGraphReadApplication(current, entities, holeId, parsedValue)
+        : substituteGraphCommandApplication(current, entities, holeId, parsedValue);
     if (!substituted.success && rawValue !== undefined && parsedValue !== rawValue)
-      substituted = substituteGraphReadApplication(current, entities, holeId, rawValue);
+      substituted =
+        current.kind === 'graph-read-application'
+          ? substituteGraphReadApplication(current, entities, holeId, rawValue)
+          : substituteGraphCommandApplication(current, entities, holeId, rawValue);
     if (!substituted.success)
       return {
         error:
@@ -296,9 +314,20 @@ const prepareOpenGraphRead = (
             ? substituted.issues.map(issue => issue.message).join(' ')
             : `Unknown Hole ?${holeId}.`,
       };
-    current = substituted.application;
+    current = substituted.application as ConsoleOpenApplication;
   }
-  const lowered = lowerGraphReadApplication(current, entities);
+  if (current.kind === 'graph-read-application') {
+    const lowered = lowerGraphReadApplication(current, entities);
+    if (!lowered.success)
+      return {
+        error:
+          lowered.reason === 'open-application'
+            ? `Complete ${lowered.holes.map(id => `?${id}`).join(', ')} before running.`
+            : lowered.error.error.message,
+      };
+    return { execution: { family: 'graph.read', body: lowered.request } };
+  }
+  const lowered = lowerGraphCommandApplication(current, entities);
   if (!lowered.success)
     return {
       error:
@@ -306,7 +335,7 @@ const prepareOpenGraphRead = (
           ? `Complete ${lowered.holes.map(id => `?${id}`).join(', ')} before running.`
           : lowered.error.error.message,
     };
-  return { execution: { family: 'graph.read', body: lowered.request } };
+  return { execution: { family: 'graph.command', body: lowered.request } };
 };
 
 type ConsoleReferenceHole = {
@@ -321,11 +350,14 @@ type ConsoleHoleField = {
 };
 
 const holeFields = (
-  application: GraphReadApplication,
+  application: ConsoleOpenApplication,
   entities: readonly AnyEntityDefinition[],
   holeId: string,
 ): readonly ConsoleHoleField[] =>
-  graphReadApplicationHolePositions(application).flatMap(position => {
+  (application.kind === 'graph-read-application'
+    ? graphReadApplicationHolePositions(application)
+    : graphCommandApplicationHolePositions(application)
+  ).flatMap(position => {
     if (position.holeId !== holeId) return [];
     const field = entities.find(entity => entity.name === position.entityName)?.fields[
       position.fieldName
@@ -334,7 +366,7 @@ const holeFields = (
   });
 
 const referenceHole = (
-  application: GraphReadApplication,
+  application: ConsoleOpenApplication,
   entities: readonly AnyEntityDefinition[],
   holeId: string,
 ): ConsoleReferenceHole | undefined => {
@@ -363,7 +395,7 @@ type ConsoleBooleanHole = {
 };
 
 const booleanHole = (
-  application: GraphReadApplication,
+  application: ConsoleOpenApplication,
   entities: readonly AnyEntityDefinition[],
   holeId: string,
 ): ConsoleBooleanHole | undefined => {
@@ -378,7 +410,7 @@ const booleanHole = (
 };
 
 const holeDescription = (
-  application: GraphReadApplication,
+  application: ConsoleOpenApplication,
   entities: readonly AnyEntityDefinition[],
   holeId: string,
 ): string | undefined => {
@@ -1079,9 +1111,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
-  const openApplication =
-    analysis.openExecution?.family === 'graph.read' ? analysis.openExecution.body : undefined;
-  const holeIds = openApplication ? graphReadApplicationHoles(openApplication) : [];
+  const openApplication = analysis.openExecution?.body;
+  const holeIds = openApplication ? applicationHoles(openApplication) : [];
   const referenceHoles = useMemo(
     () =>
       new Map(
@@ -1118,11 +1149,11 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       ),
     [openApplication, entityDefinitions],
   );
-  const preparedOpenRead = useMemo(
-    () => prepareOpenGraphRead(openApplication, entityDefinitions, holeInputs),
+  const preparedOpenApplication = useMemo(
+    () => prepareOpenApplication(openApplication, entityDefinitions, holeInputs),
     [openApplication, entityDefinitions, holeInputs],
   );
-  const effectiveExecution = analysis.execution ?? preparedOpenRead.execution;
+  const effectiveExecution = analysis.execution ?? preparedOpenApplication.execution;
   const durableInvocation =
     analysis.execution?.family === 'operation' &&
     durableOperationIds.has(analysis.execution.body.operationId);
@@ -1136,11 +1167,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       limit,
       dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
     });
-    const executedOpenApplication =
-      executedAnalysis.openExecution?.family === 'graph.read'
-        ? executedAnalysis.openExecution.body
-        : undefined;
-    const prepared = prepareOpenGraphRead(executedOpenApplication, entityDefinitions, holeInputs);
+    const executedOpenApplication = executedAnalysis.openExecution?.body;
+    const prepared = prepareOpenApplication(executedOpenApplication, entityDefinitions, holeInputs);
     const execution = executedAnalysis.execution ?? prepared.execution;
     if (!execution) {
       setResult(previous => ({
@@ -1648,7 +1676,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           viewRef={viewRef}
         />
         {holeIds.length > 0 ? (
-          <div style={styles.consoleHoleBindings} aria-label='Graph Read Hole values'>
+          <div style={styles.consoleHoleBindings} aria-label='Application Hole values'>
             {holeIds.map(holeId => {
               const setHoleInput = (value: unknown) =>
                 setHoleInputs(previous => ({ ...previous, [holeId]: value }));
@@ -1694,9 +1722,9 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                 </div>
               );
             })}
-            {preparedOpenRead.error ? (
+            {preparedOpenApplication.error ? (
               <span role='alert' style={styles.consoleDiagnostic}>
-                {preparedOpenRead.error}
+                {preparedOpenApplication.error}
               </span>
             ) : null}
           </div>

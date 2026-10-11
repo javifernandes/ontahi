@@ -39,7 +39,10 @@ export const todoItemMutationPolicy = {
       fields: ['list', 'title', 'completed'],
       if: ['title', 'completed'],
       result: ['id', 'list', 'title', 'completed'],
-      selection: { fields: { id: ['eq'], title: ['eq'] }, allowAll: true },
+      selection: {
+        fields: { id: ['eq'], title: ['eq'], list: ['eq'], completed: ['eq'] },
+        allowAll: true,
+      },
       authorize: authorizeCompletion,
     },
   },

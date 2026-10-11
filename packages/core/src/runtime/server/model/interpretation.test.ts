@@ -155,6 +155,7 @@ describe('model operation interpretation', () => {
     expect(alternatives[1]).toMatchObject({
       properties: { request: { properties: { kind: { const: 'graph-command' } } } },
     });
+    expect(JSON.stringify(alternatives)).not.toContain('graph-command-application');
     expect(modelRequest!.instructions).toContain(
       'For an editable property change that no advertised operation describes',
     );

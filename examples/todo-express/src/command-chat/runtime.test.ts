@@ -333,7 +333,84 @@ describe('Todo canonical model requests', () => {
     });
     expect(dataset().TodoItem).toHaveLength(2);
     const catalog = JSON.parse(generate.mock.calls[0]![0].context);
-    expect(catalog.commands).toEqual([]);
+    expect(catalog.commands).toHaveLength(1);
+    expect(catalog.commands[0].description).toBe(
+      'Complete every unfinished item selected by list.',
+    );
+  });
+  it('resolves and executes a Selection-targeted update with a named list Hole', async () => {
+    dataset().TodoItem = [
+      ...dataset().TodoItem!,
+      { id: 'coffee', list: 'list-1', title: 'buy coffee', completed: false },
+    ];
+    const generate = vi.fn<ModelProvider['generate']>(async () => ({
+      status: 'application',
+      application: {
+        kind: 'graph-command-application',
+        request: {
+          version: 3,
+          kind: 'graph-command',
+          command: {
+            kind: 'entity-mutation-command',
+            action: 'update',
+            entityName: 'TodoItem',
+            target: {
+              kind: 'selection',
+              entityName: 'TodoItem',
+              expression: {
+                kind: 'and',
+                operands: [
+                  {
+                    kind: 'predicate',
+                    fieldName: 'list',
+                    operator: 'eq',
+                    value: { kind: 'hole', id: 'list' },
+                  },
+                  {
+                    kind: 'predicate',
+                    fieldName: 'completed',
+                    operator: 'eq',
+                    value: false,
+                  },
+                ],
+              },
+            },
+            values: { completed: true },
+          },
+        },
+      },
+      bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
+    }));
+    bind(generate);
+
+    const result = await submit('complete all items in Shopping');
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      message: 'Selected items completed.',
+      request: {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          action: 'update',
+          target: {
+            expression: {
+              operands: [
+                { fieldName: 'list', value: { locator: { id: 'list-1' } } },
+                { fieldName: 'completed', value: false },
+              ],
+            },
+          },
+          values: { completed: true },
+        },
+      },
+    });
+    expect(dataset().TodoItem).toEqual([
+      { id: 'tea', list: 'list-1', title: 'buy tea', completed: true },
+      { id: 'other', list: 'list-2', title: 'buy apples', completed: false },
+      { id: 'coffee', list: 'list-1', title: 'buy coffee', completed: true },
+    ]);
+    expect(generate.mock.calls[0]![0].instructions).toContain('selection-targeted graph command');
   });
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());

@@ -623,6 +623,34 @@ describe('Console actions', () => {
     ).toBe('delete TodoList where name = "Inbox"');
   });
 
+  it('keeps Selection mutation predicate Holes open until they are bound', () => {
+    for (const [source, dialect] of [
+      ['TodoList.where(name = ?list).update({ name: "Today" })', 'ts'],
+      ['update TodoList where name = ?list with { name: "Today" }', 'declarative'],
+    ] as const) {
+      const analysis = analyzeConsoleDocument(source, application, { dialect });
+      expect(analysis.semanticDiagnostics).toEqual([]);
+      expect(analysis.execution).toBeUndefined();
+      expect(analysis.openExecution).toMatchObject({
+        family: 'graph.command',
+        body: {
+          kind: 'graph-command-application',
+          request: {
+            version: 3,
+            command: {
+              action: 'update',
+              target: {
+                kind: 'selection',
+                expression: { fieldName: 'name', value: { kind: 'hole', id: 'list' } },
+              },
+              values: { name: 'Today' },
+            },
+          },
+        },
+      });
+    }
+  });
+
   it('requires separately advertised Selection mutation capabilities', () => {
     const withoutSelectionCommands = {
       ...application,

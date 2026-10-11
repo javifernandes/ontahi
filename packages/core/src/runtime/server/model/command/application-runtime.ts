@@ -210,6 +210,17 @@ const defaultCommandExposures = (
           description,
           message,
         }),
+        ...(update.selection && Object.keys(update.selection.fields).length > 0
+          ? [
+              createModelEntityMutationExposure(policy, {
+                action,
+                values: update.fields,
+                selection: Object.keys(update.selection.fields),
+                description: `${description.slice(0, -1)} by Selection.`,
+                message,
+              }),
+            ]
+          : []),
       ];
     }
     const remove = policy.actions.delete!;
@@ -220,6 +231,16 @@ const defaultCommandExposures = (
         description,
         message,
       }),
+      ...(remove.selection && Object.keys(remove.selection.fields).length > 0
+        ? [
+            createModelEntityMutationExposure(policy, {
+              action,
+              selection: Object.keys(remove.selection.fields),
+              description: `${description.slice(0, -1)} by Selection.`,
+              message,
+            }),
+          ]
+        : []),
     ];
   });
 };

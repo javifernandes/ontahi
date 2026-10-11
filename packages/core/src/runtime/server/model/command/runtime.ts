@@ -1,4 +1,5 @@
 import {
+  entityRefsEqual,
   type AnyEntityDefinition,
   type AnyGraphObjectDefinition,
   type GraphCommandDispatchResponse,
@@ -45,6 +46,11 @@ import {
   type ModelGraphReadResult,
 } from '../read/graph.js';
 
+import {
+  modelGraphCommandApplicationEntityMatches,
+  resolveModelGraphCommandApplication,
+  type ModelGraphCommandApplicationProposal,
+} from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './graph.js';
 
 export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | 'description'> & {
@@ -277,6 +283,56 @@ export const createModelCommandRuntime = ({
         return reason
           ? { status: 'unresolved', message: reason }
           : { status: 'proposed', request: resolved.request };
+      }
+      if (proposal.application.kind === 'graph-command-application') {
+        const commandProposal = proposal as typeof proposal & ModelGraphCommandApplicationProposal;
+        const entityCandidates = [...(initial.entityCandidates ?? [])];
+        if (resolveEntityMatch) {
+          const matches = modelGraphCommandApplicationEntityMatches(commandProposal, graphEntities);
+          if (!matches)
+            return {
+              status: 'unresolved',
+              message: 'The proposed command has an unsupported Hole.',
+            };
+          for (const match of matches) {
+            const result = await resolveEntityMatch(
+              { target: match.target, text: match.match.text },
+              signal,
+            );
+            if (result.status === 'unresolved')
+              return { status: 'unresolved', message: result.reason };
+            entityCandidates.push(...result.candidates);
+          }
+        }
+        const resolved = resolveModelGraphCommandApplication({
+          proposal: commandProposal,
+          entities: graphEntities,
+          candidates: entityCandidates.filter(
+            (candidate, index, all) =>
+              all.findIndex(item => entityRefsEqual(item.ref, candidate.ref)) === index,
+          ),
+        });
+        if (resolved.status === 'unresolved')
+          return { status: 'unresolved', message: resolved.reason };
+        const candidates =
+          resolved.status === 'resolved'
+            ? [resolved.request]
+            : resolved.options.map(option => option.request);
+        for (const candidate of candidates) {
+          let exposure: ModelGraphCommandExposure;
+          try {
+            exposure = resolveModelGraphCommand(candidate, initial.commands ?? []);
+          } catch (error) {
+            if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
+              return { status: 'unresolved', message: error.message };
+            throw error;
+          }
+          const reason = exposure.validate(candidate);
+          if (reason) return { status: 'unresolved', message: reason };
+        }
+        return resolved.status === 'resolved'
+          ? { status: 'proposed', request: resolved.request }
+          : resolved;
       }
       const readProposal = proposal as typeof proposal & ModelGraphReadApplicationProposal;
       const entityCandidates = [...(initial.entityCandidates ?? [])];

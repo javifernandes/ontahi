@@ -117,6 +117,18 @@ update Tag where { name = "Important" } with { color: "#dd6658" }
 delete Tag where { name = "Important" }
 ```
 
+Selection predicates may remain open with named Holes:
+
+```text
+TodoItem.where(list = ?list and completed = false).update({ completed: true })
+update TodoItem where list = ?list and completed = false with { completed: true }
+```
+
+The Console renders those parameters using the same schema-derived controls as open Graph Reads.
+Run remains disabled until every predicate and payload Hole is valid. Closing the application
+produces the ordinary version 3 Graph Command; the receiver still applies its Selection mutation
+policy and authorization at execution time.
+
 These Commands may affect zero, one, or many Entities. Their result contains one mutation fact per
 affected Entity, including its identity, so Devtools reconciles every returned row in the client
 cache. The server policy separately allowlists Selection actions, predicate Fields, and operators;

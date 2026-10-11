@@ -37,13 +37,20 @@ type ModelEntityMutationConditionShape<TEntity extends AnyEntityDefinition> = {
   conditionLiterals?: Partial<Record<EntityFieldName<TEntity>, JsonPrimitive>>;
 };
 
+type ModelEntityMutationSelectionShape<TEntity extends AnyEntityDefinition> = {
+  selection?: readonly EntityFieldName<TEntity>[];
+  selectionLiterals?: Partial<Record<EntityFieldName<TEntity>, JsonPrimitive>>;
+};
+
 export type ModelEntityMutationExposureOptions<TEntity extends AnyEntityDefinition> =
   ModelEntityMutationPresentation &
     (
       | ({ action: 'create' } & ModelEntityMutationValueShape<TEntity>)
       | ({ action: 'update' } & ModelEntityMutationValueShape<TEntity> &
-          ModelEntityMutationConditionShape<TEntity>)
-      | ({ action: 'delete' } & ModelEntityMutationConditionShape<TEntity>)
+          ModelEntityMutationConditionShape<TEntity> &
+          ModelEntityMutationSelectionShape<TEntity>)
+      | ({ action: 'delete' } & ModelEntityMutationConditionShape<TEntity> &
+          ModelEntityMutationSelectionShape<TEntity>)
     );
 
 const strict = (fields: GraphSchemaFields) => graphSchema.object(fields, { unknownKeys: 'strict' });
@@ -51,7 +58,7 @@ const strict = (fields: GraphSchemaFields) => graphSchema.object(fields, { unkno
 const assertFieldsAllowed = (
   entityName: string,
   action: string,
-  purpose: 'values' | 'condition',
+  purpose: 'values' | 'condition' | 'selection',
   requested: readonly string[],
   allowed: readonly string[] | undefined,
 ) => {
@@ -112,7 +119,7 @@ const projectFields = (
 
 const assertLiteralFieldsProjected = (
   entityName: string,
-  purpose: 'values' | 'condition',
+  purpose: 'values' | 'condition' | 'selection',
   fields: readonly string[],
   literals: Partial<Record<string, JsonPrimitive>> | undefined,
 ) => {
@@ -141,6 +148,8 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
 
   const condition = options.action === 'create' ? undefined : options.condition;
   const conditionLiterals = options.action === 'create' ? undefined : options.conditionLiterals;
+  const selection = options.action === 'create' ? undefined : options.selection;
+  const selectionLiterals = options.action === 'create' ? undefined : options.selectionLiterals;
   const values = options.action === 'delete' ? undefined : options.values;
   const valueLiterals = options.action === 'delete' ? undefined : options.valueLiterals;
 
@@ -166,12 +175,72 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
   } else if (conditionLiterals && Object.keys(conditionLiterals).length > 0) {
     throw new Error(`Model ${policy.entity.name} exposure has condition literals without fields.`);
   }
+  if (selection) {
+    if (condition?.length)
+      throw new Error(
+        `Model ${policy.entity.name} ${options.action} exposure cannot combine Selection and exact conditions.`,
+      );
+    assertFieldsAllowed(
+      policy.entity.name,
+      options.action,
+      'selection',
+      selection,
+      affordance.target?.selection ? Object.keys(affordance.target.selection.fields) : undefined,
+    );
+    assertLiteralFieldsProjected(policy.entity.name, 'selection', selection, selectionLiterals);
+  } else if (selectionLiterals && Object.keys(selectionLiterals).length > 0) {
+    throw new Error(`Model ${policy.entity.name} exposure has Selection literals without fields.`);
+  }
+
+  const selectionExpression = selection
+    ? (() => {
+        const predicates = selection.map(fieldName => {
+          const field = policy.entity.fields[fieldName]!;
+          const hasLiteral = Object.prototype.hasOwnProperty.call(
+            selectionLiterals ?? {},
+            fieldName,
+          );
+          const value = hasLiteral
+            ? graphSchema.literal(selectionLiterals![fieldName]!)
+            : (() => {
+                const required = { ...field };
+                delete required.optional;
+                delete required.defaultValue;
+                return required;
+              })();
+          return strict({
+            kind: graphSchema.literal('predicate'),
+            fieldName: graphSchema.literal(fieldName),
+            operator: graphSchema.literal('eq'),
+            value,
+          });
+        });
+        const predicate = graphSchema.union(predicates);
+        return graphSchema.union([
+          predicate,
+          strict({
+            kind: graphSchema.literal('and'),
+            operands: graphSchema.array(predicate, { minItems: 1, maxItems: selection.length }),
+          }),
+        ]);
+      })()
+    : undefined;
 
   const command = strict({
     kind: graphSchema.literal('entity-mutation-command'),
     action: graphSchema.literal(options.action),
     entityName: graphSchema.literal(policy.entity.name),
-    ...(affordance.target ? { target: affordance.target.exact.reference } : {}),
+    ...(selectionExpression
+      ? {
+          target: strict({
+            kind: graphSchema.literal('selection'),
+            entityName: graphSchema.literal(policy.entity.name),
+            expression: selectionExpression,
+          }),
+        }
+      : affordance.target
+        ? { target: affordance.target.exact.reference }
+        : {}),
     ...(values
       ? {
           values: strict(
@@ -203,7 +272,7 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
   return {
     description: options.description,
     request: strict({
-      version: graphSchema.literal(condition ? 2 : 1),
+      version: graphSchema.literal(selectionExpression ? 3 : condition ? 2 : 1),
       kind: graphSchema.literal('graph-command'),
       command,
     }),

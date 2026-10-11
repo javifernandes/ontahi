@@ -7,6 +7,8 @@ import {
   type SelectionExpression,
 } from '@ontahi/core/data-graph';
 import {
+  graphCommandApplication,
+  graphCommandApplicationHoles,
   graphReadApplication,
   graphReadApplicationHoles,
 } from '@ontahi/core/experimental/semantic-program';
@@ -264,10 +266,11 @@ export const analyzeConsoleSyntax = (
       };
     }
     try {
+      const request = toGraphCommandRequest(command as never);
       return {
         ...parsed,
         semanticDiagnostics: [],
-        execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
+        execution: { family: 'graph.command', body: request },
       };
     } catch {
       return diagnostic(
@@ -324,7 +327,7 @@ export const analyzeConsoleSyntax = (
           'console.semantic.invalid-command',
           'Entity Selection Command requires a complete where predicate.',
         );
-      const resolved = resolveExpression(filter.selection, entity);
+      const resolved = resolveExpression(filter.selection, entity, { allowHoles: true });
       if (!resolved.expression || resolved.diagnostics.length)
         return { ...parsed, semanticDiagnostics: resolved.diagnostics };
       selection = resolved.expression;
@@ -396,10 +399,18 @@ export const analyzeConsoleSyntax = (
                   },
             };
     try {
+      const request = toGraphCommandRequest(command as never);
+      const applicationTerm = graphCommandApplication(request);
+      if (graphCommandApplicationHoles(applicationTerm).length > 0)
+        return {
+          ...parsed,
+          semanticDiagnostics: [],
+          openExecution: { family: 'graph.command', body: applicationTerm },
+        };
       return {
         ...parsed,
         semanticDiagnostics: [],
-        execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
+        execution: { family: 'graph.command', body: request },
       };
     } catch {
       return diagnostic(

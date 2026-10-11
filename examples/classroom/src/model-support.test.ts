@@ -60,6 +60,33 @@ describe('Classroom Model Support activation', () => {
           mutateEntity(School).create({ id: 'school-2', name: 'South School' }),
         ),
       },
+      {
+        status: 'application' as const,
+        application: {
+          kind: 'graph-command-application' as const,
+          request: {
+            version: 3 as const,
+            kind: 'graph-command' as const,
+            command: {
+              kind: 'entity-mutation-command' as const,
+              action: 'update' as const,
+              entityName: 'Course',
+              target: {
+                kind: 'selection' as const,
+                entityName: 'Course',
+                expression: {
+                  kind: 'predicate' as const,
+                  fieldName: 'school',
+                  operator: 'eq' as const,
+                  value: { kind: 'hole' as const, id: 'school' },
+                },
+              },
+              values: { capacity: 30 },
+            },
+          },
+        },
+        bindings: { school: { kind: 'entity-match' as const, text: 'North School' } },
+      },
     ];
     const generate = vi.fn<ModelProvider['generate']>(async ({ context }) => {
       const catalog = JSON.parse(context) as {
@@ -67,8 +94,8 @@ describe('Classroom Model Support activation', () => {
         commands: unknown[];
         context?: unknown;
       };
-      expect(catalog.reads).toHaveLength(2);
-      expect(catalog.commands).toHaveLength(1);
+      expect(catalog.reads).toHaveLength(3);
+      expect(catalog.commands).toHaveLength(3);
       expect(catalog.context).toBeUndefined();
       return proposals.shift();
     });
@@ -98,6 +125,10 @@ describe('Classroom Model Support activation', () => {
       { id: 'school-1', name: 'North School' },
       { id: 'school-2', name: 'South School' },
     ]);
-    expect(generate).toHaveBeenCalledTimes(3);
+    await expect(
+      runtime.submit({ text: 'set every course at North School capacity to 30' }, signal),
+    ).resolves.toMatchObject({ status: 'executed', message: 'Course updated.' });
+    expect(application.storage.dataset.Course?.map(course => course.capacity)).toEqual([30, 30]);
+    expect(generate).toHaveBeenCalledTimes(4);
   });
 });

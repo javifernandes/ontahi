@@ -28,6 +28,17 @@ export const createClassroomModelRuntime = ({
       authority: () => undefined,
       reads: [
         {
+          entity: School,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 20,
+          fields: {
+            id: { select: true },
+            name: { select: true, filter: ['eq'] },
+          },
+          scope: 'all',
+        } as const satisfies GraphReadPolicy<typeof School>,
+        {
           entity: Course,
           modes: ['run', 'count'],
           cardinalities: ['many'],
@@ -53,6 +64,17 @@ export const createClassroomModelRuntime = ({
             create: { fields: ['id', 'name'], result: ['id', 'name'] },
           },
         } as const satisfies EntityMutationCommandPolicy<typeof School>,
+        {
+          entity: Course,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['capacity'],
+              result: ['id', 'title', 'school', 'teacher', 'capacity'],
+              selection: { fields: { school: ['eq'], title: ['eq'] } },
+            },
+          },
+        } as const satisfies EntityMutationCommandPolicy<typeof Course>,
       ],
     },
   });

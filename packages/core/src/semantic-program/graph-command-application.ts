@@ -4,6 +4,7 @@ import type {
   GraphCommandRequest,
   GraphSchemaDefinition,
   GraphSchemaValidationIssue,
+  SelectionExpression,
 } from '../data-graph/index.js';
 import {
   normalizeGraphSchemaClientInput,
@@ -17,6 +18,13 @@ import { applicationHole, isApplicationHole } from './application-hole.js';
 export type GraphCommandApplication = {
   readonly kind: 'graph-command-application';
   readonly request: GraphCommandRequest;
+};
+
+export type GraphCommandApplicationHolePosition = {
+  readonly holeId: string;
+  readonly entityName: string;
+  readonly fieldName: string;
+  readonly source: 'selection' | 'value';
 };
 
 export type GraphCommandApplicationSubstitutionResult =
@@ -46,12 +54,71 @@ export type GraphCommandApplicationLoweringResult =
       readonly error: GraphCommandProtocolError;
     };
 
+export const graphCommandApplication = (request: GraphCommandRequest): GraphCommandApplication => ({
+  kind: 'graph-command-application',
+  request,
+});
+
+type PredicateValue = {
+  readonly fieldName: string;
+  readonly value: unknown;
+};
+
+type PredicateHoleValue = PredicateValue & {
+  readonly value: { readonly kind: 'hole'; readonly id: string };
+};
+
+const mapPredicateValues = (
+  expression: SelectionExpression,
+  map: (predicate: PredicateValue) => unknown,
+): SelectionExpression => {
+  if (expression.kind === 'predicate' && expression.operator !== 'isNull') {
+    if (expression.operator === 'in') return expression;
+    return { ...expression, value: map(expression) };
+  }
+  if (expression.kind === 'and' || expression.kind === 'or')
+    return {
+      ...expression,
+      operands: expression.operands.map(operand => mapPredicateValues(operand, map)),
+    };
+  if (expression.kind === 'not')
+    return { ...expression, operand: mapPredicateValues(expression.operand, map) };
+  return expression;
+};
+
+const predicateValues = (expression: SelectionExpression): readonly PredicateValue[] => {
+  const values: PredicateValue[] = [];
+  mapPredicateValues(expression, predicate => {
+    values.push(predicate);
+    return predicate.value;
+  });
+  return values;
+};
+
+const selectionTarget = (application: GraphCommandApplication) => {
+  const { command } = application.request;
+  return command.kind === 'entity-mutation-command' &&
+    command.action !== 'create' &&
+    command.target.kind === 'selection'
+    ? command.target
+    : undefined;
+};
+
 const valueHoleEntries = (application: GraphCommandApplication) => {
   const { command } = application.request;
   if (command.kind !== 'entity-mutation-command' || command.action === 'delete') return [];
   return Object.entries(command.values).filter(
     (entry): entry is [string, { kind: 'hole'; id: string }] => isApplicationHole(entry[1]),
   );
+};
+
+const selectionHoleEntries = (application: GraphCommandApplication) => {
+  const target = selectionTarget(application);
+  return target
+    ? predicateValues(target.expression).filter((entry): entry is PredicateHoleValue =>
+        isApplicationHole(entry.value),
+      )
+    : [];
 };
 
 const readEntity = (
@@ -79,20 +146,45 @@ const parseFieldValue = (schema: GraphSchemaDefinition, value: unknown) => {
 export const openGraphCommandApplication = (
   request: GraphCommandRequest,
   entities: readonly AnyEntityDefinition[],
-  holesByValueField: Readonly<Record<string, string>>,
+  holesByValueField: Readonly<Record<string, string>> = {},
+  holesBySelectionField: Readonly<Record<string, string>> = {},
 ): GraphCommandApplication => {
   const resolved = resolveGraphCommandRequest(request, { entities });
   if (!resolved.success) throw new Error(resolved.error.error.message);
   const { command } = request;
-  if (command.kind !== 'entity-mutation-command' || command.action === 'delete') {
-    throw new Error('Graph Command application requires an Entity create or update payload.');
+  if (command.kind !== 'entity-mutation-command') {
+    throw new Error('Graph Command application requires an Entity Mutation Command.');
   }
 
-  const missing = Object.keys(holesByValueField).filter(
-    fieldName => !Object.prototype.hasOwnProperty.call(command.values, fieldName),
+  const missing = Object.keys(holesByValueField).filter(fieldName =>
+    command.action === 'delete'
+      ? true
+      : !Object.prototype.hasOwnProperty.call(command.values, fieldName),
   );
   if (missing.length > 0)
     throw new Error(`Graph Command application has no value field for ${missing.join(', ')}.`);
+
+  const target = command.action === 'create' ? undefined : command.target;
+  const matchedSelectionFields = new Set<string>();
+  const openTarget =
+    target?.kind === 'selection'
+      ? {
+          ...target,
+          expression: mapPredicateValues(target.expression, predicate => {
+            const holeId = holesBySelectionField[predicate.fieldName];
+            if (holeId === undefined) return predicate.value;
+            matchedSelectionFields.add(predicate.fieldName);
+            return applicationHole(holeId);
+          }),
+        }
+      : target;
+  const missingSelectionFields = Object.keys(holesBySelectionField).filter(
+    fieldName => !matchedSelectionFields.has(fieldName),
+  );
+  if (missingSelectionFields.length > 0)
+    throw new Error(
+      `Graph Command application has no Selection predicate for ${missingSelectionFields.join(', ')}.`,
+    );
 
   return {
     kind: 'graph-command-application',
@@ -100,14 +192,19 @@ export const openGraphCommandApplication = (
       ...request,
       command: {
         ...command,
-        values: Object.fromEntries(
-          Object.entries(command.values).map(([fieldName, value]) => [
-            fieldName,
-            holesByValueField[fieldName] === undefined
-              ? value
-              : applicationHole(holesByValueField[fieldName]),
-          ]),
-        ),
+        ...(openTarget === undefined ? {} : { target: openTarget }),
+        ...(command.action === 'delete'
+          ? {}
+          : {
+              values: Object.fromEntries(
+                Object.entries(command.values).map(([fieldName, value]) => [
+                  fieldName,
+                  holesByValueField[fieldName] === undefined
+                    ? value
+                    : applicationHole(holesByValueField[fieldName]),
+                ]),
+              ),
+            }),
       },
     } as GraphCommandRequest,
   };
@@ -115,7 +212,33 @@ export const openGraphCommandApplication = (
 
 export const graphCommandApplicationHoles = (
   application: GraphCommandApplication,
-): readonly string[] => [...new Set(valueHoleEntries(application).map(([, hole]) => hole.id))];
+): readonly string[] => [
+  ...new Set([
+    ...selectionHoleEntries(application).map(entry => entry.value.id),
+    ...valueHoleEntries(application).map(([, hole]) => hole.id),
+  ]),
+];
+
+export const graphCommandApplicationHolePositions = (
+  application: GraphCommandApplication,
+): readonly GraphCommandApplicationHolePosition[] => {
+  const command = application.request.command;
+  if (command.kind !== 'entity-mutation-command') return [];
+  return [
+    ...selectionHoleEntries(application).map(position => ({
+      holeId: position.value.id,
+      entityName: command.entityName,
+      fieldName: position.fieldName,
+      source: 'selection' as const,
+    })),
+    ...valueHoleEntries(application).map(([fieldName, hole]) => ({
+      holeId: hole.id,
+      entityName: command.entityName,
+      fieldName,
+      source: 'value' as const,
+    })),
+  ];
+};
 
 export const substituteGraphCommandApplication = (
   application: GraphCommandApplication,
@@ -124,18 +247,17 @@ export const substituteGraphCommandApplication = (
   value: unknown,
 ): GraphCommandApplicationSubstitutionResult => {
   const command = application.request.command;
-  if (command.kind !== 'entity-mutation-command' || command.action === 'delete') {
+  if (command.kind !== 'entity-mutation-command') {
     return { success: false, reason: 'unknown-hole', holeId };
   }
-  const positions = Object.entries(command.values).filter(
-    (entry): entry is [string, { kind: 'hole'; id: string }] =>
-      isApplicationHole(entry[1]) && entry[1].id === holeId,
+  const positions = graphCommandApplicationHolePositions(application).filter(
+    position => position.holeId === holeId,
   );
   if (positions.length === 0) return { success: false, reason: 'unknown-hole', holeId };
 
   const entity = readEntity(command.entityName, entities);
   const normalizedValues = new Map<string, unknown>();
-  const issues = positions.flatMap(([fieldName]) => {
+  const issues = positions.flatMap(({ fieldName }) => {
     const schema = entity?.fields[fieldName];
     if (!schema)
       return [
@@ -162,14 +284,30 @@ export const substituteGraphCommandApplication = (
         ...application.request,
         command: {
           ...command,
-          values: Object.fromEntries(
-            Object.entries(command.values).map(([fieldName, current]) => [
-              fieldName,
-              isApplicationHole(current) && current.id === holeId
-                ? normalizedValues.get(fieldName)
-                : current,
-            ]),
-          ),
+          ...(command.action === 'create' || command.target.kind !== 'selection'
+            ? {}
+            : {
+                target: {
+                  ...command.target,
+                  expression: mapPredicateValues(command.target.expression, predicate =>
+                    isApplicationHole(predicate.value) && predicate.value.id === holeId
+                      ? normalizedValues.get(predicate.fieldName)
+                      : predicate.value,
+                  ),
+                },
+              }),
+          ...(command.action === 'delete'
+            ? {}
+            : {
+                values: Object.fromEntries(
+                  Object.entries(command.values).map(([fieldName, current]) => [
+                    fieldName,
+                    isApplicationHole(current) && current.id === holeId
+                      ? normalizedValues.get(fieldName)
+                      : current,
+                  ]),
+                ),
+              }),
         },
       } as GraphCommandRequest,
     },
