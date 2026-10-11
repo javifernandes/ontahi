@@ -106,6 +106,39 @@ const readIncompleteItems = (mode: 'run' | 'count' = 'run') => {
   };
 };
 
+const completeSelectionApplication = (
+  operands: readonly Record<string, unknown>[] = [
+    {
+      kind: 'predicate',
+      fieldName: 'list',
+      operator: 'eq',
+      value: { kind: 'hole', id: 'list' },
+    },
+    { kind: 'predicate', fieldName: 'completed', operator: 'eq', value: false },
+  ],
+) => ({
+  status: 'application' as const,
+  application: {
+    kind: 'graph-command-application' as const,
+    request: {
+      version: 3 as const,
+      kind: 'graph-command' as const,
+      command: {
+        kind: 'entity-mutation-command' as const,
+        action: 'update' as const,
+        entityName: 'TodoItem',
+        target: {
+          kind: 'selection' as const,
+          entityName: 'TodoItem',
+          expression: { kind: 'and' as const, operands },
+        },
+        values: { completed: true },
+      },
+    },
+  },
+  bindings: { list: { kind: 'entity-match' as const, text: 'Shopping' } },
+});
+
 describe('Todo canonical model requests', () => {
   it('deletes the named item while preserving lists and siblings', async () => {
     dataset().TodoList![0]!.name = 'Manuela';
@@ -343,44 +376,7 @@ describe('Todo canonical model requests', () => {
       ...dataset().TodoItem!,
       { id: 'coffee', list: 'list-1', title: 'buy coffee', completed: false },
     ];
-    const generate = vi.fn<ModelProvider['generate']>(async () => ({
-      status: 'application',
-      application: {
-        kind: 'graph-command-application',
-        request: {
-          version: 3,
-          kind: 'graph-command',
-          command: {
-            kind: 'entity-mutation-command',
-            action: 'update',
-            entityName: 'TodoItem',
-            target: {
-              kind: 'selection',
-              entityName: 'TodoItem',
-              expression: {
-                kind: 'and',
-                operands: [
-                  {
-                    kind: 'predicate',
-                    fieldName: 'list',
-                    operator: 'eq',
-                    value: { kind: 'hole', id: 'list' },
-                  },
-                  {
-                    kind: 'predicate',
-                    fieldName: 'completed',
-                    operator: 'eq',
-                    value: false,
-                  },
-                ],
-              },
-            },
-            values: { completed: true },
-          },
-        },
-      },
-      bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
-    }));
+    const generate = vi.fn<ModelProvider['generate']>(async () => completeSelectionApplication());
     bind(generate);
 
     const result = await submit('complete all items in Shopping');
@@ -411,6 +407,32 @@ describe('Todo canonical model requests', () => {
       { id: 'coffee', list: 'list-1', title: 'buy coffee', completed: true },
     ]);
     expect(generate.mock.calls[0]![0].instructions).toContain('selection-targeted graph command');
+  });
+  it('rejects duplicate Selection predicates instead of reporting a no-op success', async () => {
+    bind(async () =>
+      completeSelectionApplication([
+        {
+          kind: 'predicate',
+          fieldName: 'list',
+          operator: 'eq',
+          value: { kind: 'hole', id: 'list' },
+        },
+        {
+          kind: 'predicate',
+          fieldName: 'list',
+          operator: 'eq',
+          value: { kind: 'hole', id: 'list' },
+        },
+      ]),
+    );
+
+    await expect(submit('complete all items in Shopping')).resolves.toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoItem).toEqual([
+      { id: 'tea', list: 'list-1', title: 'buy tea', completed: false },
+      { id: 'other', list: 'list-2', title: 'buy apples', completed: false },
+    ]);
   });
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());

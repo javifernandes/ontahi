@@ -216,13 +216,37 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
           });
         });
         const predicate = graphSchema.union(predicates);
-        return graphSchema.union([
+        const expression = graphSchema.union([
           predicate,
           strict({
             kind: graphSchema.literal('and'),
             operands: graphSchema.array(predicate, { minItems: 1, maxItems: selection.length }),
           }),
         ]);
+        const requiredFields = Object.keys(selectionLiterals ?? {});
+        return graphSchema.refine(
+          expression,
+          value => {
+            const selectionValue = value as {
+              readonly kind: 'predicate' | 'and';
+              readonly fieldName?: string;
+              readonly operands?: readonly { readonly fieldName: string }[];
+            };
+            const fieldNames =
+              selectionValue.kind === 'and'
+                ? selectionValue.operands!.map(operand => operand.fieldName)
+                : [selectionValue.fieldName!];
+            return (
+              new Set(fieldNames).size === fieldNames.length &&
+              requiredFields.every(fieldName => fieldNames.includes(fieldName))
+            );
+          },
+          {
+            message:
+              'Selection predicates must use distinct fields and include every fixed predicate.',
+            rule: 'model-command-selection-bounds',
+          },
+        );
       })()
     : undefined;
 

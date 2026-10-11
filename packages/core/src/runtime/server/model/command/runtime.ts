@@ -38,6 +38,7 @@ import {
   modelGraphReadApplicationEntityMatches,
   resolveModelGraphReadApplication,
   type ModelEntityCandidate,
+  type ModelEntityMatchRequest,
   type ModelGraphReadApplicationProposal,
 } from '../read/application.js';
 import {
@@ -137,6 +138,59 @@ export type CreateModelCommandRuntimeOptions = {
   instructions?: string;
   /** Localize capability presentation without asking the model to invent descriptions. */
   formatHelp?: (descriptions: readonly string[], request: ModelCommandRequest) => string;
+};
+
+const resolveApplicationEntityCandidates = async (
+  matches: readonly ModelEntityMatchRequest[],
+  initial: readonly ModelEntityCandidate[],
+  resolveEntityMatch: CreateModelCommandRuntimeOptions['resolveEntityMatch'],
+  signal: AbortSignal,
+): Promise<
+  | { readonly status: 'matched'; readonly candidates: readonly ModelEntityCandidate[] }
+  | { readonly status: 'unresolved'; readonly message: string }
+> => {
+  const candidates = [...initial];
+  if (resolveEntityMatch)
+    for (const match of matches) {
+      const result = await resolveEntityMatch(
+        { target: match.target, text: match.match.text },
+        signal,
+      );
+      if (result.status === 'unresolved') return { status: 'unresolved', message: result.reason };
+      candidates.push(...result.candidates);
+    }
+  return {
+    status: 'matched',
+    candidates: candidates.filter(
+      (candidate, index, all) =>
+        all.findIndex(item => entityRefsEqual(item.ref, candidate.ref)) === index,
+    ),
+  };
+};
+
+const modelApplicationValidationReason = <
+  TRequest,
+  TExposure extends {
+    validate(request: TRequest): string | undefined;
+  },
+>(
+  requests: readonly TRequest[],
+  exposures: readonly TExposure[],
+  resolveExposure: (request: TRequest, exposures: readonly TExposure[]) => TExposure,
+): string | undefined => {
+  for (const request of requests) {
+    let exposure: TExposure;
+    try {
+      exposure = resolveExposure(request, exposures);
+    } catch (error) {
+      if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
+        return error.message;
+      throw error;
+    }
+    const reason = exposure.validate(request);
+    if (reason) return reason;
+  }
+  return undefined;
 };
 
 /** Runtime entry point for graph instructions. The host supplies a disclosure scope;
@@ -286,31 +340,23 @@ export const createModelCommandRuntime = ({
       }
       if (proposal.application.kind === 'graph-command-application') {
         const commandProposal = proposal as typeof proposal & ModelGraphCommandApplicationProposal;
-        const entityCandidates = [...(initial.entityCandidates ?? [])];
-        if (resolveEntityMatch) {
-          const matches = modelGraphCommandApplicationEntityMatches(commandProposal, graphEntities);
-          if (!matches)
-            return {
-              status: 'unresolved',
-              message: 'The proposed command has an unsupported Hole.',
-            };
-          for (const match of matches) {
-            const result = await resolveEntityMatch(
-              { target: match.target, text: match.match.text },
-              signal,
-            );
-            if (result.status === 'unresolved')
-              return { status: 'unresolved', message: result.reason };
-            entityCandidates.push(...result.candidates);
-          }
-        }
+        const matches = modelGraphCommandApplicationEntityMatches(commandProposal, graphEntities);
+        if (!matches)
+          return {
+            status: 'unresolved',
+            message: 'The proposed command has an unsupported Hole.',
+          };
+        const entityCandidates = await resolveApplicationEntityCandidates(
+          matches,
+          initial.entityCandidates ?? [],
+          resolveEntityMatch,
+          signal,
+        );
+        if (entityCandidates.status === 'unresolved') return entityCandidates;
         const resolved = resolveModelGraphCommandApplication({
           proposal: commandProposal,
           entities: graphEntities,
-          candidates: entityCandidates.filter(
-            (candidate, index, all) =>
-              all.findIndex(item => entityRefsEqual(item.ref, candidate.ref)) === index,
-          ),
+          candidates: entityCandidates.candidates,
         });
         if (resolved.status === 'unresolved')
           return { status: 'unresolved', message: resolved.reason };
@@ -318,42 +364,31 @@ export const createModelCommandRuntime = ({
           resolved.status === 'resolved'
             ? [resolved.request]
             : resolved.options.map(option => option.request);
-        for (const candidate of candidates) {
-          let exposure: ModelGraphCommandExposure;
-          try {
-            exposure = resolveModelGraphCommand(candidate, initial.commands ?? []);
-          } catch (error) {
-            if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
-              return { status: 'unresolved', message: error.message };
-            throw error;
-          }
-          const reason = exposure.validate(candidate);
-          if (reason) return { status: 'unresolved', message: reason };
-        }
+        const reason = modelApplicationValidationReason(
+          candidates,
+          initial.commands ?? [],
+          resolveModelGraphCommand,
+        );
+        if (reason) return { status: 'unresolved', message: reason };
         return resolved.status === 'resolved'
           ? { status: 'proposed', request: resolved.request }
           : resolved;
       }
       const readProposal = proposal as typeof proposal & ModelGraphReadApplicationProposal;
-      const entityCandidates = [...(initial.entityCandidates ?? [])];
-      if (resolveEntityMatch) {
-        const matches = modelGraphReadApplicationEntityMatches(readProposal, graphEntities);
-        if (!matches)
-          return { status: 'unresolved', message: 'The proposed read has an unsupported Hole.' };
-        for (const match of matches) {
-          const result = await resolveEntityMatch(
-            { target: match.target, text: match.match.text },
-            signal,
-          );
-          if (result.status === 'unresolved')
-            return { status: 'unresolved', message: result.reason };
-          entityCandidates.push(...result.candidates);
-        }
-      }
+      const matches = modelGraphReadApplicationEntityMatches(readProposal, graphEntities);
+      if (!matches)
+        return { status: 'unresolved', message: 'The proposed read has an unsupported Hole.' };
+      const entityCandidates = await resolveApplicationEntityCandidates(
+        matches,
+        initial.entityCandidates ?? [],
+        resolveEntityMatch,
+        signal,
+      );
+      if (entityCandidates.status === 'unresolved') return entityCandidates;
       const resolved = resolveModelGraphReadApplication({
         proposal: readProposal,
         entities: graphEntities,
-        candidates: entityCandidates,
+        candidates: entityCandidates.candidates,
       });
       if (resolved.status === 'unresolved')
         return { status: 'unresolved', message: resolved.reason };
@@ -361,18 +396,12 @@ export const createModelCommandRuntime = ({
         resolved.status === 'resolved'
           ? [resolved.request]
           : resolved.options.map(option => option.request);
-      for (const candidate of candidates) {
-        let exposure: ModelGraphReadExposure;
-        try {
-          exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
-        } catch (error) {
-          if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
-            return { status: 'unresolved', message: error.message };
-          throw error;
-        }
-        const reason = exposure.validate(candidate);
-        if (reason) return { status: 'unresolved', message: reason };
-      }
+      const reason = modelApplicationValidationReason(
+        candidates,
+        initial.reads ?? [],
+        resolveModelGraphRead,
+      );
+      if (reason) return { status: 'unresolved', message: reason };
       return resolved.status === 'resolved'
         ? { status: 'proposed', request: resolved.request }
         : resolved;

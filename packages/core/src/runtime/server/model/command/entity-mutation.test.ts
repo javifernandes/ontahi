@@ -179,6 +179,41 @@ describe('Model Entity mutation exposure', () => {
     expect(
       safeParseUnknownGraphSchema(exposure.request, {
         ...request,
+        command: {
+          ...request.command,
+          target: {
+            ...request.command.target,
+            expression: {
+              kind: 'predicate',
+              fieldName: 'title',
+              operator: 'eq',
+              value: 'Draft',
+            },
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
+        command: {
+          ...request.command,
+          target: {
+            ...request.command.target,
+            expression: {
+              kind: 'and',
+              operands: [
+                { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+                { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+              ],
+            },
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
         command: { ...request.command, values: { published: false } },
       }).success,
     ).toBe(false);

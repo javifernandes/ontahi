@@ -62,6 +62,10 @@ export const todoGraphCommands = (
           )
             return unresolved;
           const predicates = command.target.expression.operands;
+          const predicateFields = predicates.map(predicate =>
+            predicate.kind === 'predicate' ? predicate.fieldName : '',
+          );
+          if (predicates.length !== 2 || new Set(predicateFields).size !== 2) return unresolved;
           const list = predicates.find(
             predicate => predicate.kind === 'predicate' && predicate.fieldName === 'list',
           );

@@ -193,6 +193,128 @@ it('resolves a model-proposed Graph Read Hole from authorized scoped entities', 
   });
 });
 
+it('resolves and executes a model-proposed Selection command Hole', async () => {
+  const List = entity({
+    name: 'CommandList',
+    display: { primary: 'name', search: ['name'] },
+    fields: { id: field.id(), name: field.string() },
+  });
+  const Item = entity({
+    name: 'CommandItem',
+    fields: {
+      id: field.id(),
+      list: field.ref(List),
+      completed: field.boolean(),
+    },
+  });
+  const storage = createInMemoryDataGraphStorage({
+    dataset: {
+      CommandList: [{ id: 'inbox', name: 'Inbox' }],
+      CommandItem: [
+        { id: 'open', list: 'inbox', completed: false },
+        { id: 'done', list: 'inbox', completed: true },
+      ],
+    },
+  });
+  const application = ontahi({ entities: [List, Item], storage });
+  const runtime = createApplicationModelCommandRuntime({
+    application,
+    provider: {
+      generate: async ({ outputSchema }: ModelRequest) => {
+        expect(JSON.stringify(outputSchema)).toContain('graph-command-application');
+        return {
+          status: 'application',
+          application: {
+            kind: 'graph-command-application',
+            request: {
+              version: 3,
+              kind: 'graph-command',
+              command: {
+                kind: 'entity-mutation-command',
+                action: 'update',
+                entityName: 'CommandItem',
+                target: {
+                  kind: 'selection',
+                  entityName: 'CommandItem',
+                  expression: {
+                    kind: 'and',
+                    operands: [
+                      {
+                        kind: 'predicate',
+                        fieldName: 'list',
+                        operator: 'eq',
+                        value: { kind: 'hole', id: 'list' },
+                      },
+                      {
+                        kind: 'predicate',
+                        fieldName: 'completed',
+                        operator: 'eq',
+                        value: false,
+                      },
+                    ],
+                  },
+                },
+                values: { completed: true },
+              },
+            },
+          },
+          bindings: { list: { kind: 'entity-match', text: 'Inbox' } },
+        };
+      },
+    },
+    authorize: () => undefined,
+    graph: {
+      authority: () => undefined,
+      reads: [
+        {
+          entity: List,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 20,
+          fields: { id: { select: true }, name: { select: true, filter: ['eq'] } },
+          scope: 'all',
+        },
+      ],
+      commands: [
+        {
+          entity: Item,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['completed'],
+              result: ['id', 'list', 'completed'],
+              selection: { fields: { list: ['eq'], completed: ['eq'] } },
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  await expect(
+    runtime.submit({ text: 'Complete unfinished Inbox items' }, new AbortController().signal),
+  ).resolves.toMatchObject({
+    status: 'executed',
+    request: {
+      version: 3,
+      command: {
+        target: {
+          expression: {
+            operands: [
+              { fieldName: 'list', value: { locator: { id: 'inbox' } } },
+              { fieldName: 'completed', value: false },
+            ],
+          },
+        },
+      },
+    },
+  });
+  expect(storage.dataset.CommandItem).toEqual([
+    { id: 'open', list: 'inbox', completed: true },
+    { id: 'done', list: 'inbox', completed: true },
+  ]);
+});
+
 it('does not expose graph services that were not configured', async () => {
   const Document = entity({ name: 'Document', fields: { id: field.id() } });
   const application = ontahi({
