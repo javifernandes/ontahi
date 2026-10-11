@@ -46,6 +46,7 @@ const openTodos = TodoItem.all()
 </OntahiGraphProvider>;
 
 const todos = useGraphQuery(openTodos);
+const liveTodos = useGraphQuery(openTodos, { observation: 'live' });
 const total = useGraphQuery(openTodos.count());
 const first = useGraphQuery(openTodos.first());
 ```
@@ -72,7 +73,18 @@ Classified reads lower to the canonical base Entity before reaching these provid
 `useGraphQuery(Chapter.all().many())` (or a runtime-bound variant's `.many()`) and the usual scalar
 intents. Base and sibling variant reads have distinct membership keys under the same base-Entity
 prefix, so host-triggered `invalidateQueries({ queryKey: [ContentNode.name] })` refetches all of them.
-`useGraphQuery` does not automatically subscribe to `observe()`.
+`useGraphQuery(query, { observation: 'live' })` explicitly selects the same complete-snapshot
+observation lifecycle as the bound Query's `observe()`. The first snapshot is the initial React
+Query value; the hook does not issue a duplicate one-shot read. Later snapshots replace that value
+and pass through the same Graph Client Cache reconciliation as ordinary reads. Unmounting or
+changing the query identity aborts the observation. Scalar terminal intents remain one-shot.
+
+Live observation is opt-in. Ordinary `useGraphQuery(query)` retains one-shot execution plus
+semantic mutation invalidation. An active live Query is not redundantly invalidated after a
+mutation because its runtime observation already receives the committed revision. Contextual
+Selection observation is not supported yet. Live and one-shot evaluations use distinct internal
+React Query keys, including when the application supplies the same custom key, so both lifecycles
+may consume one authored Query simultaneously.
 
 With an observation-capable Runtime Transport, `client.graph.bindVariantSelection(Chapter.all())`
 supports `.exec().observe()`. Complete snapshots recalculate membership, ordering and limits;

@@ -242,7 +242,20 @@ const todosQuery = useMemo(
 const todos = useGraphQuery(todosQuery, {
   enabled: Boolean(selectedListId),
 });
+
+const liveTodos = useGraphQuery(todosQuery, {
+  enabled: Boolean(selectedListId),
+  observation: 'live',
+});
 ```
+
+`observation: 'live'` changes only the evaluation lifecycle. It opens the same complete-snapshot
+observation exposed by the runtime-bound Query's `.observe()`: the authored Query, parameters,
+identity, result shape, and cache normalization remain the same. The first snapshot supplies the
+initial hook value without a preceding one-shot request, later snapshots replace it, and unmounting
+aborts the observation. The option is explicit because it owns a long-lived resource. Ordinary
+queries remain one-shot and use semantic mutation invalidation. Scalar terminal intents and
+contextual Selection observation are not live-capable yet.
 
 The generated Entity is the ordinary Query entry point. Many results are the default; terminal
 read intentions change the result contract without repeating an execution mode:

@@ -12,8 +12,12 @@ export const ONTAHI_GRAPH_READ_META_KEY = 'ontahi.graphRead' as const;
 
 type OntahiGraphReadMeta = QueryMeta & {
   readonly [ONTAHI_GRAPH_READ_META_KEY]:
-    | { readonly kind: 'canonical'; readonly request: GraphReadRequest }
-    | { readonly kind: 'unknown' };
+    | {
+        readonly kind: 'canonical';
+        readonly request: GraphReadRequest;
+        readonly lifecycle: 'once' | 'live';
+      }
+    | { readonly kind: 'unknown'; readonly lifecycle: 'once' | 'live' };
 };
 
 export type SemanticGraphReadInvalidation = {
@@ -31,14 +35,18 @@ export type SemanticGraphReadInvalidationOptions = {
 export const withCanonicalGraphReadMeta = (
   meta: QueryMeta | undefined,
   request: GraphReadRequest,
+  lifecycle: 'once' | 'live' = 'once',
 ): OntahiGraphReadMeta => ({
   ...meta,
-  [ONTAHI_GRAPH_READ_META_KEY]: { kind: 'canonical', request },
+  [ONTAHI_GRAPH_READ_META_KEY]: { kind: 'canonical', request, lifecycle },
 });
 
-export const withUnknownGraphReadMeta = (meta: QueryMeta | undefined): OntahiGraphReadMeta => ({
+export const withUnknownGraphReadMeta = (
+  meta: QueryMeta | undefined,
+  lifecycle: 'once' | 'live' = 'once',
+): OntahiGraphReadMeta => ({
   ...meta,
-  [ONTAHI_GRAPH_READ_META_KEY]: { kind: 'unknown' },
+  [ONTAHI_GRAPH_READ_META_KEY]: { kind: 'unknown', lifecycle },
 });
 
 export const getCanonicalGraphReadFromMeta = (
@@ -65,6 +73,17 @@ export const invalidateSemanticGraphReads = async (
       .findAll()
       .flatMap(query => {
         const dependency = query.meta?.[ONTAHI_GRAPH_READ_META_KEY];
+        if (
+          dependency &&
+          typeof dependency === 'object' &&
+          'lifecycle' in dependency &&
+          dependency.lifecycle === 'live' &&
+          query.state.fetchStatus === 'fetching'
+        ) {
+          // Its observation already receives committed revisions from the runtime. Restarting the
+          // query here would create a second subscription and a redundant initial snapshot.
+          return [];
+        }
         if (
           dependency &&
           typeof dependency === 'object' &&

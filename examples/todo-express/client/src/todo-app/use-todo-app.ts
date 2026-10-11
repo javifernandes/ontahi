@@ -104,7 +104,10 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [optimisticOrder, setOptimisticOrder] = useState<TodoOrderMutation>();
 
   const lists = useGraphQuery(todoListsQuery);
-  const tags = useGraphQuery(tagsQuery);
+  // The flat Tag Query can stay current through the same Runtime Protocol used by headless
+  // Query.observe() consumers. The nested list projection remains mutation-refreshed until
+  // contextual Graph Read observation is supported.
+  const tags = useGraphQuery(tagsQuery, { observation: 'live' });
   const entityMutation = useEntityMutationCommand((command: EntityMutationCommand) => command);
   const executeEntityMutation = entityMutation.mutateAsync;
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);

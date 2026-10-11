@@ -124,6 +124,45 @@ const fixture = () => {
 };
 
 describe('classified reads across provider lifecycle changes', () => {
+  it('preserves one Query value across headless and React live evaluation', async () => {
+    const { Node, client, change, activeObservers } = fixture();
+    const read = query(Node).orderBy(node => node.id);
+    const oneShot = await runBrowserEffect(client.graph.bindGraphRead(read).run());
+    const headless = Stream.toAsyncIterable(client.graph.bindGraphRead(read).observe())[
+      Symbol.asyncIterator
+    ]();
+    const initialHeadless = headless.next();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider runtime={client.graph} client={client}>
+          {children}
+        </OntahiGraphProvider>
+      </QueryClientProvider>
+    );
+    const { result, unmount } = renderHook(() => useGraphQuery(read, { observation: 'live' }), {
+      wrapper,
+    });
+
+    try {
+      const initial = await initialHeadless;
+      expect(initial.value).toEqual(oneShot);
+      await waitFor(() => expect(result.current.data).toEqual(initial.value));
+      expect(activeObservers()).toBe(2);
+
+      const revisedHeadless = headless.next();
+      await act(async () => change('n1', 'part'));
+      const revised = await revisedHeadless;
+      await waitFor(() => expect(result.current.data).toEqual(revised.value));
+      expect(result.current.data).toContainEqual({ id: 'n1', type: 'part', owner: 'alice' });
+    } finally {
+      unmount();
+      await headless.return?.();
+      queryClient.clear();
+    }
+    await waitFor(() => expect(activeObservers()).toBe(0));
+  });
+
   it('recomputes scoped membership and limits through transport observation, sharing base cache identity', async () => {
     const { Node, Chapter, client, writer, change, activeObservers } = fixture();
     const base = Stream.toAsyncIterable(

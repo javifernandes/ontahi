@@ -1,5 +1,6 @@
 'use client';
 
+import { Stream } from '@ontahi/core/computation/stream';
 import {
   createRemoteDataGraphRuntime,
   isGraphCommandRejection,
@@ -221,6 +222,18 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
         : {}),
       get: (read, params, options) => runBrowserEffect(runtime.get(read, params, options)),
       run: (read, params, options) => runBrowserEffect(runtime.run(read, params, options)),
+      observe: (read, params, options, lifecycle) =>
+        Stream.toAsyncIterable(
+          lifecycle?.signal
+            ? runtime
+                .observe(read, params, options)
+                .pipe(
+                  Stream.interruptWhen(
+                    Stream.runHead(Stream.fromEventListener(lifecycle.signal, 'abort')),
+                  ),
+                )
+            : runtime.observe(read, params, options),
+        ),
       count: (read, params, options) => runBrowserEffect(runtime.count(read, params, options)),
       runCommand: (command, options) => runBrowserEffect(runtime.runCommand(command, options)),
       runRelationshipCommand: (command, options) =>
