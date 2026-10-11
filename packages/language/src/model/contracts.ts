@@ -10,7 +10,10 @@ import type {
   RelationshipCommandAffordanceDescriptor,
   EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
-import type { GraphReadApplication } from '@ontahi/core/experimental/semantic-program';
+import type {
+  GraphCommandApplication,
+  GraphReadApplication,
+} from '@ontahi/core/experimental/semantic-program';
 import type { OperationProtocolRequestV1 } from '@ontahi/core/runtime/protocol';
 
 export type ConsoleFactorySyntax = SelectionLanguageRange & {
@@ -245,10 +248,9 @@ export type ConsoleRequest =
   | { readonly family: 'graph.command'; readonly body: GraphCommandRequest }
   | { readonly family: 'operation'; readonly body: OperationProtocolRequestV1 };
 
-export type ConsoleOpenRequest = {
-  readonly family: 'graph.read';
-  readonly body: GraphReadApplication;
-};
+export type ConsoleOpenRequest =
+  | { readonly family: 'graph.read'; readonly body: GraphReadApplication }
+  | { readonly family: 'graph.command'; readonly body: GraphCommandApplication };
 
 export type ConsoleLanguageDiagnostic =
   | SelectionLanguageDiagnostic

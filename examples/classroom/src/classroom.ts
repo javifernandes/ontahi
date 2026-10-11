@@ -20,6 +20,7 @@ const enrollmentFields = [
 
 export const School = entity({
   name: 'School',
+  display: { primary: 'name', search: ['name'] },
   fields: {
     id: field.id(),
     name: field.nonEmptyString({ trim: true }),

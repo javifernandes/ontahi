@@ -655,6 +655,72 @@ describe('Console actions', uiTestOptions, () => {
     });
   });
 
+  it('binds a Selection update Hole before executing the canonical Graph Command', async () => {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      const body =
+        (envelope.body as { kind?: string }).kind === 'graph-command-capabilities'
+          ? {
+              kind: 'graph-command-capabilities-result' as const,
+              entityName: 'List',
+              capabilities: {
+                entityMutations: ['update'] as const,
+                selectionMutations: ['update'] as const,
+              },
+            }
+          : {
+              kind: 'graph-command-result' as const,
+              value: { created: [], updated: [], deleted: [] },
+            };
+      return createRuntimeProtocolResponse(envelope, body);
+    });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDialect: 'declarative',
+          initialDocument: 'update List where name = ?list with { name: "Today" }',
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      within(await screen.findByLabelText('Application Hole values')).getByText('list'),
+    ).toBeDefined();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for list' }), {
+      target: { value: '"Inbox"' },
+    });
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() =>
+      expect(request.mock.calls.some(([envelope]) => envelope.family === 'graph.command')).toBe(
+        true,
+      ),
+    );
+    expect(
+      request.mock.calls.find(
+        ([envelope]) =>
+          envelope.family === 'graph.command' &&
+          (envelope.body as { kind?: string }).kind === 'graph-command',
+      )?.[0],
+    ).toMatchObject({
+      family: 'graph.command',
+      body: {
+        version: 3,
+        command: {
+          action: 'update',
+          target: {
+            kind: 'selection',
+            expression: { fieldName: 'name', value: 'Inbox' },
+          },
+          values: { name: 'Today' },
+        },
+      },
+    });
+  });
+
   it('authors only Entity Commands advertised by the runtime policy', async () => {
     const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
       createRuntimeProtocolResponse(envelope, {
@@ -1401,7 +1467,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     const { request, result } = mountConsole(source, undefined, dialect);
 
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
-    const bindings = within(screen.getByLabelText('Graph Read Hole values'));
+    const bindings = within(screen.getByLabelText('Application Hole values'));
     expect(bindings.getByText('wanted')).toBeDefined();
     expect(bindings.queryByText('?wanted')).toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: 'Value for wanted' }), {

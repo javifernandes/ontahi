@@ -12,7 +12,7 @@ import { openGraphReadApplication } from '../../../../semantic-program/graph-rea
 import { entity } from '../../entity.js';
 
 import {
-  openModelGraphReadSchema,
+  openModelEntityReferenceSchema,
   parseModelGraphReadApplication,
   resolveModelGraphReadApplication,
 } from './application.js';
@@ -37,7 +37,7 @@ const proposal = {
 
 describe('Model Graph Read applications', () => {
   it('projects Ref values as either canonical Refs or pure Holes', () => {
-    const schema = openModelGraphReadSchema(
+    const schema = openModelEntityReferenceSchema(
       toGraphJsonSchema(
         graphSchema.object({ list: graphSchema.ref(List), completed: field.boolean() }),
       ),

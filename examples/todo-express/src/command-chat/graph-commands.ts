@@ -41,7 +41,54 @@ export const todoGraphCommands = (
     ? 'No pude identificar un único destino. Indicá el nombre actual y, para un ítem, su lista si hay varios iguales.'
     : 'I could not identify one target. Specify its current name and, for duplicate items, its list.';
   const bulkCompletion = requestsBulkCompletion(text);
-  if (bulkCompletion) return [];
+  if (bulkCompletion)
+    return [
+      createModelEntityMutationExposure(todoItemMutationPolicy, {
+        action: 'update',
+        selection: ['list', 'completed'],
+        selectionLiterals: { completed: false },
+        values: ['completed'],
+        valueLiterals: { completed: true },
+        description: es
+          ? 'Completar todos los ítems pendientes seleccionados por lista.'
+          : 'Complete every unfinished item selected by list.',
+        validate: ({ command }) => {
+          if (
+            command.kind !== 'entity-mutation-command' ||
+            command.action !== 'update' ||
+            isEntityRef(command.target) ||
+            command.values.completed !== true ||
+            command.target.expression.kind !== 'and'
+          )
+            return unresolved;
+          const predicates = command.target.expression.operands;
+          const predicateFields = predicates.map(predicate =>
+            predicate.kind === 'predicate' ? predicate.fieldName : '',
+          );
+          if (predicates.length !== 2 || new Set(predicateFields).size !== 2) return unresolved;
+          const list = predicates.find(
+            predicate => predicate.kind === 'predicate' && predicate.fieldName === 'list',
+          );
+          const completed = predicates.find(
+            predicate => predicate.kind === 'predicate' && predicate.fieldName === 'completed',
+          );
+          if (
+            list?.kind !== 'predicate' ||
+            list.operator !== 'eq' ||
+            !isEntityRef(list.value) ||
+            completed?.kind !== 'predicate' ||
+            completed.operator !== 'eq' ||
+            completed.value !== false
+          )
+            return unresolved;
+          const listRef = list.value;
+          const target = context.lists.find(candidate => candidate.id === listRef.locator.id);
+          return target && words(text).includes(words(target.name)) ? undefined : unresolved;
+        },
+        message: () =>
+          es ? 'Se completaron los ítems seleccionados.' : 'Selected items completed.',
+      }),
+    ];
   const exposure = <TEntity extends AnyEntityDefinition, TAuthority>(
     policy: EntityMutationCommandPolicy<TEntity, TAuthority>,
     key: WritableStoredFieldName<TEntity['fields']> & string,
@@ -91,39 +138,33 @@ export const todoGraphCommands = (
         return es ? `Lista “${name}” creada.` : `List “${name}” created.`;
       },
     }),
-    ...(bulkCompletion
-      ? []
-      : [
-          createModelEntityMutationExposure(todoItemMutationPolicy, {
-            action: 'create',
-            values: ['list', 'title', 'completed'],
-            valueLiterals: { completed: false },
-            description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
-            validate: ({ command }, validation) => {
-              const create = command as EntityMutationCommand;
-              const list = create.action === 'create' ? create.values.list : undefined;
-              if (
-                create.kind !== 'entity-mutation-command' ||
-                create.action !== 'create' ||
-                !isEntityRef(list) ||
-                typeof create.values.title !== 'string' ||
-                create.values.completed !== false
-              )
-                return unresolved;
-              const target = context.lists.find(candidate => candidate.id === list.locator.id);
-              const mentioned = context.lists.filter(list =>
-                words(text).includes(words(list.name)),
-              );
-              return target &&
-                includesRequestedValue(text, create.values.title) &&
-                (mentioned.some(list => list.id === target.id) ||
-                  (mentioned.length === 0 && validation?.kind === 'choice-option'))
-                ? undefined
-                : unresolved;
-            },
-            message: () => (es ? 'Ítem agregado.' : 'Item added.'),
-          }),
-        ]),
+    createModelEntityMutationExposure(todoItemMutationPolicy, {
+      action: 'create',
+      values: ['list', 'title', 'completed'],
+      valueLiterals: { completed: false },
+      description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
+      validate: ({ command }, validation) => {
+        const create = command as EntityMutationCommand;
+        const list = create.action === 'create' ? create.values.list : undefined;
+        if (
+          create.kind !== 'entity-mutation-command' ||
+          create.action !== 'create' ||
+          !isEntityRef(list) ||
+          typeof create.values.title !== 'string' ||
+          create.values.completed !== false
+        )
+          return unresolved;
+        const target = context.lists.find(candidate => candidate.id === list.locator.id);
+        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
+        return target &&
+          includesRequestedValue(text, create.values.title) &&
+          (mentioned.some(list => list.id === target.id) ||
+            (mentioned.length === 0 && validation?.kind === 'choice-option'))
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem agregado.' : 'Item added.'),
+    }),
     createModelEntityMutationExposure(todoItemMutationPolicy, {
       action: 'delete',
       condition: ['title'],

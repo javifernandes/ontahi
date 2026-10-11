@@ -31,6 +31,7 @@ const policy = {
       fields: ['title', 'published'],
       if: ['title', 'published'],
       result: ['id', 'title', 'published'],
+      selection: { fields: { title: ['eq'], published: ['eq'] } },
     },
     delete: { if: ['title'], result: ['id', 'title'] },
   },
@@ -129,6 +130,101 @@ describe('Model Entity mutation exposure', () => {
         description: 'Delete a published document.',
       }),
     ).toThrow('condition field published outside its command policy');
+  });
+
+  it('projects a bounded Selection mutation as a version 3 command', () => {
+    const exposure = createModelEntityMutationExposure(policy, {
+      action: 'update',
+      selection: ['title', 'published'],
+      selectionLiterals: { published: false },
+      values: ['published'],
+      valueLiterals: { published: true },
+      description: 'Publish selected documents.',
+    });
+    const request = {
+      version: 3,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Document',
+        target: {
+          kind: 'selection',
+          entityName: 'Document',
+          expression: {
+            kind: 'and',
+            operands: [
+              { kind: 'predicate', fieldName: 'title', operator: 'eq', value: 'Draft' },
+              { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+            ],
+          },
+        },
+        values: { published: true },
+      },
+    };
+
+    expect(safeParseUnknownGraphSchema(exposure.request, request).success).toBe(true);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
+        command: {
+          ...request.command,
+          target: {
+            ...request.command.target,
+            expression: { kind: 'and', operands: [] },
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
+        command: {
+          ...request.command,
+          target: {
+            ...request.command.target,
+            expression: {
+              kind: 'predicate',
+              fieldName: 'title',
+              operator: 'eq',
+              value: 'Draft',
+            },
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
+        command: {
+          ...request.command,
+          target: {
+            ...request.command.target,
+            expression: {
+              kind: 'and',
+              operands: [
+                { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+                { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+              ],
+            },
+          },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...request,
+        command: { ...request.command, values: { published: false } },
+      }).success,
+    ).toBe(false);
+    expect(() =>
+      createModelEntityMutationExposure(policy, {
+        action: 'update',
+        selection: ['id'],
+        values: ['published'],
+        description: 'Invalid selection.',
+      }),
+    ).toThrow('selection field id outside its command policy');
   });
 
   it('projects the same reflected Field semantics used by Runtime Protocol discovery', () => {

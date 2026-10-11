@@ -754,7 +754,7 @@ their current public contracts remain authoritative.
 - [x] Represent one parameterized Graph Read with a named hole.
 - [x] Represent one Graph Command target or value hole.
 - [ ] Represent a relationship-traversal Selection with a missing endpoint Ref.
-- [ ] Apply one delete or update Command directly to the completed Selection.
+- [x] Apply one delete or update Command directly to the completed Selection.
 - [ ] Compose one contextual multi-hop Selection with ordering, limiting, and a relation predicate.
 - [x] Reuse substitution and validation without weakening cardinality, mutation, or authority rules.
 - [x] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
@@ -961,6 +961,21 @@ discipline, but not one universal Application representation. Operation inputs, 
 predicates, and Graph Command payloads retain distinct typed application shapes and traversal rules.
 This checkpoint deliberately excludes delete payloads, target Holes, relationship Commands,
 conditional mutation values, dispatch, public exports, and console integration.
+
+### Selection-Targeted Graph Command Checkpoint
+
+Implemented on 2026-10-11: Entity update and delete applications may now retain named Holes inside
+a Selection target as well as an update payload. One substitution validates every occupied
+predicate/value position from the Entity schema; only a closed application lowers to the existing
+version 3 `GraphCommandRequest`. No bulk row identities are enumerated in the program.
+
+Both Console dialects project these open Commands through the same typed Hole controls already used
+by Graph Reads. Model Support derives bounded Selection mutation schemas from
+`EntityMutationCommandPolicy`, resolves reference predicates through authorized Graph Reads, and
+then revalidates the completed canonical Command against fresh scope before dispatch. Todo proves
+an unfinished-items-by-list update; Classroom independently proves a school-targeted Course update.
+The existing mutation journal, conservative read matching, React invalidation, and Activity paths
+consume the resulting Command without application cache keys or a new effect protocol.
 
 ### First Durable Application Dialogue Checkpoint
 

@@ -820,6 +820,13 @@ or modes, localized descriptions, or custom result messages without rebuilding i
 Use `{policies, expose}` for contextual validation or other dynamic contracts that cannot be derived
 from the registered policies.
 
+Update/delete policies with Selection permissions also derive bounded version 3 mutation
+exposures. A model may return a `graph-command-application` with a named Hole in a reference
+predicate. Core resolves that reference only through an authorized Graph Read, validates the
+completed Selection and values against the exposed schema and fresh scope, and dispatches the
+unchanged canonical Graph Command. The model never receives a cache key or an alternate bulk-action
+payload.
+
 A host with no dynamic context needs no `scope`. When a custom catalog depends on current
 application data, `scope` receives `{read?}` as a third argument and may return `data`; Core passes
 that receiver-local value to `expose` but removes it before serializing model context. The

@@ -10,6 +10,7 @@ import {
 
 import {
   graphCommandApplicationHoles,
+  graphCommandApplicationHolePositions,
   lowerGraphCommandApplication,
   openGraphCommandApplication,
   substituteGraphCommandApplication,
@@ -106,11 +107,126 @@ describe('Graph Command application', () => {
     });
   });
 
+  it('opens, substitutes, and lowers Selection-targeted update predicates', () => {
+    const selectionRequest = toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: Document.name,
+      target: {
+        kind: 'selection',
+        entityName: Document.name,
+        expression: {
+          kind: 'and',
+          operands: [
+            { kind: 'predicate', fieldName: 'label', operator: 'eq', value: 'placeholder' },
+            { kind: 'predicate', fieldName: 'published', operator: 'eq', value: false },
+          ],
+        },
+      },
+      values: { published: true },
+    });
+    const open = openGraphCommandApplication(selectionRequest, [Document], {}, { label: 'label' });
+
+    expect(graphCommandApplicationHoles(open)).toEqual(['label']);
+    expect(graphCommandApplicationHolePositions(open)).toEqual([
+      {
+        holeId: 'label',
+        entityName: Document.name,
+        fieldName: 'label',
+        source: 'selection',
+      },
+    ]);
+    expect(lowerGraphCommandApplication(open, [Document])).toEqual({
+      success: false,
+      reason: 'open-application',
+      holes: ['label'],
+    });
+
+    const substituted = substituteGraphCommandApplication(open, [Document], 'label', ' Inbox ');
+    expect(substituted.success).toBe(true);
+    if (!substituted.success) return;
+    expect(lowerGraphCommandApplication(substituted.application, [Document])).toMatchObject({
+      success: true,
+      request: {
+        version: 3,
+        command: {
+          action: 'update',
+          target: {
+            expression: {
+              operands: [
+                { fieldName: 'label', value: ' Inbox ' },
+                { fieldName: 'published', value: false },
+              ],
+            },
+          },
+          values: { published: true },
+        },
+      },
+    });
+  });
+
+  it('supports Selection-targeted delete Holes and one Hole shared by target and values', () => {
+    const deleteRequest = toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'delete',
+      entityName: Document.name,
+      target: {
+        kind: 'selection',
+        entityName: Document.name,
+        expression: { kind: 'predicate', fieldName: 'title', operator: 'eq', value: 'placeholder' },
+      },
+    });
+    const openDelete = openGraphCommandApplication(
+      deleteRequest,
+      [Document],
+      {},
+      { title: 'text' },
+    );
+    const deleted = substituteGraphCommandApplication(openDelete, [Document], 'text', '  Notes  ');
+    expect(deleted.success).toBe(true);
+    if (!deleted.success) return;
+    expect(lowerGraphCommandApplication(deleted.application, [Document])).toMatchObject({
+      success: true,
+      request: { command: { action: 'delete', target: { expression: { value: 'Notes' } } } },
+    });
+
+    const updateRequest = toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: Document.name,
+      target: {
+        kind: 'selection',
+        entityName: Document.name,
+        expression: { kind: 'predicate', fieldName: 'label', operator: 'eq', value: 'placeholder' },
+      },
+      values: { label: 'placeholder' },
+    });
+    const openUpdate = openGraphCommandApplication(
+      updateRequest,
+      [Document],
+      { label: 'label' },
+      { label: 'label' },
+    );
+    expect(graphCommandApplicationHolePositions(openUpdate)).toHaveLength(2);
+    const updated = substituteGraphCommandApplication(openUpdate, [Document], 'label', 'same');
+    expect(updated.success).toBe(true);
+    if (!updated.success) return;
+    expect(lowerGraphCommandApplication(updated.application, [Document])).toMatchObject({
+      success: true,
+      request: {
+        command: {
+          target: { expression: { value: 'same' } },
+          values: { label: 'same' },
+        },
+      },
+    });
+  });
+
   it('rejects unsupported commands, missing value fields, and unknown Entities when opening', () => {
     const deleteRequest = toGraphCommandRequest(mutateEntity(Document).delete(target));
-    expect(() => openGraphCommandApplication(deleteRequest, [Document], {})).toThrow(
-      'Graph Command application requires an Entity create or update payload.',
-    );
+    expect(() =>
+      openGraphCommandApplication(deleteRequest, [Document], { title: 'title' }),
+    ).toThrow('Graph Command application has no value field for title.');
     const unsupported = { kind: 'graph-command-application' as const, request: deleteRequest };
     expect(graphCommandApplicationHoles(unsupported)).toEqual([]);
     expect(substituteGraphCommandApplication(unsupported, [Document], 'target', target)).toEqual({

@@ -79,7 +79,10 @@ describe('Console Graph Read language', () => {
     );
 
     expect(analysis.semanticDiagnostics).toEqual([]);
-    expect(analysis.openExecution?.body.request.selection.expression).toEqual({
+    expect(analysis.openExecution?.family).toBe('graph.read');
+    if (analysis.openExecution?.family !== 'graph.read')
+      throw new Error('Expected open Graph Read.');
+    expect(analysis.openExecution.body.request.selection.expression).toEqual({
       kind: 'and',
       operands: [
         {
