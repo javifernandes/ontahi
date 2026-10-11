@@ -19,15 +19,16 @@ Console grammar. Nullable `get` is shown as `first`, not guessed to be `exists`.
 Operation labels remain unchanged until those authoring dialects are defined.
 
 ```tsx
-import { entity, field } from '@ontahi/core/data-graph';
 import { createDiagnosticRuntimeTransportRouter } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
-import { createFetchRuntimeTransport, createWebSocketRuntimeTransport } from '@ontahi/react/graph';
+import {
+  createFetchRuntimeTransport,
+  createRuntimeGraphClient,
+  createWebSocketRuntimeTransport,
+  OntahiGraphProvider,
+} from '@ontahi/react/graph';
+import { clientApplication } from './generated/client-entities.js';
 
-const TodoItem = entity('TodoItem', {
-  id: field.id(),
-  completed: field.boolean(),
-});
 const runtimeTransport = createDiagnosticRuntimeTransportRouter({
   diagnostics: {},
   transports: {
@@ -41,14 +42,15 @@ const runtimeTransport = createDiagnosticRuntimeTransportRouter({
     'durable.operation.observe': 'websocket',
   },
 });
+const graphClient = createRuntimeGraphClient({
+  application: clientApplication,
+  runtimeTransport,
+});
 
-<OntahiDevtools
-  console={{
-    entities: [TodoItem],
-    initialDocument: 'TodoItem.where(completed = false).many()',
-  }}
-  runtimeTransport={runtimeTransport}
-/>;
+<OntahiGraphProvider runtime={runtime} client={graphClient} identity={identity}>
+  <App />
+  <OntahiDevtools console={{ initialDocument: 'TodoItem.where(completed = false).many()' }} />
+</OntahiGraphProvider>;
 ```
 
 The Console supports filtered and unfiltered read terminals. `Tag.count()` and
@@ -178,8 +180,10 @@ The React surface opens as a full-width bottom drawer at a compact default heigh
 handle, or focus the handle and use the arrow keys, to resize it while the application remains
 visible above.
 
-When the host supplies Console Entity definitions, Devtools adds a Console panel backed by the
-shared Ontahí Lezer and CodeMirror language packages. The first walking skeleton accepts
+When the provider's graph client retains a generated client application, Devtools adds a Console
+panel backed by the shared Ontahí Lezer and CodeMirror language packages. Explicit
+`console.entities` and `console.identity` remain available as standalone overrides. The first
+walking skeleton accepts
 `Entity.where(Selection).many()`, nullable `Entity.where(Selection).first()`, and exact-cardinality
 `Entity.where(Selection).one()`, lowers them to the canonical Graph Read body, and sends them through
 the same configured Runtime Transport as application traffic. Submission is explicit through Run or
@@ -208,7 +212,7 @@ source and target classification plus base scopes. Variant-root Views remain uns
 The catalog is scoped to the active transport, route and execution identity; switching any of these
 drops old metadata and ignores late replies. A failed base lookup does not hide successful roots
 from other bases. Changing the draft between known roots does not issue another metadata lookup.
-Hosts must keep passing the same `console.identity` as their transport's execution identity.
+The provider makes identity changes visible to Devtools without separate synchronization.
 
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
@@ -235,11 +239,13 @@ callback still runs without metadata when that additive inspection is unavailabl
 ## Cache: local runtime state
 
 Views are ordered Console (when configured), Activity, Cache, Settings. Activity remains the
-initial view. Pass the same `clientCache` used by the application's graph provider/client:
+initial view. Inside `OntahiGraphProvider`, Devtools discovers the active client's cache:
 
 ```tsx
-<OntahiDevtools runtimeTransport={runtimeTransport} clientCache={graphClient.clientCache} />
+<OntahiDevtools />
 ```
+
+Explicit `clientCache` and `runtimeTransport` props remain available for standalone composition.
 
 Cache is a live, read-only view of canonical entity records, locator aliases, freshness markers,
 and normalized output skeletons. Instances are grouped by entity type with collapsible groups and

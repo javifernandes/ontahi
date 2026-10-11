@@ -52,6 +52,7 @@
     "@ontahi/core": "workspace:*",
     "@ontahi/language": "workspace:*",
     "@ontahi/language-codemirror": "workspace:*",
+    "@ontahi/react": "workspace:*",
     "react-json-view-lite": "^2.5.0"
   },
   "devDependencies": {

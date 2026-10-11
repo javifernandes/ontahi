@@ -67,6 +67,11 @@ browser-safe Entity schema. Applications define Views in client source and pass 
 Selection, or projectable Operation `.as(view)` APIs. Views are not registered in the server graph
 or emitted by codegen.
 
+The generated module also exports `clientApplication`, a portable catalog of those Entity facades
+and their reflected Operations. Give it to `createRuntimeGraphClient({ application:
+clientApplication, runtimeTransport })` once; React integration and Devtools can then discover the
+same client model without a second hand-maintained Entity list.
+
 ## Lower-level API
 
 The compatibility renderer mode `operationContracts: 'selection'` also includes schema-native

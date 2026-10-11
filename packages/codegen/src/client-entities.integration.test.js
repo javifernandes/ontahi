@@ -291,6 +291,7 @@ describe('conventional client entity codegen', () => {
     const source = await readFile(outputPath, 'utf8');
     const generated = await importGeneratedModule({ directory, source });
 
+    expect(generated.clientApplication.entities).toEqual([generated.Trip, generated.Driver]);
     expect(generated.DriverSchema).toMatchObject({
       kind: 'entity',
       name: 'Driver',

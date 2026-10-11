@@ -5,6 +5,7 @@ import {
   createGraphClientCache,
   createRuntimeBoundDataGraphApi,
   reconcileGraphReadSnapshot,
+  type ClientApplication,
   type GraphClientCache,
   type QueryOrView,
 } from '@ontahi/core/data-graph';
@@ -28,6 +29,7 @@ export type RuntimeGraphClientOptions<TTransportOptions = unknown> = {
   readonly runtimeTransport: RuntimeTransport<TTransportOptions>;
   readonly requestId?: () => string;
   readonly clientCache?: GraphClientCache;
+  readonly application?: ClientApplication;
   readonly reflectedEntityData?: false | FetchReflectedEntityDataReaderOptions;
   readonly reflectedRelatedEntityData?: false | FetchReflectedRelatedEntityDataReaderOptions;
 };
@@ -36,6 +38,7 @@ export const createRuntimeGraphClient = <TTransportOptions = unknown>({
   runtimeTransport,
   requestId,
   clientCache: configuredClientCache,
+  application,
   reflectedEntityData = {},
   reflectedRelatedEntityData = {},
 }: RuntimeGraphClientOptions<TTransportOptions>): FetchGraphClient<TTransportOptions> => {
@@ -62,6 +65,7 @@ export const createRuntimeGraphClient = <TTransportOptions = unknown>({
     graph: createRuntimeBoundDataGraphApi(() => runtime),
     graphExecutor: graph.graphExecutor,
     clientCache,
+    ...(application ? { application } : {}),
     runtimeTransport,
     operationBridgeAdapters: [createFetchOperationBridgeAdapter(operation)],
     reflectedOperationInvoker: createFetchReflectedOperationInvoker(operation),

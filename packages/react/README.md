@@ -207,8 +207,16 @@ For a WebSocket host, compose the same graph client around the push-capable tran
 
 ```ts
 const runtimeTransport = createWebSocketRuntimeTransport({ url: 'wss://app.example/runtime' });
-const client = createRuntimeGraphClient({ runtimeTransport });
+const client = createRuntimeGraphClient({
+  application: clientApplication,
+  runtimeTransport,
+});
 ```
+
+`clientApplication` is emitted by `@ontahi/codegen`. Retaining it on the client lets integrations
+inside `OntahiGraphProvider`, including Devtools, discover the same browser-safe Entity and
+Operation catalog without repeating it in component props. The provider likewise exposes its
+resolved identity, cache, and transport as one client-session context.
 
 The transport opens one lazy session, correlates concurrent Runtime Protocol requests, and sends
 one Durable observation control frame per run. Sequenced snapshots are pushed over that socket;
