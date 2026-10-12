@@ -172,10 +172,10 @@ describe('first-class Events', () => {
       },
     });
 
-    if (false) {
+    const emitInvalidPayload = () =>
       // @ts-expect-error Event payloads retain their declaration's inferred Ref types.
       StudentCourseAssigned.emit({ student: courseRef('course-1'), course: courseRef('c') });
-    }
+    expectTypeOf(emitInvalidPayload).toBeFunction();
 
     const events = createEventApplication({
       declarations: [StudentCourseAssigned],
