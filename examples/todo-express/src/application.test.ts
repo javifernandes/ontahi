@@ -1336,7 +1336,7 @@ describe('Ontahi todo portability example', () => {
       ).resolves.toMatchObject({
         kind: 'snapshot',
         snapshot: {
-          status: 'running',
+          status: 'waiting',
           interaction: { id: 'choose-list', kind: 'choice' },
         },
       });
@@ -1355,7 +1355,7 @@ describe('Ontahi todo portability example', () => {
       error: { code: 'access_denied' },
     });
     await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
-      status: 'running',
+      status: 'waiting',
       interaction: { id: 'choose-list' },
     });
 
@@ -1374,7 +1374,7 @@ describe('Ontahi todo portability example', () => {
 
     await vi.waitFor(async () => {
       await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-list',
           kind: 'approval',
@@ -1462,7 +1462,7 @@ describe('Ontahi todo portability example', () => {
 
     await vi.waitFor(async () => {
       await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'choose-list',
           kind: 'choice',
@@ -1483,7 +1483,7 @@ describe('Ontahi todo portability example', () => {
 
     await vi.waitFor(async () => {
       await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-delete-items',
           kind: 'approval',

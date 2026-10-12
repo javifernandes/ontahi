@@ -225,7 +225,7 @@ describe('Runtime Protocol Durable Operation family', () => {
   it('normalizes storage snapshots with undefined properties into portable snapshot bodies', () => {
     const storageSnapshot: TaskSnapshot = {
       ...run,
-      status: 'running',
+      status: 'waiting',
       subject: undefined,
       createdAt: '2026-08-30T23:50:00.000Z',
       startedAt: undefined,
@@ -257,7 +257,7 @@ describe('Runtime Protocol Durable Operation family', () => {
       kind: 'snapshot',
       snapshot: {
         ...run,
-        status: 'running',
+        status: 'waiting',
         createdAt: '2026-08-30T23:50:00.000Z',
         updatedAt: '2026-08-30T23:50:01.000Z',
         progress: { phase: 'updating', percent: 50 },
@@ -283,7 +283,7 @@ describe('Runtime Protocol Durable Operation family', () => {
   it('transports an exact approval proposal without response values', () => {
     const response = toDurableOperationSnapshotResponse({
       ...run,
-      status: 'running',
+      status: 'waiting',
       updatedAt: '2026-08-30T23:50:01.000Z',
       interaction: {
         id: 'approve-delete',
@@ -318,7 +318,7 @@ describe('Runtime Protocol Durable Operation family', () => {
   ])('transports a pending $type input without its eventual value', input => {
     const response = toDurableOperationSnapshotResponse({
       ...run,
-      status: 'running',
+      status: 'waiting',
       updatedAt: '2026-10-04T00:00:00.000Z',
       interaction: {
         id: 'TodoItem.addItem:title',
@@ -374,7 +374,7 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
-  it.each(['queued', 'running', 'completed', 'failed', 'cancelled'] as const)(
+  it.each(['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const)(
     'preserves the %s Task status',
     status => {
       expect(
@@ -382,12 +382,50 @@ describe('Runtime Protocol Durable Operation family', () => {
           ...run,
           status,
           updatedAt: '2026-08-30T23:50:00.000Z',
+          ...(status === 'waiting'
+            ? {
+                interaction: {
+                  id: 'approve-wait',
+                  kind: 'approval' as const,
+                  prompt: 'Continue?',
+                  proposal: { id: 'wait-1', summary: 'Continue.', requests: [{}] },
+                  createdAt: '2026-08-30T23:50:00.000Z',
+                },
+              }
+            : {}),
         }).snapshot.status,
       ).toBe(status);
     },
   );
 
   it.each([
+    {
+      name: 'waiting snapshot without an interaction',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: { ...run, status: 'waiting', updatedAt: 'now' },
+      },
+    },
+    {
+      name: 'interaction outside the waiting state',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'approve',
+            kind: 'approval',
+            prompt: 'Continue?',
+            proposal: { id: 'proposal', summary: 'Continue.', requests: [{}] },
+            createdAt: 'now',
+          },
+        },
+      },
+    },
     { name: 'non-object response', response: null },
     {
       name: 'unsupported snapshot version',

@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/153d-langgraph-task-runtime-comparison
   - ontahi://plans/153e-vercel-workflow-interaction-resumption
   - ontahi://plans/153f-queue-backed-task-runtime
+  - ontahi://plans/154f-wait-and-continuation-semantics
 ---
 
 Operation Interaction names the emerging need for an operation to obtain information or a decision
@@ -25,12 +26,12 @@ question does not by itself grant authority. Any eventual continuation must pres
 identity and recheck authority and relevant state before applying effects.
 
 A semantic interaction request and its typed response are distinct from host rendering and provider
-message history. The experimental contract adds choice and approval Interactions to a running
-durable Operation snapshot and accepts their responses through the existing `durable.operation`
-protocol. An approval exposes a stable proposal identity, summary, and exact JSON-safe requests;
-the in-process runtime retains the response and resumes only the matching Interaction. Lifecycle,
-expiry, persistence, cancellation, richer participant authorization, and transactional proposal
-dispatch remain under investigation in plan 153c.
+message history. Choice, input, and approval Interactions suspend a durable Operation as an explicit
+`waiting` snapshot and accept their responses through the existing `durable.operation` protocol.
+An approval exposes a stable proposal identity, summary, and exact JSON-safe requests. A valid
+response is claimed once, returns the run to `running`, and resumes only the matching Interaction.
+Expiry, cancellation, richer participant authorization, and transactional proposal dispatch remain
+under investigation.
 
 The Todo experiment now exercises both kinds in one code-backed durable Operation. Duplicate list
 names produce a choice over stable list IDs. The selected list is projected into exact canonical
@@ -97,3 +98,8 @@ missing typed request/reply primitive; progress is lifecycle observation, while 
 resume are runtime mechanics. A workflow runtime such as LangGraph may provide checkpoint/replay
 and interrupt plumbing through an optional adapter, but its thread, node, and command concepts do
 not define Ontahí's public Operation or Interaction model.
+
+Plan 154f establishes the temporal meaning of this contract across the native and LangGraph Task
+Runtimes: `waiting` is a one-shot typed wait over persisted continuation state, not progress, Query
+observation, a domain Event subscription, or Session memory. Legacy function-style Interactions may
+expose the same visible state but retain only a process-local continuation.

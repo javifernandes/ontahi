@@ -499,7 +499,7 @@ it('returns a pending follow-up interaction directly from the durable response',
       kind: 'snapshot',
       snapshot: {
         ...run,
-        status: 'running',
+        status: 'waiting',
         updatedAt: '2026-09-29T00:00:00.000Z',
         interaction,
       },

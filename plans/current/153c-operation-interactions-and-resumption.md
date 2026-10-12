@@ -86,15 +86,15 @@ Runtime Transport instrumentation already records them in Devtools Activity.
 ### Durable Operations and Task Runtime
 
 A durable Operation projects to a `TaskDefinition`. Starting it returns a `TaskRunRef` with
-`taskId` and `runId`; observation returns snapshots with queued, running, completed, failed, or
+`taskId` and `runId`; observation returns snapshots with queued, running, waiting, completed, failed, or
 cancelled state, progress, and eventual result. The Task Context supports progress, sleep, and
 declared steps.
 
 This is substantial prior structure for interactive runs. The first experimental slice now adds a
 narrow choice Interaction, while the broader lifecycle remains incomplete:
 
-- there is no `waiting` status; the in-process runtime exposes pending interactions on a `running`
-  snapshot;
+- a pending Interaction is now explicit as `waiting`; accepting its response atomically returns the
+  run to `running` before continuation evaluation;
 - the native response slice currently authorizes only the actor that started the run; richer
   participant and delegation policies remain future work;
 - the in-process runtime accepts a matching reply and resumes the choice, but its continuation is
@@ -536,8 +536,9 @@ type ExecutionRunSnapshot<TResult> =
   | { status: 'cancelled'; reason?: string };
 ```
 
-Whether `waiting` becomes a new Task status or a running snapshot with pending Interactions is an
-open compatibility question. The protocol must expose pending Interaction identity either way.
+Plan 154f resolved the compatibility question in favor of an explicit `waiting` Task status. A
+pending Interaction remains present in the same snapshot, while `running` now denotes evaluation
+that is eligible to make progress without an external answer.
 
 ## Worked Example: Delete Shopping Tasks
 
@@ -803,9 +804,9 @@ building the complete Todo experiment:
 4. inspection and response use the existing `durable.operation` Runtime Protocol family;
 5. invalid, mismatched, and duplicate responses fail without resuming the run.
 
-The slice keeps the run status as `running`; the presence of `snapshot.interaction` is the explicit
-waiting signal. This avoids adding a second source of lifecycle truth before the comparison shows
-whether waiting should become a status in persistent runtimes.
+The initial slice kept the run status as `running` and used `snapshot.interaction` as the explicit
+waiting signal. Plan 154f later promoted that proven distinction to the `waiting` lifecycle state
+while preserving the Interaction payload.
 
 This native adapter deliberately proves the semantic boundary before persistence. Its continuation
 is process-local and is lost if the process exits. It therefore does not yet satisfy restart-safe

@@ -51,7 +51,11 @@ if (!started.ok) throw new Error(started.message);
 const run = started.value;
 let snapshot = await TodoApplication.getTaskSnapshot(run);
 
-while (snapshot.status === 'queued' || snapshot.status === 'running') {
+while (
+  snapshot.status === 'queued' ||
+  snapshot.status === 'running' ||
+  snapshot.status === 'waiting'
+) {
   await wait(500);
   snapshot = await TodoApplication.getTaskSnapshot(run);
 }
@@ -86,7 +90,7 @@ sequenceDiagram
   loop observe run
     Client->>Server: get snapshot(TaskRunRef)
     Server->>Tasks: read snapshot
-    Tasks-->>Server: queued / running / completed
+    Tasks-->>Server: queued / running / waiting / completed
     Server-->>Client: snapshot
   end
 ```
@@ -108,6 +112,7 @@ return (
     {completeAll.value && <small>Run {completeAll.value.runId}</small>}
     {completeAll.isQueued && <p>Queued…</p>}
     {completeAll.isRunning && <p>{completeAll.progress?.phase ?? 'Running…'}</p>}
+    {completeAll.isWaiting && <p>Waiting for a response…</p>}
     {completeAll.isCompleted && <p>Completed {completeAll.finalValue?.completed ?? 0} Todos.</p>}
     {completeAll.isFailed && <p>{completeAll.runError?.message}</p>}
   </div>
@@ -135,9 +140,12 @@ identity:
 }
 ```
 
-The response is a versioned `snapshot` containing queued, running, completed, failed, or cancelled
-state plus progress, result, or error when present. Progress and result are snapshot states, not
-commands. Repeating `inspect` is the portable polling primitive.
+The response is a versioned `snapshot` containing queued, running, waiting, completed, failed, or
+cancelled state plus progress, a pending Interaction, result, or error when present. `waiting`
+means execution has checkpointed one exact typed Interaction and cannot continue until an
+authorized response is claimed. Claiming that response returns the run to `running` before its
+continuation executes. Progress, Interaction, and result are snapshot states, not commands.
+Repeating `inspect` is the portable polling primitive.
 
 The React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
 asynchronous snapshot sequence; the transport chooses how to produce it from its capabilities. The
@@ -181,12 +189,14 @@ migration.
 
 `inProcessTasks()` is the smallest executable runtime. Ordinary task functions still depend on the
 process that started them. Explicit step executions persist a versioned JSON checkpoint, including
-pending interactions, through the configured `TaskStorage`. With persistent storage, a freshly
+pending interactions, through the configured `TaskStorage`. A pending Interaction is exposed as a
+`waiting` run rather than as contradictory running progress. With persistent storage, a freshly
 started application can register the same Task definitions and resume an interaction response from
 that checkpoint. Inspecting or observing a running execution also resumes a checkpoint that was
 persisted just before the previous process stopped. Interaction responses are claimed once through
-the task store before execution continues. A step can be evaluated again after a crash, so side
-effects still need the same idempotency care as other retryable work.
+the task store, atomically returning the run to `running`, before execution continues. A step can
+be evaluated again after a crash, so side effects still need the same idempotency care as other
+retryable work.
 
 A persistent executor and task store can carry the same lifecycle across retries, processes, and
 deployments. Ontahí's Vercel Workflow adapter is one such runtime. The host owns provider setup,

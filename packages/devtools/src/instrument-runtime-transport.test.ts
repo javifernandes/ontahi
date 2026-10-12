@@ -276,7 +276,7 @@ describe('instrumentRuntimeTransport', () => {
       {
         taskId: 'task-1',
         runId: 'run-1',
-        status: 'running',
+        status: 'waiting',
         updatedAt: '2026-01-01T00:00:00.000Z',
         progress: { percent: 50 },
         interaction: {
@@ -324,7 +324,7 @@ describe('instrumentRuntimeTransport', () => {
     expect(received).toEqual(snapshots);
     expect(diagnostics.inspect().events).toMatchObject([
       { kind: 'observation.started', observationId: 'observation-1' },
-      { kind: 'observation.snapshot', sequence: 1, snapshot: { status: 'running' } },
+      { kind: 'observation.snapshot', sequence: 1, snapshot: { status: 'waiting' } },
       {
         kind: 'observation.snapshot',
         sequence: 2,
@@ -340,7 +340,7 @@ describe('instrumentRuntimeTransport', () => {
     const snapshot: TaskSnapshot = {
       taskId: 'task-1',
       runId: 'run-1',
-      status: 'running',
+      status: 'waiting',
       updatedAt: '2026-01-01T00:00:00.000Z',
       interaction: {
         id: 'choose-list',
@@ -393,7 +393,7 @@ describe('instrumentRuntimeTransport', () => {
     const snapshot: TaskSnapshot = {
       taskId: 'task-1',
       runId: 'run-1',
-      status: 'running',
+      status: 'waiting',
       updatedAt: '2026-01-01T00:00:00.000Z',
       interaction: {
         id: 'choose-list',

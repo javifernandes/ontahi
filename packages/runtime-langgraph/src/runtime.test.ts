@@ -143,7 +143,7 @@ describe('LangGraph Task Runtime', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'enter-title', kind: 'input' },
       });
     });
@@ -275,13 +275,13 @@ describe('LangGraph Task Runtime', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(firstRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'choose-item', kind: 'choice' },
       });
     });
 
     const secondRuntime = createRuntime(storage, saver);
-    await Effect.runPromise(
+    const choiceResponse = await Effect.runPromise(
       respondToTaskInteraction(
         secondRuntime,
         run,
@@ -289,9 +289,10 @@ describe('LangGraph Task Runtime', () => {
         { actor: { kind: 'system' } },
       ),
     );
+    expect(choiceResponse).toMatchObject({ status: 'running', interaction: undefined });
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(secondRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-item',
           kind: 'approval',
@@ -356,7 +357,7 @@ describe('LangGraph Task Runtime', () => {
       await expect(
         Effect.runPromise(getTaskSnapshot(recoveredRuntime, run)),
       ).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-item',
           proposal: { summary: 'Use two.' },
@@ -389,6 +390,7 @@ describe('LangGraph Task Runtime', () => {
     });
     await Effect.runPromise(
       storage.update(run, {
+        status: 'running',
         checkpoint: {
           version: 1,
           state: { step: 'approve', selected: 'two' } satisfies ReviewState,
@@ -402,7 +404,7 @@ describe('LangGraph Task Runtime', () => {
       await expect(
         Effect.runPromise(getTaskSnapshot(recoveredRuntime, run)),
       ).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-item',
           proposal: { summary: 'Use two.' },

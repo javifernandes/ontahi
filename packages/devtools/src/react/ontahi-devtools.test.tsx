@@ -735,7 +735,7 @@ describe('OntahiDevtools', () => {
             observe: async function* <TResult>(_run: TaskRunIdentity) {
               yield {
                 ...run,
-                status: 'running',
+                status: 'waiting',
                 updatedAt: '2026-01-01T00:00:00.000Z',
                 interaction: {
                   id: 'approve-delete-items',
@@ -836,7 +836,7 @@ describe('OntahiDevtools', () => {
             observe: async function* <TResult>(run: TaskRunIdentity) {
               yield {
                 ...run,
-                status: 'running',
+                status: 'waiting',
                 updatedAt: '2026-01-01T00:00:00.000Z',
                 interaction: {
                   id: 'shared-approval-id',

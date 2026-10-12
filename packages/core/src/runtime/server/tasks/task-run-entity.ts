@@ -5,6 +5,7 @@ import type { TaskRunIdentity, TaskSnapshot, TaskStatus, TaskSubject } from './t
 const taskStatuses = [
   'queued',
   'running',
+  'waiting',
   'completed',
   'failed',
   'cancelled',

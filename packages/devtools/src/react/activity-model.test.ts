@@ -67,7 +67,7 @@ describe('Devtools activity model', () => {
           snapshot: {
             taskId: 'Todo.delete',
             runId: 'run-1',
-            status: 'running',
+            status: 'waiting',
             updatedAt: '2026-01-01T00:00:00.000Z',
             interaction,
           },
@@ -94,8 +94,8 @@ describe('Devtools activity model', () => {
       title: 'Choice requested · Which “Shopping” list should be emptied?',
     });
     expect(operationProgressState(activity({ kind: 'unknown' }))).toEqual({
-      label: 'running',
-      title: 'running',
+      label: 'waiting',
+      title: 'waiting',
     });
     expect(
       operationProgressState({

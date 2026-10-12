@@ -150,6 +150,7 @@ export type TaskStorageEngine = {
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
+  /** Atomically replaces the pending Interaction with its response and returns the run to running. */
   claimInteraction(
     ref: TaskRunIdentity,
     interactionId: string,

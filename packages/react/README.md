@@ -200,6 +200,10 @@ await completeAll.executeAsync();
 // completeAll.status/progress/finalValue follow the accepted run.
 ```
 
+A pending typed Interaction is a distinct `waiting` lifecycle state. The hook exposes
+`isWaiting` separately from `isRunning`, keeps the run observation active, and continues to report
+`isExecuting` until the run completes, fails, or is cancelled.
+
 The hook consumes an asynchronous snapshot sequence and does not choose polling or push. The
 conventional Fetch Runtime Transport implements that sequence with versioned
 `durable.operation.inspect` requests and owns the polling cadence:

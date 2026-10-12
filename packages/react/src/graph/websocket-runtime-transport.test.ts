@@ -301,7 +301,7 @@ describe('WebSocket Runtime Transport', () => {
               snapshot: {
                 taskId: 'Todo.completeAll',
                 runId: 'run-1',
-                status: sockets.length === 1 ? 'running' : 'completed',
+                status: sockets.length === 1 ? 'waiting' : 'completed',
                 updatedAt: '2026-09-04T00:00:00.000Z',
                 ...(sockets.length === 1
                   ? {
@@ -334,7 +334,7 @@ describe('WebSocket Runtime Transport', () => {
       [Symbol.asyncIterator]();
 
     await expect(iterator.next()).resolves.toMatchObject({
-      value: { status: 'running', interaction: { kind: 'approval' } },
+      value: { status: 'waiting', interaction: { kind: 'approval' } },
     });
     sockets[0]?.close(1006, 'laptop slept');
     await expect(iterator.next()).resolves.toMatchObject({

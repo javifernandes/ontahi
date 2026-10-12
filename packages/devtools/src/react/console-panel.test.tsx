@@ -158,7 +158,7 @@ describe('Console actions', uiTestOptions, () => {
     });
     const observe = async function* <TResult = JsonValue>() {
       yield snapshot({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'choose-list',
           kind: 'choice',
@@ -172,7 +172,7 @@ describe('Console actions', uiTestOptions, () => {
       }) as TaskSnapshot<TResult>;
       await choiceAnswered;
       yield snapshot({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-list',
           kind: 'approval',

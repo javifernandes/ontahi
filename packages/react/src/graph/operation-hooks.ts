@@ -627,6 +627,7 @@ export function useDurableOperation<TInput, TResult = unknown>(
     runError: snapshot?.error,
     isQueued: runStatus === 'queued',
     isRunning: runStatus === 'running',
+    isWaiting: runStatus === 'waiting',
     isCompleted: runStatus === 'completed',
     isFailed: runStatus === 'failed',
     isCancelled: runStatus === 'cancelled',
@@ -635,7 +636,7 @@ export function useDurableOperation<TInput, TResult = unknown>(
       mutation.isExecuting ||
       (Boolean(observer) &&
         currentObservation?.active !== false &&
-        (runStatus === 'queued' || runStatus === 'running')),
+        (runStatus === 'queued' || runStatus === 'running' || runStatus === 'waiting')),
   };
 }
 

@@ -202,7 +202,7 @@ describe('ontahi application composition root', () => {
 
     await vi.waitFor(async () => {
       await expect(firstApplication.getTaskSnapshot(run)).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'approve-job', kind: 'approval' },
       });
     });
