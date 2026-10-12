@@ -545,9 +545,9 @@ Acceptance:
 - [x] Add a small Todo activity projection proving a browser consumer can subscribe.
 - [x] Add the minimum Runtime Protocol family required by that browser subscription only after
       Vertical A fixes the semantic envelope.
-- [ ] Display the occurrence and delivery causally beneath `TodoList.completeAll()` in Devtools.
-- [ ] Keep the existing automatic Query refresh behavior unchanged and separately inspectable.
-- [ ] Prove disconnect, cancellation, overflow, and payload redaction behavior.
+- [x] Display the occurrence and delivery causally beneath `TodoList.completeAll()` in Devtools.
+- [x] Keep the existing automatic Query refresh behavior unchanged and separately inspectable.
+- [x] Prove disconnect, cancellation, overflow, and payload redaction behavior.
 
 ### Vertical C: External ingress and durable Event wait
 

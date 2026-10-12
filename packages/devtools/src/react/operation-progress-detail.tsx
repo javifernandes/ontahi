@@ -28,6 +28,7 @@ import { styles } from './devtools-styles.js';
 import type { GraphObservationActivity } from './graph-observation-model.js';
 import { OperationInteraction } from './operation-interaction.js';
 import { RuntimeTrace } from './runtime-trace.js';
+import { SemanticPayload } from './semantic-payload.js';
 
 const snapshotOutcome = (
   status: ObservationSnapshot['snapshot']['status'],
@@ -43,6 +44,7 @@ export const OperationProgressDetail = ({
   mutationCommitId: correlatedMutationCommitId,
   internalExchanges = [],
   internalGraphObservations = [],
+  eventDeliveries = [],
   runtimeTransport,
 }: {
   readonly activity: OperationProgressActivity;
@@ -51,10 +53,13 @@ export const OperationProgressDetail = ({
   readonly mutationCommitId?: string;
   readonly internalExchanges?: readonly ExchangeActivity[];
   readonly internalGraphObservations?: readonly GraphObservationActivity[];
+  readonly eventDeliveries?: readonly unknown[];
   readonly runtimeTransport?: RuntimeTransport<any>;
 }) => {
   const dialect = useContext(AuthoringDialectContext);
-  const hasCorrelatedEffects = Boolean(correlatedMutationCommitId || derivedRefreshes.length > 0);
+  const hasCorrelatedEffects = Boolean(
+    correlatedMutationCommitId || derivedRefreshes.length > 0 || eventDeliveries.length > 0,
+  );
   const runtimeStepCount = internalExchanges.length + internalGraphObservations.length;
   const [activeSection, setActiveSection] = useState<'progress' | 'effects' | 'runtime'>(() =>
     hasCorrelatedEffects ? 'effects' : 'progress',
@@ -150,7 +155,7 @@ export const OperationProgressDetail = ({
           >
             Progress <span style={styles.operationTabCount}>{activity.snapshots.length}</span>
           </button>
-          {mutationCommitId || derivedRefreshes.length > 0 ? (
+          {mutationCommitId || derivedRefreshes.length > 0 || eventDeliveries.length > 0 ? (
             <button
               type='button'
               role='tab'
@@ -161,7 +166,10 @@ export const OperationProgressDetail = ({
               }}
               onClick={() => setActiveSection('effects')}
             >
-              Effects <span style={styles.operationTabCount}>{derivedRefreshes.length}</span>
+              Effects{' '}
+              <span style={styles.operationTabCount}>
+                {derivedRefreshes.length + eventDeliveries.length}
+              </span>
             </button>
           ) : null}
           {runtimeStepCount > 0 ? (
@@ -186,6 +194,11 @@ export const OperationProgressDetail = ({
               refreshes={derivedRefreshes}
               showHeading={false}
             />
+            {eventDeliveries.map((delivery, index) => (
+              <div key={index} aria-label='Event delivery'>
+                <SemanticPayload value={delivery} />
+              </div>
+            ))}
           </div>
         ) : activeSection === 'runtime' ? (
           <div role='tabpanel' aria-label='Operation runtime trace'>

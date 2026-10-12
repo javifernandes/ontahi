@@ -15,6 +15,7 @@ import {
   toOperationProtocolRequest,
 } from '../protocol/index.js';
 
+import type { EventDelivery } from './events/index.js';
 import {
   getCurrentInvocationContext,
   withInvocationContext as runWithInvocationContext,
@@ -785,5 +786,68 @@ describe('application Runtime Protocol', () => {
     expect(reportError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'storage unavailable' }),
     );
+  });
+
+  it('exposes remote Event observation only through an explicit payload projector', async () => {
+    const { application } = createApplication();
+    let subscriber: ((delivery: EventDelivery) => void | Promise<void>) | undefined;
+    const cancel = vi.fn();
+    Object.assign(application, {
+      events: {
+        subscribeByIdentity: vi.fn(
+          (_eventId: string, _eventVersion: number, next: typeof subscriber) => {
+            subscriber = next;
+            return { id: 'subscription-1', cancel };
+          },
+        ),
+      },
+    });
+    const withoutProjection = createApplicationRuntimeProtocol({ application, policies: [] });
+    expect(withoutProjection.observeEvent).toBeUndefined();
+
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectEventDelivery: delivery => ({
+        ...delivery,
+        occurrence: {
+          ...delivery.occurrence,
+          payload: {
+            visible: (delivery.occurrence.payload as { readonly visible: number }).visible,
+          },
+        },
+      }),
+    });
+    const controller = new AbortController();
+    const iterator = protocol.observeEvent!(
+      { id: 'TodoListCompleted', version: 1 },
+      {
+        context: { principal: { kind: 'user', subject: 'user-1' } },
+        signal: controller.signal,
+      },
+    )[Symbol.asyncIterator]();
+    const next = iterator.next();
+    await subscriber?.({
+      kind: 'event-delivery',
+      deliveryId: 'delivery-1',
+      subscriptionId: 'subscription-1',
+      attempt: 1,
+      occurrence: {
+        kind: 'event-occurrence',
+        occurrenceId: 'occurrence-1',
+        eventId: 'TodoListCompleted',
+        eventVersion: 1,
+        occurredAt: '2026-10-12T00:00:00.000Z',
+        payload: { visible: 2, secret: 'redacted' },
+      },
+    });
+
+    await expect(next).resolves.toMatchObject({
+      done: false,
+      value: { occurrence: { payload: { visible: 2 } } },
+    });
+    expect((await next).value.occurrence.payload).not.toHaveProperty('secret');
+    controller.abort();
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });

@@ -34,7 +34,11 @@ export type MutationEventCausation = {
   readonly parentOutcomeId?: string;
 };
 
-export type OperationEventCausation = { readonly kind: 'operation'; readonly scope: string };
+export type OperationEventCausation = {
+  readonly kind: 'operation';
+  readonly scope: string;
+  readonly taskRun?: { readonly taskId: string; readonly runId: string };
+};
 export type EventCausation = MutationEventCausation | OperationEventCausation;
 
 export type EventEmission<TId extends string = string, TVersion extends number = number> = {

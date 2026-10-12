@@ -35,6 +35,7 @@ import {
   type PortableOperationConditionRegistry,
   type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
+import { isRecord } from '../../value/object.js';
 
 import type { ArchitectureAppFacade, RegisteredArchitecture } from './app-facade.js';
 import {
@@ -534,12 +535,19 @@ export const ontahi = <
     effectors: {
       ...options.capabilities?.effectors,
       'emit-event': (intent: { kind: 'emit-event'; event: unknown }) =>
-        Effect.promise(() =>
-          interpretEvent(intent.event, {
+        Effect.promise(() => {
+          const context = getOperationRuntimeContext();
+          const taskRun = context?.extra?.taskRun;
+          return interpretEvent(intent.event, {
             kind: 'operation',
-            scope: getOperationRuntimeContext()?.scope ?? 'runtime.intent',
-          }).then(() => undefined),
-        ),
+            scope: context?.scope ?? 'runtime.intent',
+            ...(isRecord(taskRun) &&
+            typeof taskRun.taskId === 'string' &&
+            typeof taskRun.runId === 'string'
+              ? { taskRun: { taskId: taskRun.taskId, runId: taskRun.runId } }
+              : {}),
+          }).then(() => undefined);
+        }),
     },
     graph,
     task: {
@@ -552,13 +560,20 @@ export const ontahi = <
             if (!configured.resources.has(DATA_GRAPH_RUNTIME_RESOURCE_KEY)) {
               configured.resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, createDataGraphRuntime());
             }
-            return configured;
+            return {
+              ...configured,
+              extra: {
+                ...configured.extra,
+                taskRun: { taskId: source.taskId, runId: source.runId },
+              },
+            };
           }
           const resources = new Map(getCurrentInvocationContext()?.resources);
           resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, createDataGraphRuntime());
           return {
             scope: source.taskId,
             telemetrySpanName: source.taskId,
+            extra: { taskRun: { taskId: source.taskId, runId: source.runId } },
             resources,
           };
         },

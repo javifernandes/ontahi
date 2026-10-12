@@ -1289,6 +1289,14 @@ describe('Ontahi todo portability example', () => {
         list: createEntityRef(TodoList, { id: 'list-1' }),
         completedCount: 2,
       },
+      causation: {
+        kind: 'operation',
+        scope: 'TodoList.completeAll',
+        taskRun: {
+          taskId: (start.value as TaskRunIdentity).taskId,
+          runId: (start.value as TaskRunIdentity).runId,
+        },
+      },
     });
 
     const noOpStart = await client.reflectedOperationInvoker!.invokeOperation({
