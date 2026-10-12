@@ -13,7 +13,7 @@ Related plans:
 1. [154. Semantic Program Kernel And Distributed Evaluation](../research/154-semantic-program-kernel-and-distributed-evaluation.md)
 2. [153c. Interactive And Resumable Operation Execution](../current/153c-operation-interactions-and-resumption.md)
 3. [153d. LangGraph Task Runtime Comparison](../current/153d-langgraph-task-runtime-comparison.md)
-4. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
+4. [146j. First-Class Events And Configurable Event Runtime](../current/146j-first-class-events-runtime-protocol-gate.md)
 
 ## Summary
 

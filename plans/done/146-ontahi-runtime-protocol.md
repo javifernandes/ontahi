@@ -16,7 +16,7 @@ Extracted follow-ups:
 
 1. [146h. WebSocket Runtime Transport And Durable Progress](./146h-websocket-runtime-transport-and-durable-progress.md)
 2. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
-3. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
+3. [146j. First-Class Events And Configurable Event Runtime](../current/146j-first-class-events-runtime-protocol-gate.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -326,7 +326,7 @@ historical activity timeline that Atlas did not observe.
    required-guarantee negotiation, normative examples, conformance evidence, cancellation gating,
    and the legacy-endpoint release boundary.
 3. Stop before Event transport work until
-   [Plan 146j](../research/146j-first-class-events-runtime-protocol-gate.md) establishes Events as
+   [Plan 146j](../current/146j-first-class-events-runtime-protocol-gate.md) establishes Events as
    first-class semantic values.
 4. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
    identity becomes the next runtime pressure, or
