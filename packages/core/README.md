@@ -675,8 +675,8 @@ const application = ontahi({
       .relationship(Course, 'students')
       .added({ id: 'course.students.assigned', delivery: 'inline' })
       .emit(StudentCourseAssigned, outcome => ({
-          student: outcome.command.source,
-          course: outcome.command.target!,
+        student: outcome.command.source,
+        course: outcome.command.target!,
       })),
   ],
 });

@@ -1,7 +1,4 @@
-import type {
-  AnyEventDeclaration,
-  EventPayload,
-} from '../runtime/server/events/index.js';
+import type { AnyEventDeclaration, EventPayload } from '../runtime/server/events/index.js';
 
 import type { AnyEntityDefinition } from './definitions.js';
 import type { EntityMutationCommand } from './entity-mutation-command.js';
@@ -69,10 +66,9 @@ type DirectRelationshipCommandFor<
 type AppliedDirectRelationshipMutationOutcome<
   TEntity extends AnyEntityDefinition,
   TRelationName extends keyof TEntity['relations'] & string,
-> = Omit<
-  AppliedRelationshipMutationOutcome,
-  'command'
-> & { command: DirectRelationshipCommandFor<TEntity, TRelationName> };
+> = Omit<AppliedRelationshipMutationOutcome, 'command'> & {
+  command: DirectRelationshipCommandFor<TEntity, TRelationName>;
+};
 type AppliedManyToManyRelationshipMutationOutcome = Omit<
   AppliedRelationshipMutationOutcome,
   'command'

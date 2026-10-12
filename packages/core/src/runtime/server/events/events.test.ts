@@ -58,10 +58,14 @@ describe('first-class Events', () => {
     expect(() => define({ id: '' })).toThrow('non-empty id');
     expect(() => define({ version: 0 })).toThrow('positive integer');
     expect(() => define({ description: '' })).toThrow('non-empty description');
-    expect(isEventEmission(StudentCourseAssigned.emit({
-      student: studentRef('student-1'),
-      course: courseRef('course-1'),
-    }))).toBe(true);
+    expect(
+      isEventEmission(
+        StudentCourseAssigned.emit({
+          student: studentRef('student-1'),
+          course: courseRef('course-1'),
+        }),
+      ),
+    ).toBe(true);
     expect(isEventEmission(null)).toBe(false);
     expect(isEventEmission({ kind: 'event-emission', eventId: 'x', eventVersion: 1 })).toBe(false);
     expect(
@@ -137,11 +141,14 @@ describe('first-class Events', () => {
     ).toThrow('not registered');
 
     const explicit = { kind: 'operation' as const, scope: 'explicit' };
-    const occurrence = await events.publish({
-      ...emission,
-      causation: explicit,
-      correlation: { trace: 'trace-1' },
-    }, { kind: 'operation', scope: 'fallback' });
+    const occurrence = await events.publish(
+      {
+        ...emission,
+        causation: explicit,
+        correlation: { trace: 'trace-1' },
+      },
+      { kind: 'operation', scope: 'fallback' },
+    );
     expect(occurrence).toMatchObject({
       causation: explicit,
       correlation: { trace: 'trace-1' },
@@ -154,9 +161,7 @@ describe('first-class Events', () => {
       course: courseRef('course-1'),
     });
 
-    expectTypeOf(emission).toMatchTypeOf<
-      EventEmission<'StudentCourseAssigned', 1>
-    >();
+    expectTypeOf(emission).toMatchTypeOf<EventEmission<'StudentCourseAssigned', 1>>();
     expect(emission).toEqual({
       kind: 'event-emission',
       eventId: 'StudentCourseAssigned',
@@ -176,9 +181,9 @@ describe('first-class Events', () => {
       declarations: [StudentCourseAssigned],
       runtime: createInMemoryEventRuntime(),
     });
-    await expect(
-      events.publish({ ...emission, eventVersion: 2 } as EventEmission),
-    ).rejects.toThrow('requires version 1');
+    await expect(events.publish({ ...emission, eventVersion: 2 } as EventEmission)).rejects.toThrow(
+      'requires version 1',
+    );
     await expect(
       events.publish({
         ...emission,

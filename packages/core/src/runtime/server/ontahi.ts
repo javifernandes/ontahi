@@ -314,7 +314,8 @@ export const ontahi = <
     causation?: import('./events/index.js').EventCausation,
   ) => {
     if (isEventEmission(value)) return eventApplication.publish(value, causation);
-    if (!legacyEventEffector) throw new Error('No effector registered for legacy emit-event intents');
+    if (!legacyEventEffector)
+      throw new Error('No effector registered for legacy emit-event intents');
     await Effect.runPromise(legacyEventEffector({ kind: 'emit-event', event: value } as never));
   };
   const mutationReactionConfiguration: ContextualMutationReactionExecutorOptions = {

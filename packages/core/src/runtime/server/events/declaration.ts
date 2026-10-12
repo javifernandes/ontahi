@@ -1,8 +1,5 @@
 import type { GraphSchemaLike } from '../../../data-graph/index.js';
-import {
-  safeParseUnknownGraphSchema,
-  toGraphSchemaDescriptor,
-} from '../../../data-graph/index.js';
+import { safeParseUnknownGraphSchema, toGraphSchemaDescriptor } from '../../../data-graph/index.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { isRecord } from '../../../value/object.js';
 
