@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 
 import { createTodoModelRuntime } from './command-chat/runtime.js';
 import { defaultStorage } from './storage.js';
-import { Tag, TodoItem, TodoList, type TodoEvent } from './todo.js';
+import { Tag, TodoItem, TodoList, TodoListCompleted, type TodoEvent } from './todo.js';
 
 export const todoNotifications = adaptEffectMethods<{
   todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
@@ -49,6 +49,7 @@ export const TodoApplication = ontahi({
     },
   },
   entities: [TodoList, Tag, TodoItem],
+  events: [TodoListCompleted],
 });
 
 const todoPreparedModelRuntime = todoCommandProvider
@@ -67,4 +68,4 @@ export const todoModelRuntime = todoPreparedModelRuntime
 
 export const TodoGraphApi = TodoApplication.graph;
 
-export { Tag, TodoItem, TodoList };
+export { Tag, TodoItem, TodoList, TodoListCompleted };

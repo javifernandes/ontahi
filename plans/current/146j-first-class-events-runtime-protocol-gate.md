@@ -539,9 +539,9 @@ or a bulk mutation delta.
 
 Acceptance:
 
-- [ ] Declare and reflect `TodoListCompleted` in the Todo application.
-- [ ] Emit one occurrence with Todo List Ref and completed count from the committed Operation.
-- [ ] Consume it from one headless subscriber using the same declaration.
+- [x] Declare and reflect `TodoListCompleted` in the Todo application.
+- [x] Emit one occurrence with Todo List Ref and completed count from the committed Operation.
+- [x] Consume it from one headless subscriber using the same declaration.
 - [ ] Add a small Todo activity projection proving a browser consumer can subscribe.
 - [ ] Add the minimum Runtime Protocol family required by that browser subscription only after
       Vertical A fixes the semantic envelope.
@@ -716,6 +716,10 @@ may share a PR when the behavior remains reviewable and verification stays focus
 15. Reaction `delivery` continues to govern scheduling and durable acceptance of the Reaction
     intent. Event Runtime capabilities independently describe occurrence acceptance and subscriber
     delivery; the two lifecycles do not share one delivery claim.
+16. `TodoListCompleted` remains an explicit domain Event even though a future opt-in
+    `DurableOperationCompleted` or graph-change Event family could expose mechanical lifecycle
+    facts. Built-in Events must define aggregation and authorization independently so bulk work does
+    not imply one delivery per affected Entity.
 
 ## Open Questions
 

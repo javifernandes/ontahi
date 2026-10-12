@@ -17,7 +17,11 @@ import {
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
-import { createUserTaskTrigger, defineTask } from '@ontahi/core/runtime/server';
+import {
+  createUserTaskTrigger,
+  defineTask,
+  type EventDeliveryFor,
+} from '@ontahi/core/runtime/server';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
@@ -45,6 +49,7 @@ import {
   TodoItem,
   TodoApplication,
   TodoList,
+  TodoListCompleted,
   todoNotifications,
   todoTaskRuntime,
 } from './graph.js';
@@ -1196,6 +1201,10 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-3', list: 'list-2', title: 'Other list', completed: false },
     ];
     const snapshotInspection = vi.spyOn(TodoApplication, 'getTaskSnapshot');
+    const completedDeliveries: EventDeliveryFor<typeof TodoListCompleted>[] = [];
+    const completedSubscription = TodoApplication.events.subscribe(TodoListCompleted, delivery => {
+      completedDeliveries.push(delivery);
+    });
 
     let socketCount = 0;
     const runtimeTransport = createWebSocketRuntimeTransport({
@@ -1259,6 +1268,32 @@ describe('Ontahi todo portability example', () => {
       progress: { phase: 'updating' },
       result: { completed: 2 },
     });
+    expect(completedDeliveries).toHaveLength(1);
+    expect(completedDeliveries[0]?.occurrence).toMatchObject({
+      eventId: 'TodoListCompleted',
+      eventVersion: 1,
+      payload: {
+        list: createEntityRef(TodoList, { id: 'list-1' }),
+        completedCount: 2,
+      },
+    });
+
+    const noOpStart = await client.reflectedOperationInvoker!.invokeOperation({
+      operationId: 'TodoList.completeAll',
+      input: { list: createEntityRef(ClientTodoListSchema, { id: 'list-1' }) },
+    });
+    if (!noOpStart.ok) throw new Error('Expected the no-op durable Operation to start.');
+    for await (const _snapshot of client.runtimeTransport!.durableOperation!.observe(
+      noOpStart.value as TaskRunIdentity,
+    )) {
+      // Completion is asserted through the emitted domain occurrence below.
+    }
+    expect(completedDeliveries).toHaveLength(2);
+    expect(completedDeliveries[1]?.occurrence.payload).toEqual({
+      list: createEntityRef(TodoList, { id: 'list-1' }),
+      completedCount: 0,
+    });
+    completedSubscription.cancel();
     expect(snapshotInspection).not.toHaveBeenCalled();
     const terminalInspection = await createRuntimeProtocolExecutionExchange({
       transport: runtimeTransport,

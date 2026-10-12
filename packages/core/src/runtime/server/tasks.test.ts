@@ -24,6 +24,7 @@ import {
   defineTaskExecution,
   defineTaskExecutionStep,
   defineTaskStep,
+  event,
   getTaskSnapshot,
   getOperationRuntimeContext,
   inProcessTasks,
@@ -32,6 +33,7 @@ import {
   startTask,
   taskTriggerActorMatches,
   withInvocationContext,
+  withEffects,
   type TaskTrigger,
 } from './index.js';
 
@@ -680,6 +682,33 @@ describe('tasks', () => {
     expect(task.steps).toEqual({
       'import-source': step,
     });
+  });
+
+  it('executes durable operation effect intents before returning the task result', async () => {
+    const emitted: unknown[] = [];
+    architecture({
+      effectors: {
+        'emit-event': intent => Effect.sync(() => emitted.push(intent.event)),
+      },
+    });
+    const OutputSchema = value('DurableEffectOutput', { completed: field.number() });
+    const operations = defineDomainOperationsForEntity('TodoList', {
+      completeAll: defineDomainOperation({
+        layer: 'test.todos',
+        exposure: 'server-only',
+        durable: { runtime: 'in-process', finalOutput: OutputSchema },
+        run: () =>
+          Effect.succeed(
+            withEffects({ completed: 0 }, [event({ type: 'TodoListCompleted', completed: 0 })]),
+          ),
+      }),
+    });
+
+    const task = createTaskDefinitionFromDurableDomainOperation(operations.completeAll);
+    await expect(
+      Effect.runPromise(task.run({}, { run: { taskId: task.id, runId: 'run-1' } } as never)),
+    ).resolves.toEqual({ completed: 0 });
+    expect(emitted).toEqual([{ type: 'TodoListCompleted', completed: 0 }]);
   });
 
   it('creates and normalizes task triggers', () => {
