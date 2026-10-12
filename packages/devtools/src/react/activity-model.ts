@@ -504,17 +504,14 @@ const buildOperationProgressActivities = (
 
 const runKey = (run: { readonly taskId: string; readonly runId: string }) =>
   `${run.taskId}:${run.runId}`;
+const terminalObservationStatuses = new Set(['completed', 'failed', 'cancelled']);
 
 /** Reports whether a physical observer saw a terminal snapshot or terminal settlement. */
 const terminalObservation = (observation: OperationProgressActivity) => {
   const latest = observation.snapshots[observation.snapshots.length - 1]?.snapshot.status;
   return (
-    latest === 'completed' ||
-    latest === 'failed' ||
-    latest === 'cancelled' ||
-    observation.settled?.outcome === 'completed' ||
-    observation.settled?.outcome === 'failed' ||
-    observation.settled?.outcome === 'cancelled'
+    terminalObservationStatuses.has(latest ?? '') ||
+    terminalObservationStatuses.has(observation.settled?.outcome ?? '')
   );
 };
 

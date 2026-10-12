@@ -901,6 +901,48 @@ describe('Devtools activity model', () => {
     });
   });
 
+  it('selects the terminal, deepest, or latest observer for standalone Task runs', () => {
+    const snapshot = (
+      observationId: string,
+      runId: string,
+      sequence: number,
+      at: number,
+      status: 'running' | 'completed',
+    ): ObservationDiagnosticEvent => ({
+      observationId,
+      family: 'durable.operation.observe',
+      run: { taskId: 'Todo.run', runId },
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: at,
+      kind: 'observation.snapshot',
+      at,
+      sequence,
+      snapshot: {
+        taskId: 'Todo.run',
+        runId,
+        status,
+        updatedAt: `2026-10-12T00:00:${String(at).padStart(2, '0')}.000Z`,
+      },
+    });
+    const entries = buildActivityEntries([
+      snapshot('terminal-running', 'terminal', 1, 1, 'running'),
+      snapshot('terminal-completed', 'terminal', 1, 2, 'completed'),
+      snapshot('deep-observer', 'deep', 1, 3, 'running'),
+      snapshot('deep-observer', 'deep', 2, 4, 'running'),
+      snapshot('shallow-observer', 'deep', 1, 5, 'running'),
+      snapshot('earlier-observer', 'latest', 1, 6, 'running'),
+      snapshot('latest-observer', 'latest', 1, 7, 'running'),
+    ]);
+
+    expect(entries).toHaveLength(3);
+    expect(entries.map(entry => entry.id)).toEqual([
+      'observation:latest-observer',
+      'observation:deep-observer',
+      'observation:terminal-completed',
+    ]);
+  });
+
   it('correlates terminal inspection metadata and caused Graph refreshes into the durable activity', () => {
     const run = { taskId: 'TodoList.completeAll', runId: 'run-1' };
     const exchangeIdentity = {
