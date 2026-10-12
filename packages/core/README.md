@@ -695,6 +695,14 @@ restart guarantee. One occurrence identity is preserved through fan-out while ev
 gets a distinct delivery identity. Subscriber failure is isolated from other subscribers and from
 the already committed mutation.
 
+Stronger adapters may additionally expose `durableDelivery`. Stable subscriptions name one Event
+version plus an optional serializable correlation subset. A consumer claims one pending delivery
+under a bounded lease, then acknowledges it or releases the same delivery identity for a later
+attempt. `requireDurableEventDelivery(runtime)` fails before registration when retention, durable
+acceptance, durable delivery, acknowledgement, or the claim API is absent. Adapter packages can run
+`verifyDurableEventRuntimeConformance(...)` to exercise the provider-neutral lifecycle, including
+an occurrence accepted before subscription and a claim recovered after runtime recreation.
+
 Structural delete behavior belongs to the relation declaration when every mutation path must obey
 it. A required `hasMany` ownership edge can cascade, while an attribute-free many-to-many edge can
 detach its relation facts:

@@ -1,4 +1,9 @@
 export { createEventApplication } from './application.js';
+export { requireDurableEventDelivery } from './capabilities.js';
+export {
+  verifyDurableEventRuntimeConformance,
+  type DurableEventRuntimeConformanceHarness,
+} from './conformance.js';
 export {
   defineEvent,
   eventDeclaration,
@@ -16,6 +21,7 @@ export type {
   EventCausation,
   EventDeclaration,
   EventDelivery,
+  EventDeliveryClaim,
   EventDeliveryFor,
   EventEmission,
   EventOccurrence,
@@ -23,6 +29,8 @@ export type {
   EventPayload,
   EventRuntime,
   EventRuntimeCapabilities,
+  DurableEventDeliveryCapability,
+  DurableEventSubscription,
   EventSubscriber,
   EventSubscription,
   MutationEventCausation,

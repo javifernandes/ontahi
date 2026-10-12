@@ -1,10 +1,18 @@
 # `@ontahi/postgres`
 
-Direct PostgreSQL storage for Ontahi applications.
+PostgreSQL-backed runtime capabilities for Ontahi applications.
+
+This package is not a generic SQL client and installing it does not activate one monolithic
+adapter. It provides independently composable implementations of Ontahi concerns. Import the Data
+Graph storage from `@ontahi/postgres/data-graph` and the durable Event Runtime from
+`@ontahi/postgres/events`; applications may use either or both with unrelated implementations for
+their other runtime concerns.
 
 See the canonical [Relations](../../docs/developers/02-core-concepts/03-relations.md) and
 [runtime composition](../../docs/developers/03-runtimes/01-runtime-composition-and-capabilities.md)
 chapters for the application-level lifecycle. This README documents provider-specific behavior.
+
+## Data Graph
 
 The host owns its PostgreSQL schema and migrations. When the storage is composed through
 `ontahi(...)`, the adapter conventionally maps registered Entities to plural snake-case tables and
@@ -96,6 +104,50 @@ query-only, transaction-scoped `PoolClient` to the lower-level runtime. Only a `
 compositional transaction capability because it can check out and own a connection lifetime.
 
 Migration generation and schema evolution remain host responsibilities.
+
+## Durable Events
+
+`createPostgresEventRuntime({ pool })` retains accepted Event Occurrences and provides stable
+correlated subscriptions with leased claims, acknowledgement, release/retry, cancellation, and
+recovery after runtime recreation. It also preserves the ordinary process-local live subscription
+surface. The adapter advertises durable acceptance, durable delivery, retention, acknowledgement,
+subscription ordering, and spill-to-storage overflow. It deliberately does not claim general
+replay, deduplication, exactly-once processing, or atomic publication with Data Graph mutations.
+
+```ts
+import { createPostgresEventRuntime } from '@ontahi/postgres/events';
+
+const eventRuntime = createPostgresEventRuntime({ pool });
+const durable = eventRuntime.durableDelivery!;
+
+await durable.register({
+  id: `todo-export:${requestId}`,
+  eventId: 'TodoListExportReady',
+  eventVersion: 1,
+  correlation: { requestId },
+});
+
+const claim = await durable.claim(`todo-export:${requestId}`, {
+  consumerId: workerId,
+  leaseMs: 30_000,
+});
+if (claim) await durable.acknowledge(claim);
+```
+
+The host owns migrations. `createPostgresEventSchemaSql()` returns the bounded table/index contract
+for inclusion in a host migration; the runtime never creates or mutates schema at startup. Table
+names can be overridden without exposing them in Event declarations. Registration backfills
+matching retained occurrences, closing the occurrence-before-subscriber window. A delivery is
+claimed by at most one live lease; expiry or explicit release makes the same delivery identity
+claimable with an incremented attempt. Acknowledgement prevents later claims. Cancelling a stable
+subscription prevents future delivery without deleting its occurrences or already-created
+deliveries.
+
+Adapter authors can run `verifyDurableEventRuntimeConformance` from `@ontahi/core/runtime/server`
+against another retained implementation. It proves early-occurrence matching, exclusive claim,
+identity-preserving retry, acknowledgement, and recovery through runtime recreation.
+
+## Data Graph reflection and schema inspection
 
 PostgreSQL storage declares `graphReadCapabilities.relationSelections`, allowing an `ontahi(...)`
 application's read dispatcher to negotiate v2 contextual reads with remote clients. Each hop still

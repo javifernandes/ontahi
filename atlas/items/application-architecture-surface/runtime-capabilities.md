@@ -53,6 +53,13 @@ contract.
 
 BookOps remains a host composition: it chooses adapters, credentials, routes, registries, domain declarations, and application policy. Ontahi owns only the framework semantics proven reusable across hosts.
 
+A technology adapter package may implement several independent concerns without becoming a
+monolithic runtime. `@ontahi/postgres` now demonstrates this shape with separate Data Graph and
+durable Event Runtime entrypoints. A host may select either capability, combine them, or pair one
+with an implementation from another provider. Installing the package does not activate unused
+concerns or grant their capabilities; each configured implementation advertises only its proven
+guarantees.
+
 Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
 
 For observability, core owns vendor-neutral telemetry and reporting ports. `@ontahi/opentelemetry` implements span creation and Ontahi runtime attributes, while each host registers its SDK, resources, processors, and exporters. BookOps keeps Sentry reporting local until another host proves that adapter reusable; Axiom and SigNoz remain interchangeable OTLP destinations rather than Ontahi adapters.

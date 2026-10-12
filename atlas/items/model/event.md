@@ -44,6 +44,20 @@ acknowledgement,
 deduplication, atomic publication, restart guarantee, or exactly-once guarantee. A stronger adapter
 must advertise only guarantees it actually implements.
 
+The first stronger adapter is the opt-in PostgreSQL Event Runtime. It retains occurrences and
+stable subscription definitions, matches an optional JSON correlation subset, materializes one
+delivery per subscription and occurrence, and leases claims atomically. Release or lease expiry
+preserves delivery identity and increments its attempt; acknowledgement prevents another claim.
+Registration matches already-retained occurrences, so occurrence-before-subscriber and
+subscriber-before-occurrence have the same result. Runtime recreation retains pending claims and
+deliveries without retaining a JavaScript callback or stack.
+
+This proof does not yet claim general cursor replay or atomic publication with a Data Graph
+transaction. The PostgreSQL runtime reports those capabilities as false. Core's
+`requireDurableEventDelivery` fails early when a consumer requires retention, durable acceptance,
+durable delivery, acknowledgement, and the claim API but the selected runtime cannot supply them.
+The shared conformance verifier is the adapter-author boundary for these lifecycle invariants.
+
 Mutation Reactions enter the Event Runtime only from the existing Unit of Work post-commit queue.
 Rejected and rolled-back mutations create no occurrence. Publication or subscriber failure after
 commit cannot retroactively roll back domain state. Operation Effect Intents use the same built-in

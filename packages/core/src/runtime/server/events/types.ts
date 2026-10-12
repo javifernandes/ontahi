@@ -65,8 +65,33 @@ export type EventDelivery<TPayload extends JsonValue = JsonValue> = {
   readonly kind: 'event-delivery';
   readonly deliveryId: string;
   readonly subscriptionId: string;
-  readonly attempt: 1;
+  readonly attempt: number;
   readonly occurrence: EventOccurrence<TPayload>;
+};
+
+export type DurableEventSubscription = {
+  readonly id: string;
+  readonly eventId: string;
+  readonly eventVersion: number;
+  readonly correlation?: Readonly<Record<string, JsonValue>>;
+};
+
+export type EventDeliveryClaim = {
+  readonly claimId: string;
+  readonly consumerId: string;
+  readonly leaseExpiresAt: string;
+  readonly delivery: EventDelivery;
+};
+
+export type DurableEventDeliveryCapability = {
+  register: (subscription: DurableEventSubscription) => Promise<void>;
+  claim: (
+    subscriptionId: string,
+    options: { readonly consumerId: string; readonly leaseMs: number },
+  ) => Promise<EventDeliveryClaim | undefined>;
+  acknowledge: (claim: EventDeliveryClaim) => Promise<void>;
+  release: (claim: EventDeliveryClaim) => Promise<void>;
+  cancel: (subscriptionId: string) => Promise<void>;
 };
 
 export type EventRuntimeCapabilities = {
@@ -88,6 +113,7 @@ export type EventRuntime = {
   readonly capabilities: EventRuntimeCapabilities;
   accept: (emission: EventEmission) => Promise<EventOccurrence>;
   subscribe: (eventId: string, subscriber: EventSubscriber) => EventSubscription;
+  readonly durableDelivery?: DurableEventDeliveryCapability;
 };
 
 export type EventPayload<TEvent extends AnyEventDeclaration> = InferGraphSchemaClientInput<

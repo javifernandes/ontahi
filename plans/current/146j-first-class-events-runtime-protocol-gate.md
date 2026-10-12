@@ -610,17 +610,17 @@ may share a PR when the behavior remains reviewable and verification stays focus
 
 ### Slice 3: Todo, protocol, and inspection
 
-- [ ] Complete Vertical B without replacing semantic cache invalidation.
-- [ ] Add only the protocol operations demanded by the browser proof.
-- [ ] Project Event declaration and activity through Explorer and Devtools.
-- [ ] Specify live subscription cancellation, disconnect, overflow, and reconnection behavior.
+- [x] Complete Vertical B without replacing semantic cache invalidation.
+- [x] Add only the protocol operations demanded by the browser proof.
+- [x] Project Event declaration and activity through Explorer and Devtools.
+- [x] Specify live subscription cancellation, disconnect, overflow, and reconnection behavior.
 
 ### Slice 4: Durable adapter proof
 
-- [ ] Define stable subscription, delivery, claim, acknowledgement, retry, and retention contracts.
-- [ ] Implement one durable runtime or transactional outbox/inbox proof.
-- [ ] Prove capability mismatch fails at configuration or wait registration.
-- [ ] Keep provider storage schema and credentials private to the adapter.
+- [x] Define stable subscription, delivery, claim, acknowledgement, retry, and retention contracts.
+- [x] Implement one durable runtime or transactional outbox/inbox proof.
+- [x] Prove capability mismatch fails at configuration or wait registration.
+- [x] Keep provider storage schema and credentials private to the adapter.
 
 ### Slice 5: External ingress and Event continuation
 
