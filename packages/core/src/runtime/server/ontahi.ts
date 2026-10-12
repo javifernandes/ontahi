@@ -44,6 +44,7 @@ import {
 import { defineOntahiApplication, type OntahiApplication } from './application.js';
 import { architecture } from './architecture-registry.js';
 import type { ArchitectureDefinition } from './architecture-types.js';
+import { getOperationRuntimeContext } from './context.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
 import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
 import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
@@ -58,6 +59,14 @@ import {
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
+import {
+  createEventApplication,
+  createInMemoryEventRuntime,
+  isEventEmission,
+  type AnyEventDeclaration,
+  type EventApplication,
+  type EventRuntime,
+} from './events/index.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import {
   applyContextualEntityMutationReactions,
@@ -65,7 +74,7 @@ import {
   createContextualMutationReactionExecutor,
   type ContextualMutationReactionExecutorOptions,
 } from './mutation-reaction.js';
-import type { TaskConfig } from './tasks.js';
+import type { TaskConfig, TaskRunSource } from './tasks.js';
 import { getCurrentUnitOfWork, recordAppliedGraphCommand } from './unit-of-work.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
@@ -190,6 +199,7 @@ export type OntahiOptions<
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
   TCapabilities extends OntahiCapabilities = {},
+  TEvents extends readonly AnyEventDeclaration[] = readonly [],
 > = {
   storage: TStorage;
   tasks?: TaskConfig;
@@ -198,6 +208,8 @@ export type OntahiOptions<
     | TEntities
     | ((app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>) => TEntities);
   reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
+  events?: TEvents;
+  eventRuntime?: EventRuntime;
   operationConditions?: PortableOperationConditionRegistry;
   derivedFields?: PortableDerivedFieldRegistry;
   fieldGenerators?: Record<
@@ -238,6 +250,7 @@ export type ComposedOntahiApplication<
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
   TCapabilities extends OntahiCapabilities = {},
+  TEvents extends readonly AnyEventDeclaration[] = readonly [],
 > = GraphReadableOntahiApplication<
   ApplicationGraph<
     GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
@@ -256,6 +269,7 @@ export type ComposedOntahiApplication<
       RuntimeReadOptions<StorageRuntime<TStorage>>
     >
   > & {
+    events: EventApplication<TEvents>;
     architecture: RegisteredArchitecture<
       OntahiCapabilityEvent<TCapabilities>,
       OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
@@ -282,13 +296,28 @@ export const ontahi = <
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   const TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
   const TCapabilities extends OntahiCapabilities = {},
+  const TEvents extends readonly AnyEventDeclaration[] = readonly [],
 >(
-  options: OntahiOptions<TStorage, TEntities, TCapabilities>,
-): ComposedOntahiApplication<TStorage, TEntities, TCapabilities> => {
-  let registeredForReactions: RegisteredArchitecture<any, any> | undefined;
+  options: OntahiOptions<TStorage, TEntities, TCapabilities, TEvents>,
+): ComposedOntahiApplication<TStorage, TEntities, TCapabilities, TEvents> => {
   let applicationForReactions: OntahiApplication | undefined;
   let registeredReactions: readonly MutationReaction[] = [];
   const semanticEntities: AnyEntityDefinition[] = [];
+  const configuredEventRuntime = options.eventRuntime ?? createInMemoryEventRuntime();
+  const eventApplication = createEventApplication({
+    declarations: options.events ?? ([] as unknown as TEvents),
+    runtime: configuredEventRuntime,
+  });
+  const legacyEventEffector = options.capabilities?.effectors?.['emit-event'];
+  const interpretEvent = async (
+    value: unknown,
+    causation?: import('./events/index.js').EventCausation,
+  ) => {
+    if (isEventEmission(value)) return eventApplication.publish(value, causation);
+    if (!legacyEventEffector)
+      throw new Error('No effector registered for legacy emit-event intents');
+    await Effect.runPromise(legacyEventEffector({ kind: 'emit-event', event: value } as never));
+  };
   const mutationReactionConfiguration: ContextualMutationReactionExecutorOptions = {
     getReactions: () => registeredReactions,
     invokeOperation: request => {
@@ -298,19 +327,7 @@ export const ontahi = <
       }
       return applicationForReactions.invokeOperation(operation, request.input);
     },
-    emitEvent: event => {
-      const effectors = registeredForReactions?.app.effects.effectors as
-        | {
-            'emit-event'?: (intent: {
-              kind: 'emit-event';
-              event: unknown;
-            }) => Effect.Effect<void, unknown>;
-          }
-        | undefined;
-      const effector = effectors?.['emit-event'];
-      if (!effector) throw new Error('No effector registered for emit-event intents');
-      return Effect.runPromise(effector({ kind: 'emit-event', event }));
-    },
+    emitEvent: event => interpretEvent(event),
   };
   const decorateDataGraphRuntime = (
     runtime: StorageRuntime<TStorage>,
@@ -514,12 +531,22 @@ export const ontahi = <
   const configuredTasks = options.tasks ?? {};
   const definition = {
     ...options.capabilities,
+    effectors: {
+      ...options.capabilities?.effectors,
+      'emit-event': (intent: { kind: 'emit-event'; event: unknown }) =>
+        Effect.promise(() =>
+          interpretEvent(intent.event, {
+            kind: 'operation',
+            scope: getOperationRuntimeContext()?.scope ?? 'runtime.intent',
+          }).then(() => undefined),
+        ),
+    },
     graph,
     task: {
       ...configuredTasks,
       host: {
         ...configuredTasks.host,
-        createExecutionContext: source => {
+        createExecutionContext: (source: TaskRunSource) => {
           const configured = configuredTasks.host?.createExecutionContext?.(source);
           if (configured) {
             if (!configured.resources.has(DATA_GRAPH_RUNTIME_RESOURCE_KEY)) {
@@ -537,9 +564,8 @@ export const ontahi = <
         },
       },
     },
-  } as OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>;
+  } as unknown as OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>;
   const registered = architecture(definition);
-  registeredForReactions = registered;
   const declaredEntities =
     typeof options.entities === 'function' ? options.entities(registered.app) : options.entities;
   if (Array.isArray(declaredEntities)) {
@@ -812,6 +838,7 @@ export const ontahi = <
     });
 
   return Object.assign(application, {
+    events: eventApplication.api,
     graph: applicationGraph,
     app: registered.app,
     architecture: registered,

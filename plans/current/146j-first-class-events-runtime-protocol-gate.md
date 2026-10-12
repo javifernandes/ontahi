@@ -511,17 +511,17 @@ This vertical establishes the irreducible local model without Runtime Protocol o
 
 Acceptance:
 
-- [ ] Register `StudentCourseAssigned` as a typed Event declaration.
-- [ ] Infer and validate its payload at authoring and runtime boundaries.
-- [ ] Lower Reaction emission to one canonical JSON-safe EventEmission intent.
-- [ ] Create exactly one occurrence only after successful Unit of Work commit.
-- [ ] Create no occurrence after rejection or rollback.
-- [ ] Deliver the same occurrence to two live subscribers with distinct delivery identities.
-- [ ] Prove one subscriber failure does not retract the occurrence or block the other subscriber.
-- [ ] Prove cancellation prevents later delivery.
-- [ ] Reflect the Event declaration from the application model.
-- [ ] Require no application-owned `emit-event` effector.
-- [ ] Expose honest in-memory Event Runtime capabilities.
+- [x] Register `StudentCourseAssigned` as a typed Event declaration.
+- [x] Infer and validate its payload at authoring and runtime boundaries.
+- [x] Lower Reaction emission to one canonical JSON-safe EventEmission intent.
+- [x] Create exactly one occurrence only after successful Unit of Work commit.
+- [x] Create no occurrence after rejection or rollback.
+- [x] Deliver the same occurrence to two live subscribers with distinct delivery identities.
+- [x] Prove one subscriber failure does not retract the occurrence or block the other subscriber.
+- [x] Prove cancellation prevents later delivery.
+- [x] Reflect the Event declaration from the application model.
+- [x] Require no application-owned `emit-event` effector.
+- [x] Expose honest in-memory Event Runtime capabilities.
 
 ### Vertical B: Todo end-to-end event flow
 
@@ -588,25 +588,25 @@ may share a PR when the behavior remains reviewable and verification stays focus
 - [x] Inventory current Effect Intent, Mutation Reaction, Unit of Work, Task trigger, reflection,
       and Explorer event-shaped surfaces.
 - [x] Fix the occurrence/delivery/subscription/wait vocabulary in this plan.
-- [ ] Decide the minimal declaration version and compatibility contract.
-- [ ] Decide how causal provenance reuses Task Run, Operation invocation, and mutation outcome
+- [x] Decide the minimal declaration version and compatibility contract.
+- [x] Decide how causal provenance reuses Task Run, Operation invocation, and mutation outcome
       identities without embedding runtime-private objects.
 
 ### Slice 1: Typed declaration and in-memory Event Runtime
 
-- [ ] Implement Event declaration, registration, reflection, and payload validation.
-- [ ] Implement canonical EventEmission and EventOccurrence values.
-- [ ] Implement the built-in in-memory Event Runtime and capability descriptor.
-- [ ] Implement headless live subscription and cancellation.
-- [ ] Complete Vertical A.
+- [x] Implement Event declaration, registration, reflection, and payload validation.
+- [x] Implement canonical EventEmission and EventOccurrence values.
+- [x] Implement the built-in in-memory Event Runtime and capability descriptor.
+- [x] Implement headless live subscription and cancellation.
+- [x] Complete Vertical A.
 
 ### Slice 2: Unit of Work and Reaction integration
 
-- [ ] Journal Event emissions until successful commit and discard them on rollback.
-- [ ] Route typed Reaction emissions through the built-in interpreter.
-- [ ] Reconcile Reaction scheduling delivery with Event occurrence delivery.
-- [ ] Preserve publication failure as post-commit evidence rather than mutation rollback.
-- [ ] Add a migration path for raw `emit-event` intents and host effectors.
+- [x] Journal Event emissions until successful commit and discard them on rollback.
+- [x] Route typed Reaction emissions through the built-in interpreter.
+- [x] Reconcile Reaction scheduling delivery with Event occurrence delivery.
+- [x] Preserve publication failure as post-commit evidence rather than mutation rollback.
+- [x] Add a migration path for raw `emit-event` intents and host effectors.
 
 ### Slice 3: Todo, protocol, and inspection
 
@@ -706,6 +706,16 @@ may share a PR when the behavior remains reviewable and verification stays focus
 11. Generic effectors remain internal machinery and escape hatches, but applications do not register
     one merely to use first-class Events.
 12. Runtime Protocol follows the local semantic proof rather than defining it.
+13. The first declaration compatibility identity is an explicit positive integer version matched
+    exactly at the runtime boundary. Schema fingerprints, migrations, and cross-version delivery
+    remain deferred until a retained runtime supplies evidence for them.
+14. Mutation-caused occurrences preserve the existing Applied Mutation Outcome identity chain as
+    `{ outcomeId, rootOutcomeId, parentOutcomeId? }`. Operation-caused occurrences preserve the
+    current operation scope. Neither envelope serializes commands, runtime resources, callbacks,
+    Principals, or provider-private objects.
+15. Reaction `delivery` continues to govern scheduling and durable acceptance of the Reaction
+    intent. Event Runtime capabilities independently describe occurrence acceptance and subscriber
+    delivery; the two lifecycles do not share one delivery claim.
 
 ## Open Questions
 

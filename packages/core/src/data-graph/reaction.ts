@@ -1,3 +1,5 @@
+import type { AnyEventDeclaration, EventPayload } from '../runtime/server/events/index.js';
+
 import type { AnyEntityDefinition } from './definitions.js';
 import type { EntityMutationCommand } from './entity-mutation-command.js';
 import type {
@@ -9,6 +11,7 @@ import type {
   MutationReaction,
   MutationReactionIntent,
 } from './mutation-reaction.js';
+import type { EntityRef } from './ref/index.js';
 import {
   resolveCanonicalRelationshipIdentity,
   type ManyToManyRelationshipCommand,
@@ -31,6 +34,10 @@ type EntityOutcomeProjector<TAction extends EntityMutationAction, TValue> = (
 type EntityEventAuthoring<TAction extends EntityMutationAction> = {
   (project: EntityOutcomeProjector<TAction, unknown>): MutationReaction;
   (event: unknown): MutationReaction;
+  <TEvent extends AnyEventDeclaration>(
+    declaration: TEvent,
+    project: EntityOutcomeProjector<TAction, EventPayload<TEvent>> | EventPayload<TEvent>,
+  ): MutationReaction;
 };
 type EntityReactionBuilder<TAction extends EntityMutationAction> = {
   react: (
@@ -43,10 +50,25 @@ export type EntityReactionAuthoring = {
   updated: (config: ReactionConfig) => EntityReactionBuilder<'update'>;
   deleted: (config: ReactionConfig) => EntityReactionBuilder<'delete'>;
 };
-type AppliedDirectRelationshipMutationOutcome = Omit<
-  AppliedRelationshipMutationOutcome,
-  'command'
-> & { command: RelationshipCommand };
+type DirectRelationshipCommandFor<
+  TEntity extends AnyEntityDefinition,
+  TRelationName extends keyof TEntity['relations'] & string,
+> = Omit<RelationshipCommand, 'source' | 'target'> &
+  (TEntity['relations'][TRelationName]['relationKind'] extends 'hasMany'
+    ? {
+        source: EntityRef<TEntity['relations'][TRelationName]['target']['name']>;
+        target?: EntityRef<TEntity['name']>;
+      }
+    : {
+        source: EntityRef<TEntity['name']>;
+        target?: EntityRef<TEntity['relations'][TRelationName]['target']['name']>;
+      });
+type AppliedDirectRelationshipMutationOutcome<
+  TEntity extends AnyEntityDefinition,
+  TRelationName extends keyof TEntity['relations'] & string,
+> = Omit<AppliedRelationshipMutationOutcome, 'command'> & {
+  command: DirectRelationshipCommandFor<TEntity, TRelationName>;
+};
 type AppliedManyToManyRelationshipMutationOutcome = Omit<
   AppliedRelationshipMutationOutcome,
   'command'
@@ -65,11 +87,15 @@ type RelationshipOutcomeFor<
   ? AppliedOrderedRelationshipMutationOutcome
   : TEntity['relations'][TRelationName]['relationKind'] extends 'manyToMany'
     ? AppliedManyToManyRelationshipMutationOutcome
-    : AppliedDirectRelationshipMutationOutcome;
+    : AppliedDirectRelationshipMutationOutcome<TEntity, TRelationName>;
 type RelationshipOutcomeProjector<TOutcome, TValue> = (outcome: TOutcome) => TValue;
 type RelationshipEventAuthoring<TOutcome> = {
   (project: RelationshipOutcomeProjector<TOutcome, unknown>): MutationReaction;
   (event: unknown): MutationReaction;
+  <TEvent extends AnyEventDeclaration>(
+    declaration: TEvent,
+    project: RelationshipOutcomeProjector<TOutcome, EventPayload<TEvent>> | EventPayload<TEvent>,
+  ): MutationReaction;
 };
 type RelationshipReactionBuilder<TOutcome> = {
   react: (
@@ -95,7 +121,19 @@ type RelationshipReactionAuthoring<
     }
   : {});
 
-const emit = (event: unknown): EmitEventReactionIntent => ({ kind: 'emit-event', event });
+const emit = <TEvent extends AnyEventDeclaration>(
+  event: unknown | TEvent,
+  payload?: EventPayload<TEvent>,
+): EmitEventReactionIntent => ({
+  kind: 'emit-event',
+  event:
+    typeof event === 'object' &&
+    event !== null &&
+    'kind' in event &&
+    event.kind === 'event-declaration'
+      ? (event as TEvent).emit(payload as EventPayload<TEvent>)
+      : event,
+});
 
 const invoke = (
   operation: string | { id: string },
@@ -158,10 +196,19 @@ const defineRelationshipReaction = <
     return declaration;
   };
 
-  const emitReaction = ((event: unknown) =>
-    react(outcome => [
-      emit(typeof event === 'function' ? event(outcome) : event),
-    ])) as RelationshipEventAuthoring<RelationshipOutcomeFor<TEntity, TRelationName>>;
+  const emitReaction = ((event: unknown, payload?: unknown) =>
+    react(outcome => {
+      if (
+        typeof event === 'object' &&
+        event !== null &&
+        'kind' in event &&
+        event.kind === 'event-declaration'
+      ) {
+        const resolved = typeof payload === 'function' ? payload(outcome) : payload;
+        return [emit(event as AnyEventDeclaration, resolved as never)];
+      }
+      return [emit(typeof event === 'function' ? event(outcome) : event)];
+    })) as RelationshipEventAuthoring<RelationshipOutcomeFor<TEntity, TRelationName>>;
 
   return { react, emit: emitReaction };
 };
@@ -202,10 +249,19 @@ const defineEntityReaction = <TAction extends EntityMutationAction>(
     },
     react: (outcome: AppliedMutationOutcome) => project(outcome as EntityOutcomeFor<TAction>),
   });
-  const emitReaction = ((event: unknown) =>
-    react(outcome => [
-      emit(typeof event === 'function' ? event(outcome) : event),
-    ])) as EntityEventAuthoring<TAction>;
+  const emitReaction = ((event: unknown, payload?: unknown) =>
+    react(outcome => {
+      if (
+        typeof event === 'object' &&
+        event !== null &&
+        'kind' in event &&
+        event.kind === 'event-declaration'
+      ) {
+        const resolved = typeof payload === 'function' ? payload(outcome) : payload;
+        return [emit(event as AnyEventDeclaration, resolved as never)];
+      }
+      return [emit(typeof event === 'function' ? event(outcome) : event)];
+    })) as EntityEventAuthoring<TAction>;
 
   return { react, emit: emitReaction };
 };

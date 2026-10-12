@@ -644,36 +644,56 @@ const Book = entity({
 ```
 
 Ontahí collects these declarations when the Entity is registered and evaluates them after the
-authoritative mutation succeeds. The composition root still binds the `emit-event` effector, so
-the model describes the event while the host chooses how to deliver it.
+authoritative mutation succeeds. Raw event objects remain supported through an application-owned
+`emit-event` effector during migration. New code should use a registered typed Event, which is
+interpreted by Ontahí's built-in Event Runtime without an application-owned effector.
 
 Cross-Entity and application-level Reactions can remain in `ontahi({ reactions })`. Relationship
 factories derive the canonical relation identity from either endpoint and keep delivery policy
 visible:
 
 ```ts
-import { reaction } from '@ontahi/core/data-graph';
+import { graphSchema, reaction } from '@ontahi/core/data-graph';
+import { event, ontahi } from '@ontahi/core/runtime/server';
+
+const StudentCourseAssigned = event.define({
+  id: 'StudentCourseAssigned',
+  version: 1,
+  description: 'A student was assigned to a course.',
+  payload: graphSchema.object({
+    student: graphSchema.ref(Student),
+    course: graphSchema.ref(Course),
+  }),
+});
 
 const application = ontahi({
   storage,
   entities: [Course, Student],
+  events: [StudentCourseAssigned],
   reactions: () => [
     reaction
       .relationship(Course, 'students')
-      .removed({ id: 'course.students.removed', delivery: 'inline' })
-      .react(outcome => [
-        reaction.intent.invoke('Course.recordRemoval', {
-          studentId: outcome.command.source.locator.id,
-        }),
-        reaction.intent.emit({
-          type: 'StudentRemovedFromCourse',
-          student: outcome.command.source,
-          course: outcome.command.target,
-        }),
-      ]),
+      .added({ id: 'course.students.assigned', delivery: 'inline' })
+      .emit(StudentCourseAssigned, outcome => ({
+        student: outcome.command.source,
+        course: outcome.command.target!,
+      })),
   ],
 });
+
+const subscription = application.events.subscribe(StudentCourseAssigned, delivery => {
+  console.log(delivery.deliveryId, delivery.occurrence.payload);
+});
+
+subscription.cancel();
 ```
+
+The default Event Runtime is process-local and ephemeral. Its capability descriptor reports live
+subscription and acceptance-ordered fan-out with bounded overflow rejection, but no retention,
+replay, durable acceptance or delivery, acknowledgement, deduplication, atomic publication, or
+restart guarantee. One occurrence identity is preserved through fan-out while every subscriber
+gets a distinct delivery identity. Subscriber failure is isolated from other subscribers and from
+the already committed mutation.
 
 Structural delete behavior belongs to the relation declaration when every mutation path must obey
 it. A required `hasMany` ownership edge can cascade, while an attribute-free many-to-many edge can

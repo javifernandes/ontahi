@@ -8,10 +8,12 @@ horizon: now
 supports:
   - ontahi.model.applied-mutation-outcome
   - ontahi.model.operation-invocation
+  - ontahi.model.event
 relatedPlans:
   - ontahi://plans/135-applied-mutation-outcomes-and-reactions
   - ontahi://plans/135b-declarative-reaction-authoring-and-registration
   - ontahi://plans/132-durable-invocation-identity-and-idempotency
+  - ontahi://plans/146j-first-class-events-runtime-protocol-gate
 ---
 
 A [[ontahi.model.reaction|Reaction]] is a modeled rule that consumes an Applied Mutation Outcome and
@@ -35,6 +37,12 @@ The first portable intent vocabulary includes Relationship Commands, Operation I
 Domain Events. Each is interpreted through its normal runtime capability so a Reaction does not
 bypass validation or authorization. Durable envelopes accept only JSON-safe intent and never carry
 opaque executable functions.
+
+Typed Event authoring now lowers through the registered Event declaration to the built-in Event
+interpreter. Reaction `delivery` still governs Reaction scheduling and durable intent acceptance;
+the Event Runtime separately states occurrence and subscriber-delivery guarantees. Existing raw
+`emit-event` values may use an explicitly registered legacy effector during migration, but a typed
+Event does not require one.
 
 Applications register Relationship Reactions through `ontahi({ reactions })`. The
 `reaction.relationship(Entity, relationName).added(...)` and `.removed(...)` factories normalize

@@ -1,3 +1,4 @@
+import type { EventOccurrence } from '../runtime/server/events/index.js';
 import { isJsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
@@ -143,7 +144,7 @@ export type MutationReactionExecution = {
 } & (
   | { status: 'applied'; outcome: AppliedMutationOutcome }
   | { status: 'completed'; result: unknown }
-  | { status: 'emitted' }
+  | { status: 'emitted'; occurrence?: EventOccurrence }
   | { status: 'accepted'; acceptance: DurableMutationReactionAcceptance }
   | {
       status: 'not-applied';
@@ -183,7 +184,7 @@ export type CreateMutationReactionRunnerOptions = {
   ) => Promise<RelationshipCommandResult>;
   executeEntityMutationCommand?: (command: EntityMutationCommand) => Promise<EntityMutationDelta>;
   invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
-  emitEvent?: (event: unknown) => Promise<void>;
+  emitEvent?: (event: unknown) => Promise<EventOccurrence | void>;
   acceptDurableReaction?: (
     envelope: DurableMutationReactionEnvelope,
   ) => Promise<DurableMutationReactionAcceptance>;
@@ -535,8 +536,28 @@ export const createMutationReactionRunner = ({
           'Event emission for Mutation Reactions is unavailable.',
         );
       }
-      await emitEvent(intent.event);
-      return { ...execution, status: 'emitted' };
+      const event =
+        isRecord(intent.event) &&
+        intent.event.kind === 'event-emission' &&
+        !hasOwn(intent.event, 'causation')
+          ? {
+              ...intent.event,
+              causation: {
+                kind: 'mutation-outcome',
+                outcomeId: source.causality.outcomeId,
+                rootOutcomeId: source.causality.rootOutcomeId,
+                ...(source.causality.parentOutcomeId
+                  ? { parentOutcomeId: source.causality.parentOutcomeId }
+                  : {}),
+              },
+            }
+          : intent.event;
+      const occurrence = await emitEvent(event);
+      return {
+        ...execution,
+        status: 'emitted',
+        ...(occurrence ? { occurrence } : {}),
+      };
     } catch {
       return failedExecution(execution, 'follow_up_failed', 'Post-commit follow-up intent failed.');
     }

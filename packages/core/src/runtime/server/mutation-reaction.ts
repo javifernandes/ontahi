@@ -26,7 +26,7 @@ import { recordAppliedMutationOutcome } from './unit-of-work.js';
 export type ContextualMutationReactionExecutorOptions = {
   getReactions: () => readonly MutationReaction[];
   invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
-  emitEvent?: (event: unknown) => Promise<void>;
+  emitEvent?: (event: unknown) => Promise<import('./events/index.js').EventOccurrence | void>;
   createOutcomeId?: () => string;
   maxDepth?: number;
 };
