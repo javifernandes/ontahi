@@ -2,6 +2,7 @@ import type { ConsoleDialect } from '@ontahi/language';
 
 import type {
   ExchangeDiagnosticEvent,
+  EventObservationDiagnosticEvent,
   GraphObservationDiagnosticEvent,
   ObservationDiagnosticEvent,
   OntahiDiagnosticEvent,
@@ -126,6 +127,7 @@ export type ActivityEntry =
       readonly observation?: never;
       readonly derivedRefreshes?: never;
       readonly mutationCommitId?: string;
+      readonly eventDeliveries?: never;
     }
   | {
       readonly kind: 'exchange';
@@ -137,6 +139,7 @@ export type ActivityEntry =
       readonly mutationCommitId?: string;
       readonly internalExchanges?: readonly ExchangeActivity[];
       readonly internalGraphObservations?: readonly GraphObservationActivity[];
+      readonly eventDeliveries?: readonly unknown[];
     }
   | {
       readonly kind: 'observation';
@@ -147,6 +150,7 @@ export type ActivityEntry =
       readonly mutationCommitId?: string;
       readonly internalExchanges?: readonly ExchangeActivity[];
       readonly internalGraphObservations?: readonly GraphObservationActivity[];
+      readonly eventDeliveries?: readonly unknown[];
     };
 
 export const isRecord = (value: unknown): value is RecordValue =>
@@ -674,6 +678,35 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
           : undefined;
     if (run) entryByRun.set(runKey(run), entry);
   });
+  const eventDeliveriesByEntry = new Map<string, unknown[]>();
+  events
+    .filter(
+      (
+        event,
+      ): event is Extract<
+        EventObservationDiagnosticEvent,
+        { kind: 'event-observation.delivery' }
+      > => event.kind === 'event-observation.delivery',
+    )
+    .forEach(event => {
+      const taskRun = event.taskRun;
+      if (!taskRun) return;
+      const entry = entryByRun.get(runKey(taskRun));
+      if (!entry) return;
+      eventDeliveriesByEntry.set(entry.id, [
+        ...(eventDeliveriesByEntry.get(entry.id) ?? []),
+        event.delivery ?? {
+          kind: 'event-delivery',
+          occurrence: {
+            kind: 'event-occurrence',
+            occurrenceId: event.occurrenceId,
+            eventId: event.eventId,
+            eventVersion: event.eventVersion,
+            causation: { kind: 'operation', scope: taskRun.taskId, taskRun },
+          },
+        },
+      ]);
+    });
   const commitEntry = new Map<string, string>();
   const commitIdByEntry = new Map<string, string>();
   primary.forEach(entry => {
@@ -787,12 +820,14 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       const mutationCommitId = commitIdByEntry.get(entry.id);
       const internalExchanges = internalExchangesByEntry.get(entry.id);
       const internalGraphObservations = internalGraphObservationsByEntry.get(entry.id);
+      const eventDeliveries = eventDeliveriesByEntry.get(entry.id);
       return {
         ...entry,
         ...(derivedRefreshes ? { derivedRefreshes } : {}),
         ...(mutationCommitId ? { mutationCommitId } : {}),
         ...(internalExchanges ? { internalExchanges } : {}),
         ...(internalGraphObservations ? { internalGraphObservations } : {}),
+        ...(eventDeliveries ? { eventDeliveries } : {}),
       };
     });
   const semanticEntries: ActivityEntry[] = [

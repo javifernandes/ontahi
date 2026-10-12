@@ -139,10 +139,41 @@ export type GraphObservationDiagnosticEvent = GraphObservationIdentity &
       }
   );
 
+type EventObservationIdentity = {
+  readonly observationId: string;
+  readonly family: 'event.observe';
+  readonly eventId: string;
+  readonly eventVersion: number;
+  readonly transportId: string;
+  readonly transportKind: string;
+  readonly startedAt: number;
+};
+
+export type EventObservationDiagnosticEvent = EventObservationIdentity &
+  (
+    | { readonly kind: 'event-observation.started'; readonly at: number }
+    | {
+        readonly kind: 'event-observation.delivery';
+        readonly at: number;
+        readonly sequence: number;
+        readonly occurrenceId: string;
+        readonly taskRun?: TaskRunIdentity;
+        readonly delivery?: unknown;
+      }
+    | {
+        readonly kind: 'event-observation.settled';
+        readonly at: number;
+        readonly durationMs: number;
+        readonly outcome: RuntimeDiagnosticOutcome;
+        readonly error?: DiagnosticError;
+      }
+  );
+
 export type OntahiDiagnosticEvent =
   | ExchangeDiagnosticEvent
   | ObservationDiagnosticEvent
-  | GraphObservationDiagnosticEvent;
+  | GraphObservationDiagnosticEvent
+  | EventObservationDiagnosticEvent;
 
 export type OntahiDiagnosticsSnapshot = {
   readonly version: number;

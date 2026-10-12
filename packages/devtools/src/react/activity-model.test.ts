@@ -1210,4 +1210,70 @@ describe('Devtools activity model', () => {
     expect(matchesFilter(['TodoItem', 42, undefined], 'todo')).toBe(true);
     expect(matchesFilter(['TodoItem', 42, undefined], 'missing')).toBe(false);
   });
+
+  it('groups Event occurrence and delivery evidence beneath its causal durable Operation', () => {
+    const run = { taskId: 'TodoList.completeAll', runId: 'run-1' };
+    const entries = buildActivityEntries([
+      {
+        kind: 'exchange.started',
+        at: 1,
+        exchangeId: 'invoke-1',
+        requestId: 'invoke-1',
+        family: 'operation',
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt: 1,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'operation',
+          body: { kind: 'invoke', operationId: 'TodoList.completeAll' },
+        },
+      },
+      {
+        kind: 'exchange.settled',
+        at: 2,
+        durationMs: 1,
+        outcome: 'success',
+        exchangeId: 'invoke-1',
+        requestId: 'invoke-1',
+        family: 'operation',
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt: 1,
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'operation',
+          body: { kind: 'invocation-result', result: { ok: true, value: run } },
+        },
+      },
+      {
+        kind: 'event-observation.delivery',
+        at: 3,
+        sequence: 1,
+        observationId: 'events-1',
+        family: 'event.observe',
+        eventId: 'TodoListCompleted',
+        eventVersion: 1,
+        occurrenceId: 'occurrence-1',
+        taskRun: run,
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt: 0,
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.eventDeliveries).toEqual([
+      expect.objectContaining({
+        occurrence: expect.objectContaining({
+          occurrenceId: 'occurrence-1',
+          eventId: 'TodoListCompleted',
+        }),
+      }),
+    ]);
+  });
 });

@@ -35,6 +35,8 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
     // This example exposes one shared Todo graph, so authorized callers may receive the same
     // bounded semantic mutations that their invocation committed.
     projectCommittedMutations: mutations => mutations,
+    // Event delivery is an explicit authority boundary even though this payload is entirely public.
+    projectEventDelivery: delivery => delivery,
     ...(modelCommandRuntime ? { modelCommand: { runtime: modelCommandRuntime } } : {}),
     taskInteractionActor: context =>
       context.principal

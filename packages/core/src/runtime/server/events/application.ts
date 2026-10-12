@@ -42,6 +42,15 @@ export const createEventApplication = <TEvents extends readonly AnyEventDeclarat
           subscriber as (delivery: EventDelivery) => void | Promise<void>,
         );
       },
+      subscribeByIdentity: (eventId, eventVersion, subscriber) => {
+        const declaration = declarations.get(eventId);
+        if (!declaration || declaration.version !== eventVersion) {
+          throw new TypeError(
+            `Event ${eventId}@${eventVersion} is not registered by this application.`,
+          );
+        }
+        return options.runtime.subscribe(eventId, subscriber);
+      },
     },
     publish: async (emission, causation) =>
       options.runtime.accept(

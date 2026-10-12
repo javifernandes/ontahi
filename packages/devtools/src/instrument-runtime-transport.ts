@@ -300,6 +300,71 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
         },
       }
     : undefined;
+  const events = transport.events
+    ? {
+        observe: async function* (
+          ...args: Parameters<NonNullable<RuntimeTransport['events']>['observe']>
+        ) {
+          const [event, options] = args;
+          const startedAt = now();
+          const identity = {
+            observationId: createId('observation'),
+            family: 'event.observe' as const,
+            eventId: event.id,
+            eventVersion: event.version,
+            transportId,
+            transportKind,
+            startedAt,
+          };
+          let sequence = 0;
+          let settled = false;
+          const settle = (outcome: RuntimeDiagnosticOutcome, error?: unknown) => {
+            if (settled) return;
+            settled = true;
+            const at = now();
+            const projectedError =
+              error === undefined
+                ? undefined
+                : (projectPayload(diagnosticError(error)) as DiagnosticError | undefined);
+            publish({
+              ...identity,
+              kind: 'event-observation.settled',
+              at,
+              durationMs: Math.max(0, at - startedAt),
+              outcome,
+              ...(projectedError ? { error: projectedError } : {}),
+            });
+          };
+          publish({ ...identity, kind: 'event-observation.started', at: startedAt });
+          try {
+            for await (const delivery of transport.events!.observe(...args)) {
+              sequence += 1;
+              const projected = projectPayload(delivery);
+              const taskRun =
+                delivery.occurrence.causation?.kind === 'operation'
+                  ? delivery.occurrence.causation.taskRun
+                  : undefined;
+              publish({
+                ...identity,
+                kind: 'event-observation.delivery',
+                at: now(),
+                sequence,
+                occurrenceId: delivery.occurrence.occurrenceId,
+                ...(taskRun ? { taskRun } : {}),
+                ...(projected === undefined ? {} : { delivery: projected }),
+              });
+              yield delivery;
+            }
+            settle(options?.signal?.aborted ? 'aborted' : 'consumer-closed');
+          } catch (error) {
+            settle(options?.signal?.aborted ? 'aborted' : 'transport-error', error);
+            throw error;
+          } finally {
+            settle(options?.signal?.aborted ? 'aborted' : 'consumer-closed');
+          }
+        },
+      }
+    : undefined;
   const routing = isConfigurableRuntimeTransport(transport)
     ? {
         inspect: () => transport.routing.inspect(),
@@ -323,6 +388,7 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
         }
       : {}),
     ...(durableOperation ? { durableOperation } : {}),
+    ...(events ? { events } : {}),
     causality: {
       associateGraphReadRefreshes: (requests, causedBy) => {
         const registeredAt = Date.now();

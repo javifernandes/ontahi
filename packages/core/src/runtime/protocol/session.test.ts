@@ -58,6 +58,15 @@ const graphObserveFrame = (
   },
 });
 
+const eventObserveFrame = (id = 'event-observation-1'): RuntimeProtocolSessionClientFrame => ({
+  protocol: 'ontahi.runtime.session',
+  version: 1,
+  kind: 'event-observe',
+  id,
+  eventId: 'TodoListCompleted',
+  eventVersion: 1,
+});
+
 const nullDispatcher: RuntimeProtocolDispatcher<undefined> = input => {
   const request = input as RuntimeProtocolRequestEnvelope;
   return Promise.resolve(
@@ -66,6 +75,156 @@ const nullDispatcher: RuntimeProtocolDispatcher<undefined> = input => {
 };
 
 describe('Runtime Protocol session frames', () => {
+  it('validates Event observation identities and canonical delivery bodies', () => {
+    expect(parseRuntimeProtocolSessionClientFrame(eventObserveFrame())).toEqual({
+      success: true,
+      frame: eventObserveFrame(),
+    });
+    for (const frame of [
+      { ...eventObserveFrame(), eventId: '' },
+      { ...eventObserveFrame(), eventVersion: 0 },
+      { ...eventObserveFrame(), eventVersion: 1.5 },
+      { ...eventObserveFrame(), authority: 'admin' },
+    ]) {
+      expect(parseRuntimeProtocolSessionClientFrame(frame)).toMatchObject({ success: false });
+    }
+
+    const valid = {
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'event-delivery',
+      id: 'event-observation-1',
+      sequence: 1,
+      body: {
+        kind: 'event-delivery',
+        deliveryId: 'delivery-1',
+        subscriptionId: 'subscription-1',
+        attempt: 1,
+        occurrence: {
+          kind: 'event-occurrence',
+          occurrenceId: 'occurrence-1',
+          eventId: 'TodoListCompleted',
+          eventVersion: 1,
+          occurredAt: '2026-10-12T00:00:00.000Z',
+          payload: { completedCount: 3 },
+        },
+      },
+    } as const;
+    expect(parseRuntimeProtocolSessionServerFrame(valid)).toMatchObject({ success: true });
+    for (const frame of [
+      { ...valid, sequence: 0 },
+      { ...valid, body: { ...valid.body, attempt: 2 } },
+      { ...valid, body: { ...valid.body, deliveryId: '' } },
+      {
+        ...valid,
+        body: { ...valid.body, occurrence: { ...valid.body.occurrence, payload: undefined } },
+      },
+    ]) {
+      expect(parseRuntimeProtocolSessionServerFrame(frame)).toMatchObject({ success: false });
+    }
+  });
+
+  it('reports unavailable and failed Event observers as session errors', async () => {
+    const unavailable: RuntimeProtocolSessionServerFrame[] = [];
+    const withoutObserver = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        unavailable.push(frame);
+      },
+    });
+    await withoutObserver.receive(eventObserveFrame('missing-events'));
+    expect(unavailable).toContainEqual(
+      expect.objectContaining({
+        kind: 'session-error',
+        id: 'missing-events',
+        error: expect.objectContaining({ code: 'capability_unavailable' }),
+      }),
+    );
+
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    const reported = vi.fn();
+    const failedObserver = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      reportError: reported,
+      observeEvent: () => ({
+        async *[Symbol.asyncIterator]() {
+          yield { kind: 'not-a-delivery' } as never;
+        },
+      }),
+    });
+    await failedObserver.receive(eventObserveFrame('failed-events'));
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({
+          kind: 'session-error',
+          id: 'failed-events',
+          error: expect.objectContaining({ code: 'observation_failed' }),
+        }),
+      ),
+    );
+    expect(reported).toHaveBeenCalledOnce();
+  });
+
+  it('streams canonical Event deliveries and cancels the runtime subscription', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    let released = false;
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      observeEvent: (_event, { signal }) => ({
+        async *[Symbol.asyncIterator]() {
+          try {
+            yield {
+              kind: 'event-delivery',
+              deliveryId: 'delivery-1',
+              subscriptionId: 'subscription-1',
+              attempt: 1,
+              occurrence: {
+                kind: 'event-occurrence',
+                occurrenceId: 'occurrence-1',
+                eventId: 'TodoListCompleted',
+                eventVersion: 1,
+                occurredAt: '2026-10-12T00:00:00.000Z',
+                payload: { completedCount: 0 },
+              },
+            };
+            await new Promise<void>(resolve =>
+              signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+          } finally {
+            released = true;
+          }
+        },
+      }),
+    });
+
+    await session.receive(eventObserveFrame());
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({ kind: 'event-delivery', id: 'event-observation-1' }),
+      ),
+    );
+    await session.receive({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'event-unobserve',
+      id: 'event-observation-1',
+    });
+    await vi.waitFor(() => expect(released).toBe(true));
+    expect(sent[0]).toMatchObject({
+      kind: 'ready',
+      capabilities: ['request-response', 'event-subscription-push'],
+    });
+  });
+
   it('parses request, response, observation, and ready frames without changing family bodies', () => {
     const request = requestFrame('request-1');
     expect(parseRuntimeProtocolSessionClientFrame(request)).toEqual({

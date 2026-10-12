@@ -56,6 +56,7 @@ import {
 import { getRequiredDataGraphRuntime } from './data-graph.js';
 import { layer } from './dsl.js';
 import type { EffectSuccessPayload } from './effect-intents/types.js';
+import { executeEffectIntents, normalizeEffectSuccess } from './intents.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 import type { OperationCacheConfig, OperationEffectsConfig } from './operation/options-types.js';
@@ -78,6 +79,7 @@ import {
 import { toOperationInvocationResult, type OperationInvocationResult } from './operation-result.js';
 import { unitOfWorkEntityRefInputResolutionScope } from './ref-resolution.js';
 import { bindRequirements } from './requirements.js';
+import { toTaskFailure } from './tasks/failures.js';
 import type {
   TaskContext,
   TaskDefinition,
@@ -789,6 +791,17 @@ export const createTaskDefinitionFromDurableDomainOperation = <
           operation.run,
           hydrateOperationInputRefs(operation, input) as never,
           context,
+        ),
+      ).pipe(
+        Effect.flatMap(value =>
+          Effect.tryPromise({
+            try: async () => {
+              const normalized = normalizeEffectSuccess(value);
+              await executeEffectIntents(normalized.effects);
+              return normalized.data as TResult;
+            },
+            catch: toTaskFailure,
+          }),
         ),
       )) as TaskDefinition<TInput, TResult>['run'],
   };

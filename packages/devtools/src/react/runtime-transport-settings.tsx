@@ -43,6 +43,10 @@ const capabilityCopy: Record<
     label: 'Graph observation',
     description: 'Live invalidation and graph update streams.',
   },
+  'event.observe': {
+    label: 'Event subscription',
+    description: 'Live delivery of declared domain Events.',
+  },
 };
 
 const familiarTransportNames: Readonly<Record<string, string>> = {

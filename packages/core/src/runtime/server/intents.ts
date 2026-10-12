@@ -1,5 +1,5 @@
 import { isPlainObject } from '@ontahi/core/value/object';
-import { Effect } from 'effect';
+import { Cause, Effect, Exit, Option } from 'effect';
 
 import { getArchitectureEffectors } from './architecture-registry.js';
 import { getServerRuntimeConfig } from './config.js';
@@ -160,7 +160,11 @@ const executeRequiredEffectIntent = async <TEvent>(
       }),
     },
     async span => {
-      await Effect.runPromise(await resolveEffectIntent(intent));
+      const exit = await Effect.runPromiseExit(await resolveEffectIntent(intent));
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        throw Option.isSome(failure) ? failure.value : Cause.squash(exit.cause);
+      }
       telemetry.markSuccess(span, metadata);
     },
   );

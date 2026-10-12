@@ -10,6 +10,7 @@ import {
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
+import type { EventDelivery } from '../server/events/index.js';
 
 import type { RuntimeProtocolDispatcher } from './dispatcher.js';
 import {
@@ -35,7 +36,8 @@ export const RUNTIME_PROTOCOL_SESSION_VERSION = 1 as const;
 export type RuntimeProtocolSessionCapability =
   | 'request-response'
   | 'durable-operation-push'
-  | 'graph-observation-push';
+  | 'graph-observation-push'
+  | 'event-subscription-push';
 
 export type RuntimeProtocolSessionReadyFrame = {
   readonly protocol: typeof RUNTIME_PROTOCOL_SESSION_NAME;
@@ -128,6 +130,31 @@ export type RuntimeProtocolSessionGraphObservationCompleteFrame = {
   readonly sequence: number;
 };
 
+export type RuntimeProtocolSessionEventObserveFrame = {
+  readonly protocol: typeof RUNTIME_PROTOCOL_SESSION_NAME;
+  readonly version: typeof RUNTIME_PROTOCOL_SESSION_VERSION;
+  readonly kind: 'event-observe';
+  readonly id: string;
+  readonly eventId: string;
+  readonly eventVersion: number;
+};
+
+export type RuntimeProtocolSessionEventUnobserveFrame = {
+  readonly protocol: typeof RUNTIME_PROTOCOL_SESSION_NAME;
+  readonly version: typeof RUNTIME_PROTOCOL_SESSION_VERSION;
+  readonly kind: 'event-unobserve';
+  readonly id: string;
+};
+
+export type RuntimeProtocolSessionEventDeliveryFrame = {
+  readonly protocol: typeof RUNTIME_PROTOCOL_SESSION_NAME;
+  readonly version: typeof RUNTIME_PROTOCOL_SESSION_VERSION;
+  readonly kind: 'event-delivery';
+  readonly id: string;
+  readonly sequence: number;
+  readonly body: EventDelivery;
+};
+
 export type RuntimeProtocolSessionErrorCode =
   | 'invalid_frame'
   | 'unsupported_version'
@@ -152,7 +179,9 @@ export type RuntimeProtocolSessionClientFrame =
   | RuntimeProtocolSessionDurableObserveFrame
   | RuntimeProtocolSessionDurableUnobserveFrame
   | RuntimeProtocolSessionGraphObserveFrame
-  | RuntimeProtocolSessionGraphUnobserveFrame;
+  | RuntimeProtocolSessionGraphUnobserveFrame
+  | RuntimeProtocolSessionEventObserveFrame
+  | RuntimeProtocolSessionEventUnobserveFrame;
 
 export type RuntimeProtocolSessionServerFrame =
   | RuntimeProtocolSessionReadyFrame
@@ -160,6 +189,7 @@ export type RuntimeProtocolSessionServerFrame =
   | RuntimeProtocolSessionDurableObservationFrame
   | RuntimeProtocolSessionGraphObservationFrame
   | RuntimeProtocolSessionGraphObservationCompleteFrame
+  | RuntimeProtocolSessionEventDeliveryFrame
   | RuntimeProtocolSessionErrorFrame;
 
 export type RuntimeProtocolSessionFrameParseResult<TFrame> =
@@ -170,6 +200,7 @@ const sessionCapabilities = new Set<RuntimeProtocolSessionCapability>([
   'request-response',
   'durable-operation-push',
   'graph-observation-push',
+  'event-subscription-push',
 ]);
 const sessionErrorCodes = new Set<RuntimeProtocolSessionErrorCode>([
   'invalid_frame',
@@ -188,6 +219,7 @@ const unobserveFrameKeys = new Set([...commonFrameKeys, 'id']);
 const observationFrameKeys = new Set([...commonFrameKeys, 'id', 'sequence', 'body']);
 const observationCompleteFrameKeys = new Set([...commonFrameKeys, 'id', 'sequence']);
 const graphObserveFrameKeys = new Set([...commonFrameKeys, 'id', 'request']);
+const eventObserveFrameKeys = new Set([...commonFrameKeys, 'id', 'eventId', 'eventVersion']);
 const errorFrameKeys = new Set([...commonFrameKeys, 'id', 'error']);
 const errorKeys = new Set(['code', 'message']);
 const graphReadResultKeys = new Set(['kind', 'value', 'causedBy']);
@@ -357,6 +389,44 @@ export const parseRuntimeProtocolSessionClientFrame = (
     };
   }
 
+  if (value.kind === 'event-observe') {
+    if (
+      !hasOnlyKeys(value, eventObserveFrameKeys) ||
+      !isSessionId(value.id) ||
+      !isSessionId(value.eventId) ||
+      !Number.isInteger(value.eventVersion) ||
+      (value.eventVersion as number) < 1
+    ) {
+      return invalidFrame('Runtime Protocol Event observe frame is invalid.', value);
+    }
+    return {
+      success: true,
+      frame: {
+        protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+        version: RUNTIME_PROTOCOL_SESSION_VERSION,
+        kind: 'event-observe',
+        id: value.id,
+        eventId: value.eventId,
+        eventVersion: value.eventVersion as number,
+      },
+    };
+  }
+
+  if (value.kind === 'event-unobserve') {
+    if (!hasOnlyKeys(value, unobserveFrameKeys) || !isSessionId(value.id)) {
+      return invalidFrame('Runtime Protocol Event unobserve frame is invalid.', value);
+    }
+    return {
+      success: true,
+      frame: {
+        protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+        version: RUNTIME_PROTOCOL_SESSION_VERSION,
+        kind: 'event-unobserve',
+        id: value.id,
+      },
+    };
+  }
+
   return invalidFrame('Runtime Protocol session client frame kind is invalid.', value);
 };
 
@@ -400,6 +470,39 @@ const parseGraphObservationBody = (
     return undefined;
   }
   return cloneJson(value) as RuntimeProtocolGraphObservationBody;
+};
+
+const parseEventDelivery = (value: unknown): EventDelivery | undefined => {
+  if (
+    !isRecord(value) ||
+    !isJsonValue(value) ||
+    value.kind !== 'event-delivery' ||
+    !isSessionId(value.deliveryId) ||
+    !isSessionId(value.subscriptionId) ||
+    value.attempt !== 1 ||
+    !isRecord(value.occurrence) ||
+    value.occurrence.kind !== 'event-occurrence' ||
+    !isSessionId(value.occurrence.occurrenceId) ||
+    !isSessionId(value.occurrence.eventId) ||
+    !Number.isInteger(value.occurrence.eventVersion) ||
+    typeof value.occurrence.occurredAt !== 'string' ||
+    !('payload' in value.occurrence)
+  ) {
+    return undefined;
+  }
+  return cloneJson(value) as EventDelivery;
+};
+
+const parseObservationFrameIdentity = (value: Record<string, unknown>) => {
+  if (
+    !hasOnlyKeys(value, observationFrameKeys) ||
+    !isSessionId(value.id) ||
+    !Number.isSafeInteger(value.sequence) ||
+    (value.sequence as number) <= 0
+  ) {
+    return undefined;
+  }
+  return { id: value.id, sequence: value.sequence as number };
 };
 
 export const parseRuntimeProtocolSessionServerFrame = (
@@ -470,13 +573,8 @@ export const parseRuntimeProtocolSessionServerFrame = (
 
   if (value.kind === 'graph-observation') {
     const body = parseGraphObservationBody(value.body);
-    if (
-      !hasOnlyKeys(value, observationFrameKeys) ||
-      !isSessionId(value.id) ||
-      !Number.isSafeInteger(value.sequence) ||
-      (value.sequence as number) <= 0 ||
-      !body
-    ) {
+    const identity = parseObservationFrameIdentity(value);
+    if (!identity || !body) {
       return invalidFrame('Runtime Protocol Graph observation frame is invalid.', value);
     }
     return {
@@ -485,8 +583,7 @@ export const parseRuntimeProtocolSessionServerFrame = (
         protocol: RUNTIME_PROTOCOL_SESSION_NAME,
         version: RUNTIME_PROTOCOL_SESSION_VERSION,
         kind: 'graph-observation',
-        id: value.id,
-        sequence: value.sequence as number,
+        ...identity,
         body,
       },
     };
@@ -509,6 +606,24 @@ export const parseRuntimeProtocolSessionServerFrame = (
         kind: 'graph-observation-complete',
         id: value.id,
         sequence: value.sequence as number,
+      },
+    };
+  }
+
+  if (value.kind === 'event-delivery') {
+    const body = parseEventDelivery(value.body);
+    const identity = parseObservationFrameIdentity(value);
+    if (!identity || !body) {
+      return invalidFrame('Runtime Protocol Event delivery frame is invalid.', value);
+    }
+    return {
+      success: true,
+      frame: {
+        protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+        version: RUNTIME_PROTOCOL_SESSION_VERSION,
+        kind: 'event-delivery',
+        ...identity,
+        body,
       },
     };
   }
@@ -554,6 +669,11 @@ export type RuntimeProtocolGraphObserver<TContext> = (
   options: RuntimeProtocolDurableObservationOptions<TContext>,
 ) => AsyncIterable<RuntimeProtocolGraphObservationBody>;
 
+export type RuntimeProtocolEventObserver<TContext> = (
+  event: { readonly id: string; readonly version: number },
+  options: RuntimeProtocolDurableObservationOptions<TContext>,
+) => AsyncIterable<EventDelivery>;
+
 export type CreateTaskRunDurableOperationObserverOptions<TContext, TError = unknown> = {
   readonly observe: (
     run: TaskRunIdentity,
@@ -567,6 +687,7 @@ export type CreateRuntimeProtocolServerSessionOptions<TContext> = {
   readonly send: (frame: RuntimeProtocolSessionServerFrame) => void | Promise<void>;
   readonly observeDurableOperation?: RuntimeProtocolDurableObserver<TContext>;
   readonly observeGraph?: RuntimeProtocolGraphObserver<TContext>;
+  readonly observeEvent?: RuntimeProtocolEventObserver<TContext>;
   readonly reportError?: (error: unknown) => void;
 };
 
@@ -590,6 +711,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
   send: sendFrame,
   observeDurableOperation,
   observeGraph,
+  observeEvent,
   reportError,
 }: CreateRuntimeProtocolServerSessionOptions<TContext>): RuntimeProtocolServerSession => {
   let closed = false;
@@ -771,6 +893,44 @@ export const createRuntimeProtocolServerSession = <TContext>({
     }
   };
 
+  const runEventObservation = async (
+    frame: RuntimeProtocolSessionEventObserveFrame,
+    active: ActiveObservation,
+  ) => {
+    let sequence = 0;
+    try {
+      const iterable = observeEvent!(
+        { id: frame.eventId, version: frame.eventVersion },
+        { context, signal: active.controller.signal },
+      );
+      const iterator = iterable[Symbol.asyncIterator]();
+      active.iterator = iterator as AsyncIterator<unknown>;
+      while (!active.controller.signal.aborted) {
+        const next = await iterator.next();
+        if (next.done || active.controller.signal.aborted) break;
+        const body = parseEventDelivery(next.value);
+        if (!body) throw new Error('Event observer produced an invalid delivery.');
+        sequence += 1;
+        await send({
+          protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+          version: RUNTIME_PROTOCOL_SESSION_VERSION,
+          kind: 'event-delivery',
+          id: frame.id,
+          sequence,
+          body,
+        });
+      }
+    } catch (error) {
+      if (!active.controller.signal.aborted) {
+        reportError?.(error);
+        await sendError('observation_failed', 'Event observation is unavailable.', frame.id);
+      }
+    } finally {
+      if (observations.get(frame.id) === active) observations.delete(frame.id);
+      await finalizeObservation(active);
+    }
+  };
+
   const receive = async (input: unknown) => {
     if (closed) return;
     const parsed = parseRuntimeProtocolSessionClientFrame(input);
@@ -794,7 +954,11 @@ export const createRuntimeProtocolServerSession = <TContext>({
       return;
     }
 
-    if (frame.kind === 'durable-unobserve' || frame.kind === 'graph-unobserve') {
+    if (
+      frame.kind === 'durable-unobserve' ||
+      frame.kind === 'graph-unobserve' ||
+      frame.kind === 'event-unobserve'
+    ) {
       const active = observations.get(frame.id);
       if (!active) return;
       observations.delete(frame.id);
@@ -805,13 +969,17 @@ export const createRuntimeProtocolServerSession = <TContext>({
     const observerAvailable =
       frame.kind === 'durable-observe'
         ? observeDurableOperation !== undefined
-        : observeGraph !== undefined;
+        : frame.kind === 'graph-observe'
+          ? observeGraph !== undefined
+          : observeEvent !== undefined;
     if (!observerAvailable) {
       await sendError(
         'capability_unavailable',
         frame.kind === 'durable-observe'
           ? 'Durable Operation push observation is unavailable in this session.'
-          : 'Data graph push observation is unavailable in this session.',
+          : frame.kind === 'graph-observe'
+            ? 'Data graph push observation is unavailable in this session.'
+            : 'Event push subscription is unavailable in this session.',
         frame.id,
       );
       return;
@@ -828,7 +996,8 @@ export const createRuntimeProtocolServerSession = <TContext>({
     const active = { controller: new AbortController() } satisfies ActiveObservation;
     observations.set(frame.id, active);
     if (frame.kind === 'durable-observe') void runDurableObservation(frame, active);
-    else void runGraphObservation(frame, active);
+    else if (frame.kind === 'graph-observe') void runGraphObservation(frame, active);
+    else void runEventObservation(frame, active);
   };
 
   void send({
@@ -839,6 +1008,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       'request-response',
       ...(observeDurableOperation ? (['durable-operation-push'] as const) : []),
       ...(observeGraph ? (['graph-observation-push'] as const) : []),
+      ...(observeEvent ? (['event-subscription-push'] as const) : []),
     ],
   }).catch(error => reportError?.(error));
 

@@ -1,6 +1,7 @@
 import type { GraphReadRequest, GraphReadRequestV1 } from '../../data-graph/read-protocol.js';
 import type { JsonValue } from '../../value/json.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
+import type { AnyEventDeclaration, EventDeliveryFor } from '../server/events/index.js';
 
 import {
   createRuntimeProtocolRequest,
@@ -38,6 +39,13 @@ export type GraphObservationCapability<TTransportOptions = unknown> = {
   ): AsyncIterable<RuntimeProtocolGraphObservationBody>;
 };
 
+export type EventObservationCapability<TTransportOptions = unknown> = {
+  observe<TEvent extends AnyEventDeclaration>(
+    event: TEvent,
+    options?: RuntimeTransportRequestOptions<TTransportOptions>,
+  ): AsyncIterable<EventDeliveryFor<TEvent>>;
+};
+
 export type RuntimeTransportCausalityCapability = {
   associateGraphReadRefreshes(
     requests: readonly GraphReadRequest[],
@@ -58,6 +66,7 @@ export type RuntimeTransport<TTransportOptions = unknown> = {
   ): Promise<RuntimeProtocolResponseEnvelope | RuntimeProtocolError>;
   readonly durableOperation?: DurableOperationObservationCapability;
   readonly graph?: GraphObservationCapability<TTransportOptions>;
+  readonly events?: EventObservationCapability<TTransportOptions>;
   /** Client-local causal context used by diagnostics; it is never sent over the wire. */
   readonly causality?: RuntimeTransportCausalityCapability;
 };

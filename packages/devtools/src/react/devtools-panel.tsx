@@ -161,6 +161,7 @@ export const DevtoolsPanel = ({
             mutationCommitId={activeActivity.mutationCommitId}
             internalExchanges={activeActivity.internalExchanges}
             internalGraphObservations={activeActivity.internalGraphObservations}
+            eventDeliveries={activeActivity.eventDeliveries}
             runtimeTransport={runtimeTransport}
           />
         ) : activeActivity?.kind === 'exchange' ? (

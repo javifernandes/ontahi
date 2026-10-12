@@ -8,6 +8,7 @@ import {
   value,
   withSelectionFactories,
   type EntityMutationCommandExecutionRuntime,
+  type EntityRef,
   type InferGraphSchemaValue,
   type RelationConstraint,
 } from '@ontahi/core/data-graph';
@@ -15,9 +16,12 @@ import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import {
   defineTaskExecution,
   defineTaskExecutionStep,
+  event,
   failOperation,
   getRequiredDataGraphRuntime,
+  withEffects,
   type TaskExecutionState,
+  type EventEffectIntent,
 } from '@ontahi/core/runtime/server';
 import type { JsonValue } from '@ontahi/core/value/json';
 import { Effect } from 'effect';
@@ -63,6 +67,11 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
     completed: field.boolean(),
   },
 });
+
+const todoListCompleted = (
+  list: EntityRef<'TodoList'>,
+  completedCount: number,
+): EventEffectIntent => event(TodoListCompleted, { list, completedCount });
 
 export const TodoList = entity({
   name: 'TodoList',
@@ -126,10 +135,25 @@ export const TodoList = entity({
           runtime: 'in-process',
           progress: CompleteAllProgress,
         },
-        run: runCompleteAll,
+        run: (input, context) =>
+          runCompleteAll(input, context).pipe(
+            Effect.map(result =>
+              withEffects(result, [todoListCompleted(input.list, result.completed)]),
+            ),
+          ),
       }),
     };
   },
+});
+
+export const TodoListCompleted = event.define({
+  id: 'TodoListCompleted',
+  version: 1,
+  description: 'A bulk Todo List completion operation finished successfully.',
+  payload: graphSchema.object({
+    list: graphSchema.ref(TodoList),
+    completedCount: field.nonNegativeInteger(),
+  }),
 });
 
 export const Tag = withSelectionFactories(

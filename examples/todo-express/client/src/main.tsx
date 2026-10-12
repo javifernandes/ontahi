@@ -19,6 +19,10 @@ import {
   type AuthenticationSession,
   type BootstrapState,
 } from './todo-app/bootstrap.js';
+import {
+  observeTodoEventActivity,
+  TodoListCompletedEventIdentity,
+} from './todo-app/todo-event-activity.js';
 import './styles.css';
 
 const queryClient = new QueryClient();
@@ -53,6 +57,7 @@ const runtimeTransport = createDiagnosticRuntimeTransportRouter({
     operation: 'websocket',
     'model.command': 'http',
     'durable.operation.observe': 'websocket',
+    'event.observe': 'websocket',
   },
 });
 const graphClient = createRuntimeGraphClient({ runtimeTransport, application: clientApplication });
@@ -67,6 +72,20 @@ const TodoClient = () => {
   });
   useEffect(() => {
     void loadAuthenticationSession().then(setAuthentication);
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void observeTodoEventActivity(
+      runtimeTransport,
+      TodoListCompletedEventIdentity,
+      () => {
+        // The instrumented transport projects the delivery into Devtools Activity.
+      },
+      controller.signal,
+    ).catch(error => {
+      if (!controller.signal.aborted) console.error('Todo Event observation failed.', error);
+    });
+    return () => controller.abort();
   }, []);
 
   const identity = useMemo(

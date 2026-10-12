@@ -34,7 +34,11 @@ export type MutationEventCausation = {
   readonly parentOutcomeId?: string;
 };
 
-export type OperationEventCausation = { readonly kind: 'operation'; readonly scope: string };
+export type OperationEventCausation = {
+  readonly kind: 'operation';
+  readonly scope: string;
+  readonly taskRun?: { readonly taskId: string; readonly runId: string };
+};
 export type EventCausation = MutationEventCausation | OperationEventCausation;
 
 export type EventEmission<TId extends string = string, TVersion extends number = number> = {
@@ -108,5 +112,11 @@ export type EventApplication<TEvents extends readonly AnyEventDeclaration[]> = {
   subscribe: <TEvent extends TEvents[number]>(
     declaration: TEvent,
     subscriber: (delivery: EventDeliveryFor<TEvent>) => void | Promise<void>,
+  ) => EventSubscription;
+  /** @internal Runtime Protocol bridge; prefer typed `subscribe` in application code. */
+  subscribeByIdentity: (
+    eventId: string,
+    eventVersion: number,
+    subscriber: EventSubscriber,
   ) => EventSubscription;
 };

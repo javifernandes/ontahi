@@ -139,6 +139,19 @@ describe('first-class Events', () => {
     expect(() =>
       events.api.subscribe({ ...StudentCourseAssigned } as typeof StudentCourseAssigned, () => {}),
     ).toThrow('not registered');
+    expect(() => events.api.subscribeByIdentity('Unknown', 1, () => {})).toThrow(
+      'Unknown@1 is not registered',
+    );
+    expect(() => events.api.subscribeByIdentity(StudentCourseAssigned.id, 2, () => {})).toThrow(
+      'StudentCourseAssigned@2 is not registered',
+    );
+
+    const byIdentity = vi.fn();
+    const subscription = events.api.subscribeByIdentity(
+      StudentCourseAssigned.id,
+      StudentCourseAssigned.version,
+      byIdentity,
+    );
 
     const explicit = { kind: 'operation' as const, scope: 'explicit' };
     const occurrence = await events.publish(
@@ -153,6 +166,8 @@ describe('first-class Events', () => {
       causation: explicit,
       correlation: { trace: 'trace-1' },
     });
+    expect(byIdentity).toHaveBeenCalledOnce();
+    subscription.cancel();
   });
 
   it('infers typed JSON-safe emissions and validates forged payloads and versions', async () => {
