@@ -104,10 +104,12 @@ const graphReadRequest = {
 } as const;
 
 const readyFrame = (
-  capabilities: Array<'request-response' | 'durable-operation-push' | 'graph-observation-push'> = [
-    'request-response',
-    'durable-operation-push',
-  ],
+  capabilities: Array<
+    | 'request-response'
+    | 'durable-operation-push'
+    | 'graph-observation-push'
+    | 'event-subscription-push'
+  > = ['request-response', 'durable-operation-push'],
 ): RuntimeProtocolSessionServerFrame => ({
   protocol: 'ontahi.runtime.session',
   version: 1,
@@ -716,6 +718,50 @@ describe('WebSocket Runtime Transport', () => {
     await expect(transport.request(operationRequest('request-1'))).rejects.toThrow(
       'WebSocket is unavailable',
     );
+  });
+
+  it('fails an Event observation when its client queue overflows', async () => {
+    const socket = new MemoryWebSocket();
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        socket.sendFromServer(readyFrame(['event-subscription-push']));
+        return socket;
+      },
+      observationId: () => 'event-observation-1',
+    });
+    const iterator = transport.events
+      .observe({ id: 'Event', version: 1 } as never)
+      [Symbol.asyncIterator]();
+    const first = iterator.next();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    for (let index = 0; index < 258; index += 1) {
+      socket.sendFromServer({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'event-delivery',
+        id: 'event-observation-1',
+        sequence: index + 1,
+        body: {
+          kind: 'event-delivery',
+          deliveryId: `delivery-${index}`,
+          subscriptionId: 'subscription-1',
+          attempt: 1,
+          occurrence: {
+            kind: 'event-occurrence',
+            occurrenceId: `occurrence-${index}`,
+            eventId: 'Event',
+            eventVersion: 1,
+            occurredAt: '2026-10-12T00:00:00.000Z',
+            payload: {},
+          },
+        },
+      });
+    }
+    await expect(first).resolves.toMatchObject({ value: { deliveryId: 'delivery-0' } });
+    for (let index = 0; index < 256; index += 1) await iterator.next();
+    await expect(iterator.next()).rejects.toThrow('queue overflowed');
+    transport.close();
   });
 
   it('times out a session that never completes its handshake', async () => {

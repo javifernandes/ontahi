@@ -407,40 +407,66 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     signal: AbortSignal,
   ): AsyncIterable<EventDelivery> => ({
     [Symbol.asyncIterator]() {
+      const maxQueuedDeliveries = 256;
       const queued: EventDelivery[] = [];
-      let pending: ((result: IteratorResult<EventDelivery>) => void) | undefined;
+      let pending:
+        | {
+            resolve: (result: IteratorResult<EventDelivery>) => void;
+            reject: (error: Error) => void;
+          }
+        | undefined;
       let closed = false;
-      const finish = () => {
+      let failure: Error | undefined;
+      let projection = Promise.resolve();
+      const abort = () => finish();
+      function finish(error?: unknown) {
         if (closed) return;
         closed = true;
+        failure =
+          error instanceof Error
+            ? error
+            : error === undefined
+              ? undefined
+              : new Error(String(error));
         subscription.cancel();
-        signal.removeEventListener('abort', finish);
-        pending?.({ done: true, value: undefined });
+        signal.removeEventListener('abort', abort);
+        if (failure) pending?.reject(failure);
+        else pending?.resolve({ done: true, value: undefined });
         pending = undefined;
-      };
+      }
       const subscription = application.events.subscribeByIdentity(
         event.id,
         event.version,
-        async delivery => {
-          if (closed) return;
-          const visible = await projectEventDelivery!(delivery, context);
-          if (!visible || closed) return;
-          if (pending) {
-            const resolve = pending;
-            pending = undefined;
-            resolve({ done: false, value: visible });
-          } else queued.push(visible);
+        delivery => {
+          projection = projection
+            .then(async () => {
+              if (closed) return;
+              const visible = await projectEventDelivery!(delivery, context);
+              if (!visible || closed) return;
+              if (pending) {
+                const waiter = pending;
+                pending = undefined;
+                waiter.resolve({ done: false, value: visible });
+              } else if (queued.length >= maxQueuedDeliveries) {
+                finish(new Error('Event observation queue overflowed.'));
+              } else {
+                queued.push(visible);
+              }
+            })
+            .catch(finish);
+          return projection;
         },
       );
-      signal.addEventListener('abort', finish, { once: true });
-      if (signal.aborted) finish();
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
       return {
         next: () => {
           const delivery = queued.shift();
           if (delivery) return Promise.resolve({ done: false as const, value: delivery });
+          if (failure) return Promise.reject(failure);
           if (closed) return Promise.resolve({ done: true as const, value: undefined });
-          return new Promise(resolve => {
-            pending = resolve;
+          return new Promise((resolve, reject) => {
+            pending = { resolve, reject };
           });
         },
         return: async () => {

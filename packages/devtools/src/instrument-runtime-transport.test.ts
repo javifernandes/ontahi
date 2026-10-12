@@ -435,6 +435,73 @@ describe('instrumentRuntimeTransport', () => {
     });
   });
 
+  it('keeps Event causal identity without payload capture and redacts observation errors', async () => {
+    const diagnostics = createOntahiDiagnostics({
+      capturePayloads: true,
+      redact: value =>
+        typeof value === 'object' && value !== null && 'message' in value
+          ? { message: '[redacted]' }
+          : undefined,
+      createId: () => 'events-1',
+    });
+    const delivery = {
+      kind: 'event-delivery' as const,
+      deliveryId: 'delivery-1',
+      subscriptionId: 'subscription-1',
+      attempt: 1 as const,
+      occurrence: {
+        kind: 'event-occurrence' as const,
+        occurrenceId: 'occurrence-1',
+        eventId: 'TodoListCompleted',
+        eventVersion: 1,
+        occurredAt: '2026-10-12T00:00:00.000Z',
+        payload: { secret: true },
+        causation: {
+          kind: 'operation' as const,
+          scope: 'TodoList.completeAll',
+          taskRun: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+        },
+      },
+    };
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn(),
+        events: {
+          observe: async function* () {
+            yield delivery;
+            throw new Error('secret failure');
+          },
+        },
+      } as RuntimeTransport,
+    });
+
+    await expect(async () => {
+      for await (const _delivery of transport.events!.observe({
+        id: 'TodoListCompleted',
+        version: 1,
+      } as never)) {
+        /* consume */
+      }
+    }).rejects.toThrow('secret failure');
+
+    expect(diagnostics.inspect().events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'event-observation.delivery',
+          occurrenceId: 'occurrence-1',
+          taskRun: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+        }),
+        expect.objectContaining({
+          kind: 'event-observation.settled',
+          error: { message: '[redacted]' },
+        }),
+      ]),
+    );
+  });
+
   it('preserves and delegates configurable routing capabilities', () => {
     const base = createRuntimeTransportRouter({
       transports: {

@@ -322,7 +322,10 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
             if (settled) return;
             settled = true;
             const at = now();
-            const projectedError = error === undefined ? undefined : diagnosticError(error);
+            const projectedError =
+              error === undefined
+                ? undefined
+                : (projectPayload(diagnosticError(error)) as DiagnosticError | undefined);
             publish({
               ...identity,
               kind: 'event-observation.settled',
@@ -337,11 +340,17 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
             for await (const delivery of transport.events!.observe(...args)) {
               sequence += 1;
               const projected = projectPayload(delivery);
+              const taskRun =
+                delivery.occurrence.causation?.kind === 'operation'
+                  ? delivery.occurrence.causation.taskRun
+                  : undefined;
               publish({
                 ...identity,
                 kind: 'event-observation.delivery',
                 at: now(),
                 sequence,
+                occurrenceId: delivery.occurrence.occurrenceId,
+                ...(taskRun ? { taskRun } : {}),
                 ...(projected === undefined ? {} : { delivery: projected }),
               });
               yield delivery;

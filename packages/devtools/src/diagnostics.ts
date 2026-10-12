@@ -156,6 +156,8 @@ export type EventObservationDiagnosticEvent = EventObservationIdentity &
         readonly kind: 'event-observation.delivery';
         readonly at: number;
         readonly sequence: number;
+        readonly occurrenceId: string;
+        readonly taskRun?: TaskRunIdentity;
         readonly delivery?: unknown;
       }
     | {

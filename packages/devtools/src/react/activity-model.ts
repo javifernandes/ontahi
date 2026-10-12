@@ -689,21 +689,22 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
       > => event.kind === 'event-observation.delivery',
     )
     .forEach(event => {
-      if (!isRecord(event.delivery)) return;
-      const occurrence = event.delivery.occurrence;
-      if (!isRecord(occurrence) || !isRecord(occurrence.causation)) return;
-      const taskRun = occurrence.causation.taskRun;
-      if (
-        !isRecord(taskRun) ||
-        typeof taskRun.taskId !== 'string' ||
-        typeof taskRun.runId !== 'string'
-      )
-        return;
-      const entry = entryByRun.get(runKey({ taskId: taskRun.taskId, runId: taskRun.runId }));
+      const taskRun = event.taskRun;
+      if (!taskRun) return;
+      const entry = entryByRun.get(runKey(taskRun));
       if (!entry) return;
       eventDeliveriesByEntry.set(entry.id, [
         ...(eventDeliveriesByEntry.get(entry.id) ?? []),
-        event.delivery,
+        event.delivery ?? {
+          kind: 'event-delivery',
+          occurrence: {
+            kind: 'event-occurrence',
+            occurrenceId: event.occurrenceId,
+            eventId: event.eventId,
+            eventVersion: event.eventVersion,
+            causation: { kind: 'operation', scope: taskRun.taskId, taskRun },
+          },
+        },
       ]);
     });
   const commitEntry = new Map<string, string>();

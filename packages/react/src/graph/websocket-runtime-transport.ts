@@ -71,7 +71,7 @@ type AsyncQueue<TValue> = {
   readonly fail: (error: Error) => void;
 };
 
-const createAsyncQueue = <TValue>(): AsyncQueue<TValue> => {
+const createAsyncQueue = <TValue>(capacity = Number.POSITIVE_INFINITY): AsyncQueue<TValue> => {
   const values: TValue[] = [];
   const waiters: QueueWaiter<TValue>[] = [];
   let ended = false;
@@ -97,7 +97,10 @@ const createAsyncQueue = <TValue>(): AsyncQueue<TValue> => {
       if (ended || failure) return;
       const waiter = waiters.shift();
       if (waiter) waiter.resolve({ done: false, value });
-      else values.push(value);
+      else if (values.length >= capacity) {
+        failure = new Error('Runtime Protocol observation queue overflowed.');
+        settleWaiters();
+      } else values.push(value);
     },
     end: () => {
       if (ended || failure) return;
@@ -686,7 +689,7 @@ export const createWebSocketRuntimeTransport = ({
     options,
   ) {
     if (options?.signal?.aborted) return;
-    const queue = createAsyncQueue<EventDeliveryFor<AnyEventDeclaration>>();
+    const queue = createAsyncQueue<EventDeliveryFor<AnyEventDeclaration>>(256);
     const prepared = prepareObservation(queue, options?.signal);
     const { id } = prepared;
     const observation: ActiveEventObservation = { queue, lastSequence: 0 };

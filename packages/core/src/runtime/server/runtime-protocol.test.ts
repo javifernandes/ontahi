@@ -850,4 +850,103 @@ describe('application Runtime Protocol', () => {
     controller.abort();
     expect(cancel).toHaveBeenCalledOnce();
   });
+
+  it('serializes Event projection and terminates on projector failure', async () => {
+    const { application } = createApplication();
+    let subscriber: ((delivery: EventDelivery) => void | Promise<void>) | undefined;
+    Object.assign(application, {
+      events: {
+        subscribeByIdentity: (_id: string, _version: number, next: typeof subscriber) => {
+          subscriber = next;
+          return { id: 'subscription-1', cancel: vi.fn() };
+        },
+      },
+    });
+    let releaseFirst!: () => void;
+    const firstProjection = new Promise<void>(resolve => (releaseFirst = resolve));
+    const projected: string[] = [];
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectEventDelivery: async delivery => {
+        projected.push(delivery.deliveryId);
+        if (delivery.deliveryId === 'delivery-1') await firstProjection;
+        if (delivery.deliveryId === 'delivery-failed') throw new Error('projection failed');
+        return delivery;
+      },
+    });
+    const controller = new AbortController();
+    const iterator = protocol.observeEvent!(
+      { id: 'Event', version: 1 },
+      { context: { principal: null }, signal: controller.signal },
+    )[Symbol.asyncIterator]();
+    const firstNext = iterator.next();
+    const delivery = (deliveryId: string): EventDelivery => ({
+      kind: 'event-delivery',
+      deliveryId,
+      subscriptionId: 'subscription-1',
+      attempt: 1,
+      occurrence: {
+        kind: 'event-occurrence',
+        occurrenceId: deliveryId,
+        eventId: 'Event',
+        eventVersion: 1,
+        occurredAt: '2026-10-12T00:00:00.000Z',
+        payload: {},
+      },
+    });
+    const first = subscriber!(delivery('delivery-1'));
+    const second = subscriber!(delivery('delivery-2'));
+    await Promise.resolve();
+    expect(projected).toEqual(['delivery-1']);
+    releaseFirst();
+    await Promise.all([first, second]);
+    await expect(firstNext).resolves.toMatchObject({ value: { deliveryId: 'delivery-1' } });
+    await expect(iterator.next()).resolves.toMatchObject({ value: { deliveryId: 'delivery-2' } });
+    const failedNext = iterator.next();
+    await subscriber!(delivery('delivery-failed'));
+    await expect(failedNext).rejects.toThrow('projection failed');
+  });
+
+  it('bounds the projected Event delivery queue', async () => {
+    const { application } = createApplication();
+    let subscriber: ((delivery: EventDelivery) => void | Promise<void>) | undefined;
+    Object.assign(application, {
+      events: {
+        subscribeByIdentity: (_id: string, _version: number, next: typeof subscriber) => {
+          subscriber = next;
+          return { id: 'subscription-1', cancel: vi.fn() };
+        },
+      },
+    });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectEventDelivery: delivery => delivery,
+    });
+    const iterator = protocol.observeEvent!(
+      { id: 'Event', version: 1 },
+      { context: { principal: null }, signal: new AbortController().signal },
+    )[Symbol.asyncIterator]();
+    const first = iterator.next();
+    for (let index = 0; index < 258; index += 1) {
+      await subscriber!({
+        kind: 'event-delivery',
+        deliveryId: `delivery-${index}`,
+        subscriptionId: 'subscription-1',
+        attempt: 1,
+        occurrence: {
+          kind: 'event-occurrence',
+          occurrenceId: `occurrence-${index}`,
+          eventId: 'Event',
+          eventVersion: 1,
+          occurredAt: '2026-10-12T00:00:00.000Z',
+          payload: {},
+        },
+      });
+    }
+    await first;
+    for (let index = 0; index < 256; index += 1) await iterator.next();
+    await expect(iterator.next()).rejects.toThrow('queue overflowed');
+  });
 });

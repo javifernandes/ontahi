@@ -79,6 +79,7 @@ import {
 import { toOperationInvocationResult, type OperationInvocationResult } from './operation-result.js';
 import { unitOfWorkEntityRefInputResolutionScope } from './ref-resolution.js';
 import { bindRequirements } from './requirements.js';
+import { toTaskFailure } from './tasks/failures.js';
 import type {
   TaskContext,
   TaskDefinition,
@@ -793,10 +794,13 @@ export const createTaskDefinitionFromDurableDomainOperation = <
         ),
       ).pipe(
         Effect.flatMap(value =>
-          Effect.promise(async () => {
-            const normalized = normalizeEffectSuccess(value);
-            await executeEffectIntents(normalized.effects);
-            return normalized.data as TResult;
+          Effect.tryPromise({
+            try: async () => {
+              const normalized = normalizeEffectSuccess(value);
+              await executeEffectIntents(normalized.effects);
+              return normalized.data as TResult;
+            },
+            catch: toTaskFailure,
           }),
         ),
       )) as TaskDefinition<TInput, TResult>['run'],

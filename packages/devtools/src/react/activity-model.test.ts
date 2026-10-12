@@ -1258,25 +1258,21 @@ describe('Devtools activity model', () => {
         family: 'event.observe',
         eventId: 'TodoListCompleted',
         eventVersion: 1,
+        occurrenceId: 'occurrence-1',
+        taskRun: run,
         transportId: 'websocket',
         transportKind: 'websocket',
         startedAt: 0,
-        delivery: {
-          kind: 'event-delivery',
-          occurrence: {
-            kind: 'event-occurrence',
-            eventId: 'TodoListCompleted',
-            causation: { kind: 'operation', scope: run.taskId, taskRun: run },
-            payload: { completedCount: 0 },
-          },
-        },
       },
     ]);
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.eventDeliveries).toEqual([
       expect.objectContaining({
-        occurrence: expect.objectContaining({ eventId: 'TodoListCompleted' }),
+        occurrence: expect.objectContaining({
+          occurrenceId: 'occurrence-1',
+          eventId: 'TodoListCompleted',
+        }),
       }),
     ]);
   });

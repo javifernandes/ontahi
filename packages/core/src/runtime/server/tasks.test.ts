@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Cause, Effect, Exit, Option } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { field, value } from '../../data-graph/index.js';
@@ -709,6 +709,35 @@ describe('tasks', () => {
       Effect.runPromise(task.run({}, { run: { taskId: task.id, runId: 'run-1' } } as never)),
     ).resolves.toEqual({ completed: 0 });
     expect(emitted).toEqual([{ type: 'TodoListCompleted', completed: 0 }]);
+  });
+
+  it('preserves a required durable effect rejection as a typed task failure', async () => {
+    const failure = {
+      ok: false,
+      kind: 'rejected',
+      executed: false,
+      reason: 'event_publication_failed',
+      message: 'Event publication failed.',
+    } as const;
+    architecture({
+      effectors: { 'emit-event': () => Effect.fail(failure) },
+    });
+    const operations = defineDomainOperationsForEntity('TodoList', {
+      completeAll: defineDomainOperation({
+        layer: 'test.todos',
+        exposure: 'server-only',
+        durable: { runtime: 'in-process' },
+        run: () => Effect.succeed(withEffects(undefined, [event({ type: 'FailedEvent' })])),
+      }),
+    });
+    const task = createTaskDefinitionFromDurableDomainOperation(operations.completeAll);
+
+    const exit = await Effect.runPromiseExit(
+      task.run({}, { run: { taskId: task.id, runId: 'run-failed' } } as never),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) throw new Error('Expected the task effect to fail.');
+    expect(Option.getOrUndefined(Cause.failureOption(exit.cause))).toMatchObject(failure);
   });
 
   it('creates and normalizes task triggers', () => {
