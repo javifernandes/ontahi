@@ -109,4 +109,10 @@ export type EventApplication<TEvents extends readonly AnyEventDeclaration[]> = {
     declaration: TEvent,
     subscriber: (delivery: EventDeliveryFor<TEvent>) => void | Promise<void>,
   ) => EventSubscription;
+  /** @internal Runtime Protocol bridge; prefer typed `subscribe` in application code. */
+  subscribeByIdentity: (
+    eventId: string,
+    eventVersion: number,
+    subscriber: EventSubscriber,
+  ) => EventSubscription;
 };

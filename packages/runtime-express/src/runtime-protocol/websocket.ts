@@ -5,6 +5,7 @@ import {
   createRuntimeProtocolServerSession,
   type RuntimeProtocolDispatcher,
   type RuntimeProtocolDurableObserver,
+  type RuntimeProtocolEventObserver,
   type RuntimeProtocolGraphObserver,
 } from '@ontahi/core/runtime/protocol';
 import type { ApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
@@ -26,6 +27,7 @@ export type CreateExpressRuntimeProtocolWebSocketServerOptions<TContext> = {
   readonly authorizeUpgrade?: ExpressRuntimeProtocolWebSocketUpgradeAuthorization;
   readonly observeDurableOperation?: RuntimeProtocolDurableObserver<TContext>;
   readonly observeGraph?: RuntimeProtocolGraphObserver<TContext>;
+  readonly observeEvent?: RuntimeProtocolEventObserver<TContext>;
   readonly ownsUpgradeBoundary?: boolean;
   readonly path?: string;
   readonly reportError?: (error: unknown, request: IncomingMessage) => void;
@@ -59,6 +61,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   authorizeUpgrade,
   observeDurableOperation,
   observeGraph,
+  observeEvent,
   ownsUpgradeBoundary = false,
   path = '/runtime',
   reportError,
@@ -67,6 +70,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
   const durableObserver = observeDurableOperation ?? receiver?.observeDurableOperation;
   const graphObserver = observeGraph ?? receiver?.observeGraph;
+  const eventObserver = observeEvent ?? receiver?.observeEvent;
   const routePath = normalizePath(path);
   const webSocketServer = new WebSocketServer({ noServer: true });
   let closed = false;
@@ -114,6 +118,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
           context: receiverContext,
           observeDurableOperation: durableObserver,
           observeGraph: graphObserver,
+          observeEvent: eventObserver,
           reportError: error => reportError?.(error, request),
           send: frame => {
             if (webSocket.readyState === WebSocket.OPEN) {

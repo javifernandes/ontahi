@@ -23,6 +23,7 @@ import {
   withRuntimeProtocolMetadata,
   type RuntimeProtocolDispatcher,
   type RuntimeProtocolDurableObserver,
+  type RuntimeProtocolEventObserver,
   type RuntimeProtocolGraphObserver,
 } from '../protocol/index.js';
 
@@ -31,6 +32,7 @@ import {
   type GraphObservationRefreshCause,
 } from './active-graph-observations.js';
 import { serverContext } from './context.js';
+import type { EventApplication, EventDelivery } from './events/index.js';
 import type { InvocationContextInput } from './invocation-context.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import { submitModelCommandProtocol } from './model/command/protocol.js';
@@ -52,6 +54,7 @@ import {
 type RuntimeProtocolApplication = GraphReadableOntahiApplication &
   GraphObservableOntahiApplication &
   GraphCommandableOntahiApplication & {
+    readonly events: EventApplication<any>;
     readonly app: {
       readonly runtime: {
         withInvocationContext<TValue>(context: InvocationContextInput, run: () => TValue): TValue;
@@ -84,6 +87,11 @@ export type ApplicationRuntimeProtocolOptions<TContext extends InvocationContext
       readonly family: 'operation' | 'graph.command' | 'durable.operation';
     },
   ) => CommittedMutationSet | undefined | PromiseLike<CommittedMutationSet | undefined>;
+  /** Explicit authority-scoped projection. Event subscription is unavailable when omitted. */
+  readonly projectEventDelivery?: (
+    delivery: EventDelivery,
+    context: TContext,
+  ) => EventDelivery | undefined | PromiseLike<EventDelivery | undefined>;
   /** Returning null denies an Interaction response. Authenticated principals are mapped by default. */
   readonly taskInteractionActor?: (context: TContext) => TaskActor | null;
   readonly reportError?: (error: unknown) => void;
@@ -93,6 +101,7 @@ export type ApplicationRuntimeProtocol<TContext> = {
   readonly dispatcher: RuntimeProtocolDispatcher<TContext>;
   readonly observeDurableOperation: RuntimeProtocolDurableObserver<TContext>;
   readonly observeGraph: RuntimeProtocolGraphObserver<TContext>;
+  readonly observeEvent?: RuntimeProtocolEventObserver<TContext>;
   readonly graphReadPolicies: readonly GraphReadPolicy<any, TContext>[];
   readonly graphCommandPolicies: readonly ApplicationRuntimeGraphCommandPolicy<TContext>[];
 };
@@ -147,6 +156,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
   policies,
   modelCommand,
   projectCommittedMutations,
+  projectEventDelivery,
   taskInteractionActor = actorFromContext,
   reportError,
 }: ApplicationRuntimeProtocolOptions<TContext>): ApplicationRuntimeProtocol<TContext> => {
@@ -391,6 +401,56 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     reportError: error => reportError?.(error),
   });
 
+  const observeEvent = (
+    event: { readonly id: string; readonly version: number },
+    context: TContext,
+    signal: AbortSignal,
+  ): AsyncIterable<EventDelivery> => ({
+    [Symbol.asyncIterator]() {
+      const queued: EventDelivery[] = [];
+      let pending: ((result: IteratorResult<EventDelivery>) => void) | undefined;
+      let closed = false;
+      const finish = () => {
+        if (closed) return;
+        closed = true;
+        subscription.cancel();
+        signal.removeEventListener('abort', finish);
+        pending?.({ done: true, value: undefined });
+        pending = undefined;
+      };
+      const subscription = application.events.subscribeByIdentity(
+        event.id,
+        event.version,
+        async delivery => {
+          if (closed) return;
+          const visible = await projectEventDelivery!(delivery, context);
+          if (!visible || closed) return;
+          if (pending) {
+            const resolve = pending;
+            pending = undefined;
+            resolve({ done: false, value: visible });
+          } else queued.push(visible);
+        },
+      );
+      signal.addEventListener('abort', finish, { once: true });
+      if (signal.aborted) finish();
+      return {
+        next: () => {
+          const delivery = queued.shift();
+          if (delivery) return Promise.resolve({ done: false as const, value: delivery });
+          if (closed) return Promise.resolve({ done: true as const, value: undefined });
+          return new Promise(resolve => {
+            pending = resolve;
+          });
+        },
+        return: async () => {
+          finish();
+          return { done: true as const, value: undefined };
+        },
+      };
+    },
+  });
+
   return {
     dispatcher,
     graphReadPolicies,
@@ -402,5 +462,8 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     observeDurableOperation: createTaskRunDurableOperationObserver<TContext>({
       observe: (run, context) => withContext(context, () => application.app.task.observe(run)),
     }),
+    ...(projectEventDelivery
+      ? { observeEvent: (event, { context, signal }) => observeEvent(event, context, signal) }
+      : {}),
   };
 };

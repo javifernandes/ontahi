@@ -58,6 +58,15 @@ const graphObserveFrame = (
   },
 });
 
+const eventObserveFrame = (id = 'event-observation-1'): RuntimeProtocolSessionClientFrame => ({
+  protocol: 'ontahi.runtime.session',
+  version: 1,
+  kind: 'event-observe',
+  id,
+  eventId: 'TodoListCompleted',
+  eventVersion: 1,
+});
+
 const nullDispatcher: RuntimeProtocolDispatcher<undefined> = input => {
   const request = input as RuntimeProtocolRequestEnvelope;
   return Promise.resolve(
@@ -66,6 +75,61 @@ const nullDispatcher: RuntimeProtocolDispatcher<undefined> = input => {
 };
 
 describe('Runtime Protocol session frames', () => {
+  it('streams canonical Event deliveries and cancels the runtime subscription', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    let released = false;
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      observeEvent: (_event, { signal }) => ({
+        async *[Symbol.asyncIterator]() {
+          try {
+            yield {
+              kind: 'event-delivery',
+              deliveryId: 'delivery-1',
+              subscriptionId: 'subscription-1',
+              attempt: 1,
+              occurrence: {
+                kind: 'event-occurrence',
+                occurrenceId: 'occurrence-1',
+                eventId: 'TodoListCompleted',
+                eventVersion: 1,
+                occurredAt: '2026-10-12T00:00:00.000Z',
+                payload: { completedCount: 0 },
+              },
+            };
+            await new Promise<void>(resolve =>
+              signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+          } finally {
+            released = true;
+          }
+        },
+      }),
+    });
+
+    await session.receive(eventObserveFrame());
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual(
+        expect.objectContaining({ kind: 'event-delivery', id: 'event-observation-1' }),
+      ),
+    );
+    await session.receive({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'event-unobserve',
+      id: 'event-observation-1',
+    });
+    await vi.waitFor(() => expect(released).toBe(true));
+    expect(sent[0]).toMatchObject({
+      kind: 'ready',
+      capabilities: ['request-response', 'event-subscription-push'],
+    });
+  });
+
   it('parses request, response, observation, and ready frames without changing family bodies', () => {
     const request = requestFrame('request-1');
     expect(parseRuntimeProtocolSessionClientFrame(request)).toEqual({

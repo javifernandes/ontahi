@@ -9,7 +9,8 @@ import type { RuntimeTransport, RuntimeTransportRequestOptions } from './transpo
 export type RuntimeTransportCapability =
   | RuntimeProtocolFamily
   | 'durable.operation.observe'
-  | 'graph.observe';
+  | 'graph.observe'
+  | 'event.observe';
 
 export type RuntimeTransportRouting = Readonly<Partial<Record<RuntimeTransportCapability, string>>>;
 
@@ -53,6 +54,7 @@ type RegisteredRuntimeTransport = RuntimeTransportRegistration & {
 const observationCapabilities = [
   'durable.operation.observe',
   'graph.observe',
+  'event.observe',
 ] as const satisfies readonly RuntimeTransportCapability[];
 
 const runtimeTransportCapabilities = (
@@ -61,6 +63,7 @@ const runtimeTransportCapabilities = (
   ...runtimeProtocolFamilyNames,
   ...(transport.durableOperation ? (['durable.operation.observe'] as const) : []),
   ...(transport.graph ? (['graph.observe'] as const) : []),
+  ...(transport.events ? (['event.observe'] as const) : []),
 ];
 
 const isRuntimeTransportCapability = (value: unknown): value is RuntimeTransportCapability =>
@@ -193,6 +196,12 @@ export const createRuntimeTransportRouter = <
           transportFor('graph.observe').graph!.observe(...args),
       }
     : undefined;
+  const events = availableCapabilities.includes('event.observe')
+    ? {
+        observe: (...args: Parameters<NonNullable<RuntimeTransport['events']>['observe']>) =>
+          transportFor('event.observe').events!.observe(...args),
+      }
+    : undefined;
   const causality = {
     associateGraphReadRefreshes: (
       ...args: Parameters<NonNullable<RuntimeTransport['causality']>['associateGraphReadRefreshes']>
@@ -203,6 +212,7 @@ export const createRuntimeTransportRouter = <
     request,
     ...(durableOperation ? { durableOperation } : {}),
     ...(graph ? { graph } : {}),
+    ...(events ? { events } : {}),
     causality,
     routing: {
       inspect: () => snapshot,

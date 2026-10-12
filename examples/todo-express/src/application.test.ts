@@ -35,6 +35,8 @@ import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { projectTodoEventActivity } from '../client/src/todo-app/todo-event-activity.js';
+
 import { createTodoExpressServer } from './application.js';
 import type { TodoAuthenticationAdapter } from './authentication.js';
 import {
@@ -1215,6 +1217,17 @@ describe('Ontahi todo portability example', () => {
       },
     });
     const client = createRuntimeGraphClient({ runtimeTransport });
+    const browserEventController = new AbortController();
+    const browserDeliveriesPromise = (async () => {
+      const deliveries: EventDeliveryFor<typeof TodoListCompleted>[] = [];
+      for await (const delivery of runtimeTransport.events.observe(TodoListCompleted, {
+        signal: browserEventController.signal,
+      })) {
+        deliveries.push(delivery);
+        if (deliveries.length === 2) break;
+      }
+      return deliveries;
+    })();
     const TodoSocketRow = ClientTodoItem.view('TodoSocketRow', {
       id: true,
       title: true,
@@ -1293,6 +1306,22 @@ describe('Ontahi todo portability example', () => {
       list: createEntityRef(TodoList, { id: 'list-1' }),
       completedCount: 0,
     });
+    const browserDeliveries = await browserDeliveriesPromise;
+    expect(browserDeliveries.map(delivery => delivery.occurrence.payload)).toEqual([
+      {
+        list: createEntityRef(TodoList, { id: 'list-1' }),
+        completedCount: 2,
+      },
+      {
+        list: createEntityRef(TodoList, { id: 'list-1' }),
+        completedCount: 0,
+      },
+    ]);
+    expect(browserDeliveries.map(projectTodoEventActivity)).toEqual([
+      expect.objectContaining({ kind: 'todo-list-completed', completedCount: 2 }),
+      expect.objectContaining({ kind: 'todo-list-completed', completedCount: 0 }),
+    ]);
+    browserEventController.abort();
     completedSubscription.cancel();
     expect(snapshotInspection).not.toHaveBeenCalled();
     const terminalInspection = await createRuntimeProtocolExecutionExchange({

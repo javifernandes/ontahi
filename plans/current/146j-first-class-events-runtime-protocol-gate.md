@@ -542,8 +542,8 @@ Acceptance:
 - [x] Declare and reflect `TodoListCompleted` in the Todo application.
 - [x] Emit one occurrence with Todo List Ref and completed count from the committed Operation.
 - [x] Consume it from one headless subscriber using the same declaration.
-- [ ] Add a small Todo activity projection proving a browser consumer can subscribe.
-- [ ] Add the minimum Runtime Protocol family required by that browser subscription only after
+- [x] Add a small Todo activity projection proving a browser consumer can subscribe.
+- [x] Add the minimum Runtime Protocol family required by that browser subscription only after
       Vertical A fixes the semantic envelope.
 - [ ] Display the occurrence and delivery causally beneath `TodoList.completeAll()` in Devtools.
 - [ ] Keep the existing automatic Query refresh behavior unchanged and separately inspectable.
