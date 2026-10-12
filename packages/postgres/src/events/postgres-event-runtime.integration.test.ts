@@ -125,6 +125,30 @@ describe('PostgreSQL Event Runtime', () => {
     expect(early?.delivery.occurrence.occurredAt).toBe('2026-10-12T00:00:00.000Z');
   });
 
+  it('claims backfilled deliveries in occurrence order when timestamps tie', async () => {
+    const ids = ['z-first-occurrence', 'a-second-occurrence'];
+    const events = createPostgresEventRuntime({
+      pool,
+      now: () => new Date('2026-10-12T00:00:00.000Z'),
+      createId: () => ids.shift() ?? `claim-${++sequence}`,
+    });
+    await events.accept(emission('first'));
+    await events.accept(emission('second'));
+    await events.durableDelivery!.register(subscription('ordered-backfill'));
+
+    const first = await events.durableDelivery!.claim('ordered-backfill', {
+      consumerId: 'worker-1',
+      leaseMs: 1_000,
+    });
+    expect(first?.delivery.occurrence.payload).toMatchObject({ requestId: 'first' });
+    await events.durableDelivery!.acknowledge(first!);
+    const second = await events.durableDelivery!.claim('ordered-backfill', {
+      consumerId: 'worker-1',
+      leaseMs: 1_000,
+    });
+    expect(second?.delivery.occurrence.payload).toMatchObject({ requestId: 'second' });
+  });
+
   it('matches correlation without consuming unrelated retained occurrences', async () => {
     const events = runtime();
     await events.accept(emission('other', { requestId: 'other' }));

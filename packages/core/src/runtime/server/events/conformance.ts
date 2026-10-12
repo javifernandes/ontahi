@@ -4,6 +4,7 @@ import type { EventEmission, EventRuntime } from './types.js';
 export type DurableEventRuntimeConformanceHarness = {
   readonly createRuntime: () => EventRuntime;
   readonly identityPrefix?: string;
+  readonly waitForLeaseExpiry?: (leaseMs: number) => Promise<void>;
 };
 
 const invariant: (condition: unknown, message: string) => asserts condition = (
@@ -82,6 +83,51 @@ export const verifyDurableEventRuntimeConformance = async (
     })) === undefined,
     'an acknowledged delivery must not be claimed again',
   );
+
+  await durableDelivery.register({
+    id: `${prefix}.lease-expiry`,
+    eventId,
+    eventVersion: 1,
+    correlation: { requestId: 'lease-expiry' },
+  });
+  await runtime.accept(emission('lease-expiry'));
+  const leaseMs = 10;
+  const expiring = await durableDelivery.claim(`${prefix}.lease-expiry`, {
+    consumerId: 'consumer-expiring',
+    leaseMs,
+  });
+  invariant(expiring, 'a pending delivery must be claimable with a lease');
+  await (
+    harness.waitForLeaseExpiry ??
+    (duration => new Promise(resolve => setTimeout(resolve, duration + 10)))
+  )(leaseMs);
+  const reclaimed = await durableDelivery.claim(`${prefix}.lease-expiry`, {
+    consumerId: 'consumer-after-expiry',
+    leaseMs: 10_000,
+  });
+  invariant(reclaimed, 'an expired delivery lease must become claimable again');
+  invariant(
+    reclaimed.delivery.deliveryId === expiring.delivery.deliveryId,
+    'lease expiry must preserve delivery identity',
+  );
+  invariant(reclaimed.delivery.attempt === 2, 'lease expiry retry must increment the attempt');
+  let staleClaimRejected = false;
+  try {
+    await durableDelivery.acknowledge(expiring);
+  } catch {
+    staleClaimRejected = true;
+  }
+  if (!staleClaimRejected) {
+    const stillClaimed = await durableDelivery.claim(`${prefix}.lease-expiry`, {
+      consumerId: 'consumer-probe',
+      leaseMs: 10_000,
+    });
+    invariant(
+      stillClaimed === undefined,
+      'a stale claim must not acknowledge a delivery held by a newer claim',
+    );
+  }
+  await durableDelivery.acknowledge(reclaimed);
 
   await durableDelivery.register({
     id: `${prefix}.restart`,

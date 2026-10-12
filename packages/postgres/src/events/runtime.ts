@@ -236,12 +236,14 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     const claimId = createId();
     const result = await options.pool.query(
       `WITH candidate AS (
-         SELECT delivery_id
-         FROM ${tables.deliveries}
-         WHERE subscription_id = $1
-           AND (state = 'pending' OR (state = 'claimed' AND lease_expires_at <= now()))
-         ORDER BY created_at, delivery_id
-         FOR UPDATE SKIP LOCKED
+         SELECT delivery.delivery_id
+         FROM ${tables.deliveries} AS delivery
+         JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
+         WHERE delivery.subscription_id = $1
+           AND (delivery.state = 'pending'
+             OR (delivery.state = 'claimed' AND delivery.lease_expires_at <= now()))
+         ORDER BY occurrence.acceptance_order
+         FOR UPDATE OF delivery SKIP LOCKED
          LIMIT 1
        ), claimed AS (
          UPDATE ${tables.deliveries} AS delivery

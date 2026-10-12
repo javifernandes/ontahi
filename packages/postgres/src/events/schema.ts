@@ -37,6 +37,7 @@ export const createPostgresEventSchemaSql = (
   return [
     `CREATE TABLE ${names.occurrences} (
       occurrence_id text PRIMARY KEY,
+      acceptance_order bigserial NOT NULL UNIQUE,
       event_id text NOT NULL,
       event_version integer NOT NULL CHECK (event_version > 0),
       occurred_at timestamptz NOT NULL,
@@ -45,7 +46,7 @@ export const createPostgresEventSchemaSql = (
       correlation jsonb
     )`,
     `CREATE INDEX ${identifier(`${resolvePostgresEventTableNames(tables).occurrences}_event_idx`)}
-      ON ${names.occurrences} (event_id, event_version, occurred_at, occurrence_id)`,
+      ON ${names.occurrences} (event_id, event_version, acceptance_order)`,
     `CREATE TABLE ${names.subscriptions} (
       subscription_id text PRIMARY KEY,
       event_id text NOT NULL,

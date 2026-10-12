@@ -10,9 +10,10 @@ describe('PostgreSQL Event schema contract', () => {
       deliveries: 'ontahi_event_deliveries',
     });
     expect(createPostgresEventSchemaSql()).toHaveLength(5);
-    expect(createPostgresEventSchemaSql().join('\n')).toContain(
-      'CREATE TABLE "ontahi_event_occurrences"',
-    );
+    const sql = createPostgresEventSchemaSql().join('\n');
+    expect(sql).toContain('CREATE TABLE "ontahi_event_occurrences"');
+    expect(sql).toContain('acceptance_order bigserial NOT NULL UNIQUE');
+    expect(sql).toContain('(event_id, event_version, acceptance_order)');
   });
 
   it('quotes custom identifiers and rejects empty names', () => {

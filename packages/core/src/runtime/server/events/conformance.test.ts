@@ -14,7 +14,13 @@ const createConformanceRuntimeFactory = () => {
   const subscriptions = new Map<string, DurableEventSubscription>();
   const deliveries = new Map<
     string,
-    { delivery: EventDelivery; state: 'pending' | 'claimed' | 'acknowledged' }
+    {
+      delivery: EventDelivery;
+      state: 'pending' | 'claimed' | 'acknowledged';
+      claimId?: string;
+      consumerId?: string;
+      leaseExpiresAt?: number;
+    }
   >();
   let sequence = 0;
   const matches = (subscription: DurableEventSubscription, occurrence: EventOccurrence) =>
@@ -75,23 +81,40 @@ const createConformanceRuntimeFactory = () => {
       claim: async (subscriptionId, options) => {
         const entry = [...deliveries.values()].find(
           candidate =>
-            candidate.delivery.subscriptionId === subscriptionId && candidate.state === 'pending',
+            candidate.delivery.subscriptionId === subscriptionId &&
+            (candidate.state === 'pending' ||
+              (candidate.state === 'claimed' && candidate.leaseExpiresAt! <= Date.now())),
         );
         if (!entry) return undefined;
+        const claimId = `claim-${++sequence}`;
         entry.state = 'claimed';
+        entry.claimId = claimId;
+        entry.consumerId = options.consumerId;
+        entry.leaseExpiresAt = Date.now() + options.leaseMs;
         entry.delivery = { ...entry.delivery, attempt: entry.delivery.attempt + 1 };
         return {
-          claimId: `claim-${++sequence}`,
+          claimId,
           consumerId: options.consumerId,
-          leaseExpiresAt: '2026-10-12T00:01:00.000Z',
+          leaseExpiresAt: new Date(entry.leaseExpiresAt).toISOString(),
           delivery: entry.delivery,
         };
       },
       acknowledge: async (claim: EventDeliveryClaim) => {
-        deliveries.get(claim.delivery.deliveryId)!.state = 'acknowledged';
+        const entry = deliveries.get(claim.delivery.deliveryId)!;
+        if (
+          entry.state !== 'claimed' ||
+          entry.claimId !== claim.claimId ||
+          entry.consumerId !== claim.consumerId ||
+          entry.leaseExpiresAt! <= Date.now()
+        ) {
+          throw new Error('stale claim');
+        }
+        entry.state = 'acknowledged';
       },
       release: async (claim: EventDeliveryClaim) => {
-        deliveries.get(claim.delivery.deliveryId)!.state = 'pending';
+        const entry = deliveries.get(claim.delivery.deliveryId)!;
+        if (entry.claimId !== claim.claimId) throw new Error('stale claim');
+        entry.state = 'pending';
       },
       cancel: async subscriptionId => {
         subscriptions.delete(subscriptionId);
