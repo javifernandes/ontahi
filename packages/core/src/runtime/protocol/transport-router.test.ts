@@ -10,6 +10,7 @@ import {
 } from './transport-router.js';
 import type {
   DurableOperationObservationCapability,
+  EventObservationCapability,
   GraphObservationCapability,
   RuntimeTransport,
 } from './transport.js';
@@ -24,10 +25,12 @@ const taskSnapshot = (source: string): TaskSnapshot => ({
 
 const createTransport = ({
   durable = false,
+  events = false,
   graph = false,
   source,
 }: {
   readonly durable?: boolean;
+  readonly events?: boolean;
   readonly graph?: boolean;
   readonly source: string;
 }) => {
@@ -46,16 +49,43 @@ const createTransport = ({
       change: { kind: 'invalidate' },
     } as never;
   };
+  const observeEvents: EventObservationCapability['observe'] = async function* () {
+    yield { source } as never;
+  };
   const associateGraphReadRefreshes = vi.fn();
   return {
     request,
     causality: { associateGraphReadRefreshes },
     ...(durable ? { durableOperation: { observe: observeDurable } } : {}),
     ...(graph ? { graph: { observe: observeGraph } } : {}),
+    ...(events ? { events: { observe: observeEvents } } : {}),
   };
 };
 
 describe('Runtime Transport router', () => {
+  it('registers, routes, and reconfigures Event observations', async () => {
+    const http = createTransport({ events: true, source: 'http' });
+    const websocket = createTransport({ events: true, source: 'websocket' });
+    const transport = createRuntimeTransportRouter({
+      transports: { http, websocket },
+      routing: { 'event.observe': 'websocket' },
+    });
+
+    expect(transport.routing.inspect().assignments['event.observe']).toBe('websocket');
+    const fromWebsocket = [];
+    for await (const delivery of transport.events!.observe({} as never)) {
+      fromWebsocket.push(delivery);
+    }
+    expect(fromWebsocket).toEqual([{ source: 'websocket' }]);
+
+    transport.routing.configure('event.observe', 'http');
+    const fromHttp = [];
+    for await (const delivery of transport.events!.observe({} as never)) {
+      fromHttp.push(delivery);
+    }
+    expect(fromHttp).toEqual([{ source: 'http' }]);
+  });
+
   it('derives registered capabilities and routes protocol work independently', async () => {
     const http = createTransport({ durable: true, source: 'http' });
     const websocket = createTransport({ durable: true, graph: true, source: 'websocket' });
