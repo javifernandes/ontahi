@@ -8,17 +8,17 @@ import {
   graphSchema,
   reaction,
   type InMemoryDataset,
-} from '../../data-graph/index.js';
+} from '../../../data-graph/index.js';
+import { entity, event, layer, ontahi, relation } from '../index.js';
 
 import {
   createEventApplication,
   createInMemoryEventRuntime,
+  isEventEmission,
   type EventDeliveryFor,
   type EventEmission,
   type EventOccurrenceFor,
-} from './events.js';
-
-import { entity, event, layer, ontahi, relation } from './index.js';
+} from './index.js';
 
 const CourseFields = { id: field.id() };
 const CourseRef = entity.ref('EventCourse', { fields: CourseFields });
@@ -45,6 +45,109 @@ const studentRef = (id: string) => createEntityRef(Student, { id });
 const courseRef = (id: string) => createEntityRef(Course, { id });
 
 describe('first-class Events', () => {
+  it('rejects invalid declarations and recognizes only canonical JSON-safe emissions', () => {
+    const define = (overrides: Partial<Parameters<typeof event.define>[0]> = {}) =>
+      event.define({
+        id: 'ValidationEvent',
+        version: 1,
+        description: 'Validation fixture.',
+        payload: graphSchema.object({ value: graphSchema.string() }),
+        ...overrides,
+      } as Parameters<typeof event.define>[0]);
+
+    expect(() => define({ id: '' })).toThrow('non-empty id');
+    expect(() => define({ version: 0 })).toThrow('positive integer');
+    expect(() => define({ description: '' })).toThrow('non-empty description');
+    expect(isEventEmission(StudentCourseAssigned.emit({
+      student: studentRef('student-1'),
+      course: courseRef('course-1'),
+    }))).toBe(true);
+    expect(isEventEmission(null)).toBe(false);
+    expect(isEventEmission({ kind: 'event-emission', eventId: 'x', eventVersion: 1 })).toBe(false);
+    expect(
+      isEventEmission({
+        kind: 'event-emission',
+        eventId: 'x',
+        eventVersion: 1,
+        payload: Number.NaN,
+      }),
+    ).toBe(false);
+  });
+
+  it('validates runtime bounds and releases capacity after a subscriber timeout', async () => {
+    expect(() => createInMemoryEventRuntime({ capacity: 0 })).toThrow('positive integer');
+    expect(() => createInMemoryEventRuntime({ deliveryTimeoutMs: 0 })).toThrow('must be positive');
+
+    vi.useFakeTimers();
+    try {
+      const subscriberFailure = vi.fn();
+      const runtime = createInMemoryEventRuntime({
+        capacity: 1,
+        deliveryTimeoutMs: 10,
+        createId: (() => {
+          let sequence = 0;
+          return () => `bounded-${++sequence}`;
+        })(),
+        onSubscriberError: cause => {
+          subscriberFailure(cause);
+          throw new Error('diagnostic reporter failed');
+        },
+      });
+      const subscription = runtime.subscribe('StudentCourseAssigned', () => new Promise(() => {}));
+      const emission = StudentCourseAssigned.emit({
+        student: studentRef('student-1'),
+        course: courseRef('course-1'),
+      });
+      const first = runtime.accept(emission);
+      await Promise.resolve();
+      await expect(runtime.accept(emission)).rejects.toThrow('capacity exceeded');
+      await vi.advanceTimersByTimeAsync(10);
+      await expect(first).resolves.toMatchObject({ eventId: 'StudentCourseAssigned' });
+      expect(subscriberFailure).toHaveBeenCalledOnce();
+
+      subscription.cancel();
+      subscription.cancel();
+      await expect(runtime.accept(emission)).resolves.toMatchObject({
+        eventId: 'StudentCourseAssigned',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects duplicate, unknown, and foreign declarations while preserving explicit provenance', async () => {
+    const runtime = createInMemoryEventRuntime();
+    expect(() =>
+      createEventApplication({
+        declarations: [StudentCourseAssigned, StudentCourseAssigned],
+        runtime,
+      }),
+    ).toThrow('declared more than once');
+
+    const events = createEventApplication({ declarations: [StudentCourseAssigned], runtime });
+    const emission = StudentCourseAssigned.emit({
+      student: studentRef('student-1'),
+      course: courseRef('course-1'),
+    });
+    await expect(events.publish({ ...emission, eventId: 'Unknown' })).rejects.toThrow(
+      'Unknown Event',
+    );
+    expect(() =>
+      events.api.subscribe({ ...StudentCourseAssigned } as typeof StudentCourseAssigned, () => {}),
+    ).toThrow('not registered');
+
+    const explicit = { kind: 'operation' as const, scope: 'explicit' };
+    const occurrence = await events.publish({
+      ...emission,
+      causation: explicit,
+      correlation: { trace: 'trace-1' },
+    }, { kind: 'operation', scope: 'fallback' });
+    expect(occurrence).toMatchObject({
+      causation: explicit,
+      correlation: { trace: 'trace-1' },
+    });
+  });
+
   it('infers typed JSON-safe emissions and validates forged payloads and versions', async () => {
     const emission = StudentCourseAssigned.emit({
       student: studentRef('student-1'),

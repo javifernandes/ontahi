@@ -38,8 +38,9 @@ subscriber. Subscriber failure neither retracts the occurrence nor prevents othe
 running. Cancellation prevents future delivery to that subscription.
 
 Core's default Event Runtime is process-local and in-memory. It provides live subscription,
-synchronous acceptance-ordered fan-out, cancellation, and bounded rejection on overflow. It
-explicitly provides no retention, replay, durable acceptance, durable delivery, acknowledgement,
+awaited concurrent fan-out, cancellation, bounded subscriber delivery time, and rejection on
+overflow. The adapter explicitly provides no retention, replay, durable acceptance, durable delivery,
+acknowledgement,
 deduplication, atomic publication, restart guarantee, or exactly-once guarantee. A stronger adapter
 must advertise only guarantees it actually implements.
 

@@ -1,7 +1,7 @@
 import type {
   AnyEventDeclaration,
   EventPayload,
-} from '../runtime/server/events.js';
+} from '../runtime/server/events/index.js';
 
 import type { AnyEntityDefinition } from './definitions.js';
 import type { EntityMutationCommand } from './entity-mutation-command.js';

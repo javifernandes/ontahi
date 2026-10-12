@@ -66,7 +66,7 @@ import {
   type AnyEventDeclaration,
   type EventApplication,
   type EventRuntime,
-} from './events.js';
+} from './events/index.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import {
   applyContextualEntityMutationReactions,
@@ -309,7 +309,10 @@ export const ontahi = <
     runtime: configuredEventRuntime,
   });
   const legacyEventEffector = options.capabilities?.effectors?.['emit-event'];
-  const interpretEvent = async (value: unknown, causation?: import('./events.js').EventCausation) => {
+  const interpretEvent = async (
+    value: unknown,
+    causation?: import('./events/index.js').EventCausation,
+  ) => {
     if (isEventEmission(value)) return eventApplication.publish(value, causation);
     if (!legacyEventEffector) throw new Error('No effector registered for legacy emit-event intents');
     await Effect.runPromise(legacyEventEffector({ kind: 'emit-event', event: value } as never));

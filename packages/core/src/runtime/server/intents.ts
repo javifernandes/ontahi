@@ -16,7 +16,7 @@ import {
   type AnyEventDeclaration,
   type EventEmission,
   type EventPayload,
-} from './events.js';
+} from './events/index.js';
 import { reportOperationWarning } from './failures.js';
 
 type EventIntentFactory = {

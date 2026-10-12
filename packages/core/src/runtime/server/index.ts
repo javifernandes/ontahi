@@ -277,7 +277,7 @@ export {
   type MutationEventCausation,
   type OperationEventCausation,
   type ReflectedEventDeclaration,
-} from './events.js';
+} from './events/index.js';
 export type {
   EffectIntent,
   Effectors,

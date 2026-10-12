@@ -1,4 +1,4 @@
-import type { EventOccurrence } from '../runtime/server/events.js';
+import type { EventOccurrence } from '../runtime/server/events/index.js';
 import { isJsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
