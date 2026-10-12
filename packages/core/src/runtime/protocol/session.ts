@@ -493,6 +493,18 @@ const parseEventDelivery = (value: unknown): EventDelivery | undefined => {
   return cloneJson(value) as EventDelivery;
 };
 
+const parseObservationFrameIdentity = (value: Record<string, unknown>) => {
+  if (
+    !hasOnlyKeys(value, observationFrameKeys) ||
+    !isSessionId(value.id) ||
+    !Number.isSafeInteger(value.sequence) ||
+    (value.sequence as number) <= 0
+  ) {
+    return undefined;
+  }
+  return { id: value.id, sequence: value.sequence as number };
+};
+
 export const parseRuntimeProtocolSessionServerFrame = (
   input: unknown,
 ): RuntimeProtocolSessionFrameParseResult<RuntimeProtocolSessionServerFrame> => {
@@ -561,13 +573,8 @@ export const parseRuntimeProtocolSessionServerFrame = (
 
   if (value.kind === 'graph-observation') {
     const body = parseGraphObservationBody(value.body);
-    if (
-      !hasOnlyKeys(value, observationFrameKeys) ||
-      !isSessionId(value.id) ||
-      !Number.isSafeInteger(value.sequence) ||
-      (value.sequence as number) <= 0 ||
-      !body
-    ) {
+    const identity = parseObservationFrameIdentity(value);
+    if (!identity || !body) {
       return invalidFrame('Runtime Protocol Graph observation frame is invalid.', value);
     }
     return {
@@ -576,8 +583,7 @@ export const parseRuntimeProtocolSessionServerFrame = (
         protocol: RUNTIME_PROTOCOL_SESSION_NAME,
         version: RUNTIME_PROTOCOL_SESSION_VERSION,
         kind: 'graph-observation',
-        id: value.id,
-        sequence: value.sequence as number,
+        ...identity,
         body,
       },
     };
@@ -606,13 +612,8 @@ export const parseRuntimeProtocolSessionServerFrame = (
 
   if (value.kind === 'event-delivery') {
     const body = parseEventDelivery(value.body);
-    if (
-      !hasOnlyKeys(value, observationFrameKeys) ||
-      !isSessionId(value.id) ||
-      !Number.isSafeInteger(value.sequence) ||
-      (value.sequence as number) <= 0 ||
-      !body
-    ) {
+    const identity = parseObservationFrameIdentity(value);
+    if (!identity || !body) {
       return invalidFrame('Runtime Protocol Event delivery frame is invalid.', value);
     }
     return {
@@ -621,8 +622,7 @@ export const parseRuntimeProtocolSessionServerFrame = (
         protocol: RUNTIME_PROTOCOL_SESSION_NAME,
         version: RUNTIME_PROTOCOL_SESSION_VERSION,
         kind: 'event-delivery',
-        id: value.id,
-        sequence: value.sequence as number,
+        ...identity,
         body,
       },
     };

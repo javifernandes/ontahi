@@ -224,6 +224,22 @@ export const createWebSocketRuntimeTransport = ({
   const graphObservations = new Map<string, ActiveGraphObservation>();
   const eventObservations = new Map<string, ActiveEventObservation>();
 
+  const prepareObservation = <TValue>(
+    queue: AsyncQueue<TValue>,
+    signal: AbortSignal | undefined,
+  ) => {
+    const id = observationId();
+    const abort = () => queue.end();
+    signal?.addEventListener('abort', abort, { once: true });
+    return {
+      id,
+      release: () => signal?.removeEventListener('abort', abort),
+    };
+  };
+
+  const observationIdIsActive = (id: string) =>
+    durableObservations.has(id) || graphObservations.has(id) || eventObservations.has(id);
+
   const send = (frame: RuntimeProtocolSessionClientFrame) => {
     if (disposed) throw new Error('Runtime Protocol WebSocket transport is closed.');
     if (!socket || socket.readyState !== SOCKET_OPEN) {
@@ -528,8 +544,9 @@ export const createWebSocketRuntimeTransport = ({
     if (options?.signal?.aborted) return;
     let failedAttempts = 0;
     while (!options?.signal?.aborted) {
-      const id = observationId();
       const queue = createAsyncQueue<TaskSnapshot>();
+      const prepared = prepareObservation(queue, options?.signal);
+      const { id } = prepared;
       const observation: ActiveDurableObservation = {
         run,
         queue,
@@ -537,9 +554,6 @@ export const createWebSocketRuntimeTransport = ({
         terminal: false,
       };
       let subscribed = false;
-      const abort = () => queue.end();
-      options?.signal?.addEventListener('abort', abort, { once: true });
-
       try {
         const connectedCapabilities = await awaitWithSignal(
           ensureConnection(),
@@ -549,7 +563,7 @@ export const createWebSocketRuntimeTransport = ({
         if (!connectedCapabilities.has('durable-operation-push')) {
           throw new Error('Durable Operation push is unavailable in this WebSocket session.');
         }
-        if (durableObservations.has(id) || graphObservations.has(id) || eventObservations.has(id)) {
+        if (observationIdIsActive(id)) {
           throw new Error(`Durable observation id ${id} is already active.`);
         }
         durableObservations.set(id, observation);
@@ -588,7 +602,7 @@ export const createWebSocketRuntimeTransport = ({
           throw delayError;
         }
       } finally {
-        options?.signal?.removeEventListener('abort', abort);
+        prepared.release();
         if (durableObservations.get(id) === observation) durableObservations.delete(id);
         if (subscribed && !observation.terminal) {
           try {
@@ -611,17 +625,15 @@ export const createWebSocketRuntimeTransport = ({
     options,
   ) {
     if (options?.signal?.aborted) return;
-    const id = observationId();
     const queue = createAsyncQueue<RuntimeProtocolGraphObservationBody>();
+    const prepared = prepareObservation(queue, options?.signal);
+    const { id } = prepared;
     const observation: ActiveGraphObservation = {
       queue,
       lastSequence: 0,
       terminal: false,
     };
     let subscribed = false;
-    const abort = () => queue.end();
-    options?.signal?.addEventListener('abort', abort, { once: true });
-
     try {
       const connectedCapabilities = await awaitWithSignal(
         ensureConnection(),
@@ -631,7 +643,7 @@ export const createWebSocketRuntimeTransport = ({
       if (!connectedCapabilities.has('graph-observation-push')) {
         throw new Error('Data graph push observation is unavailable in this WebSocket session.');
       }
-      if (durableObservations.has(id) || graphObservations.has(id) || eventObservations.has(id)) {
+      if (observationIdIsActive(id)) {
         throw new Error(`Graph observation id ${id} is already active.`);
       }
       graphObservations.set(id, observation);
@@ -652,7 +664,7 @@ export const createWebSocketRuntimeTransport = ({
     } catch (error) {
       if (!options?.signal?.aborted) throw error;
     } finally {
-      options?.signal?.removeEventListener('abort', abort);
+      prepared.release();
       if (graphObservations.get(id) === observation) graphObservations.delete(id);
       if (subscribed && !observation.terminal) {
         try {
@@ -674,12 +686,11 @@ export const createWebSocketRuntimeTransport = ({
     options,
   ) {
     if (options?.signal?.aborted) return;
-    const id = observationId();
     const queue = createAsyncQueue<EventDeliveryFor<AnyEventDeclaration>>();
+    const prepared = prepareObservation(queue, options?.signal);
+    const { id } = prepared;
     const observation: ActiveEventObservation = { queue, lastSequence: 0 };
     let subscribed = false;
-    const abort = () => queue.end();
-    options?.signal?.addEventListener('abort', abort, { once: true });
     try {
       const connectedCapabilities = await awaitWithSignal(
         ensureConnection(),
@@ -689,7 +700,7 @@ export const createWebSocketRuntimeTransport = ({
       if (!connectedCapabilities.has('event-subscription-push')) {
         throw new Error('Event push subscription is unavailable in this WebSocket session.');
       }
-      if (durableObservations.has(id) || graphObservations.has(id) || eventObservations.has(id)) {
+      if (observationIdIsActive(id)) {
         throw new Error(`Event observation id ${id} is already active.`);
       }
       eventObservations.set(id, observation);
@@ -710,7 +721,7 @@ export const createWebSocketRuntimeTransport = ({
     } catch (error) {
       if (!options?.signal?.aborted) throw error;
     } finally {
-      options?.signal?.removeEventListener('abort', abort);
+      prepared.release();
       if (eventObservations.get(id) === observation) eventObservations.delete(id);
       if (subscribed) {
         try {
