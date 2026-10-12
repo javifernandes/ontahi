@@ -25,10 +25,10 @@ import {
 import { AuthoringDialectContext } from './authoring-dialect.js';
 import { CausalEffects } from './causal-effects.js';
 import { styles } from './devtools-styles.js';
+import { EventDeliveryDetail } from './event-delivery-detail.js';
 import type { GraphObservationActivity } from './graph-observation-model.js';
 import { OperationInteraction } from './operation-interaction.js';
 import { RuntimeTrace } from './runtime-trace.js';
-import { SemanticPayload } from './semantic-payload.js';
 
 const snapshotOutcome = (
   status: ObservationSnapshot['snapshot']['status'],
@@ -194,11 +194,14 @@ export const OperationProgressDetail = ({
               refreshes={derivedRefreshes}
               showHeading={false}
             />
-            {eventDeliveries.map((delivery, index) => (
-              <div key={index} aria-label='Event delivery'>
-                <SemanticPayload value={delivery} />
-              </div>
-            ))}
+            {eventDeliveries.length > 0 ? (
+              <section aria-label='Events' style={styles.eventSection}>
+                <span style={styles.semanticLabel}>Events</span>
+                {eventDeliveries.map((delivery, index) => (
+                  <EventDeliveryDetail key={index} delivery={delivery} />
+                ))}
+              </section>
+            ) : null}
           </div>
         ) : activeSection === 'runtime' ? (
           <div role='tabpanel' aria-label='Operation runtime trace'>

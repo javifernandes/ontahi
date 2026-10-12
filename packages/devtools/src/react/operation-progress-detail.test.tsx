@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { OperationProgressActivity } from './activity-model.js';
@@ -31,11 +31,25 @@ describe('OperationProgressDetail', () => {
         activity={activity}
         eventDeliveries={[
           {
+            kind: 'event-delivery',
+            deliveryId: 'delivery-1',
+            subscriptionId: 'subscription-1',
+            attempt: 1,
             occurrence: {
-              event: { name: 'TodoListCompleted', version: 1 },
-              payload: { listId: 'list-1', completed: 0 },
+              kind: 'event-occurrence',
+              occurrenceId: 'occurrence-1',
+              eventId: 'TodoListCompleted',
+              eventVersion: 1,
+              occurredAt: '2026-10-12T00:00:00.000Z',
+              payload: {
+                list: {
+                  kind: 'entity-ref',
+                  entityName: 'TodoList',
+                  locator: { id: 'list-inbox' },
+                },
+                completedCount: 3,
+              },
             },
-            delivery: { deliveryId: 'delivery-1' },
           },
         ]}
       />,
@@ -44,8 +58,15 @@ describe('OperationProgressDetail', () => {
     expect(screen.getByRole('tab', { name: /Effects 1/ }).getAttribute('aria-selected')).toBe(
       'true',
     );
-    expect(screen.getByLabelText('Event delivery').textContent).toContain('TodoListCompleted');
-    expect(screen.getByLabelText('Event delivery').textContent).toContain('completed');
-    expect(screen.getByLabelText('Event delivery').textContent).toContain('0');
+    const summary = screen.getByLabelText('Event summary');
+    expect(screen.getByLabelText('Events')).toBeTruthy();
+    expect(summary.textContent).toContain('TodoListCompleted');
+    expect(summary.textContent).toContain('list = list-inbox');
+    expect(summary.textContent).toContain('completedCount = 3');
+    expect(screen.getByText('Technical details').parentElement?.hasAttribute('open')).toBe(false);
+
+    fireEvent.click(screen.getByText('Technical details'));
+    expect(screen.getByText('Technical details').parentElement?.hasAttribute('open')).toBe(true);
+    expect(screen.getByLabelText('Event delivery').textContent).toContain('delivery-1');
   });
 });
