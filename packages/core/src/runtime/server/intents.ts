@@ -11,12 +11,36 @@ import type {
   RunEffectIntent,
   TryEffectIntent,
 } from './effect-intents/types.js';
+import {
+  defineEvent,
+  type AnyEventDeclaration,
+  type EventEmission,
+  type EventPayload,
+} from './events.js';
 import { reportOperationWarning } from './failures.js';
 
-export const event = <TEvent>(domainEvent: TEvent): EventEffectIntent<TEvent> => ({
-  kind: 'emit-event',
-  event: domainEvent,
-});
+type EventIntentFactory = {
+  <TEvent extends AnyEventDeclaration>(
+    declaration: TEvent,
+    payload: EventPayload<TEvent>,
+  ): EventEffectIntent<EventEmission<TEvent['id'], TEvent['version']>>;
+  <TEvent>(domainEvent: TEvent): EventEffectIntent<TEvent>;
+  define: typeof defineEvent;
+};
+
+export const event = Object.assign(
+  (<TEvent>(domainEvent: TEvent | AnyEventDeclaration, payload?: unknown): EventEffectIntent => ({
+    kind: 'emit-event',
+    event:
+      typeof domainEvent === 'object' &&
+      domainEvent !== null &&
+      'kind' in domainEvent &&
+      domainEvent.kind === 'event-declaration'
+        ? domainEvent.emit(payload as never)
+        : domainEvent,
+  })) as EventIntentFactory,
+  { define: defineEvent },
+);
 
 export const run = (effect: RunEffectIntent['effect']): RunEffectIntent => ({
   kind: 'run-effect',
