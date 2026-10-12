@@ -157,7 +157,7 @@ export const toOperationInvocationResult = <TOutput = unknown, TFailure = unknow
   };
 };
 
-export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus = 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 
 export type TaskSubject = {
   type: string;

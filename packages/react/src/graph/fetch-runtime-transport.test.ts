@@ -113,7 +113,7 @@ describe('Fetch Runtime Transport', () => {
   });
 
   it('polls with inspect messages and completes the observation at terminal state', async () => {
-    const statuses = ['running', 'completed'] as const;
+    const statuses = ['running', 'waiting', 'completed'] as const;
     const fetchRequest = vi.fn(async (_endpoint: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
       const status = statuses[fetchRequest.mock.calls.length - 1];
@@ -125,12 +125,23 @@ describe('Fetch Runtime Transport', () => {
             ...run,
             status,
             updatedAt: `2026-08-31T01:00:0${fetchRequest.mock.calls.length}.000Z`,
+            ...(status === 'waiting'
+              ? {
+                  interaction: {
+                    id: 'choose-next-step',
+                    kind: 'choice' as const,
+                    prompt: 'Choose the next step.',
+                    options: [{ id: 'continue', label: 'Continue' }],
+                    createdAt: '2026-08-31T01:00:02.000Z',
+                  },
+                }
+              : {}),
             ...(status === 'completed' ? { result: { completed: 3 } } : {}),
           },
         }),
       );
     });
-    const requestIds = ['inspect-1', 'inspect-2'][Symbol.iterator]();
+    const requestIds = ['inspect-1', 'inspect-2', 'inspect-3'][Symbol.iterator]();
     const transport = createFetchRuntimeTransport({
       fetch: fetchRequest as typeof fetch,
       requestId: () => requestIds.next().value ?? 'unexpected',
@@ -150,8 +161,20 @@ describe('Fetch Runtime Transport', () => {
       },
       {
         ...run,
-        status: 'completed',
+        status: 'waiting',
         updatedAt: '2026-08-31T01:00:02.000Z',
+        interaction: {
+          id: 'choose-next-step',
+          kind: 'choice',
+          prompt: 'Choose the next step.',
+          options: [{ id: 'continue', label: 'Continue' }],
+          createdAt: '2026-08-31T01:00:02.000Z',
+        },
+      },
+      {
+        ...run,
+        status: 'completed',
+        updatedAt: '2026-08-31T01:00:03.000Z',
         result: { completed: 3 },
       },
     ]);
@@ -168,6 +191,14 @@ describe('Fetch Runtime Transport', () => {
         protocol: 'ontahi.runtime',
         version: 1,
         id: 'inspect-2',
+        kind: 'request',
+        family: 'durable.operation',
+        body: { version: 1, kind: 'inspect', run },
+      },
+      {
+        protocol: 'ontahi.runtime',
+        version: 1,
+        id: 'inspect-3',
         kind: 'request',
         family: 'durable.operation',
         body: { version: 1, kind: 'inspect', run },

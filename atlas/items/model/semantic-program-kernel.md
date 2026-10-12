@@ -152,3 +152,10 @@ is reevaluated through the authorized dispatcher under the subscription's origin
 Native provider observation remains a parallel change source and equal snapshots are deduplicated.
 Delivery is process-local and lossy with one pending refresh per slow observer, not a mutation log
 or distributed broker. Portable causal identity and Devtools grouping remain unproven.
+
+Plan 154f proves the first durable wait boundary without adding a generic Program wrapper. An
+explicit Task execution persists JSON-safe state and one expected typed Interaction, reports the
+run as `waiting`, atomically claims one authorized correlated response, returns to `running`, and
+resumes after runtime recreation. Native and LangGraph executors preserve that same lifecycle while
+keeping their continuation mechanics private. This one-shot wait remains distinct from Query
+observation and from the domain Event declarations and delivery semantics gated by Plan 146j.

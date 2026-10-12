@@ -574,15 +574,26 @@ describe('operation hooks', () => {
       },
     });
     const operation = ClientBook.domain.importBook;
+    let completeObservation!: () => void;
+    const continueObservation = new Promise<void>(resolve => {
+      completeObservation = resolve;
+    });
     const observe = vi.fn(() =>
       (async function* () {
         yield {
           taskId: 'book.import',
           runId: 'run-1',
-          status: 'running' as const,
+          status: 'waiting' as const,
           updatedAt: '2026-07-23T00:00:00.000Z',
-          progress: { phase: 'importing' },
+          interaction: {
+            id: 'approve-import',
+            kind: 'approval' as const,
+            prompt: 'Import this book?',
+            proposal: { id: 'import-1', summary: 'Import the book.', requests: [{}] },
+            createdAt: '2026-07-23T00:00:00.000Z',
+          },
         };
+        await continueObservation;
         yield {
           taskId: 'book.import',
           runId: 'run-1',
@@ -629,6 +640,10 @@ describe('operation hooks', () => {
     });
 
     expect(result.current.durable.runtime).toBe('vercel-workflow');
+    await waitFor(() => expect(result.current.isWaiting).toBe(true));
+    expect(result.current.isRunning).toBe(false);
+    expect(result.current.isExecuting).toBe(true);
+    completeObservation();
     await waitFor(() => expect(result.current.isCompleted).toBe(true));
     expect(result.current.finalValue).toEqual({ imported: 3 });
     expect(observe).toHaveBeenCalledWith(

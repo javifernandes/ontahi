@@ -108,7 +108,7 @@ describe('tasks', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'continue' },
         executionMetadata: {
           committedMutations: {
@@ -244,7 +244,7 @@ describe('tasks', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(firstRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'choose-item', kind: 'choice' },
       });
     });
@@ -270,16 +270,17 @@ describe('tasks', () => {
     ).resolves.toMatchObject({ reason: 'task_definition_invalid' });
     const { app: secondApp } = architecture({ task: { runtime: secondRuntime } });
     secondApp.task.defineForEntity({}, { review: task });
-    await Effect.runPromise(
+    const choiceResponse = await Effect.runPromise(
       secondApp.task.respondToInteraction(
         run,
         { interactionId: 'choose-item', optionId: 'two' },
         { actor: { kind: 'system' } },
       ),
     );
+    expect(choiceResponse).toMatchObject({ status: 'running', interaction: undefined });
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(secondRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: { id: 'approve-item', kind: 'approval' },
       });
     });
@@ -293,13 +294,14 @@ describe('tasks', () => {
     });
     const { app: thirdApp } = architecture({ task: { runtime: thirdRuntime } });
     thirdApp.task.defineForEntity({}, { review: task });
-    await Effect.runPromise(
+    const approvalResponse = await Effect.runPromise(
       thirdApp.task.respondToInteraction(
         run,
         { interactionId: 'approve-item', decision: 'approve' },
         { actor: { kind: 'system' } },
       ),
     );
+    expect(approvalResponse).toMatchObject({ status: 'running', interaction: undefined });
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(thirdRuntime, run))).resolves.toMatchObject({
         status: 'completed',
@@ -1475,7 +1477,7 @@ describe('tasks', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'choose-reviewer',
           kind: 'choice',
@@ -1562,11 +1564,11 @@ describe('tasks', () => {
         responseContext,
       ),
     );
-    expect(resumed.interaction).toBeUndefined();
+    expect(resumed).toMatchObject({ status: 'running', interaction: undefined });
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-document',
           kind: 'approval',

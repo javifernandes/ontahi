@@ -61,7 +61,7 @@ describe('Model Command Task', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(f.taskRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'approve-model-command',
           kind: 'approval',
@@ -165,7 +165,7 @@ describe('Model Command Task', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
-        status: 'running',
+        status: 'waiting',
         interaction: {
           id: 'choose-model-command',
           kind: 'choice',

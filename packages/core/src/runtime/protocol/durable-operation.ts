@@ -92,7 +92,14 @@ const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
 const taskErrorKeys = new Set(['code', 'message']);
 const protocolErrorKeys = new Set(['kind', 'error']);
 const protocolErrorDetailKeys = new Set(['code', 'message']);
-const taskStatuses = new Set<TaskStatus>(['queued', 'running', 'completed', 'failed', 'cancelled']);
+const taskStatuses = new Set<TaskStatus>([
+  'queued',
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'cancelled',
+]);
 const protocolErrorCodes = new Set<DurableOperationProtocolErrorCode>([
   'invalid_request',
   'unsupported_version',
@@ -441,7 +448,8 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
     (value.subject !== undefined && subject === undefined) ||
     (value.progress !== undefined && progress === undefined) ||
     (value.interaction !== undefined && interaction === undefined) ||
-    (value.error !== undefined && error === undefined)
+    (value.error !== undefined && error === undefined) ||
+    (value.status === 'waiting') !== (interaction !== undefined)
   ) {
     return { success: false };
   }

@@ -161,7 +161,7 @@ describe('createSupabaseTaskStorage', () => {
     await Effect.runPromise(store.create({ ...ref, trigger: { cause: 'system' } }));
     await Effect.runPromise(
       store.update(ref, {
-        status: 'running',
+        status: 'waiting',
         checkpoint: {
           version: 1,
           state: { step: 'approve' },
@@ -239,7 +239,7 @@ describe('createSupabaseTaskStorage', () => {
 
     const updated = await Effect.runPromise(
       store.update(created, {
-        status: 'running',
+        status: 'waiting',
         progress: {
           phase: 'waiting',
           message: 'Waiting',
@@ -259,7 +259,7 @@ describe('createSupabaseTaskStorage', () => {
     );
 
     expect(updated).toMatchObject({
-      status: 'running',
+      status: 'waiting',
       progress: {
         phase: 'waiting',
         message: 'Waiting',

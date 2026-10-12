@@ -39,6 +39,10 @@ Task storage and the LangGraph checkpointer have different responsibilities:
 - a response is authorized and atomically claimed through `TaskStorage` before LangGraph receives a
   resume Command.
 
+An unanswered Interaction publishes `status: 'waiting'`. Its successful atomic claim returns the
+run to `running` before LangGraph resumes the checkpoint, so provider interrupt state does not leak
+into Ontahí's public lifecycle.
+
 On recovery, the adapter compares the provider state with the authoritative Ontahí execution
 checkpoint. A missing or stale LangGraph thread is discarded and rebuilt from `TaskStorage`; a
 claimed response first replays earlier interactions, verifies the pending interrupt identity, and

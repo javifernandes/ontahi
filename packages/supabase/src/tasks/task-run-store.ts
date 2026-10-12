@@ -257,7 +257,7 @@ export const createSupabaseTaskStorage = ({
   ) => {
     const current = fromRow(await loadRow(ref));
     const result = await keyFilters(
-      client.from(tableName).update(toPatchRow(current, { checkpoint }, now())),
+      client.from(tableName).update(toPatchRow(current, { status: 'running', checkpoint }, now())),
       ref,
     )
       .eq('checkpoint->interaction->>id', interactionId)

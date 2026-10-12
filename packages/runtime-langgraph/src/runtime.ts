@@ -196,6 +196,7 @@ const createLangGraphTaskRuntime = (
 
     if (persistedCheckpoint?.response?.interactionId !== interaction.id) {
       await update(ref, {
+        status: 'waiting',
         checkpoint: withReplay(
           { version: 1, state: cloneJson(state), interaction },
           replayOf(persisted),
@@ -553,7 +554,7 @@ const createLangGraphTaskRuntime = (
         );
         if (!snapshot) return yield* Effect.fail(taskInteractionNotPendingFailure(ref));
         yield* projection.publish(snapshot);
-        const resumedSource = { ...source, checkpoint: nextCheckpoint };
+        const resumedSource = { ...source, status: 'running' as const, checkpoint: nextCheckpoint };
         launch(
           resumedSource,
           task,

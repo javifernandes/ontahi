@@ -74,6 +74,7 @@ export type DurableOperationHookResult<TInput, TResult> = OperationHookResult<
   runError: TaskSnapshot<TResult>['error'];
   isQueued: boolean;
   isRunning: boolean;
+  isWaiting: boolean;
   isCompleted: boolean;
   isFailed: boolean;
   isCancelled: boolean;

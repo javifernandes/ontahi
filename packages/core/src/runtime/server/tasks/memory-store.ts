@@ -112,6 +112,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
 
         const next = {
           ...current,
+          status: 'running',
           checkpoint,
           updatedAt: now(),
         } satisfies TaskRunSource;

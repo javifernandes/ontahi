@@ -767,21 +767,21 @@ their current public contracts remain authoritative.
 
 ### Slice 4: Reactive Program Evaluation
 
-- [ ] Express run-once and observe evaluation over one canonical Query term.
-- [ ] Preserve complete-current-result Query observation semantics.
-- [ ] Define dependency and lifecycle metadata without naming polling or WebSocket in the program.
-- [ ] Prove one React consumer and one non-React consumer observe the same semantic value.
-- [ ] Test a bounded derived or external read dependency before attempting general federation.
+- [x] Express run-once and observe evaluation over one canonical Query term.
+- [x] Preserve complete-current-result Query observation semantics.
+- [x] Define dependency and lifecycle metadata without naming polling or WebSocket in the program.
+- [x] Prove one React consumer and one non-React consumer observe the same semantic value.
+- [x] Test a bounded derived or external read dependency before attempting general federation.
 
 ### Slice 5: Wait, Event, And Continuation Semantics
 
-- [ ] Project approval and choice Interactions as typed waits over persisted continuations.
-- [ ] Distinguish one-shot `await`, persistent `onEach`, and reactive `observe` lifecycles.
-- [ ] Relate domain Events to the kernel without preempting Plan 146j's declaration and delivery
+- [x] Project approval and choice Interactions as typed waits over persisted continuations.
+- [x] Distinguish one-shot `await`, persistent `onEach`, and reactive `observe` lifecycles.
+- [x] Relate domain Events to the kernel without preempting Plan 146j's declaration and delivery
       decisions.
-- [ ] Prove restart-safe wait and resume on two Task Runtime implementations.
-- [ ] Specify correlation, actor authorization, cancellation, timeout, and idempotency boundaries.
-- [ ] Keep Session continuity separate from the Program Run continuation being resumed.
+- [x] Prove restart-safe wait and resume on two Task Runtime implementations.
+- [x] Specify correlation, actor authorization, cancellation, timeout, and idempotency boundaries.
+- [x] Keep Session continuity separate from the Program Run continuation being resumed.
 
 ### Slice 6: Bounded Distributed Evaluation
 
@@ -1126,7 +1126,8 @@ slices that have not been created yet:
 4. [`154d`: semantic mutation journal, conservative dependency matching, and reactive
    invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md);
 5. [`154e`: run-once and reactive evaluation of one canonical Query](../done/154e-reactive-program-evaluation.md);
-6. `154f`: Event waits, reactions, and durable continuation semantics;
+6. [`154f`: typed waits and durable continuation semantics](../done/154f-wait-and-continuation-semantics.md),
+   with first-class Event reactions still gated by Plan 146j;
 7. `154g`: distributed evaluation and substitution routing;
 8. `154h`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
 

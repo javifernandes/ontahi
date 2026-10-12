@@ -131,8 +131,6 @@ export const createInProcessTaskRuntime = ({
 
     return pending ? { ...snapshot, interaction: pending } : snapshot;
   };
-  const publishCurrentSnapshot = (ref: TaskRunIdentity) =>
-    storage.update(ref, {}).pipe(Effect.map(withPendingInteraction), Effect.tap(taskRuns.publish));
   const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
   const restoreCommittedMutations = (source: TaskRunSource) => {
@@ -169,7 +167,9 @@ export const createInProcessTaskRuntime = ({
     const key = keyOf(ref);
     pendingInteractions.set(key, pending);
 
-    return publishCurrentSnapshot(ref).pipe(
+    return storage.update(ref, { status: 'waiting' }).pipe(
+      Effect.map(withPendingInteraction),
+      Effect.tap(taskRuns.publish),
       Effect.tapError(() => Effect.sync(() => pendingInteractions.delete(key))),
       Effect.flatMap(() => Effect.promise(() => pending.continuation)),
       Effect.ensuring(
@@ -401,6 +401,7 @@ export const createInProcessTaskRuntime = ({
         checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
         const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
         yield* update(ref, {
+          status: 'waiting',
           checkpoint,
           ...(executionMetadata ? { executionMetadata } : {}),
         });
@@ -609,7 +610,7 @@ export const createInProcessTaskRuntime = ({
           launchExplicitExecution(
             ref,
             task,
-            { ...source, checkpoint: nextCheckpoint },
+            { ...source, status: 'running', checkpoint: nextCheckpoint },
             createTaskOperationContext(source),
           );
           return snapshot;
@@ -632,7 +633,7 @@ export const createInProcessTaskRuntime = ({
         }
 
         pendingInteractions.delete(key);
-        const snapshot = yield* publishCurrentSnapshot(ref).pipe(
+        const snapshot = yield* update(ref, { status: 'running' }).pipe(
           Effect.tapError(() => Effect.sync(() => pendingInteractions.set(key, pending))),
         );
         pending.resume(resolution.value);
