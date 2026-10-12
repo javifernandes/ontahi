@@ -561,7 +561,7 @@ describe('Devtools activity model', () => {
     ).toBe('Entity.relation.move(unknown, destination: unknown)');
   });
 
-  it('correlates large progress streams without losing snapshots', () => {
+  it('correlates large progress streams without losing snapshots or duplicating the run', () => {
     const exchangeBase = {
       exchangeId: 'exchange-progress',
       requestId: 'request-progress',
@@ -674,8 +674,9 @@ describe('Devtools activity model', () => {
     const correlated = entries.find(entry => entry.kind === 'exchange')!;
     const standaloneEntry = entries.find(entry => entry.id === 'observation:observation-2')!;
 
-    expect(entries).toHaveLength(3);
+    expect(entries).toHaveLength(2);
     expect(entries[0]?.id).toBe('observation:observation-2');
+    expect(entries.some(entry => entry.id === 'observation:observation-3')).toBe(false);
     expect(correlated.observation?.snapshots).toHaveLength(128);
     expect(correlated.observation?.snapshots[127]?.sequence).toBe(128);
     expect(activityEntryEvent(correlated)?.kind).toBe('exchange.settled');
@@ -811,6 +812,93 @@ describe('Devtools activity model', () => {
     });
     expect(activityEntryTitle(entries[0]!)).toBe('Ask model · "rename list Inbox to Today"');
     expect(activityEntryOutcome(entries[0]!)).toBe('completed');
+  });
+
+  it('collapses repeated physical observers into one semantic Operation activity', () => {
+    const run = { taskId: 'TodoItem.deleteFromNamedList', runId: 'run-1' };
+    const exchangeIdentity = {
+      exchangeId: 'invoke-1',
+      requestId: 'invoke-1',
+      family: 'operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 10,
+    } as const;
+    const observation = (observationId: string, startedAt: number) =>
+      ({
+        observationId,
+        family: 'durable.operation.observe',
+        run,
+        transportId: 'websocket',
+        transportKind: 'websocket',
+        startedAt,
+      }) as const;
+    const first = observation('strict-mode-probe', 12);
+    const active = observation('active-observer', 14);
+    const entries = buildActivityEntries([
+      {
+        ...exchangeIdentity,
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'operation',
+          body: { kind: 'invoke', operationId: run.taskId },
+        },
+      },
+      {
+        ...exchangeIdentity,
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'operation',
+          body: { kind: 'invocation-result', result: { ok: true, value: run } },
+        },
+      },
+      { ...first, kind: 'observation.started', at: 12 },
+      {
+        ...first,
+        kind: 'observation.settled',
+        at: 13,
+        durationMs: 1,
+        outcome: 'aborted',
+      },
+      { ...active, kind: 'observation.started', at: 14 },
+      {
+        ...active,
+        kind: 'observation.snapshot',
+        at: 15,
+        sequence: 1,
+        snapshot: {
+          ...run,
+          status: 'waiting',
+          updatedAt: '2026-10-12T00:00:00.000Z',
+          interaction: {
+            id: 'approve-delete-items',
+            kind: 'approval',
+            prompt: 'Delete the items?',
+            proposal: { id: 'proposal-1', summary: 'Delete the items.', requests: [] },
+            createdAt: '2026-10-12T00:00:00.000Z',
+          },
+        },
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: 'exchange',
+      observation: {
+        id: 'active-observer',
+        snapshots: [{ snapshot: { status: 'waiting' } }],
+      },
+    });
   });
 
   it('correlates terminal inspection metadata and caused Graph refreshes into the durable activity', () => {

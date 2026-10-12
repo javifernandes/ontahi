@@ -505,6 +505,31 @@ const buildOperationProgressActivities = (
 const runKey = (run: { readonly taskId: string; readonly runId: string }) =>
   `${run.taskId}:${run.runId}`;
 
+/** Reports whether a physical observer saw a terminal snapshot or terminal settlement. */
+const terminalObservation = (observation: OperationProgressActivity) => {
+  const latest = observation.snapshots[observation.snapshots.length - 1]?.snapshot.status;
+  return (
+    latest === 'completed' ||
+    latest === 'failed' ||
+    latest === 'cancelled' ||
+    observation.settled?.outcome === 'completed' ||
+    observation.settled?.outcome === 'failed' ||
+    observation.settled?.outcome === 'cancelled'
+  );
+};
+
+/** Selects the most complete physical observation as the visible timeline for one Task run. */
+const preferredRunObservation = (
+  left: OperationProgressActivity,
+  right: OperationProgressActivity,
+) => {
+  const terminalDifference = Number(terminalObservation(right)) - Number(terminalObservation(left));
+  if (terminalDifference !== 0) return terminalDifference > 0 ? right : left;
+  const snapshotDifference = right.snapshots.length - left.snapshots.length;
+  if (snapshotDifference !== 0) return snapshotDifference > 0 ? right : left;
+  return right.at > left.at ? right : left;
+};
+
 const exchangeTaskRun = (
   activity: ExchangeActivity,
 ): { readonly taskId: string; readonly runId: string } | undefined => {
@@ -587,8 +612,9 @@ const correlateActivity = (
   const attached = new Set<string>();
   const exchangeEntries = exchanges.map<ActivityEntry>(exchange => {
     const run = exchangeTaskRun(exchange);
-    const observation = run ? observationsByRun.get(runKey(run))?.[0] : undefined;
-    if (observation) attached.add(observation.id);
+    const runObservations = run ? observationsByRun.get(runKey(run)) : undefined;
+    const observation = runObservations?.reduce(preferredRunObservation);
+    runObservations?.forEach(candidate => attached.add(candidate.id));
     return {
       kind: 'exchange',
       id: `exchange:${exchange.id}`,
@@ -597,14 +623,25 @@ const correlateActivity = (
       ...(observation ? { observation } : {}),
     };
   });
-  const observationEntries = observations
+  const standaloneByRun = new Map<string, OperationProgressActivity>();
+  observations
     .filter(observation => !attached.has(observation.id))
-    .map<ActivityEntry>(observation => ({
-      kind: 'observation',
-      id: `observation:${observation.id}`,
-      at: observation.at,
-      observation,
-    }));
+    .forEach(observation => {
+      const event = observation.started ?? observation.snapshots[0] ?? observation.settled;
+      if (!event) return;
+      const key = runKey(event.run);
+      const current = standaloneByRun.get(key);
+      standaloneByRun.set(
+        key,
+        current ? preferredRunObservation(current, observation) : observation,
+      );
+    });
+  const observationEntries = [...standaloneByRun.values()].map<ActivityEntry>(observation => ({
+    kind: 'observation',
+    id: `observation:${observation.id}`,
+    at: observation.at,
+    observation,
+  }));
   return [...exchangeEntries, ...observationEntries].sort((left, right) => right.at - left.at);
 };
 

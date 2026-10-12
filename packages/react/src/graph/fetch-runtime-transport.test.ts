@@ -125,6 +125,17 @@ describe('Fetch Runtime Transport', () => {
             ...run,
             status,
             updatedAt: `2026-08-31T01:00:0${fetchRequest.mock.calls.length}.000Z`,
+            ...(status === 'waiting'
+              ? {
+                  interaction: {
+                    id: 'choose-next-step',
+                    kind: 'choice' as const,
+                    prompt: 'Choose the next step.',
+                    options: [{ id: 'continue', label: 'Continue' }],
+                    createdAt: '2026-08-31T01:00:02.000Z',
+                  },
+                }
+              : {}),
             ...(status === 'completed' ? { result: { completed: 3 } } : {}),
           },
         }),
@@ -152,6 +163,13 @@ describe('Fetch Runtime Transport', () => {
         ...run,
         status: 'waiting',
         updatedAt: '2026-08-31T01:00:02.000Z',
+        interaction: {
+          id: 'choose-next-step',
+          kind: 'choice',
+          prompt: 'Choose the next step.',
+          options: [{ id: 'continue', label: 'Continue' }],
+          createdAt: '2026-08-31T01:00:02.000Z',
+        },
       },
       {
         ...run,
