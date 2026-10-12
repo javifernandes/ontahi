@@ -1,6 +1,8 @@
+import { useState } from 'react';
+
 import { isRecord } from './activity-model.js';
 import { styles } from './devtools-styles.js';
-import { SemanticPayload } from './semantic-payload.js';
+import { JsonView } from './json-view.js';
 
 const formatValue = (value: unknown): string => {
   if (isRecord(value) && value.kind === 'entity-ref' && isRecord(value.locator)) {
@@ -16,9 +18,57 @@ const formatValue = (value: unknown): string => {
   return String(value ?? '—');
 };
 
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+const causationSummary = (causation: unknown): string | undefined => {
+  if (!isRecord(causation)) return undefined;
+  if (causation.kind === 'operation') {
+    const scope = text(causation.scope) ?? 'Operation';
+    const taskRun = isRecord(causation.taskRun) ? causation.taskRun : undefined;
+    return taskRun && text(taskRun.runId) ? `${scope} · Run ${text(taskRun.runId)}` : scope;
+  }
+  if (causation.kind === 'mutation-outcome') {
+    return `Mutation outcome ${text(causation.outcomeId) ?? 'unknown'}`;
+  }
+  return text(causation.kind);
+};
+
+const EventOverview = ({
+  delivery,
+  occurrence,
+}: {
+  delivery: Record<string, unknown>;
+  occurrence?: Record<string, unknown>;
+}) => {
+  const cause = causationSummary(occurrence?.causation);
+  const facts = [
+    ['Occurred', text(occurrence?.occurredAt)],
+    [
+      'Version',
+      typeof occurrence?.eventVersion === 'number' ? String(occurrence.eventVersion) : undefined,
+    ],
+    ['Caused by', cause],
+    ['Occurrence', text(occurrence?.occurrenceId)],
+    ['Delivery', text(delivery.deliveryId)],
+    ['Subscription', text(delivery.subscriptionId)],
+    ['Attempt', typeof delivery.attempt === 'number' ? String(delivery.attempt) : undefined],
+  ].filter((fact): fact is [string, string] => fact[1] !== undefined);
+
+  return (
+    <dl style={styles.eventFacts}>
+      {facts.map(([label, value]) => (
+        <div key={label} style={styles.eventFact}>
+          <dt style={styles.eventFactLabel}>{label}</dt>
+          <dd style={styles.eventFactValue}>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
+
 export const EventDeliveryDetail = ({ delivery }: { readonly delivery: unknown }) => {
-  const occurrence =
-    isRecord(delivery) && isRecord(delivery.occurrence) ? delivery.occurrence : undefined;
+  const [mode, setMode] = useState<'overview' | 'json'>('overview');
+  const deliveryRecord = isRecord(delivery) ? delivery : {};
+  const occurrence = isRecord(deliveryRecord.occurrence) ? deliveryRecord.occurrence : undefined;
   const eventId = typeof occurrence?.eventId === 'string' ? occurrence.eventId : 'Event';
   const payload = isRecord(occurrence?.payload) ? occurrence.payload : undefined;
 
@@ -40,7 +90,23 @@ export const EventDeliveryDetail = ({ delivery }: { readonly delivery: unknown }
       <details style={styles.technicalEvidence}>
         <summary>Technical details</summary>
         <div style={styles.eventTechnicalDetails}>
-          <SemanticPayload value={delivery} />
+          <div style={styles.eventDetailModes} role='group' aria-label='Event detail mode'>
+            {(['overview', 'json'] as const).map(value => (
+              <button
+                key={value}
+                type='button'
+                style={{ ...styles.mode, ...(mode === value ? styles.activeMode : {}) }}
+                onClick={() => setMode(value)}
+              >
+                {value === 'overview' ? 'Overview' : 'JSON'}
+              </button>
+            ))}
+          </div>
+          {mode === 'json' ? (
+            <JsonView value={delivery} label={`${eventId} delivery JSON`} />
+          ) : (
+            <EventOverview delivery={deliveryRecord} occurrence={occurrence} />
+          )}
         </div>
       </details>
     </article>

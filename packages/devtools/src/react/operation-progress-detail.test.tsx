@@ -41,6 +41,11 @@ describe('OperationProgressDetail', () => {
               eventId: 'TodoListCompleted',
               eventVersion: 1,
               occurredAt: '2026-10-12T00:00:00.000Z',
+              causation: {
+                kind: 'operation',
+                scope: 'TodoList.completeAll',
+                taskRun: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+              },
               payload: {
                 list: {
                   kind: 'entity-ref',
@@ -67,6 +72,16 @@ describe('OperationProgressDetail', () => {
 
     fireEvent.click(screen.getByText('Technical details'));
     expect(screen.getByText('Technical details').parentElement?.hasAttribute('open')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeTruthy();
+    expect(screen.getByLabelText('Event delivery').textContent).toContain(
+      'TodoList.completeAll · Run run-1',
+    );
     expect(screen.getByLabelText('Event delivery').textContent).toContain('delivery-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    expect(
+      screen.getByRole('button', { name: 'Copy TodoListCompleted delivery JSON' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('tree', { name: 'TodoListCompleted delivery JSON' })).toBeTruthy();
   });
 });
