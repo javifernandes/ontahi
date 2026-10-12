@@ -479,7 +479,8 @@ const parseEventDelivery = (value: unknown): EventDelivery | undefined => {
     value.kind !== 'event-delivery' ||
     !isSessionId(value.deliveryId) ||
     !isSessionId(value.subscriptionId) ||
-    value.attempt !== 1 ||
+    !Number.isSafeInteger(value.attempt) ||
+    (value.attempt as number) < 1 ||
     !isRecord(value.occurrence) ||
     value.occurrence.kind !== 'event-occurrence' ||
     !isSessionId(value.occurrence.occurrenceId) ||

@@ -111,9 +111,15 @@ describe('Runtime Protocol session frames', () => {
       },
     } as const;
     expect(parseRuntimeProtocolSessionServerFrame(valid)).toMatchObject({ success: true });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        ...valid,
+        body: { ...valid.body, attempt: 2 },
+      }),
+    ).toMatchObject({ success: true });
     for (const frame of [
       { ...valid, sequence: 0 },
-      { ...valid, body: { ...valid.body, attempt: 2 } },
+      { ...valid, body: { ...valid.body, attempt: 0 } },
       { ...valid, body: { ...valid.body, deliveryId: '' } },
       {
         ...valid,

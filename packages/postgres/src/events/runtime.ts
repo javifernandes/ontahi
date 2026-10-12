@@ -1,0 +1,339 @@
+import type {
+  DurableEventSubscription,
+  EventDelivery,
+  EventDeliveryClaim,
+  EventEmission,
+  EventOccurrence,
+  EventRuntime,
+  EventSubscriber,
+} from '@ontahi/core/runtime/server';
+import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
+import type { Pool, PoolClient } from 'pg';
+
+import {
+  quotePostgresEventTableNames,
+  resolvePostgresEventTableNames,
+  type PostgresEventTableNames,
+} from './schema.js';
+
+export type PostgresEventRuntimeOptions = {
+  readonly pool: Pick<Pool, 'connect' | 'query'>;
+  readonly tables?: PostgresEventTableNames;
+  readonly now?: () => Date;
+  readonly createId?: () => string;
+  readonly onSubscriberError?: (cause: unknown, delivery: EventDelivery) => void;
+};
+
+let identitySequence = 0;
+const createDefaultIdentity = () =>
+  globalThis.crypto?.randomUUID?.() ?? `ontahi-event-${Date.now()}-${++identitySequence}`;
+
+const requireIdentity = (value: string, label: string) => {
+  if (value.trim().length === 0) throw new TypeError(`${label} must be a non-empty string.`);
+};
+
+const isoDate = (value: unknown) => {
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.valueOf())) throw new TypeError('PostgreSQL Event timestamp is invalid.');
+  return date.toISOString();
+};
+
+const occurrenceFromRow = (row: Record<string, unknown>): EventOccurrence =>
+  cloneJson({
+    kind: 'event-occurrence',
+    occurrenceId: String(row.occurrence_id),
+    eventId: String(row.event_id),
+    eventVersion: Number(row.event_version),
+    occurredAt: isoDate(row.occurred_at),
+    payload: row.payload,
+    ...(row.causation === null ? {} : { causation: row.causation }),
+    ...(row.correlation === null ? {} : { correlation: row.correlation }),
+  } as EventOccurrence);
+
+const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
+  kind: 'event-delivery',
+  deliveryId: String(row.delivery_id),
+  subscriptionId: String(row.subscription_id),
+  attempt: Number(row.attempt),
+  occurrence: occurrenceFromRow(row),
+});
+
+const inTransaction = async <T>(
+  pool: Pick<Pool, 'connect'>,
+  work: (client: PoolClient) => Promise<T>,
+) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (cause) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Preserve the failure that caused the transaction to roll back.
+    }
+    throw cause;
+  } finally {
+    client.release();
+  }
+};
+
+const lockEventWriter = (client: PoolClient, namespace: string) =>
+  client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [namespace]);
+
+export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions): EventRuntime => {
+  const tableNames = resolvePostgresEventTableNames(options.tables);
+  const tables = quotePostgresEventTableNames(tableNames);
+  const writerLockNamespace = `ontahi.events:${tableNames.occurrences}:${tableNames.subscriptions}:${tableNames.deliveries}`;
+  const createId = options.createId ?? createDefaultIdentity;
+  const subscribers = new Map<string, { eventId: string; subscriber: EventSubscriber }>();
+
+  const accept = async (emission: EventEmission) => {
+    const occurrence = cloneJson<EventOccurrence>({
+      kind: 'event-occurrence',
+      occurrenceId: createId(),
+      eventId: emission.eventId,
+      eventVersion: emission.eventVersion,
+      occurredAt: (options.now ?? (() => new Date()))().toISOString(),
+      payload: emission.payload,
+      ...(emission.causation ? { causation: emission.causation } : {}),
+      ...(emission.correlation ? { correlation: emission.correlation } : {}),
+    });
+    await inTransaction(options.pool, async client => {
+      await lockEventWriter(client, writerLockNamespace);
+      await client.query(
+        `INSERT INTO ${tables.occurrences}
+          (occurrence_id, event_id, event_version, occurred_at, payload, causation, correlation)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)`,
+        [
+          occurrence.occurrenceId,
+          occurrence.eventId,
+          occurrence.eventVersion,
+          occurrence.occurredAt,
+          JSON.stringify(occurrence.payload),
+          occurrence.causation ? JSON.stringify(occurrence.causation) : null,
+          occurrence.correlation ? JSON.stringify(occurrence.correlation) : null,
+        ],
+      );
+      await client.query(
+        `INSERT INTO ${tables.deliveries} (delivery_id, subscription_id, occurrence_id)
+         SELECT 'ontahi-delivery:' || subscription_id || ':' || $1, subscription_id, $1
+         FROM ${tables.subscriptions}
+         WHERE active = true
+           AND event_id = $2
+           AND event_version = $3
+           AND ($4::jsonb @> correlation)
+         ON CONFLICT (subscription_id, occurrence_id) DO NOTHING`,
+        [
+          occurrence.occurrenceId,
+          occurrence.eventId,
+          occurrence.eventVersion,
+          JSON.stringify(occurrence.correlation ?? {}),
+        ],
+      );
+    });
+
+    await Promise.all(
+      [...subscribers.entries()]
+        .filter(([, subscription]) => subscription.eventId === occurrence.eventId)
+        .map(async ([subscriptionId, subscription]) => {
+          const delivery: EventDelivery = {
+            kind: 'event-delivery',
+            deliveryId: createId(),
+            subscriptionId,
+            attempt: 1,
+            occurrence,
+          };
+          try {
+            await subscription.subscriber(cloneJson(delivery));
+          } catch (cause) {
+            try {
+              options.onSubscriberError?.(cause, delivery);
+            } catch {
+              // Diagnostic reporting cannot turn delivery failure into publication failure.
+            }
+          }
+        }),
+    );
+    return occurrence;
+  };
+
+  const register = async (subscription: DurableEventSubscription) => {
+    requireIdentity(subscription.id, 'Durable Event subscription id');
+    requireIdentity(subscription.eventId, 'Durable Event id');
+    if (!Number.isInteger(subscription.eventVersion) || subscription.eventVersion < 1) {
+      throw new TypeError('Durable Event version must be a positive integer.');
+    }
+    if (subscription.correlation !== undefined && !isJsonValue(subscription.correlation)) {
+      throw new TypeError('Durable Event correlation must be JSON-safe.');
+    }
+    await inTransaction(options.pool, async client => {
+      await lockEventWriter(client, writerLockNamespace);
+      await client.query(
+        `INSERT INTO ${tables.subscriptions}
+          (subscription_id, event_id, event_version, correlation, active)
+         VALUES ($1, $2, $3, $4::jsonb, true)
+         ON CONFLICT (subscription_id) DO NOTHING`,
+        [
+          subscription.id,
+          subscription.eventId,
+          subscription.eventVersion,
+          JSON.stringify(subscription.correlation ?? {}),
+        ],
+      );
+      const existing = await client.query(
+        `SELECT subscription_id
+         FROM ${tables.subscriptions}
+         WHERE subscription_id = $1
+           AND event_id = $2
+           AND event_version = $3
+           AND correlation = $4::jsonb`,
+        [
+          subscription.id,
+          subscription.eventId,
+          subscription.eventVersion,
+          JSON.stringify(subscription.correlation ?? {}),
+        ],
+      );
+      if (existing.rowCount !== 1) {
+        throw new TypeError(
+          `Durable Event subscription ${subscription.id} is already registered differently.`,
+        );
+      }
+      await client.query(
+        `UPDATE ${tables.subscriptions} SET active = true WHERE subscription_id = $1`,
+        [subscription.id],
+      );
+      await client.query(
+        `INSERT INTO ${tables.deliveries} (delivery_id, subscription_id, occurrence_id)
+         SELECT 'ontahi-delivery:' || $1 || ':' || occurrence_id, $1, occurrence_id
+         FROM ${tables.occurrences}
+         WHERE event_id = $2
+           AND event_version = $3
+           AND (COALESCE(correlation, '{}'::jsonb) @> $4::jsonb)
+         ON CONFLICT (subscription_id, occurrence_id) DO NOTHING`,
+        [
+          subscription.id,
+          subscription.eventId,
+          subscription.eventVersion,
+          JSON.stringify(subscription.correlation ?? {}),
+        ],
+      );
+    });
+  };
+
+  const claim = async (
+    subscriptionId: string,
+    claimOptions: { readonly consumerId: string; readonly leaseMs: number },
+  ): Promise<EventDeliveryClaim | undefined> => {
+    requireIdentity(subscriptionId, 'Durable Event subscription id');
+    requireIdentity(claimOptions.consumerId, 'Durable Event consumer id');
+    if (!Number.isSafeInteger(claimOptions.leaseMs) || claimOptions.leaseMs <= 0) {
+      throw new TypeError('Durable Event claim lease must be a positive safe integer.');
+    }
+    const claimId = createId();
+    const result = await options.pool.query(
+      `WITH candidate AS (
+         SELECT delivery_id
+         FROM ${tables.deliveries}
+         WHERE subscription_id = $1
+           AND (state = 'pending' OR (state = 'claimed' AND lease_expires_at <= now()))
+         ORDER BY created_at, delivery_id
+         FOR UPDATE SKIP LOCKED
+         LIMIT 1
+       ), claimed AS (
+         UPDATE ${tables.deliveries} AS delivery
+         SET state = 'claimed', claim_id = $2, claimed_by = $3,
+             lease_expires_at = now() + ($4 * interval '1 millisecond'),
+             attempt = attempt + 1
+         FROM candidate
+         WHERE delivery.delivery_id = candidate.delivery_id
+         RETURNING delivery.*
+       )
+       SELECT claimed.*, occurrence.event_id, occurrence.event_version, occurrence.occurred_at,
+              occurrence.payload, occurrence.causation, occurrence.correlation
+       FROM claimed
+       JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)`,
+      [subscriptionId, claimId, claimOptions.consumerId, claimOptions.leaseMs],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      claimId,
+      consumerId: claimOptions.consumerId,
+      leaseExpiresAt: isoDate(row.lease_expires_at),
+      delivery: deliveryFromRow(row),
+    };
+  };
+
+  const settle = async (claimValue: EventDeliveryClaim, state: 'acknowledged' | 'pending') => {
+    const acknowledged = state === 'acknowledged';
+    const result = await options.pool.query(
+      `UPDATE ${tables.deliveries}
+       SET state = $1,
+           acknowledged_at = ${acknowledged ? 'now()' : 'NULL'},
+           claim_id = NULL, claimed_by = NULL, lease_expires_at = NULL
+       WHERE delivery_id = $2
+         AND subscription_id = $3
+         AND state = 'claimed'
+         AND claim_id = $4
+         AND claimed_by = $5
+         AND lease_expires_at > now()`,
+      [
+        state,
+        claimValue.delivery.deliveryId,
+        claimValue.delivery.subscriptionId,
+        claimValue.claimId,
+        claimValue.consumerId,
+      ],
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(`Durable Event claim ${claimValue.claimId} is stale or already settled.`);
+    }
+  };
+
+  return {
+    capabilities: {
+      liveSubscription: true,
+      retention: true,
+      replay: false,
+      durableAcceptance: true,
+      durableDelivery: true,
+      acknowledgement: true,
+      ordering: 'subscription',
+      deduplication: false,
+      atomicPublication: false,
+      overflowBehavior: 'spill',
+    },
+    accept,
+    subscribe: (eventId, subscriber) => {
+      requireIdentity(eventId, 'Event id');
+      const id = createId();
+      subscribers.set(id, { eventId, subscriber });
+      let active = true;
+      return {
+        id,
+        cancel: () => {
+          if (!active) return;
+          active = false;
+          subscribers.delete(id);
+        },
+      };
+    },
+    durableDelivery: {
+      register,
+      claim,
+      acknowledge: claimValue => settle(claimValue, 'acknowledged'),
+      release: claimValue => settle(claimValue, 'pending'),
+      cancel: async subscriptionId => {
+        requireIdentity(subscriptionId, 'Durable Event subscription id');
+        await options.pool.query(
+          `UPDATE ${tables.subscriptions} SET active = false WHERE subscription_id = $1`,
+          [subscriptionId],
+        );
+      },
+    },
+  };
+};
