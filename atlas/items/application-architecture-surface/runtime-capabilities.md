@@ -54,11 +54,12 @@ contract.
 BookOps remains a host composition: it chooses adapters, credentials, routes, registries, domain declarations, and application policy. Ontahi owns only the framework semantics proven reusable across hosts.
 
 A technology adapter package may implement several independent concerns without becoming a
-monolithic runtime. `@ontahi/postgres` now demonstrates this shape with separate Data Graph and
-durable Event Runtime entrypoints. A host may select either capability, combine them, or pair one
-with an implementation from another provider. Installing the package does not activate unused
-concerns or grant their capabilities; each configured implementation advertises only its proven
-guarantees.
+monolithic runtime. `@ontahi/postgres` and `@ontahi/mysql` demonstrate this shape with separate Data
+Graph and durable Event Runtime entrypoints. A host may select either capability, combine them, or
+pair one with an implementation from another provider. Installing the package does not activate
+unused concerns or grant their capabilities; each configured implementation advertises only its
+proven guarantees. Provider-neutral conformance establishes shared semantics while physical schema,
+locking, and transaction mechanisms remain adapter-owned.
 
 Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
 

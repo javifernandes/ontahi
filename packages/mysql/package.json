@@ -1,7 +1,7 @@
 {
   "name": "@ontahi/mysql",
   "version": "1.0.0-alpha.12",
-  "description": "MySQL data graph storage for Ontahi",
+  "description": "MySQL-backed runtime capabilities for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/mysql",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
@@ -28,6 +28,11 @@
       "types": "./dist/data-graph/index.d.ts",
       "import": "./dist/data-graph/index.js",
       "require": "./dist/data-graph/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "import": "./dist/events/index.js",
+      "require": "./dist/events/index.js"
     }
   },
   "publishConfig": {
