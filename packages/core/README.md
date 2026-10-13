@@ -701,7 +701,8 @@ under a bounded lease, then acknowledges it or releases the same delivery identi
 attempt. `requireDurableEventDelivery(runtime)` fails before registration when retention, durable
 acceptance, durable delivery, acknowledgement, or the claim API is absent. Adapter packages can run
 `verifyDurableEventRuntimeConformance(...)` to exercise the provider-neutral lifecycle, including
-an occurrence accepted before subscription and a claim recovered after runtime recreation.
+an occurrence accepted before subscription, exclusive claims, lease expiry with stale-claim
+fencing, and a claim recovered after runtime recreation.
 
 Structural delete behavior belongs to the relation declaration when every mutation path must obey
 it. A required `hasMany` ownership edge can cascade, while an attribute-free many-to-many edge can

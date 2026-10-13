@@ -1,7 +1,9 @@
 # @ontahi/mysql
 
-MySQL storage for Ontahi, tested with MySQL 8.4 and InnoDB. It uses `mysql2/promise` and the
-shared `@ontahi/sql` read implementation. This release does not claim full PostgreSQL parity.
+MySQL-backed runtime capabilities for Ontahi, tested with MySQL 8.4 and InnoDB. The package is not
+a generic SQL client or one monolithic adapter: applications may independently use its Data Graph
+storage, durable Event Runtime, or both. It uses `mysql2/promise`; the Data Graph implementation
+also uses the shared `@ontahi/sql` read layer. This release does not claim full PostgreSQL parity.
 
 ```ts
 import { createPool } from 'mysql2/promise';
@@ -15,9 +17,8 @@ const application = ontahi({
 });
 ```
 
-The host installs `mysql2` when importing it directly and owns the pool lifecycle, credentials,
-physical schema, migrations, and grants. Keep the pool alive for the application lifetime and close
-it on host shutdown.
+The host owns the pool lifecycle, credentials, physical schema, migrations, and grants. Keep the
+pool alive for the application lifetime and close it on host shutdown.
 
 ## Public entrypoints
 
@@ -25,11 +26,45 @@ The package root and `/data-graph` export `createMysqlDataGraphStorage`,
 `createMysqlDataGraphRuntime`, `mysqlMapping`, `mysqlNaming`, `inferMysqlMappings`, query/selection
 compilers, reflection readers, and `MysqlDataGraphError`.
 
+The package root and `/events` export `createMysqlEventRuntime`,
+`createMysqlEventSchemaSql`, and the configurable Event table-name contract.
+
 Storage infers plural snake-case tables and snake-case columns using the same conventions as
 PostgreSQL. Use `overrides` for physical exceptions, or pass explicit `mappings`. Standalone runtime
 construction requires mappings and a promise pool exposing `execute` and `getConnection`.
 
-## Supported behavior
+## Durable Event Runtime
+
+```ts
+import { createPool } from 'mysql2/promise';
+import { createMysqlEventRuntime, createMysqlEventSchemaSql } from '@ontahi/mysql/events';
+
+const pool = createPool(process.env.DATABASE_URL!);
+const eventRuntime = createMysqlEventRuntime({ pool });
+```
+
+The host applies the statements from `createMysqlEventSchemaSql()` through its migration system;
+runtime construction never migrates automatically. Table names are configurable for hosts that
+need a prefix or an existing naming convention.
+
+The Event Runtime provides retained occurrences, stable subscription definitions, JSON correlation
+matching, registration backfill, acceptance-ordered claims, leased retries, acknowledgement,
+release, cancellation, runtime recreation, and process-local live subscribers. Registration and
+acceptance share a MySQL user lock scoped to the configured table set, closing the race between
+backfill and publication. Competing claims use InnoDB row locks with `SKIP LOCKED`; claim identity
+and lease expiry fence stale workers.
+
+Its advertised capabilities are durable acceptance, durable delivery, acknowledgement, retention,
+and per-subscription ordering. It deliberately advertises no replay cursor, deduplication, or atomic
+publication with Data Graph mutations. Cancellation stops future delivery creation without deleting
+retained occurrences or deliveries already created. The deployment must permit
+`GET_LOCK`/`RELEASE_LOCK`, and the generated tables must remain InnoDB, for these guarantees.
+
+The adapter has the same Core semantic contract and conformance proof as PostgreSQL, but its schema,
+locking, JSON predicates, and deterministic hashed delivery identities are MySQL-owned details.
+Using `/events` does not configure or require `/data-graph`.
+
+## Data Graph behavior
 
 - Scalar Selections, reference lowering/lifting, aliases, nested projections and relation reads,
   related-root reads, ordering, count, and stream from one buffered query execution.
@@ -83,9 +118,10 @@ ordered moves lock the collection owner. All writers enforcing these semantic co
 use that coordination protocol. Arbitrary external SQL can bypass model constraints. MySQL can
 abort a transaction on a deadlock; this adapter propagates the failure without automatic retries.
 
-Automatic migrations, broader schema-contract diagnostics, task storage, and MariaDB compatibility
-are separate work. Date/time, JSON, and large-number conformance remain a bounded follow-up; this
-release does not promise every PostgreSQL physical representation works unchanged.
+Automatic migrations, broader schema-contract diagnostics, task storage, Event replay/history,
+atomic Data Graph/Event publication, and MariaDB compatibility are separate work. Date/time, JSON,
+and large-number Data Graph conformance remain a bounded follow-up; this release does not promise
+every PostgreSQL physical representation works unchanged.
 
 ## Verification
 

@@ -621,6 +621,7 @@ may share a PR when the behavior remains reviewable and verification stays focus
 - [x] Implement one durable runtime or transactional outbox/inbox proof.
 - [x] Prove capability mismatch fails at configuration or wait registration.
 - [x] Keep provider storage schema and credentials private to the adapter.
+- [x] Verify the durable contract against a second independent provider through MySQL 8.4/InnoDB.
 
 ### Slice 5: External ingress and Event continuation
 
