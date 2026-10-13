@@ -165,6 +165,23 @@ describe('MySQL Event Runtime', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('matches durable Event identities exactly under a case-insensitive database default', async () => {
+    const events = runtime();
+    await events.durableDelivery!.register({
+      id: 'case-sensitive-wait',
+      eventId: 'TodoListExportReady',
+      eventVersion: 1,
+    });
+    await events.accept({ ...emission('wrong-case'), eventId: 'todolistexportready' });
+
+    await expect(
+      events.durableDelivery!.claim('case-sensitive-wait', {
+        consumerId: 'worker-1',
+        leaseMs: 1_000,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('does not lose delivery when registration races occurrence acceptance', async () => {
     const events = runtime();
     await Promise.all([

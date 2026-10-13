@@ -13,6 +13,7 @@ describe('MySQL Event schema contract', () => {
     expect(createMysqlEventSchemaSql()).toHaveLength(3);
     expect(sql).toContain('CREATE TABLE `ontahi_event_occurrences`');
     expect(sql).toContain('acceptance_order bigint unsigned NOT NULL AUTO_INCREMENT UNIQUE');
+    expect(sql.match(/COLLATE utf8mb4_0900_bin/g)?.length).toBeGreaterThanOrEqual(8);
     expect(sql).toContain('(event_id, event_version, acceptance_order)');
     expect(sql.match(/ENGINE=InnoDB/g)).toHaveLength(3);
   });
@@ -25,5 +26,8 @@ describe('MySQL Event schema contract', () => {
     }).join('\n');
     expect(sql).toContain('`facts``retained`');
     expect(() => createMysqlEventSchemaSql({ occurrences: ' ' })).toThrow('non-empty');
+    expect(() => createMysqlEventSchemaSql({ occurrences: 'x'.repeat(55) })).toThrow(
+      '64 characters or fewer',
+    );
   });
 });

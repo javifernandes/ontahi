@@ -18,26 +18,31 @@ import {
 
 export type MysqlEventRuntimePool = Pick<Pool, 'getConnection' | 'query'>;
 
-export type MysqlEventRuntimeOptions = {
+export interface MysqlEventRuntimeOptions {
   readonly pool: MysqlEventRuntimePool;
   readonly tables?: MysqlEventTableNames;
   readonly now?: () => Date;
   readonly createId?: () => string;
   readonly onSubscriberError?: (cause: unknown, delivery: EventDelivery) => void;
-};
+}
 
 let identitySequence = 0;
-const createDefaultIdentity = () =>
-  globalThis.crypto?.randomUUID?.() ?? `ontahi-event-${Date.now()}-${++identitySequence}`;
-
-const requireIdentity = (value: string, label: string) => {
-  if (value.trim().length === 0) throw new TypeError(`${label} must be a non-empty string.`);
+const createMysqlEventIdentity = () => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid !== undefined) return uuid;
+  identitySequence += 1;
+  return `ontahi-event-${Date.now()}-${identitySequence}`;
 };
 
-const isoDate = (value: unknown) => {
-  const date = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(date.valueOf())) throw new TypeError('MySQL Event timestamp is invalid.');
-  return date.toISOString();
+const requireIdentity = (value: string, label: string) => {
+  if (value.trim()) return;
+  throw new TypeError(`${label} must be a non-empty string.`);
+};
+
+const mysqlTimestampToIso = (value: unknown) => {
+  const normalized = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isNaN(normalized.valueOf())) return normalized.toISOString();
+  throw new TypeError('MySQL Event timestamp is invalid.');
 };
 
 const jsonValue = (value: unknown) => {
@@ -55,7 +60,7 @@ const occurrenceFromRow = (row: Record<string, unknown>): EventOccurrence =>
     occurrenceId: String(row.occurrence_id),
     eventId: String(row.event_id),
     eventVersion: Number(row.event_version),
-    occurredAt: isoDate(row.occurred_at),
+    occurredAt: mysqlTimestampToIso(row.occurred_at),
     payload: jsonValue(row.payload),
     ...(row.causation === null ? {} : { causation: jsonValue(row.causation) }),
     ...(row.correlation === null ? {} : { correlation: jsonValue(row.correlation) }),
@@ -68,6 +73,53 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
   attempt: Number(row.attempt),
   occurrence: occurrenceFromRow(row),
 });
+
+type LiveSubscriber = { readonly eventId: string; readonly subscriber: EventSubscriber };
+
+const createOccurrence = (
+  emission: EventEmission,
+  occurrenceId: string,
+  occurredAt: string,
+): EventOccurrence =>
+  cloneJson({
+    kind: 'event-occurrence',
+    occurrenceId,
+    eventId: emission.eventId,
+    eventVersion: emission.eventVersion,
+    occurredAt,
+    payload: emission.payload,
+    ...(emission.causation === undefined ? {} : { causation: emission.causation }),
+    ...(emission.correlation === undefined ? {} : { correlation: emission.correlation }),
+  });
+
+const deliverToLiveSubscribers = async (
+  subscribers: ReadonlyMap<string, LiveSubscriber>,
+  occurrence: EventOccurrence,
+  createId: () => string,
+  reportError?: MysqlEventRuntimeOptions['onSubscriberError'],
+) => {
+  const matching = [...subscribers].filter(([, value]) => value.eventId === occurrence.eventId);
+  await Promise.all(
+    matching.map(async ([subscriptionId, { subscriber }]) => {
+      const delivery: EventDelivery = {
+        kind: 'event-delivery',
+        deliveryId: createId(),
+        subscriptionId,
+        attempt: 1,
+        occurrence,
+      };
+      try {
+        await subscriber(cloneJson(delivery));
+      } catch (cause) {
+        try {
+          reportError?.(cause, delivery);
+        } catch {
+          // Diagnostic reporting cannot turn delivery failure into publication failure.
+        }
+      }
+    }),
+  );
+};
 
 const inTransaction = async <T>(
   pool: Pick<Pool, 'getConnection'>,
@@ -132,23 +184,20 @@ const withWriterTransaction = async <T>(
 };
 
 export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): EventRuntime => {
-  const tableNames = resolveMysqlEventTableNames(options.tables);
-  const tables = quoteMysqlEventTableNames(tableNames);
-  const writerLockNamespace = `ontahi.events:${tableNames.occurrences}:${tableNames.subscriptions}:${tableNames.deliveries}`;
-  const createId = options.createId ?? createDefaultIdentity;
-  const subscribers = new Map<string, { eventId: string; subscriber: EventSubscriber }>();
+  const resolvedNames = resolveMysqlEventTableNames(options.tables);
+  const tables = quoteMysqlEventTableNames(resolvedNames);
+  const writerLockNamespace = [
+    'ontahi.events',
+    resolvedNames.occurrences,
+    resolvedNames.subscriptions,
+    resolvedNames.deliveries,
+  ].join(':');
+  const createId = options.createId ?? createMysqlEventIdentity;
+  const subscribers = new Map<string, LiveSubscriber>();
+  const currentTime = options.now ?? (() => new Date());
 
   const accept = async (emission: EventEmission) => {
-    const occurrence = cloneJson<EventOccurrence>({
-      kind: 'event-occurrence',
-      occurrenceId: createId(),
-      eventId: emission.eventId,
-      eventVersion: emission.eventVersion,
-      occurredAt: (options.now ?? (() => new Date()))().toISOString(),
-      payload: emission.payload,
-      ...(emission.causation ? { causation: emission.causation } : {}),
-      ...(emission.correlation ? { correlation: emission.correlation } : {}),
-    });
+    const occurrence = createOccurrence(emission, createId(), currentTime().toISOString());
     await withWriterTransaction(options.pool, writerLockNamespace, async connection => {
       await connection.query(
         `INSERT INTO ${tables.occurrences}
@@ -184,28 +233,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
       );
     });
 
-    await Promise.all(
-      [...subscribers.entries()]
-        .filter(([, subscription]) => subscription.eventId === occurrence.eventId)
-        .map(async ([subscriptionId, subscription]) => {
-          const delivery: EventDelivery = {
-            kind: 'event-delivery',
-            deliveryId: createId(),
-            subscriptionId,
-            attempt: 1,
-            occurrence,
-          };
-          try {
-            await subscription.subscriber(cloneJson(delivery));
-          } catch (cause) {
-            try {
-              options.onSubscriberError?.(cause, delivery);
-            } catch {
-              // Diagnostic reporting cannot turn delivery failure into publication failure.
-            }
-          }
-        }),
-    );
+    await deliverToLiveSubscribers(subscribers, occurrence, createId, options.onSubscriberError);
     return occurrence;
   };
 
@@ -318,7 +346,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
       return {
         claimId,
         consumerId: claimOptions.consumerId,
-        leaseExpiresAt: isoDate(row.lease_expires_at),
+        leaseExpiresAt: mysqlTimestampToIso(row.lease_expires_at),
         delivery: deliveryFromRow(row),
       };
     });
@@ -349,46 +377,52 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     }
   };
 
+  const subscribe = (eventId: string, subscriber: EventSubscriber) => {
+    requireIdentity(eventId, 'Event id');
+    const subscriptionId = createId();
+    subscribers.set(subscriptionId, { eventId, subscriber });
+    let cancelled = false;
+    return {
+      id: subscriptionId,
+      cancel: () => {
+        if (cancelled) return;
+        cancelled = true;
+        subscribers.delete(subscriptionId);
+      },
+    };
+  };
+
+  const cancelDurableSubscription = async (subscriptionId: string) => {
+    requireIdentity(subscriptionId, 'Durable Event subscription id');
+    await options.pool.query(
+      `UPDATE ${tables.subscriptions} SET active = false WHERE subscription_id = ?`,
+      [subscriptionId],
+    );
+  };
+
+  const capabilities = {
+    liveSubscription: true,
+    retention: true,
+    replay: false,
+    durableAcceptance: true,
+    durableDelivery: true,
+    acknowledgement: true,
+    ordering: 'subscription',
+    deduplication: false,
+    atomicPublication: false,
+    overflowBehavior: 'spill',
+  } as const;
+
   return {
-    capabilities: {
-      liveSubscription: true,
-      retention: true,
-      replay: false,
-      durableAcceptance: true,
-      durableDelivery: true,
-      acknowledgement: true,
-      ordering: 'subscription',
-      deduplication: false,
-      atomicPublication: false,
-      overflowBehavior: 'spill',
-    },
+    capabilities,
     accept,
-    subscribe: (eventId, subscriber) => {
-      requireIdentity(eventId, 'Event id');
-      const id = createId();
-      subscribers.set(id, { eventId, subscriber });
-      let active = true;
-      return {
-        id,
-        cancel: () => {
-          if (!active) return;
-          active = false;
-          subscribers.delete(id);
-        },
-      };
-    },
+    subscribe,
     durableDelivery: {
       register,
       claim,
       acknowledge: claimValue => settle(claimValue, 'acknowledged'),
       release: claimValue => settle(claimValue, 'pending'),
-      cancel: async subscriptionId => {
-        requireIdentity(subscriptionId, 'Durable Event subscription id');
-        await options.pool.query(
-          `UPDATE ${tables.subscriptions} SET active = false WHERE subscription_id = ?`,
-          [subscriptionId],
-        );
-      },
+      cancel: cancelDurableSubscription,
     },
   };
 };
