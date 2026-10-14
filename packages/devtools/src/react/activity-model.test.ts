@@ -882,6 +882,50 @@ describe('Devtools activity model', () => {
       label: 'resumed',
       title: 'TodoListExportReady received · fixture-worker',
     });
+
+    expect(
+      operationProgressState({
+        ...activity,
+        snapshots: [
+          {
+            ...activity.snapshots[0]!,
+            snapshot: {
+              ...activity.snapshots[0]!.snapshot,
+              waitingOn: { kind: 'event', eventId: undefined as unknown as string },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'waiting', title: 'Waiting for Event' });
+    expect(
+      operationProgressState({
+        ...activity,
+        snapshots: [
+          {
+            ...activity.snapshots[0]!,
+            snapshot: {
+              ...activity.snapshots[0]!.snapshot,
+              status: 'running',
+              waitingOn: undefined,
+              resumedBy: {
+                kind: 'event',
+                waitId: 'export:request-1',
+                eventId: undefined as unknown as string,
+                eventVersion: 1,
+                occurrenceId: 'occurrence-1',
+                occurredAt: '2026-10-14T00:00:01.000Z',
+                deliveryId: 'delivery-1',
+                subscriptionId: 'subscription-1',
+                attempt: 1,
+                claimId: 'claim-1',
+                consumerId: 'worker-1',
+                leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+              },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'resumed', title: 'Event received' });
   });
 
   it('collapses repeated physical observers into one semantic Operation activity', () => {
