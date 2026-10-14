@@ -280,6 +280,7 @@ export {
   type EventSubscriber,
   type EventSubscription,
   type InMemoryEventRuntimeOptions,
+  type IngressEventCausation,
   type MutationEventCausation,
   type OperationEventCausation,
   type ReflectedEventDeclaration,

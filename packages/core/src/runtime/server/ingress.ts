@@ -1,4 +1,7 @@
+import type { JsonValue } from '../../value/json.js';
 import type { OperationInvocationDispatcher } from '../operation-invocation.js';
+
+import type { AnyEventDeclaration, EventApplication, EventOccurrence } from './events/index.js';
 
 export type GraphHttpIngressAccepted = {
   kind: 'accepted';
@@ -8,6 +11,7 @@ export type GraphHttpIngressAccepted = {
   event: string | null;
   deliveryId: string | null;
   payload?: unknown;
+  correlation?: Readonly<Record<string, JsonValue>>;
   status?: number;
   details?: Record<string, unknown>;
 };
@@ -48,6 +52,24 @@ export type GraphHttpIngressRoute = {
   provider?: string;
   channel?: string;
 };
+
+export type GraphHttpEventIngressRoute = {
+  eventId: string;
+  eventVersion: number;
+  method: string;
+  route: string;
+  provider: string;
+  channel?: string;
+};
+
+export type GraphHttpEventIngressDispatchInput = {
+  route: GraphHttpEventIngressRoute;
+  outcome: GraphHttpIngressAccepted;
+};
+
+export type GraphHttpEventIngressDispatcher = (
+  input: GraphHttpEventIngressDispatchInput,
+) => Promise<EventOccurrence>;
 
 export type GraphHttpIngressDispatchInput = {
   operationId: string;
@@ -92,11 +114,31 @@ const findMatchingRoute = (input: {
   );
 };
 
-const findRequestRoutes = (input: {
-  routes: readonly GraphHttpIngressRoute[];
+const findMatchingEventRoute = (input: {
+  routes: readonly GraphHttpEventIngressRoute[];
   request: Request;
   route: string;
+  outcome: GraphHttpIngressAccepted;
 }) => {
+  const provider = input.outcome.providerKey ?? input.outcome.provider;
+  const method = input.request.method.toUpperCase();
+
+  return input.routes.find(
+    route =>
+      route.method.toUpperCase() === method &&
+      route.route === input.route &&
+      route.provider === provider &&
+      (!route.channel || route.channel === input.outcome.channel),
+  );
+};
+
+const findRequestRoutes = <
+  TRoute extends { method: string; route: string; provider?: string },
+>(input: {
+  routes: readonly TRoute[];
+  request: Request;
+  route: string;
+}): TRoute[] => {
   const method = input.request.method.toUpperCase();
 
   return input.routes.filter(
@@ -106,7 +148,7 @@ const findRequestRoutes = (input: {
 
 const findRequestProvider = (input: {
   providers: GraphHttpIngressProviderRegistry;
-  routes: readonly GraphHttpIngressRoute[];
+  routes: readonly { provider?: string }[];
 }) => {
   const providerKeys = Array.from(
     new Set(
@@ -175,6 +217,26 @@ export const createGraphHttpIngressOperationDispatcher =
       throw new Error(response.result.message);
     }
   };
+
+export const createGraphHttpEventIngressDispatcher = (input: {
+  events: EventApplication<readonly AnyEventDeclaration[]>;
+  now?: () => Date;
+}): GraphHttpEventIngressDispatcher => {
+  const now = input.now ?? (() => new Date());
+  return ({ route, outcome }) =>
+    input.events.ingestByIdentity({
+      eventId: route.eventId,
+      eventVersion: route.eventVersion,
+      payload: outcome.payload,
+      ingress: {
+        provider: outcome.provider,
+        receivedAt: now().toISOString(),
+        ...(outcome.event ? { event: outcome.event } : {}),
+        ...(outcome.deliveryId ? { deliveryId: outcome.deliveryId } : {}),
+      },
+      ...(outcome.correlation ? { correlation: outcome.correlation } : {}),
+    });
+};
 
 export const createGraphHttpIngressRoute =
   (input: {
@@ -268,5 +330,72 @@ export const createGraphHttpIngressRouter = (input: {
       routes: requestRoutes,
       dispatch: input.dispatch,
     })(request);
+  },
+});
+
+export const createGraphHttpEventIngressRouter = (input: {
+  routes: readonly GraphHttpEventIngressRoute[];
+  providers: GraphHttpIngressProviderRegistry;
+  dispatch: GraphHttpEventIngressDispatcher;
+}) => ({
+  handle: async (request: Request) => {
+    const routePath = new URL(request.url).pathname;
+    const requestRoutes = findRequestRoutes({
+      routes: input.routes,
+      request,
+      route: routePath,
+    });
+
+    if (requestRoutes.length === 0) {
+      return json({ ok: false, error: 'No HTTP Event ingress route matches this request.' }, 404);
+    }
+
+    const providerMatch = findRequestProvider({
+      providers: input.providers,
+      routes: requestRoutes,
+    });
+    if (providerMatch.kind === 'error') return providerMatch.response;
+
+    const outcome = await providerMatch.provider.receive(request);
+    if (outcome.kind === 'rejected') {
+      return json({ ok: false, error: outcome.error }, outcome.status);
+    }
+    if (outcome.kind === 'ignored') {
+      return json(acceptedBody(outcome), acceptedStatus(outcome));
+    }
+
+    const route = findMatchingEventRoute({
+      routes: input.routes,
+      request,
+      route: routePath,
+      outcome,
+    });
+    if (!route) {
+      return json(
+        { ok: false, error: 'Authenticated ingress is not authorized for this Event route.' },
+        403,
+      );
+    }
+
+    try {
+      const occurrence = await input.dispatch({ route, outcome });
+      return json(
+        {
+          ...acceptedBody(outcome),
+          occurrenceId: occurrence.occurrenceId,
+          eventId: occurrence.eventId,
+          eventVersion: occurrence.eventVersion,
+        },
+        acceptedStatus(outcome),
+      );
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Event ingress failed.',
+        },
+        error instanceof TypeError ? 400 : 500,
+      );
+    }
   },
 });

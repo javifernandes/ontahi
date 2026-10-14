@@ -39,7 +39,17 @@ export type OperationEventCausation = {
   readonly scope: string;
   readonly taskRun?: { readonly taskId: string; readonly runId: string };
 };
-export type EventCausation = MutationEventCausation | OperationEventCausation;
+export type IngressEventCausation = {
+  readonly kind: 'ingress';
+  readonly provider: string;
+  readonly receivedAt: string;
+  readonly event?: string;
+  readonly deliveryId?: string;
+};
+export type EventCausation =
+  | MutationEventCausation
+  | OperationEventCausation
+  | IngressEventCausation;
 
 export type EventEmission<TId extends string = string, TVersion extends number = number> = {
   readonly kind: 'event-emission';
@@ -145,4 +155,20 @@ export type EventApplication<TEvents extends readonly AnyEventDeclaration[]> = {
     eventVersion: number,
     subscriber: EventSubscriber,
   ) => EventSubscription;
+  ingest: <TEvent extends TEvents[number]>(
+    declaration: TEvent,
+    input: {
+      readonly payload: EventPayload<TEvent>;
+      readonly ingress: Omit<IngressEventCausation, 'kind'>;
+      readonly correlation?: Readonly<Record<string, JsonValue>>;
+    },
+  ) => Promise<EventOccurrenceFor<TEvent>>;
+  /** @internal Authenticated ingress bridge; prefer typed `ingest` in application code. */
+  ingestByIdentity: (input: {
+    readonly eventId: string;
+    readonly eventVersion: number;
+    readonly payload: unknown;
+    readonly ingress: Omit<IngressEventCausation, 'kind'>;
+    readonly correlation?: Readonly<Record<string, JsonValue>>;
+  }) => Promise<EventOccurrence>;
 };

@@ -170,6 +170,59 @@ describe('first-class Events', () => {
     subscription.cancel();
   });
 
+  it('accepts typed ingress and rejects malformed provenance or correlation', async () => {
+    const events = createEventApplication({
+      declarations: [StudentCourseAssigned],
+      runtime: createInMemoryEventRuntime(),
+    });
+    const occurrence = await events.api.ingest(StudentCourseAssigned, {
+      payload: {
+        student: studentRef('student-1'),
+        course: courseRef('course-1'),
+      },
+      ingress: {
+        provider: 'fixture',
+        event: 'student.assigned',
+        deliveryId: 'delivery-1',
+        receivedAt: '2026-10-14T04:00:00.000Z',
+      },
+      correlation: { requestId: 'request-1' },
+    });
+    expectTypeOf(occurrence).toMatchTypeOf<EventOccurrenceFor<typeof StudentCourseAssigned>>();
+    expect(occurrence).toMatchObject({
+      eventId: StudentCourseAssigned.id,
+      causation: { kind: 'ingress', provider: 'fixture', deliveryId: 'delivery-1' },
+    });
+
+    await Promise.all(
+      [
+        [{ provider: '', receivedAt: '2026-10-14T04:00:00.000Z' }, 'provider'],
+        [{ provider: 'fixture', receivedAt: 'invalid' }, 'receivedAt'],
+        [{ provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', event: '' }, 'event'],
+        [
+          { provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', deliveryId: '' },
+          'deliveryId',
+        ],
+      ].map(async ([ingress, message]) =>
+        expect(
+          events.api.ingest(StudentCourseAssigned, {
+            payload: occurrence.payload,
+            ingress: ingress as never,
+          }),
+        ).rejects.toThrow(message as string),
+      ),
+    );
+    await expect(
+      events.api.ingestByIdentity({
+        eventId: StudentCourseAssigned.id,
+        eventVersion: StudentCourseAssigned.version,
+        payload: occurrence.payload,
+        ingress: { provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z' },
+        correlation: ['not', 'an', 'object'] as never,
+      }),
+    ).rejects.toThrow('JSON-safe object');
+  });
+
   it('infers typed JSON-safe emissions and validates forged payloads and versions', async () => {
     const emission = StudentCourseAssigned.emit({
       student: studentRef('student-1'),

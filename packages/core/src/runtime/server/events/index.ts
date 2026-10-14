@@ -35,5 +35,6 @@ export type {
   EventSubscription,
   MutationEventCausation,
   OperationEventCausation,
+  IngressEventCausation,
   ReflectedEventDeclaration,
 } from './types.js';

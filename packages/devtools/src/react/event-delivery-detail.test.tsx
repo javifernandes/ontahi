@@ -57,6 +57,10 @@ describe('EventDeliveryDetail', () => {
     [{ kind: 'operation', taskRun: { runId: 'run-1' } }, 'Operation · Run run-1'],
     [{ kind: 'mutation-outcome', outcomeId: 'outcome-1' }, 'Mutation outcome outcome-1'],
     [{ kind: 'mutation-outcome' }, 'Mutation outcome unknown'],
+    [
+      { kind: 'ingress', provider: 'github', event: 'push', deliveryId: 'github-delivery-1' },
+      'github · push · Delivery github-delivery-1',
+    ],
     [{ kind: 'import' }, 'import'],
   ])('summarizes causation %j', (causation, expected) => {
     render(<EventDeliveryDetail delivery={delivery({ causation })} />);

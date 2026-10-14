@@ -1,4 +1,5 @@
-import { cloneJson } from '../../../value/json.js';
+import { cloneJson, isJsonValue } from '../../../value/json.js';
+import { isRecord } from '../../../value/object.js';
 
 import { reflectEventDeclaration, validateEventEmission } from './declaration.js';
 import type {
@@ -31,6 +32,55 @@ export const createEventApplication = <TEvents extends readonly AnyEventDeclarat
       throw new TypeError(`Event ${declaration.id} is not registered by this application.`);
     }
   };
+  const assertIngress = (ingress: {
+    readonly provider: string;
+    readonly receivedAt: string;
+    readonly event?: string;
+    readonly deliveryId?: string;
+  }) => {
+    if (ingress.provider.trim().length === 0) {
+      throw new TypeError('Event ingress provider must be a non-empty string.');
+    }
+    if (Number.isNaN(Date.parse(ingress.receivedAt))) {
+      throw new TypeError('Event ingress receivedAt must be a valid timestamp.');
+    }
+    if (ingress.event !== undefined && ingress.event.trim().length === 0) {
+      throw new TypeError('Event ingress event must be a non-empty string when provided.');
+    }
+    if (ingress.deliveryId !== undefined && ingress.deliveryId.trim().length === 0) {
+      throw new TypeError('Event ingress deliveryId must be a non-empty string when provided.');
+    }
+  };
+  const ingestByIdentity = async (input: {
+    readonly eventId: string;
+    readonly eventVersion: number;
+    readonly payload: unknown;
+    readonly ingress: {
+      readonly provider: string;
+      readonly receivedAt: string;
+      readonly event?: string;
+      readonly deliveryId?: string;
+    };
+    readonly correlation?: Readonly<Record<string, import('../../../value/json.js').JsonValue>>;
+  }) => {
+    assertIngress(input.ingress);
+    if (
+      input.correlation !== undefined &&
+      (!isRecord(input.correlation) || !isJsonValue(input.correlation))
+    ) {
+      throw new TypeError('Event ingress correlation must be a JSON-safe object.');
+    }
+    return options.runtime.accept(
+      validateEventEmission(declarations, {
+        kind: 'event-emission',
+        eventId: input.eventId,
+        eventVersion: input.eventVersion,
+        payload: input.payload as never,
+        causation: { kind: 'ingress', ...input.ingress },
+        ...(input.correlation ? { correlation: input.correlation } : {}),
+      }),
+    );
+  };
   return {
     api: {
       capabilities: options.runtime.capabilities,
@@ -51,6 +101,15 @@ export const createEventApplication = <TEvents extends readonly AnyEventDeclarat
         }
         return options.runtime.subscribe(eventId, subscriber);
       },
+      ingest: async (declaration, input) => {
+        assertRegistered(declaration);
+        return (await ingestByIdentity({
+          eventId: declaration.id,
+          eventVersion: declaration.version,
+          ...input,
+        })) as never;
+      },
+      ingestByIdentity,
     },
     publish: async (emission, causation) =>
       options.runtime.accept(
