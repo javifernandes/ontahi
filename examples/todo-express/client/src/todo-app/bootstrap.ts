@@ -6,8 +6,9 @@ export type BootstrapState<Value> =
   | { status: 'error' };
 
 export type TodoRuntime = {
-  storage: 'in-memory' | 'postgres';
+  storage: 'in-memory' | 'postgres' | 'mysql';
   commandChat?: boolean;
+  eventWaitDemo?: boolean;
 };
 
 export type AuthenticationSession = {

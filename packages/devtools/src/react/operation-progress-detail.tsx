@@ -280,7 +280,9 @@ export const OperationProgressDetail = ({
                     direction='←'
                     outcome={snapshotOutcome(snapshot.snapshot.status)}
                     title={
-                      snapshot.snapshot.interaction
+                      snapshot.snapshot.interaction ||
+                      snapshot.snapshot.waitingOn ||
+                      snapshot.snapshot.resumedBy
                         ? snapshotState.title
                         : `${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`
                     }

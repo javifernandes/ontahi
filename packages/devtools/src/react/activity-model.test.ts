@@ -814,6 +814,120 @@ describe('Devtools activity model', () => {
     expect(activityEntryOutcome(entries[0]!)).toBe('completed');
   });
 
+  it('describes an Event wait and its ingress-driven resume', () => {
+    const activity: OperationProgressActivity = {
+      id: 'export-run',
+      at: 1,
+      snapshots: [
+        {
+          kind: 'observation.snapshot' as const,
+          observationId: 'export-run',
+          family: 'durable.operation.observe' as const,
+          run: { taskId: 'TodoList.export', runId: 'run-1' },
+          transportId: 'websocket',
+          transportKind: 'websocket',
+          startedAt: 1,
+          at: 2,
+          sequence: 1,
+          snapshot: {
+            taskId: 'TodoList.export',
+            runId: 'run-1',
+            status: 'waiting',
+            updatedAt: '2026-10-14T00:00:00.000Z',
+            waitingOn: { kind: 'event', eventId: 'TodoListExportReady' },
+          },
+        },
+      ],
+    };
+
+    expect(operationProgressState(activity)).toEqual({
+      label: 'waiting',
+      title: 'Waiting for TodoListExportReady',
+    });
+    expect(
+      operationProgressState({
+        ...activity,
+        snapshots: [
+          {
+            ...activity.snapshots[0]!,
+            sequence: 2,
+            snapshot: {
+              taskId: 'TodoList.export',
+              runId: 'run-1',
+              status: 'running',
+              updatedAt: '2026-10-14T00:00:01.000Z',
+              resumedBy: {
+                kind: 'event',
+                waitId: 'export:request-1',
+                eventId: 'TodoListExportReady',
+                eventVersion: 1,
+                occurrenceId: 'occurrence-1',
+                occurredAt: '2026-10-14T00:00:01.000Z',
+                deliveryId: 'delivery-1',
+                subscriptionId: 'subscription-1',
+                attempt: 1,
+                claimId: 'claim-1',
+                consumerId: 'worker-1',
+                leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+                ingress: {
+                  provider: 'fixture-worker',
+                  receivedAt: '2026-10-14T00:00:01.000Z',
+                },
+              },
+            },
+          },
+        ],
+      }),
+    ).toEqual({
+      label: 'resumed',
+      title: 'TodoListExportReady received · fixture-worker',
+    });
+
+    expect(
+      operationProgressState({
+        ...activity,
+        snapshots: [
+          {
+            ...activity.snapshots[0]!,
+            snapshot: {
+              ...activity.snapshots[0]!.snapshot,
+              waitingOn: { kind: 'event', eventId: undefined as unknown as string },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'waiting', title: 'Waiting for Event' });
+    expect(
+      operationProgressState({
+        ...activity,
+        snapshots: [
+          {
+            ...activity.snapshots[0]!,
+            snapshot: {
+              ...activity.snapshots[0]!.snapshot,
+              status: 'running',
+              waitingOn: undefined,
+              resumedBy: {
+                kind: 'event',
+                waitId: 'export:request-1',
+                eventId: undefined as unknown as string,
+                eventVersion: 1,
+                occurrenceId: 'occurrence-1',
+                occurredAt: '2026-10-14T00:00:01.000Z',
+                deliveryId: 'delivery-1',
+                subscriptionId: 'subscription-1',
+                attempt: 1,
+                claimId: 'claim-1',
+                consumerId: 'worker-1',
+                leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+              },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ label: 'resumed', title: 'Event received' });
+  });
+
   it('collapses repeated physical observers into one semantic Operation activity', () => {
     const run = { taskId: 'TodoItem.deleteFromNamedList', runId: 'run-1' };
     const exchangeIdentity = {

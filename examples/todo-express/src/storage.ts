@@ -6,6 +6,7 @@ import {
 } from '@ontahi/core/data-graph';
 import { createMysqlDataGraphStorage } from '@ontahi/mysql';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
+import { createPostgresEventRuntime } from '@ontahi/postgres/events';
 import { createPool } from 'mysql2/promise';
 import { Pool } from 'pg';
 
@@ -78,14 +79,17 @@ export const createTodoInMemoryStorage = () =>
     ],
   });
 
-const createDefaultStorage = () => {
-  if (process.env.TODO_STORAGE === 'postgres') {
-    return createPostgresDataGraphStorage({
-      pool: new Pool({
+const postgresPool =
+  process.env.TODO_STORAGE === 'postgres'
+    ? new Pool({
         connectionString:
           process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/ontahi_todos',
-      }),
-    });
+      })
+    : undefined;
+
+const createDefaultStorage = () => {
+  if (process.env.TODO_STORAGE === 'postgres') {
+    return createPostgresDataGraphStorage({ pool: postgresPool! });
   }
   if (process.env.TODO_STORAGE === 'mysql') {
     const uri = process.env.DATABASE_URL;
@@ -105,6 +109,9 @@ const createDefaultStorage = () => {
   return createTodoInMemoryStorage();
 };
 export const defaultStorage = createDefaultStorage();
+export const todoEventRuntime = postgresPool
+  ? createPostgresEventRuntime({ pool: postgresPool })
+  : undefined;
 
 export const createTodoDataGraphRuntime = (): DataGraphExecutionRuntime<unknown> =>
   defaultStorage.createRuntime();

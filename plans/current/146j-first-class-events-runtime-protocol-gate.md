@@ -583,7 +583,7 @@ Acceptance:
 - [x] Reject unauthorized ingress, invalid payloads, stale declarations, and mismatched correlation.
 - [x] Define duplicate occurrence and duplicate delivery behavior without claiming exactly once.
 - [x] Define timeout and cancellation ownership without erasing the occurrence.
-- [ ] Show ingress, occurrence, claimed delivery, wait, resume, and completion in one causal Activity.
+- [x] Show ingress, occurrence, claimed delivery, wait, resume, and completion in one causal Activity.
 
 ## Execution Slices
 
@@ -638,8 +638,14 @@ may share a PR when the behavior remains reviewable and verification stays focus
 - [x] Bind the same HTTP-neutral Event ingress contract through a Next.js App Router Route Handler.
 - [x] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
 - [x] Implement serializable correlated Event wait and atomic resume.
-- [ ] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
+- [x] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
       contract is stable.
+
+The causal Activity is reconstructed from the existing Task observation stream. A running snapshot
+retains compact, payload-free resume evidence for the matched occurrence, durable delivery claim,
+and ingress provenance; it does not introduce a general Event history API. The LangGraph adapter was
+evaluated as the second runtime and rejects Event-wait transitions explicitly until it can preserve
+the same durable semantics.
 
 The first Express binding requires Operation ingress and Event ingress to use distinct HTTP paths.
 This avoids making middleware registration order decide whether one authenticated provider delivery

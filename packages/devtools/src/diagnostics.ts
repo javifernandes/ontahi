@@ -1,4 +1,4 @@
-import type { TaskRunIdentity, TaskStatus } from '@ontahi/core/runtime/contracts';
+import type { TaskEventResume, TaskRunIdentity, TaskStatus } from '@ontahi/core/runtime/contracts';
 
 export type RuntimeDiagnosticOutcome =
   | 'success'
@@ -37,6 +37,8 @@ export type DiagnosticTaskSnapshot = {
   };
   /** Redacted diagnostic payload; it is not guaranteed to retain the runtime Interaction shape. */
   readonly interaction?: unknown;
+  readonly waitingOn?: unknown;
+  readonly resumedBy?: TaskEventResume;
   readonly error?: { readonly code: string; readonly message: string };
   readonly result?: unknown;
   readonly mutationCommitId?: string;

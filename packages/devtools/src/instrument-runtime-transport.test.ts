@@ -336,6 +336,140 @@ describe('instrumentRuntimeTransport', () => {
     expect(diagnostics.inspect().events[2]).not.toHaveProperty('snapshot.result');
   });
 
+  it('keeps Event wait and resume identity while payload capture stays opt-in', async () => {
+    const snapshot: TaskSnapshot = {
+      taskId: 'TodoList.export',
+      runId: 'run-1',
+      status: 'running',
+      updatedAt: '2026-10-14T00:00:02.000Z',
+      resumedBy: {
+        kind: 'event',
+        waitId: 'export:request-1',
+        eventId: 'TodoListExportReady',
+        eventVersion: 1,
+        occurrenceId: 'occurrence-1',
+        occurredAt: '2026-10-14T00:00:01.000Z',
+        deliveryId: 'delivery-1',
+        subscriptionId: 'subscription-1',
+        attempt: 1,
+        claimId: 'claim-1',
+        consumerId: 'worker-1',
+        leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+        ingress: {
+          provider: 'fixture-worker',
+          receivedAt: '2026-10-14T00:00:01.000Z',
+          event: 'export.ready',
+          deliveryId: 'external-delivery-1',
+        },
+      },
+    };
+    const diagnostics = createOntahiDiagnostics({ createId: () => 'observation-1' });
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn(),
+        durableOperation: {
+          observe: async function* <TResult>(_run: TaskRunIdentity) {
+            yield snapshot as TaskSnapshot<TResult>;
+          },
+        },
+      },
+    });
+
+    for await (const _snapshot of transport.durableOperation!.observe(snapshot)) {
+      // Consume the observation so diagnostics receives the resume evidence.
+    }
+
+    expect(diagnostics.inspect().events[1]).toMatchObject({
+      kind: 'observation.snapshot',
+      snapshot: {
+        status: 'running',
+        resumedBy: {
+          eventId: 'TodoListExportReady',
+          occurrenceId: 'occurrence-1',
+          claimId: 'claim-1',
+          ingress: { provider: 'fixture-worker' },
+        },
+      },
+    });
+  });
+
+  it('projects Event wait correlation and optional timing only when present', async () => {
+    const run = { taskId: 'TodoList.export', runId: 'run-1' };
+    const snapshots: TaskSnapshot[] = [
+      {
+        ...run,
+        status: 'waiting',
+        updatedAt: '2026-10-14T00:00:00.000Z',
+        waitingOn: {
+          id: 'export:request-1',
+          kind: 'event',
+          eventId: 'TodoListExportReady',
+          eventVersion: 1,
+          correlation: { requestId: 'request-1' },
+          createdAt: '2026-10-14T00:00:00.000Z',
+          timeoutAt: '2026-10-14T00:05:00.000Z',
+        },
+      },
+      {
+        ...run,
+        status: 'waiting',
+        updatedAt: '2026-10-14T00:00:01.000Z',
+        waitingOn: {
+          id: 'export:any',
+          kind: 'event',
+          eventId: 'TodoListExportReady',
+          eventVersion: 1,
+          createdAt: '2026-10-14T00:00:01.000Z',
+        },
+      },
+    ];
+    const diagnostics = createOntahiDiagnostics({
+      capturePayloads: true,
+      redact: value => value,
+      createId: () => 'observation-1',
+    });
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn(),
+        durableOperation: {
+          observe: async function* <TResult>(_run: TaskRunIdentity) {
+            for (const snapshot of snapshots) yield snapshot as TaskSnapshot<TResult>;
+          },
+        },
+      },
+    });
+
+    for await (const _snapshot of transport.durableOperation!.observe(run)) {
+      // Consume both snapshots so diagnostics projects each wait variant.
+    }
+
+    expect(diagnostics.inspect().events).toMatchObject([
+      { kind: 'observation.started' },
+      {
+        kind: 'observation.snapshot',
+        snapshot: {
+          waitingOn: {
+            correlation: { requestId: 'request-1' },
+            timeoutAt: '2026-10-14T00:05:00.000Z',
+          },
+        },
+      },
+      {
+        kind: 'observation.snapshot',
+        snapshot: { waitingOn: { id: 'export:any' } },
+      },
+      { kind: 'observation.settled' },
+    ]);
+    expect(diagnostics.inspect().events[2]).not.toHaveProperty('snapshot.waitingOn.correlation');
+    expect(diagnostics.inspect().events[2]).not.toHaveProperty('snapshot.waitingOn.timeoutAt');
+  });
+
   it('captures pending Durable interactions when diagnostic payload capture is enabled', async () => {
     const snapshot: TaskSnapshot = {
       taskId: 'task-1',

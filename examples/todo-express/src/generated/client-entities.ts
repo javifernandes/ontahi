@@ -93,6 +93,19 @@ export const TodoList = defineClientEntity(TodoListSchema, {
         runtime: 'in-process',
       },
     }),
+    export: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {},
+      input: graphSchema.object({
+        list: graphSchema.ref(TodoListSchema),
+        requestId: graphSchema.string(),
+      }),
+      output: graphSchema.object({ url: graphSchema.string() }),
+      durable: {
+        runtime: 'in-process',
+      },
+    }),
   },
 });
 

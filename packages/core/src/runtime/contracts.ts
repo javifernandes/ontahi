@@ -303,6 +303,28 @@ export type TaskExecutionCheckpoint = {
   response?: TaskInteractionResponse;
   eventWait?: TaskPendingEventWait;
   eventOccurrence?: import('./server/events/types.js').EventOccurrence;
+  eventResume?: TaskEventResume;
+};
+
+export type TaskEventResume = {
+  kind: 'event';
+  waitId: string;
+  eventId: string;
+  eventVersion: number;
+  occurrenceId: string;
+  occurredAt: string;
+  deliveryId: string;
+  subscriptionId: string;
+  attempt: number;
+  claimId: string;
+  consumerId: string;
+  leaseExpiresAt: string;
+  ingress?: {
+    provider: string;
+    receivedAt: string;
+    event?: string;
+    deliveryId?: string;
+  };
 };
 
 export type TaskInteractionResponseContext = {
@@ -331,6 +353,7 @@ export type TaskSnapshot<TResult = unknown> = {
   };
   interaction?: TaskPendingInteraction;
   waitingOn?: TaskWaitingOn;
+  resumedBy?: TaskEventResume;
   error?: {
     code: string;
     message: string;

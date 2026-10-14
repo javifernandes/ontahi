@@ -75,6 +75,9 @@ const createProps = (
   isDeleting: false,
   isCompletingAll: false,
   completeAllDisabled: false,
+  eventWaitDemo: false,
+  isExporting: false,
+  exportDisabled: false,
   isDragging: false,
   isColorPickerOpen: false,
   closePopovers: vi.fn(),
@@ -85,6 +88,8 @@ const createProps = (
   recolorList: vi.fn().mockResolvedValue(true),
   deleteList: vi.fn().mockResolvedValue(true),
   completeAllTodos: vi.fn().mockResolvedValue(true),
+  exportTodoList: vi.fn().mockResolvedValue(true),
+  simulateExportReady: vi.fn().mockResolvedValue(true),
   createTodo: vi.fn().mockResolvedValue(true),
   setTodoCompleted: vi.fn().mockResolvedValue(true),
   renameTodo,
@@ -146,6 +151,43 @@ describe('TodoListCard item reordering', () => {
 
     act(() => action.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(completeAllTodos).toHaveBeenCalledWith('list-1');
+  });
+
+  it('simulates export readiness through an explicit fixture action while waiting', () => {
+    const exportTodoList = vi.fn().mockResolvedValue(true);
+    const simulateExportReady = vi.fn().mockResolvedValue(true);
+    act(() =>
+      root.render(
+        <TodoListCard
+          {...createProps(vi.fn(), undefined, {
+            eventWaitDemo: true,
+            isExporting: true,
+            exportTodoList,
+            simulateExportReady,
+            exportRun: {
+              requestId: 'request-1',
+              isExecuting: true,
+              isQueued: false,
+              isRunning: false,
+              isWaiting: true,
+              isCompleted: false,
+              isSimulatingReady: false,
+              finalValue: undefined,
+            },
+          })}
+        />,
+      ),
+    );
+
+    const exportAction = Array.from(container.querySelectorAll('button')).find(button =>
+      button.textContent?.includes('Waiting'),
+    )!;
+    const simulateAction = Array.from(container.querySelectorAll('button')).find(button =>
+      button.textContent?.includes('Simulate ready'),
+    )!;
+    expect(exportAction.title).toBe('Run TodoList.export()');
+    act(() => simulateAction.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(simulateExportReady).toHaveBeenCalledOnce();
   });
 
   it('previews the destination slot and commits the move only when released', () => {

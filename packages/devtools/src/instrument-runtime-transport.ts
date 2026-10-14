@@ -89,6 +89,22 @@ const projectTaskSnapshot = (
   const result = snapshot.result === undefined ? undefined : projectPayload(snapshot.result);
   const interaction =
     snapshot.interaction === undefined ? undefined : projectPayload(snapshot.interaction);
+  const waitingOn = (() => {
+    if (snapshot.waitingOn?.kind !== 'event') return undefined;
+    const correlation =
+      snapshot.waitingOn.correlation === undefined
+        ? undefined
+        : projectPayload(snapshot.waitingOn.correlation);
+    return {
+      id: snapshot.waitingOn.id,
+      kind: snapshot.waitingOn.kind,
+      eventId: snapshot.waitingOn.eventId,
+      eventVersion: snapshot.waitingOn.eventVersion,
+      createdAt: snapshot.waitingOn.createdAt,
+      ...(snapshot.waitingOn.timeoutAt ? { timeoutAt: snapshot.waitingOn.timeoutAt } : {}),
+      ...(correlation === undefined ? {} : { correlation }),
+    };
+  })();
   return {
     taskId: snapshot.taskId,
     runId: snapshot.runId,
@@ -97,6 +113,8 @@ const projectTaskSnapshot = (
       ? { subject: { type: snapshot.subject.type, id: snapshot.subject.id } }
       : {}),
     ...(interaction === undefined ? {} : { interaction }),
+    ...(waitingOn === undefined ? {} : { waitingOn }),
+    ...(snapshot.resumedBy ? { resumedBy: snapshot.resumedBy } : {}),
     ...(snapshot.createdAt ? { createdAt: snapshot.createdAt } : {}),
     ...(snapshot.startedAt ? { startedAt: snapshot.startedAt } : {}),
     updatedAt: snapshot.updatedAt,

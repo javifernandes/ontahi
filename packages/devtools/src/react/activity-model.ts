@@ -86,6 +86,22 @@ export const operationProgressState = (
     const state = interactionProgressState(latest.interaction);
     if (state) return state;
   }
+  if (latest && isRecord(latest.waitingOn) && latest.waitingOn.kind === 'event') {
+    const eventId =
+      typeof latest.waitingOn.eventId === 'string' ? latest.waitingOn.eventId : 'Event';
+    return { label: 'waiting', title: `Waiting for ${eventId}` };
+  }
+  if (latest && isRecord(latest.resumedBy) && latest.resumedBy.kind === 'event') {
+    const eventId =
+      typeof latest.resumedBy.eventId === 'string' ? latest.resumedBy.eventId : 'Event';
+    const provider = isRecord(latest.resumedBy.ingress)
+      ? latest.resumedBy.ingress.provider
+      : undefined;
+    return {
+      label: 'resumed',
+      title: `${eventId} received${typeof provider === 'string' ? ` · ${provider}` : ''}`,
+    };
+  }
   if (latest && ['completed', 'failed', 'cancelled'].includes(latest.status))
     return { label: 'operation', title: latest.status };
   if (latest?.progress) {

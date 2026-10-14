@@ -140,6 +140,35 @@ recreate the database and reapply every file in `migrations/`. PostgreSQL only r
 scripts when creating the volume, so reset an existing example database after pulling a new
 migration.
 
+### Event-wait fixture
+
+PostgreSQL mode also enables a temporary end-to-end fixture for the durable Event-wait flow. Build
+the browser once and reset an existing example database so the Event Runtime migration is applied:
+
+```sh
+pnpm build:packages
+pnpm --filter @ontahi/example-todo-express build:client
+pnpm --filter @ontahi/example-todo-express db:reset
+TODO_AUTH_MODE=disabled pnpm --filter @ontahi/example-todo-express dev:postgres
+```
+
+Open `http://localhost:3001`, create a list if the PostgreSQL database is empty, and open Devtools.
+Each list exposes **Export**. It starts `TodoList.export()` and waits for a correlated
+`TodoListExportReady`. Once the UI says **Waiting…**, click **Simulate ready**. That button posts a
+development-only fixture payload with the fixed `x-todo-export-fixture: ready` demo header through
+`/fixtures/todo-list-export-ready`, the same Express Event-ingress boundary an external worker would
+call. The fixture route is not mounted when `NODE_ENV=production`. Devtools should show one causal
+progress timeline:
+
+```text
+Waiting for TodoListExportReady
+TodoListExportReady received · todo-export-fixture
+completed
+```
+
+The fixture is intentionally unavailable in the zero-infrastructure in-memory mode because that
+Event Runtime advertises no durable delivery guarantees.
+
 To use MySQL 8.4/InnoDB instead, build the packages and browser client once, then start the host:
 
 ```sh

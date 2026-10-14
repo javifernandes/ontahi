@@ -37,6 +37,7 @@ export type {
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskExecutionCheckpoint,
+  TaskEventResume,
   TaskExecutionMetadata,
   TaskPendingChoiceInteraction,
   TaskPendingInputInteraction,

@@ -9,6 +9,90 @@ import { OperationProgressDetail } from './operation-progress-detail.js';
 afterEach(cleanup);
 
 describe('OperationProgressDetail', () => {
+  it('renders one causal timeline from Event wait through resume and completion', () => {
+    const base = {
+      observationId: 'operation-1',
+      family: 'durable.operation.observe' as const,
+      run: { taskId: 'TodoList.export', runId: 'run-1' },
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 1,
+    };
+    const activity: OperationProgressActivity = {
+      id: 'operation-1',
+      at: 1,
+      started: { ...base, kind: 'observation.started', at: 1 },
+      snapshots: [
+        {
+          ...base,
+          kind: 'observation.snapshot',
+          at: 2,
+          sequence: 1,
+          snapshot: {
+            ...base.run,
+            status: 'waiting',
+            updatedAt: '2026-10-14T00:00:00.000Z',
+            waitingOn: {
+              id: 'export:request-1',
+              kind: 'event',
+              eventId: 'TodoListExportReady',
+              eventVersion: 1,
+              createdAt: '2026-10-14T00:00:00.000Z',
+            },
+          },
+        },
+        {
+          ...base,
+          kind: 'observation.snapshot',
+          at: 3,
+          sequence: 2,
+          snapshot: {
+            ...base.run,
+            status: 'running',
+            updatedAt: '2026-10-14T00:00:01.000Z',
+            resumedBy: {
+              kind: 'event',
+              waitId: 'export:request-1',
+              eventId: 'TodoListExportReady',
+              eventVersion: 1,
+              occurrenceId: 'occurrence-1',
+              occurredAt: '2026-10-14T00:00:01.000Z',
+              deliveryId: 'delivery-1',
+              subscriptionId: 'subscription-1',
+              attempt: 1,
+              claimId: 'claim-1',
+              consumerId: 'worker-1',
+              leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+              ingress: {
+                provider: 'fixture-worker',
+                receivedAt: '2026-10-14T00:00:01.000Z',
+              },
+            },
+          },
+        },
+        {
+          ...base,
+          kind: 'observation.snapshot',
+          at: 4,
+          sequence: 3,
+          snapshot: {
+            ...base.run,
+            status: 'completed',
+            updatedAt: '2026-10-14T00:00:02.000Z',
+          },
+        },
+      ],
+    };
+
+    render(<OperationProgressDetail activity={activity} eventDeliveries={[]} />);
+
+    expect(screen.getByText('Waiting for TodoListExportReady')).toBeTruthy();
+    expect(screen.getByText('TodoListExportReady received · fixture-worker')).toBeTruthy();
+    expect(screen.getByText('completed')).toBeTruthy();
+    fireEvent.click(screen.getByText('TodoListExportReady received · fixture-worker'));
+    expect(screen.getByRole('tree', { name: 'Progress update 2 JSON' })).toBeTruthy();
+  });
+
   it('renders causally correlated Event deliveries as Operation effects', () => {
     const activity: OperationProgressActivity = {
       id: 'operation-1',

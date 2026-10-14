@@ -30,6 +30,7 @@ const createProps = (overrides: Partial<TodoBoardProps> = {}): TodoBoardProps =>
   recoloringListId: undefined,
   deletingListId: undefined,
   completingListId: undefined,
+  exportingListId: undefined,
   completingTodoId: undefined,
   renamingTodoId: undefined,
   deletingTodoId: undefined,
@@ -48,6 +49,19 @@ const createProps = (overrides: Partial<TodoBoardProps> = {}): TodoBoardProps =>
     isRunning: false,
     isCompleted: false,
     progress: undefined,
+    finalValue: undefined,
+  },
+  eventWaitDemo: false,
+  exportTodoList: vi.fn().mockResolvedValue(true),
+  simulateExportReady: vi.fn().mockResolvedValue(true),
+  exportRun: {
+    requestId: undefined,
+    isExecuting: false,
+    isQueued: false,
+    isRunning: false,
+    isWaiting: false,
+    isCompleted: false,
+    isSimulatingReady: false,
     finalValue: undefined,
   },
   createTodo: vi.fn().mockResolvedValue(true),
@@ -185,5 +199,40 @@ describe('TodoBoard list creation', () => {
       'true',
     );
     expect(container.textContent).toContain('Saving order…');
+  });
+
+  it('blocks another list export while the shared export run is active', () => {
+    act(() =>
+      root.render(
+        <TodoBoard
+          {...createProps({
+            eventWaitDemo: true,
+            exportingListId: 'list-1',
+            lists: [
+              { id: 'list-1', name: 'Inbox', color: '#f5ddd5', items: [] },
+              { id: 'list-2', name: 'Later', color: '#dbe8f4', items: [] },
+            ],
+            exportRun: {
+              requestId: 'request-1',
+              isExecuting: true,
+              isQueued: false,
+              isRunning: false,
+              isWaiting: true,
+              isCompleted: false,
+              isSimulatingReady: false,
+              finalValue: undefined,
+            },
+          })}
+        />,
+      ),
+    );
+
+    const buttons = Array.from(container.querySelectorAll('button'));
+    const activeExport = buttons.find(button => button.textContent?.includes('Waiting'));
+    const otherExport = buttons.find(button => button.textContent === 'Export');
+    const simulate = buttons.find(button => button.textContent?.includes('Simulate ready'));
+    expect(activeExport?.disabled).toBe(true);
+    expect(otherExport?.disabled).toBe(true);
+    expect(simulate?.disabled).toBe(false);
   });
 });

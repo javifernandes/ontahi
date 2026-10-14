@@ -1,7 +1,8 @@
-import { Effect } from 'effect';
+import { Chunk, Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { graphSchema } from '../../../data-graph/index.js';
+import type { TaskSnapshot } from '../../contracts.js';
 import { createEventApplication } from '../events/application.js';
 import { defineEvent } from '../events/declaration.js';
 import { createInMemoryEventRuntime } from '../events/in-memory-runtime.js';
@@ -300,6 +301,12 @@ describe('durable Task Event waits', () => {
     });
     recovered.register?.(task);
     await Effect.runPromise(recovered.getSnapshot(run));
+    const observation = Effect.runPromise(
+      recovered.observe!(run).pipe(
+        Stream.takeUntil(snapshot => snapshot.status === 'completed'),
+        Stream.runCollect,
+      ),
+    );
     const occurrence = await eventApplication.api.ingest(ExportReady, {
       payload: { requestId: 'wanted', url: 'https://example.com/right' },
       correlation: { requestId: 'wanted' },
@@ -316,6 +323,7 @@ describe('durable Task Event waits', () => {
         result: { url: 'https://example.com/right' },
       });
     });
+    const observed: readonly TaskSnapshot[] = Chunk.toReadonlyArray(await observation);
     expect(occurrence.causation).toEqual({
       kind: 'ingress',
       provider: 'fixture-worker',
@@ -323,6 +331,36 @@ describe('durable Task Event waits', () => {
       deliveryId: 'delivery-wanted',
       receivedAt: '2026-10-14T00:00:01.000Z',
     });
+    expect(observed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 'waiting',
+          waitingOn: expect.objectContaining({
+            kind: 'event',
+            eventId: ExportReady.id,
+            correlation: { requestId: 'wanted' },
+          }),
+        }),
+        expect.objectContaining({
+          status: 'running',
+          resumedBy: expect.objectContaining({
+            kind: 'event',
+            eventId: ExportReady.id,
+            occurrenceId: occurrence.occurrenceId,
+            attempt: 1,
+            claimId: expect.stringMatching(/^claim-/),
+            consumerId: expect.stringContaining('TodoList.export:restart'),
+            ingress: {
+              provider: 'fixture-worker',
+              event: 'export.ready',
+              deliveryId: 'delivery-wanted',
+              receivedAt: '2026-10-14T00:00:01.000Z',
+            },
+          }),
+        }),
+        expect.objectContaining({ status: 'completed' }),
+      ]),
+    );
   });
 
   it('does not consume a retained delivery until the recovered Task definition is registered', async () => {

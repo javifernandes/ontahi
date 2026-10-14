@@ -106,6 +106,16 @@ export type ApplicationRuntimeProtocol<TContext> = {
   readonly graphCommandPolicies: readonly ApplicationRuntimeGraphCommandPolicy<TContext>[];
 };
 
+type GraphObservationRaceOutcome =
+  | {
+      readonly kind: 'native';
+      readonly result: IteratorResult<GraphReadObservationResponse>;
+    }
+  | {
+      readonly kind: 'mutation';
+      readonly causedBy: GraphObservationRefreshCause | undefined;
+    };
+
 const isGraphReadPolicy = <TContext>(
   policy: ApplicationRuntimePolicy<TContext>,
 ): policy is GraphReadPolicy<any, TContext> =>
@@ -287,7 +297,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
 
       try {
         while (!signal.aborted) {
-          const outcome = await Promise.race([
+          const outcome: GraphObservationRaceOutcome = await Promise.race([
             ...(nativeNext
               ? [nativeNext.then(result => ({ kind: 'native' as const, result }))]
               : []),
@@ -298,8 +308,18 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             if (outcome.result.done) {
               nativeNext = undefined;
             } else {
-              nativeNext = iterator.next();
-              const body = emitIfChanged(outcome.result.value);
+              const nativeBody: GraphReadObservationResponse = outcome.result.value;
+              const nativeUnavailable: boolean =
+                isGraphReadProtocolError(nativeBody) &&
+                nativeBody.error.code === 'execution_unavailable';
+              nativeNext = nativeUnavailable ? undefined : iterator.next();
+              const body = emitIfChanged(
+                nativeUnavailable
+                  ? toGraphObservationResponse(
+                      await withContext(context, () => read(request, { authority: context })),
+                    )
+                  : nativeBody,
+              );
               if (body) yield body;
             }
             continue;

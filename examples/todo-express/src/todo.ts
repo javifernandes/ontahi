@@ -73,6 +73,21 @@ const todoListCompleted = (
   completedCount: number,
 ): EventEffectIntent => event(TodoListCompleted, { list, completedCount });
 
+export const TodoListExportReady = event.define({
+  id: 'TodoListExportReady',
+  version: 1,
+  description: 'A requested Todo List export is ready to download.',
+  payload: graphSchema.object({
+    requestId: graphSchema.string(),
+    url: graphSchema.string(),
+  }),
+});
+
+type TodoListExportState = TaskExecutionState & {
+  step: 'wait-for-export';
+  requestId: string;
+};
+
 export const TodoList = entity({
   name: 'TodoList',
   fields: todoListFields,
@@ -115,6 +130,32 @@ export const TodoList = entity({
             Effect.map(completed => completed.length),
           ),
     );
+    const exportExecution = defineTaskExecution<
+      { list: EntityRef<'TodoList'>; requestId: string },
+      TodoListExportState,
+      { url: string }
+    >({
+      initial: ({ requestId }) => ({ step: 'wait-for-export', requestId }),
+      steps: {
+        'wait-for-export': defineTaskExecutionStep({
+          run: ({ state, event: occurrence }) =>
+            occurrence
+              ? Effect.succeed({
+                  kind: 'complete',
+                  result: { url: (occurrence.payload as { url: string }).url },
+                })
+              : Effect.succeed({
+                  kind: 'event',
+                  state,
+                  event: {
+                    id: `todo-list-export:${state.requestId}`,
+                    declaration: TodoListExportReady,
+                    correlation: { requestId: state.requestId },
+                  },
+                }),
+        }),
+      },
+    });
 
     return {
       completeAll: operation({
@@ -141,6 +182,21 @@ export const TodoList = entity({
               withEffects(result, [todoListCompleted(input.list, result.completed)]),
             ),
           ),
+      }),
+      export: operation({
+        description: 'Request a Todo List export and wait for an external worker callback.',
+        input: graphSchema.object({
+          list: graphSchema.ref(self),
+          requestId: graphSchema.string(),
+        }),
+        graphOps: { receiver: 'list' },
+        output: graphSchema.object({ url: graphSchema.string() }),
+        durable: {
+          runtime: 'in-process',
+          execution: exportExecution,
+        },
+        run: (): Effect.Effect<{ url: string }> =>
+          Effect.dieMessage('Explicit durable execution requires a Task Runtime.'),
       }),
     };
   },
