@@ -95,6 +95,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
   const [completingListId, setCompletingListId] = useState<string>();
+  const [exportingListId, setExportingListId] = useState<string>();
+  const [exportRequestId, setExportRequestId] = useState<string>();
+  const [isSimulatingExportReady, setIsSimulatingExportReady] = useState(false);
   const [completingTodoId, setCompletingTodoId] = useState<string>();
   const [renamingTodoId, setRenamingTodoId] = useState<string>();
   const [deletingTodoId, setDeletingTodoId] = useState<string>();
@@ -111,6 +114,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const entityMutation = useEntityMutationCommand((command: EntityMutationCommand) => command);
   const executeEntityMutation = entityMutation.mutateAsync;
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
+  const exportOperation = useDurableOperation(TodoList.domain.export);
   const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
   const linkTags = useManyToManyRelationshipCommand((input: TodoTagMutation) =>
     createTodoTagCommand('add', input),
@@ -342,6 +346,52 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const exportTodoList = async (listId: string) => {
+    const requestId = globalThis.crypto.randomUUID();
+    setActionError(undefined);
+    setExportingListId(listId);
+    setExportRequestId(requestId);
+    try {
+      const result = await exportOperation.executeAsync({
+        list: TodoList.refById(listId),
+        requestId,
+      });
+      const message = operationMessage(result, 'The export operation could not be started.');
+      setActionError(message);
+      return !message;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The export operation could not be started.'));
+      return false;
+    }
+  };
+
+  const simulateExportReady = async () => {
+    if (!exportRequestId) return false;
+    setActionError(undefined);
+    setIsSimulatingExportReady(true);
+    try {
+      const response = await fetch('/fixtures/todo-list-export-ready', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-todo-export-fixture': 'ready',
+          'x-todo-delivery': `todo-export-fixture:${exportRequestId}`,
+        },
+        body: JSON.stringify({
+          requestId: exportRequestId,
+          url: `https://example.test/todo-exports/${exportRequestId}.json`,
+        }),
+      });
+      if (!response.ok) throw new Error(`Fixture ingress returned HTTP ${response.status}.`);
+      return true;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The export callback could not be simulated.'));
+      return false;
+    } finally {
+      setIsSimulatingExportReady(false);
+    }
+  };
+
   const moveTodo = async (listId: string, todoId: string, beforeTodoId?: string) => {
     const list = dashboardLists.find(candidate => candidate.id === listId);
     const currentIndex = list?.items.findIndex(todo => todo.id === todoId) ?? -1;
@@ -425,6 +475,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       recoloringListId,
       deletingListId,
       completingListId,
+      exportingListId,
       completingTodoId,
       renamingTodoId,
       deletingTodoId,
@@ -444,6 +495,19 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         isCompleted: completeAllOperation.isCompleted,
         progress: completeAllOperation.progress,
         finalValue: completeAllOperation.finalValue,
+      },
+      eventWaitDemo: runtime.status === 'ready' && runtime.value.eventWaitDemo === true,
+      exportTodoList,
+      simulateExportReady,
+      exportRun: {
+        requestId: exportRequestId,
+        isExecuting: exportOperation.isExecuting,
+        isQueued: exportOperation.isQueued,
+        isRunning: exportOperation.isRunning,
+        isWaiting: exportOperation.isWaiting,
+        isCompleted: exportOperation.isCompleted,
+        isSimulatingReady: isSimulatingExportReady,
+        finalValue: exportOperation.finalValue,
       },
       createTodo,
       setTodoCompleted,

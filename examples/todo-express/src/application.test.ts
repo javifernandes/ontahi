@@ -52,6 +52,7 @@ import {
   TodoApplication,
   TodoList,
   TodoListCompleted,
+  TodoListExportReady,
   todoNotifications,
   todoTaskRuntime,
 } from './graph.js';
@@ -197,6 +198,58 @@ describe('Ontahi todo portability example', () => {
       }
     } finally {
       websocket.close();
+    }
+  });
+
+  it('sends the simulated export callback through authenticated Event ingress', async () => {
+    const deliveries: EventDeliveryFor<typeof TodoListExportReady>[] = [];
+    const subscription = TodoApplication.events.subscribe(TodoListExportReady, delivery => {
+      deliveries.push(delivery);
+    });
+    const payload = {
+      requestId: 'request-1',
+      url: 'https://example.test/todo-exports/request-1.json',
+    };
+    try {
+      await expect(
+        fetch(`${origin}/fixtures/todo-list-export-ready`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+      ).resolves.toHaveProperty('status', 401);
+      await expect(
+        fetch(`${origin}/fixtures/todo-list-export-ready`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-todo-export-fixture': 'ready',
+            'x-todo-delivery': 'fixture-delivery-1',
+          },
+          body: JSON.stringify(payload),
+        }).then(async response => ({ body: await response.json(), status: response.status })),
+      ).resolves.toMatchObject({
+        status: 202,
+        body: { ok: true, eventId: TodoListExportReady.id },
+      });
+      expect(deliveries).toEqual([
+        expect.objectContaining({
+          occurrence: expect.objectContaining({
+            eventId: TodoListExportReady.id,
+            payload,
+            correlation: { requestId: 'request-1' },
+            causation: {
+              kind: 'ingress',
+              provider: 'todo-export-fixture',
+              event: 'export.ready',
+              deliveryId: 'fixture-delivery-1',
+              receivedAt: expect.any(String),
+            },
+          }),
+        }),
+      ]);
+    } finally {
+      subscription.cancel();
     }
   });
 
@@ -751,6 +804,7 @@ describe('Ontahi todo portability example', () => {
       storage: 'in-memory',
       taskRuntime: todoTaskRuntime,
       commandChat: false,
+      eventWaitDemo: false,
     });
     await expect(
       fetch(`${origin}/explorer/snapshot`).then(response => response.json()),

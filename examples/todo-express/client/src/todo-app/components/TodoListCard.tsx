@@ -2,6 +2,7 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  Download,
   LoaderCircle,
   Palette,
   Pencil,
@@ -36,6 +37,9 @@ type TodoListCardProps = {
   isCompletingAll: boolean;
   completeAllDisabled: boolean;
   completeAllStatus?: Pick<Dashboard['completeAll'], 'isCompleted' | 'progress' | 'finalValue'>;
+  eventWaitDemo: boolean;
+  isExporting: boolean;
+  exportRun?: Dashboard['exportRun'];
   isDragging: boolean;
   completingTodoId?: string;
   renamingTodoId?: string;
@@ -53,6 +57,8 @@ type TodoListCardProps = {
   recolorList: Dashboard['recolorList'];
   deleteList: Dashboard['deleteList'];
   completeAllTodos: Dashboard['completeAllTodos'];
+  exportTodoList: Dashboard['exportTodoList'];
+  simulateExportReady: Dashboard['simulateExportReady'];
   createTodo: Dashboard['createTodo'];
   setTodoCompleted: Dashboard['setTodoCompleted'];
   renameTodo: Dashboard['renameTodo'];
@@ -99,6 +105,9 @@ export const TodoListCard = ({
   isCompletingAll,
   completeAllDisabled,
   completeAllStatus,
+  eventWaitDemo,
+  isExporting,
+  exportRun,
   isDragging,
   completingTodoId,
   renamingTodoId,
@@ -116,6 +125,8 @@ export const TodoListCard = ({
   recolorList,
   deleteList,
   completeAllTodos,
+  exportTodoList,
+  simulateExportReady,
   createTodo,
   setTodoCompleted,
   renameTodo,
@@ -452,6 +463,52 @@ export const TodoListCard = ({
               <span className='complete-list-result' aria-live='polite'>
                 Updating…
               </span>
+            ) : null}
+
+            {eventWaitDemo ? (
+              <>
+                <button
+                  type='button'
+                  className='complete-list-action'
+                  onClick={() => void exportTodoList(list.id)}
+                  disabled={
+                    !canComplete ||
+                    exportRun?.isExecuting ||
+                    exportRun?.isQueued ||
+                    exportRun?.isRunning ||
+                    exportRun?.isWaiting
+                  }
+                  title='Run TodoList.export()'
+                >
+                  {isExporting && exportRun?.isExecuting ? (
+                    <LoaderCircle className='spin' aria-hidden='true' />
+                  ) : (
+                    <Download aria-hidden='true' />
+                  )}
+                  <span>{isExporting && exportRun?.isWaiting ? 'Waiting…' : 'Export'}</span>
+                </button>
+                {isExporting && exportRun?.isWaiting ? (
+                  <button
+                    type='button'
+                    className='complete-list-action'
+                    onClick={() => void simulateExportReady()}
+                    disabled={exportRun.isSimulatingReady}
+                    title='POST the simulated worker callback through Event ingress'
+                  >
+                    <span>{exportRun.isSimulatingReady ? 'Sending…' : 'Simulate ready'}</span>
+                  </button>
+                ) : null}
+                {isExporting && exportRun?.isCompleted && exportRun.finalValue ? (
+                  <a
+                    className='complete-list-result'
+                    href={exportRun.finalValue.url}
+                    target='_blank'
+                    rel='noreferrer'
+                  >
+                    Export ready
+                  </a>
+                ) : null}
+              </>
             ) : null}
 
             <div className='list-card-controls'>

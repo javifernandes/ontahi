@@ -67,6 +67,7 @@ export const TodoBoard = ({
   recoloringListId,
   deletingListId,
   completingListId,
+  exportingListId,
   completingTodoId,
   renamingTodoId,
   deletingTodoId,
@@ -80,6 +81,10 @@ export const TodoBoard = ({
   deleteList,
   completeAllTodos,
   completeAll,
+  eventWaitDemo,
+  exportTodoList,
+  simulateExportReady,
+  exportRun,
   createTodo,
   setTodoCompleted,
   renameTodo,
@@ -322,6 +327,9 @@ export const TodoBoard = ({
                       }
                     : undefined
                 }
+                eventWaitDemo={eventWaitDemo}
+                isExporting={exportingListId === list.id}
+                exportRun={exportingListId === list.id ? exportRun : undefined}
                 isDragging={draggingListId === list.id}
                 completingTodoId={completingTodoId}
                 renamingTodoId={renamingTodoId}
@@ -347,6 +355,8 @@ export const TodoBoard = ({
                 recolorList={recolorList}
                 deleteList={deleteList}
                 completeAllTodos={completeAllTodos}
+                exportTodoList={exportTodoList}
+                simulateExportReady={simulateExportReady}
                 completeAllDisabled={completeAll.isExecuting}
                 createTodo={createTodo}
                 setTodoCompleted={setTodoCompleted}

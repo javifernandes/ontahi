@@ -10,8 +10,15 @@ import { langGraphTasks } from '@ontahi/runtime-langgraph';
 import { Effect } from 'effect';
 
 import { createTodoModelRuntime } from './command-chat/runtime.js';
-import { defaultStorage } from './storage.js';
-import { Tag, TodoItem, TodoList, TodoListCompleted, type TodoEvent } from './todo.js';
+import { defaultStorage, todoEventRuntime } from './storage.js';
+import {
+  Tag,
+  TodoItem,
+  TodoList,
+  TodoListCompleted,
+  TodoListExportReady,
+  type TodoEvent,
+} from './todo.js';
 
 export const todoNotifications = adaptEffectMethods<{
   todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
@@ -41,6 +48,7 @@ export const todoTaskRuntime =
 
 export const TodoApplication = ontahi({
   storage: defaultStorage,
+  eventRuntime: todoEventRuntime,
   tasks: todoTaskRuntime === 'langgraph' ? langGraphTasks() : inProcessTasks(),
   capabilities: {
     effectors: {
@@ -49,7 +57,7 @@ export const TodoApplication = ontahi({
     },
   },
   entities: [TodoList, Tag, TodoItem],
-  events: [TodoListCompleted],
+  events: [TodoListCompleted, TodoListExportReady],
 });
 
 const todoPreparedModelRuntime = todoCommandProvider
@@ -68,4 +76,4 @@ export const todoModelRuntime = todoPreparedModelRuntime
 
 export const TodoGraphApi = TodoApplication.graph;
 
-export { Tag, TodoItem, TodoList, TodoListCompleted };
+export { Tag, TodoItem, TodoList, TodoListCompleted, TodoListExportReady };
