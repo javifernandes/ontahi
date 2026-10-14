@@ -399,6 +399,81 @@ describe('application Runtime Protocol', () => {
     await expect(iterator.next()).resolves.toMatchObject({ done: true });
   });
 
+  it('falls back to semantic reads when native Graph observation is unavailable', async () => {
+    const { application } = createApplication();
+    let revision = 0;
+    application.createGraphReadDispatcher = vi.fn(() => async () => ({
+      kind: 'graph-read-result' as const,
+      value: [{ revision: revision++ }],
+    }));
+    application.createGraphReadObserver = vi.fn(
+      () =>
+        async function* () {
+          yield {
+            kind: 'protocol-error' as const,
+            error: {
+              code: 'execution_unavailable' as const,
+              message: 'Data graph read execution is temporarily unavailable.',
+            },
+          };
+        },
+    );
+    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+    const controller = new AbortController();
+    const context: Context = { principal: { kind: 'user', subject: 'observer' } };
+    const iterator = protocol
+      .observeGraph(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+        { context, signal: controller.signal },
+      )
+      [Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'graph-read-result', value: [{ revision: 0 }] },
+    });
+
+    await protocol.dispatcher(
+      request('graph.command', {
+        version: 3,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: {
+            kind: 'selection',
+            entityName: 'Todo',
+            expression: { kind: 'all' },
+          },
+          values: { completed: true },
+        },
+      }),
+      context,
+    );
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: {
+        kind: 'graph-read-result',
+        value: [{ revision: 1 }],
+        causedBy: { kind: 'committed-mutations' },
+      },
+    });
+    controller.abort();
+    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+  });
+
   it('does not refresh active Graph Reads when mutation execution fails', async () => {
     const { application } = createApplication();
     const read = vi.fn(async () => ({
