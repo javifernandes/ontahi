@@ -166,6 +166,12 @@ TodoListExportReady received · todo-export-fixture
 completed
 ```
 
+PostgreSQL mode composes independent Data Graph, Task Storage, and Event Runtime implementations
+over the host-owned pool. A waiting export checkpoint and its durable Event delivery therefore
+survive an Express process restart; after the server returns, **Simulate ready** resumes the same
+run. This composition does not claim that graph mutations, Task writes, and Event acceptance share
+one transaction.
+
 The fixture is intentionally unavailable in the zero-infrastructure in-memory mode because that
 Event Runtime advertises no durable delivery guarantees.
 
@@ -344,16 +350,16 @@ Boolean composition refines that same value without creating a UI-only filter la
 
 ## How the application fits together
 
-1. [`src/storage.ts`](./src/storage.ts) selects one default graph storage—either in-memory
-   or PostgreSQL. The host owns the physical mapping, migration, database connection, process
-   lifetime, and error reporting policy.
+1. [`src/storage.ts`](./src/storage.ts) selects graph storage and, in PostgreSQL mode, independently
+   composes PostgreSQL Task Storage and Event Runtime over the same host-owned pool. The host owns
+   physical mappings, migrations, database connection, process lifetime, and error reporting.
 2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, and `Tag`
    declarations, including their identities, relations, write Operations, and durable Operation.
    [`src/todo-read-policies.ts`](./src/todo-read-policies.ts) separately declares the browser-visible
    read surface and the Relationship Command policy exposes only `TodoItem.tags` link/unlink plus
    `TodoList.items` move.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
-   `inProcessTasks()`, the notification Capability, and the public entities into the complete
+   `inProcessTasks({ storage })`, the notification Capability, and the public entities into the complete
    `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
    executor and storage can be configured separately when durable state must outlive the process.
 4. [`src/application.ts`](./src/application.ts) mounts the Operation and graph-read bridges plus an
@@ -374,9 +380,9 @@ Fetch graph executor, and Operation bridge. `@ontahi/runtime-express` only trans
 and responses. `@ontahi/codegen` is a build-time dependency; it projects the browser-safe Entity
 schemas and Operation surface from the same semantic declaration.
 
-`@ontahi/postgres` translates the same data graph reads and commands into parameterized SQL. It
-does not infer migrations: this example deliberately keeps physical schema evolution under host
-control.
+`@ontahi/postgres` translates the same data graph reads and commands into parameterized SQL and
+offers independently selectable Task and Event persistence. It does not infer migrations: this
+example deliberately keeps physical schema evolution under host control.
 
 ## Development error diagnostics
 

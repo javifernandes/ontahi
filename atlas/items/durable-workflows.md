@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/153d-langgraph-task-runtime-comparison
   - ontahi://plans/153e-vercel-workflow-interaction-resumption
   - ontahi://plans/153f-queue-backed-task-runtime
+  - ontahi://plans/155-adapter-capability-completeness
   - bookops://plans/90-event-driven-architecture-runtime
 migratedFrom: bookops://atlas/durable-workflows
 sourceCommit: 67713696
@@ -35,3 +36,11 @@ TaskRun Query. In-process runtime instances over the same Task storage share tha
 Operation executor and a protocol observer see the same writes without inspecting storage. The
 Runtime Protocol adapts the native Stream to Durable snapshots; other execution and storage adapters
 may provide native observation or explicitly use the polling compatibility adapter.
+
+Task Storage is an adapter-author boundary independent from execution engines. Core's shared
+conformance proof covers private source persistence, public snapshot and listing projections,
+runtime recreation, canonical duplicate behavior, actor scoping, and exclusive Interaction and
+Event-wait claims. `@ontahi/postgres/tasks` is the first direct-SQL implementation: it persists
+restart-safe checkpoints and uses conditional PostgreSQL updates so concurrent application
+processes cannot both claim one pending continuation. It does not make the Task lifecycle atomic
+with Data Graph mutations or Event acceptance merely because those adapters can share a pool.

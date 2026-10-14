@@ -4,9 +4,9 @@ PostgreSQL-backed runtime capabilities for Ontahi applications.
 
 This package is not a generic SQL client and installing it does not activate one monolithic
 adapter. It provides independently composable implementations of Ontahi concerns. Import the Data
-Graph storage from `@ontahi/postgres/data-graph` and the durable Event Runtime from
-`@ontahi/postgres/events`; applications may use either or both with unrelated implementations for
-their other runtime concerns.
+Graph storage from `@ontahi/postgres/data-graph`, Task Storage from `@ontahi/postgres/tasks`, and
+the durable Event Runtime from `@ontahi/postgres/events`; applications may use any subset with
+unrelated implementations for their other runtime concerns.
 
 See the canonical [Relations](../../docs/developers/02-core-concepts/03-relations.md) and
 [runtime composition](../../docs/developers/03-runtimes/01-runtime-composition-and-capabilities.md)
@@ -146,6 +146,32 @@ deliveries.
 Adapter authors can run `verifyDurableEventRuntimeConformance` from `@ontahi/core/runtime/server`
 against another retained implementation. It proves early-occurrence matching, exclusive claim,
 identity-preserving retry, acknowledgement, and recovery through runtime recreation.
+
+## Task Storage
+
+`createPostgresTaskStorage({ pool })` persists the private Task source, checkpoint, lifecycle,
+progress, runtime reference, result, and semantic execution metadata in one host-owned PostgreSQL
+table. Import it independently from `@ontahi/postgres/tasks` and pass it to an executor:
+
+```ts
+import { inProcessTasks } from '@ontahi/core/runtime/server';
+import { createPostgresTaskStorage } from '@ontahi/postgres/tasks';
+
+const tasks = inProcessTasks({
+  storage: createPostgresTaskStorage({ pool }),
+});
+```
+
+The host applies `createPostgresTaskSchemaSql()` through its migration system. Construction never
+creates or changes tables. Interaction responses and Event waits use conditional updates so one
+pending continuation has one successful claimant across concurrent processes. Runtime recreation
+loads the same private checkpoint; public snapshots and recent-run listings omit the stored input,
+and listings omit result payloads.
+
+Task Storage does not execute Tasks, observe database changes, retain JavaScript continuations, or
+make Data Graph commands and Event acceptance atomic. Those remain independently composed runtime
+concerns even when they share one PostgreSQL pool. Adapter authors can run
+`verifyTaskStorageConformance` from `@ontahi/core/runtime/server/tasks` against another storage.
 
 ## Data Graph reflection and schema inspection
 
