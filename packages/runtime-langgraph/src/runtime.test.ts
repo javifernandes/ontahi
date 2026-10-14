@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { MemorySaver } from '@langchain/langgraph';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
+import { graphSchema } from '@ontahi/core/data-graph';
+import { event } from '@ontahi/core/runtime/server';
 import {
   createInMemoryTaskStorage,
   defineTask,
@@ -924,6 +926,37 @@ describe('LangGraph Task Runtime', () => {
     await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
       status: 'failed',
       error: { code: 'task_definition_invalid' },
+    });
+  });
+
+  it('rejects native durable Event waits explicitly', async () => {
+    const Ready = event.define({
+      id: 'LangGraphReady',
+      version: 1,
+      description: 'LangGraph unsupported wait fixture.',
+      payload: graphSchema.object({ value: graphSchema.string() }),
+    });
+    const task = defineTask({
+      id: 'demo.langgraph-event-wait',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'wait' }),
+        steps: {
+          wait: defineTaskExecutionStep({
+            run: ({ state }) =>
+              Effect.succeed({ kind: 'event', state, event: { declaration: Ready } }),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy execution must not run.'),
+    });
+    const runtime = createLangGraphTaskExecutor().createRuntime(createInMemoryTaskStorage());
+    const run = await Effect.runPromise(startTask(runtime, task, {}, { runId: 'event-wait' }));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'task_definition_invalid' },
+      });
     });
   });
 });

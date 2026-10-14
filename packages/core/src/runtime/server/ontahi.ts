@@ -554,6 +554,10 @@ export const ontahi = <
       ...configuredTasks,
       host: {
         ...configuredTasks.host,
+        events: {
+          runtime: configuredEventRuntime,
+          declarations: options.events ?? [],
+        },
         createExecutionContext: (source: TaskRunSource) => {
           const configured = configuredTasks.host?.createExecutionContext?.(source);
           if (configured) {

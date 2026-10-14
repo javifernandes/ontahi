@@ -369,6 +369,13 @@ provider payload
 Provider request identity, signature evidence, received time, and deduplication key belong to
 ingress metadata. The normalized domain payload remains provider-independent.
 
+An integration such as GitHub may therefore expose a declared domain Event as its application
+boundary even when the technological implementation is an HTTP webhook. The webhook handler is
+an ingress adapter, not an HTTP-shaped domain Operation: after authentication and normalization,
+downstream waits, Reactions, and Operations depend on the declared Event and remain independent of
+GitHub and HTTP. Direct webhook-to-Operation dispatch remains valid when no durable domain fact is
+useful; the two forms are intentional alternatives rather than aliases.
+
 Outbound webhooks, notifications, and queue publication are modeled as subscribers or Event
 Runtime delivery adapters. They do not require applications to reintroduce a generic `emit-event`
 effector. Custom effectors remain available for opaque external effects that are not domain Events.
@@ -569,13 +576,13 @@ restart safety using the default ephemeral runtime.
 Acceptance:
 
 - [ ] Authenticate and normalize one external provider payload into a declared Event occurrence.
-- [ ] Persist a serializable Event wait with exact declaration and correlation data.
-- [ ] Resume after Task Runtime recreation without retaining a JavaScript stack.
-- [ ] Handle occurrence-before-observer and observer-before-occurrence ordering explicitly.
-- [ ] Atomically allow one matching occurrence to advance one one-shot continuation.
+- [x] Persist a serializable Event wait with exact declaration and correlation data.
+- [x] Resume after Task Runtime recreation without retaining a JavaScript stack.
+- [x] Handle occurrence-before-observer and observer-before-occurrence ordering explicitly.
+- [x] Atomically allow one matching occurrence to advance one one-shot continuation.
 - [ ] Reject unauthorized ingress, invalid payloads, stale declarations, and mismatched correlation.
 - [ ] Define duplicate occurrence and duplicate delivery behavior without claiming exactly once.
-- [ ] Define timeout and cancellation ownership without erasing the occurrence.
+- [x] Define timeout and cancellation ownership without erasing the occurrence.
 - [ ] Show ingress, occurrence, claimed delivery, wait, resume, and completion in one causal Activity.
 
 ## Execution Slices
@@ -626,8 +633,8 @@ may share a PR when the behavior remains reviewable and verification stays focus
 ### Slice 5: External ingress and Event continuation
 
 - [ ] Implement policy-aware Event ingress with provenance and deduplication identity.
-- [ ] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
-- [ ] Implement serializable correlated Event wait and atomic resume.
+- [x] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
+- [x] Implement serializable correlated Event wait and atomic resume.
 - [ ] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
       contract is stable.
 

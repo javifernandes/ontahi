@@ -34,6 +34,13 @@ export const getTaskSnapshot = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
 
 export const listRecentTasks = (runtime: TaskRuntime, limit?: number) => runtime.listRecent(limit);
 
+export const cancelTaskEventWait = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
+  runtime.cancelEventWait
+    ? runtime.cancelEventWait(ref)
+    : Effect.fail(
+        createTaskFailure('task_cancellation_unavailable', 'Task cancellation is unavailable.'),
+      );
+
 export const respondToTaskInteraction = (
   runtime: TaskRuntime,
   ref: TaskRunIdentity,
@@ -88,6 +95,11 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
       }),
     observe: (ref: TaskRunIdentity) =>
       Stream.unwrap(Effect.map(getRuntime(), runtime => observeTaskRun(runtime, ref))),
+    cancelEventWait: (ref: TaskRunIdentity) =>
+      Effect.gen(function* () {
+        const runtime = yield* getRuntime();
+        return yield* cancelTaskEventWait(runtime, ref);
+      }),
     respondToInteraction: (
       ref: TaskRunIdentity,
       response: TaskInteractionResponse,

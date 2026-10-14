@@ -5,9 +5,10 @@ import type { InProcessTasksOptions, TaskConfig } from './types.js';
 export const inProcessTasks = ({
   storage = createInMemoryTaskStorage(),
   createExecutionContext,
+  events,
   ...executorOptions
 }: InProcessTasksOptions = {}): TaskConfig => ({
   executor: createInProcessTaskExecutor(executorOptions),
   storage,
-  ...(createExecutionContext ? { host: { createExecutionContext } } : {}),
+  ...(createExecutionContext || events ? { host: { createExecutionContext, events } } : {}),
 });

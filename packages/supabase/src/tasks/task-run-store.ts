@@ -122,6 +122,9 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   completedAt: source.completedAt,
   progress: source.progress,
   interaction: source.checkpoint?.interaction,
+  waitingOn: source.checkpoint?.interaction
+    ? { kind: 'interaction', interaction: source.checkpoint.interaction }
+    : source.checkpoint?.eventWait,
   error: source.error,
   result: source.result,
   ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
@@ -271,6 +274,48 @@ export const createSupabaseTaskStorage = ({
     return result.data ? fromRow(result.data) : undefined;
   };
 
+  const claimEvent = async (
+    ref: TaskRunIdentity,
+    waitId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ) => {
+    const current = fromRow(await loadRow(ref));
+    const result = await keyFilters(
+      client.from(tableName).update(toPatchRow(current, { status: 'running', checkpoint }, now())),
+      ref,
+    )
+      .eq('status', 'waiting')
+      .eq('checkpoint->eventWait->>id', waitId)
+      .select('*')
+      .maybeSingle();
+
+    if (result.error) throw toPersistenceFailure('Failed to claim task Event wait.', result.error);
+    return result.data ? fromRow(result.data) : undefined;
+  };
+
+  const cancelEvent = async (
+    ref: TaskRunIdentity,
+    waitId: string,
+    status: 'cancelled' | 'failed',
+    error?: NonNullable<TaskSnapshot['error']>,
+  ) => {
+    const current = fromRow(await loadRow(ref));
+    const result = await keyFilters(
+      client
+        .from(tableName)
+        .update(
+          toPatchRow(current, { status, completedAt: now(), checkpoint: undefined, error }, now()),
+        ),
+      ref,
+    )
+      .eq('status', 'waiting')
+      .eq('checkpoint->eventWait->>id', waitId)
+      .select('*')
+      .maybeSingle();
+    if (result.error) throw toPersistenceFailure('Failed to cancel task Event wait.', result.error);
+    return result.data ? fromRow(result.data) : undefined;
+  };
+
   return {
     create: input =>
       Effect.tryPromise({
@@ -308,6 +353,22 @@ export const createSupabaseTaskStorage = ({
       Effect.tryPromise({
         try: async () => {
           const source = await claimInteraction(ref, interactionId, checkpoint);
+          return source ? toSnapshot(source) : undefined;
+        },
+        catch: toCaughtFailure,
+      }),
+    claimEvent: (ref, waitId, checkpoint) =>
+      Effect.tryPromise({
+        try: async () => {
+          const source = await claimEvent(ref, waitId, checkpoint);
+          return source ? toSnapshot(source) : undefined;
+        },
+        catch: toCaughtFailure,
+      }),
+    cancelEvent: (ref, waitId, status, error) =>
+      Effect.tryPromise({
+        try: async () => {
+          const source = await cancelEvent(ref, waitId, status, error);
           return source ? toSnapshot(source) : undefined;
         },
         catch: toCaughtFailure,

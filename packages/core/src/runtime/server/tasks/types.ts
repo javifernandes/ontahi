@@ -21,6 +21,7 @@ import type {
   TaskTrigger,
 } from '../../contracts.js';
 import type { OperationRuntimeContext } from '../context-types.js';
+import type { AnyEventDeclaration, EventOccurrence, EventRuntime } from '../events/types.js';
 import type { OperationFailure } from '../operation/types.js';
 
 export type {
@@ -41,6 +42,8 @@ export type {
   TaskPendingInputInteraction,
   TaskPendingApprovalInteraction,
   TaskPendingInteraction,
+  TaskPendingEventWait,
+  TaskWaitingOn,
   TaskRunListItem,
   TaskRunIdentity,
   TaskRunRef,
@@ -103,7 +106,19 @@ export type TaskExecutionTransition<TState extends TaskExecutionState, TResult> 
       readonly state: TState;
       readonly interaction: TaskExecutionInteractionRequest;
     }
+  | {
+      readonly kind: 'event';
+      readonly state: TState;
+      readonly event: TaskEventWaitRequest;
+    }
   | { readonly kind: 'complete'; readonly result: TResult };
+
+export type TaskEventWaitRequest = {
+  readonly id?: string;
+  readonly declaration: AnyEventDeclaration;
+  readonly correlation?: Readonly<Record<string, JsonValue>>;
+  readonly timeoutMs?: number;
+};
 
 export type TaskExecutionStepContext = Omit<TaskContext, 'interact' | 'step'>;
 
@@ -112,6 +127,7 @@ export type TaskExecutionStepDefinition<TInput, TState extends TaskExecutionStat
     readonly input: TInput;
     readonly state: TState;
     readonly response?: TaskInteractionResponse;
+    readonly event?: EventOccurrence;
     readonly context: TaskExecutionStepContext;
   }): Effect.Effect<TaskExecutionTransition<TState, TResult>, TaskFailure>;
 };
@@ -155,6 +171,18 @@ export type TaskStorageEngine = {
     ref: TaskRunIdentity,
     interactionId: string,
     checkpoint: TaskExecutionCheckpoint,
+  ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
+  /** Atomically consumes a pending Event wait and returns the run to running. */
+  claimEvent(
+    ref: TaskRunIdentity,
+    waitId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
+  cancelEvent(
+    ref: TaskRunIdentity,
+    waitId: string,
+    status: 'cancelled' | 'failed',
+    error?: NonNullable<TaskSnapshot['error']>,
   ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
 };
 
@@ -239,6 +267,7 @@ export type TaskRuntime = {
   ): Effect.Effect<TaskRunRef, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
+  cancelEventWait?(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   respondToInteraction?(
     ref: TaskRunIdentity,
     response: TaskInteractionResponse,
@@ -253,6 +282,10 @@ export type TaskExecutor = {
 
 export type TaskRuntimeHostOptions = {
   createExecutionContext?: (source: TaskRunSource) => OperationRuntimeContext | undefined;
+  events?: {
+    readonly runtime: EventRuntime;
+    readonly declarations: readonly AnyEventDeclaration[];
+  };
 };
 
 export type TaskConfig = {

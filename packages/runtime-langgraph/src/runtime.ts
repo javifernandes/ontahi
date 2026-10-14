@@ -234,6 +234,13 @@ const createLangGraphTaskRuntime = (
       await prepareInteraction(ref, executionState, transition.interaction);
       return { executionState, done: false };
     }
+    if (transition.kind === 'event') {
+      throw invalidTaskDefinitionFailure(
+        task.id,
+        'LangGraph Task Runtime does not support durable Event waits.',
+        { eventId: transition.event.declaration.id },
+      );
+    }
     await update(ref, {
       checkpoint: withReplay({ version: 1, state: executionState }, replayOf(source)),
     });

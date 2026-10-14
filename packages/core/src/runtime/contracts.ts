@@ -261,6 +261,20 @@ export type TaskPendingInteraction =
   | TaskPendingInputInteraction
   | TaskPendingApprovalInteraction;
 
+export type TaskPendingEventWait = {
+  id: string;
+  kind: 'event';
+  eventId: string;
+  eventVersion: number;
+  correlation?: Readonly<Record<string, JsonValue>>;
+  createdAt: string;
+  timeoutAt?: string;
+};
+
+export type TaskWaitingOn =
+  | { kind: 'interaction'; interaction: TaskPendingInteraction }
+  | TaskPendingEventWait;
+
 export type TaskChoiceInteractionResponse = {
   interactionId: string;
   optionId: string;
@@ -287,6 +301,8 @@ export type TaskExecutionCheckpoint = {
   state: JsonValue;
   interaction?: TaskPendingInteraction;
   response?: TaskInteractionResponse;
+  eventWait?: TaskPendingEventWait;
+  eventOccurrence?: import('./server/events/types.js').EventOccurrence;
 };
 
 export type TaskInteractionResponseContext = {
@@ -314,6 +330,7 @@ export type TaskSnapshot<TResult = unknown> = {
     percent?: number;
   };
   interaction?: TaskPendingInteraction;
+  waitingOn?: TaskWaitingOn;
   error?: {
     code: string;
     message: string;
