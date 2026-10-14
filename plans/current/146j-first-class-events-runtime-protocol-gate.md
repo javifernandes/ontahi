@@ -635,6 +635,7 @@ may share a PR when the behavior remains reviewable and verification stays focus
 - [x] Implement policy-aware Event ingress with provenance and deduplication identity.
 - [x] Bind declared Event ingress through the Express host while preserving the provider's raw
       request for authentication and normalization.
+- [x] Bind the same HTTP-neutral Event ingress contract through a Next.js App Router Route Handler.
 - [x] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
 - [x] Implement serializable correlated Event wait and atomic resume.
 - [ ] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
