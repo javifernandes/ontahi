@@ -1,4 +1,4 @@
-export { createEventApplication } from './application.js';
+export { createEventApplication, EventIngressValidationError } from './application.js';
 export { requireDurableEventDelivery } from './capabilities.js';
 export {
   verifyDurableEventRuntimeConformance,
@@ -35,5 +35,6 @@ export type {
   EventSubscription,
   MutationEventCausation,
   OperationEventCausation,
+  IngressEventCausation,
   ReflectedEventDeclaration,
 } from './types.js';

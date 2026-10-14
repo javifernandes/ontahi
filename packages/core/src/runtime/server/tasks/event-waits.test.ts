@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { graphSchema } from '../../../data-graph/index.js';
+import { createEventApplication } from '../events/application.js';
 import { defineEvent } from '../events/declaration.js';
 import { createInMemoryEventRuntime } from '../events/in-memory-runtime.js';
 import type {
@@ -83,6 +84,7 @@ const createDurableRuntime = (
         eventVersion: emission.eventVersion,
         occurredAt: new Date().toISOString(),
         payload: emission.payload,
+        ...(emission.causation ? { causation: emission.causation } : {}),
         ...(emission.correlation ? { correlation: emission.correlation } : {}),
       };
       occurrences.push(occurrence);
@@ -269,6 +271,10 @@ describe('durable Task Event waits', () => {
 
   it('recovers a persisted wait after Task Runtime recreation and ignores mismatched correlation', async () => {
     const events = createDurableRuntime();
+    const eventApplication = createEventApplication({
+      declarations: [ExportReady],
+      runtime: events,
+    });
     const storage = createInMemoryTaskStorage();
     const task = createExportTask();
     const first = createInProcessTaskRuntime({
@@ -294,15 +300,28 @@ describe('durable Task Event waits', () => {
     });
     recovered.register?.(task);
     await Effect.runPromise(recovered.getSnapshot(run));
-    await events.accept({
-      ...ExportReady.emit({ requestId: 'wanted', url: 'https://example.com/right' }),
+    const occurrence = await eventApplication.api.ingest(ExportReady, {
+      payload: { requestId: 'wanted', url: 'https://example.com/right' },
       correlation: { requestId: 'wanted' },
+      ingress: {
+        provider: 'fixture-worker',
+        event: 'export.ready',
+        deliveryId: 'delivery-wanted',
+        receivedAt: '2026-10-14T00:00:01.000Z',
+      },
     });
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(recovered.getSnapshot(run))).resolves.toMatchObject({
         status: 'completed',
         result: { url: 'https://example.com/right' },
       });
+    });
+    expect(occurrence.causation).toEqual({
+      kind: 'ingress',
+      provider: 'fixture-worker',
+      event: 'export.ready',
+      deliveryId: 'delivery-wanted',
+      receivedAt: '2026-10-14T00:00:01.000Z',
     });
   });
 

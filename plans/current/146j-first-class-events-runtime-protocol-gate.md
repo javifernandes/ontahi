@@ -575,13 +575,13 @@ restart safety using the default ephemeral runtime.
 
 Acceptance:
 
-- [ ] Authenticate and normalize one external provider payload into a declared Event occurrence.
+- [x] Authenticate and normalize one external provider payload into a declared Event occurrence.
 - [x] Persist a serializable Event wait with exact declaration and correlation data.
 - [x] Resume after Task Runtime recreation without retaining a JavaScript stack.
 - [x] Handle occurrence-before-observer and observer-before-occurrence ordering explicitly.
 - [x] Atomically allow one matching occurrence to advance one one-shot continuation.
-- [ ] Reject unauthorized ingress, invalid payloads, stale declarations, and mismatched correlation.
-- [ ] Define duplicate occurrence and duplicate delivery behavior without claiming exactly once.
+- [x] Reject unauthorized ingress, invalid payloads, stale declarations, and mismatched correlation.
+- [x] Define duplicate occurrence and duplicate delivery behavior without claiming exactly once.
 - [x] Define timeout and cancellation ownership without erasing the occurrence.
 - [ ] Show ingress, occurrence, claimed delivery, wait, resume, and completion in one causal Activity.
 
@@ -632,7 +632,7 @@ may share a PR when the behavior remains reviewable and verification stays focus
 
 ### Slice 5: External ingress and Event continuation
 
-- [ ] Implement policy-aware Event ingress with provenance and deduplication identity.
+- [x] Implement policy-aware Event ingress with provenance and deduplication identity.
 - [x] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
 - [x] Implement serializable correlated Event wait and atomic resume.
 - [ ] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
@@ -728,6 +728,13 @@ may share a PR when the behavior remains reviewable and verification stays focus
     `DurableOperationCompleted` or graph-change Event family could expose mechanical lifecycle
     facts. Built-in Events must define aggregation and authorization independently so bulk work does
     not imply one delivery per affected Entity.
+17. Event ingress authenticates and normalizes at the provider adapter, then crosses an explicit
+    default-deny Event route. Core validates the registered declaration, version, payload, and
+    correlation before acceptance and retains provider delivery identity as provenance rather than
+    as application correlation.
+18. Repeating an accepted external delivery creates a distinct occurrence when the selected Event
+    Runtime advertises `deduplication: false`. The stable provider delivery identity makes the
+    duplicate observable without implying exactly-once acceptance.
 
 ## Open Questions
 
@@ -766,7 +773,7 @@ may share a PR when the behavior remains reviewable and verification stays focus
 - [ ] Commit, rollback, publication failure, fan-out, cancellation, replay, and duplicate behavior
       are explicit and tested where supported.
 - [ ] Todo emits and consumes one bulk Event end to end while cache invalidation remains independent.
-- [ ] One authenticated external Event resumes one correlated durable continuation across restart.
+- [x] One authenticated external Event resumes one correlated durable continuation across restart.
 - [ ] Devtools explains occurrence and delivery beneath their causal Operation, Command, Reaction,
       or ingress Activity.
 - [ ] Runtime Protocol transports only the accepted semantic contracts and advertises lifecycle

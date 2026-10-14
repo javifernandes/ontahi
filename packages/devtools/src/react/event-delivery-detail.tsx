@@ -29,6 +29,14 @@ const causationSummary = (causation: unknown): string | undefined => {
   if (causation.kind === 'mutation-outcome') {
     return `Mutation outcome ${text(causation.outcomeId) ?? 'unknown'}`;
   }
+  if (causation.kind === 'ingress') {
+    const provider = text(causation.provider) ?? 'external provider';
+    const event = text(causation.event);
+    const deliveryId = text(causation.deliveryId);
+    return [provider, event, deliveryId ? `Delivery ${deliveryId}` : undefined]
+      .filter((value): value is string => value !== undefined)
+      .join(' · ');
+  }
   return text(causation.kind);
 };
 
