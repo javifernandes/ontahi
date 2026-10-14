@@ -633,10 +633,17 @@ may share a PR when the behavior remains reviewable and verification stays focus
 ### Slice 5: External ingress and Event continuation
 
 - [x] Implement policy-aware Event ingress with provenance and deduplication identity.
+- [x] Bind declared Event ingress through the Express host while preserving the provider's raw
+      request for authentication and normalization.
 - [x] Generalize Task `waiting` evidence from Interaction-only to an explicit waiting reason.
 - [x] Implement serializable correlated Event wait and atomic resume.
 - [ ] Complete Vertical C on the native Task Runtime and evaluate a second runtime only after the
       contract is stable.
+
+The first Express binding requires Operation ingress and Event ingress to use distinct HTTP paths.
+This avoids making middleware registration order decide whether one authenticated provider delivery
+means an Operation invocation or an Event occurrence. Shared-path multiplexing remains deferred
+until the provider outcome can be evaluated once and routed semantically after normalization.
 
 ### Slice 6: Durable knowledge and protocol decision
 

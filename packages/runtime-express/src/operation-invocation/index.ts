@@ -33,4 +33,4 @@ export {
   type ExpressGraphCommandAuthorityFactory,
   type ExpressGraphCommandContextFactory,
 } from '../graph-command/index.js';
-export type { OntahiExpressIngressOptions } from '../http-ingress.js';
+export type { GraphHttpEventIngressRoute, OntahiExpressIngressOptions } from '../http-ingress.js';
