@@ -607,7 +607,7 @@ describe('HTTP Event ingress', () => {
       routes: [route],
       providers: { 'fixture-webhook': { receive: async () => accepted() } },
       dispatch: async () => {
-        throw new Error('Event Runtime unavailable');
+        throw new TypeError('Event Runtime unavailable');
       },
     });
 

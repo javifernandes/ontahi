@@ -253,6 +253,7 @@ export {
 } from './intents.js';
 export {
   createEventApplication,
+  EventIngressValidationError,
   createInMemoryEventRuntime,
   defineEvent,
   eventDeclaration,

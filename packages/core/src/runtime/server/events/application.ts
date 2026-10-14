@@ -12,6 +12,15 @@ import type {
   EventRuntime,
 } from './types.js';
 
+export class EventIngressValidationError extends TypeError {
+  readonly code = 'event_ingress_invalid';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'EventIngressValidationError';
+  }
+}
+
 export const createEventApplication = <TEvents extends readonly AnyEventDeclaration[]>(options: {
   declarations: TEvents;
   runtime: EventRuntime;
@@ -38,17 +47,27 @@ export const createEventApplication = <TEvents extends readonly AnyEventDeclarat
     readonly event?: string;
     readonly deliveryId?: string;
   }) => {
-    if (ingress.provider.trim().length === 0) {
-      throw new TypeError('Event ingress provider must be a non-empty string.');
+    if (typeof ingress.provider !== 'string' || ingress.provider.trim().length === 0) {
+      throw new EventIngressValidationError('Event ingress provider must be a non-empty string.');
     }
-    if (Number.isNaN(Date.parse(ingress.receivedAt))) {
-      throw new TypeError('Event ingress receivedAt must be a valid timestamp.');
+    if (typeof ingress.receivedAt !== 'string' || Number.isNaN(Date.parse(ingress.receivedAt))) {
+      throw new EventIngressValidationError('Event ingress receivedAt must be a valid timestamp.');
     }
-    if (ingress.event !== undefined && ingress.event.trim().length === 0) {
-      throw new TypeError('Event ingress event must be a non-empty string when provided.');
+    if (
+      ingress.event !== undefined &&
+      (typeof ingress.event !== 'string' || ingress.event.trim().length === 0)
+    ) {
+      throw new EventIngressValidationError(
+        'Event ingress event must be a non-empty string when provided.',
+      );
     }
-    if (ingress.deliveryId !== undefined && ingress.deliveryId.trim().length === 0) {
-      throw new TypeError('Event ingress deliveryId must be a non-empty string when provided.');
+    if (
+      ingress.deliveryId !== undefined &&
+      (typeof ingress.deliveryId !== 'string' || ingress.deliveryId.trim().length === 0)
+    ) {
+      throw new EventIngressValidationError(
+        'Event ingress deliveryId must be a non-empty string when provided.',
+      );
     }
   };
   const ingestByIdentity = async (input: {
@@ -68,18 +87,26 @@ export const createEventApplication = <TEvents extends readonly AnyEventDeclarat
       input.correlation !== undefined &&
       (!isRecord(input.correlation) || !isJsonValue(input.correlation))
     ) {
-      throw new TypeError('Event ingress correlation must be a JSON-safe object.');
+      throw new EventIngressValidationError(
+        'Event ingress correlation must be a JSON-safe object.',
+      );
     }
-    return options.runtime.accept(
-      validateEventEmission(declarations, {
+    let emission: EventEmission;
+    try {
+      emission = validateEventEmission(declarations, {
         kind: 'event-emission',
         eventId: input.eventId,
         eventVersion: input.eventVersion,
         payload: input.payload as never,
         causation: { kind: 'ingress', ...input.ingress },
         ...(input.correlation ? { correlation: input.correlation } : {}),
-      }),
-    );
+      });
+    } catch (error) {
+      throw new EventIngressValidationError(
+        error instanceof Error ? error.message : 'Event ingress payload is invalid.',
+      );
+    }
+    return options.runtime.accept(emission);
   };
   return {
     api: {

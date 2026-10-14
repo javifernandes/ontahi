@@ -1,7 +1,12 @@
 import type { JsonValue } from '../../value/json.js';
 import type { OperationInvocationDispatcher } from '../operation-invocation.js';
 
-import type { AnyEventDeclaration, EventApplication, EventOccurrence } from './events/index.js';
+import {
+  EventIngressValidationError,
+  type AnyEventDeclaration,
+  type EventApplication,
+  type EventOccurrence,
+} from './events/index.js';
 
 export type GraphHttpIngressAccepted = {
   kind: 'accepted';
@@ -394,7 +399,7 @@ export const createGraphHttpEventIngressRouter = (input: {
           ok: false,
           error: error instanceof Error ? error.message : 'Event ingress failed.',
         },
-        error instanceof TypeError ? 400 : 500,
+        error instanceof EventIngressValidationError ? 400 : 500,
       );
     }
   },

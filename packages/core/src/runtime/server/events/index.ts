@@ -1,4 +1,4 @@
-export { createEventApplication } from './application.js';
+export { createEventApplication, EventIngressValidationError } from './application.js';
 export { requireDurableEventDelivery } from './capabilities.js';
 export {
   verifyDurableEventRuntimeConformance,

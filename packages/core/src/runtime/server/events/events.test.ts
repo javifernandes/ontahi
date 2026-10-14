@@ -197,10 +197,17 @@ describe('first-class Events', () => {
     await Promise.all(
       [
         [{ provider: '', receivedAt: '2026-10-14T04:00:00.000Z' }, 'provider'],
+        [{ provider: undefined, receivedAt: '2026-10-14T04:00:00.000Z' }, 'provider'],
         [{ provider: 'fixture', receivedAt: 'invalid' }, 'receivedAt'],
+        [{ provider: 'fixture', receivedAt: 1 }, 'receivedAt'],
         [{ provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', event: '' }, 'event'],
+        [{ provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', event: 1 }, 'event'],
         [
           { provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', deliveryId: '' },
+          'deliveryId',
+        ],
+        [
+          { provider: 'fixture', receivedAt: '2026-10-14T04:00:00.000Z', deliveryId: 1 },
           'deliveryId',
         ],
       ].map(async ([ingress, message]) =>
