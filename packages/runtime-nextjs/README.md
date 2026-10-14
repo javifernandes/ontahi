@@ -13,8 +13,8 @@ This package depends on `@ontahi/core` and owns the Next.js / `next-safe-action`
 4. `@ontahi/runtime-nextjs/graph-read`: an App Router adapter for policy-scoped remote data graph reads.
 5. `@ontahi/runtime-nextjs/runtime-protocol`: an App Router adapter for an injected common Runtime
    Protocol dispatcher and receiver-owned context factory.
-6. `@ontahi/runtime-nextjs/event-ingress`: an App Router adapter that authenticates and normalizes
-   an external provider request before ingesting a declared Event.
+6. `@ontahi/runtime-nextjs/event-ingress`: an App Router adapter that passes the original `Request`
+   to a provider for authentication and normalization before ingesting a declared Event.
 
 New generic consumers should import action metadata and result helpers from `@ontahi/core/runtime/actions`. React hooks and operation bridge adapters live in `@ontahi/react/actions` so this package can stay focused on Next.js runtime concerns.
 

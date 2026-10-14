@@ -235,6 +235,66 @@ describe('Next.js Event ingress route adapter', () => {
     expect(subscriber).not.toHaveBeenCalled();
   });
 
+  it('sanitizes Event Runtime failures while preserving their internal diagnostic', async () => {
+    const { events, subscriber } = eventFixture();
+    const failure = new Error('database host and internal Event Runtime details');
+    const reportError = vi.fn();
+    const handler = createNextEventIngressRouteHandler({
+      events: {
+        ...events,
+        ingestByIdentity: async () => Promise.reject(failure),
+      },
+      route,
+      providers: {
+        'fixture-webhook': {
+          receive: async () => ({
+            kind: 'accepted',
+            provider: 'fixture',
+            providerKey: 'fixture-webhook',
+            channel: 'todo.export-ready',
+            event: 'export.ready',
+            deliveryId: 'delivery-runtime-failure',
+            payload: { requestId: 'request-1', url: 'https://example.test/export/1' },
+          }),
+        },
+      },
+      reportError,
+    });
+    const incoming = request('{}');
+
+    const response = await handler(incoming);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: 'Event ingress is temporarily unavailable.',
+    });
+    expect(reportError).toHaveBeenCalledWith(expect.any(Error), incoming);
+    expect((reportError.mock.calls[0]?.[0] as Error).message).toBe(failure.message);
+    expect(subscriber).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a server diagnostic when no reporter is configured', async () => {
+    const { events } = eventFixture();
+    const failure = new Error('provider unavailable');
+    const consoleError = vi.spyOn(globalThis.console, 'error').mockImplementation(() => undefined);
+    const handler = createNextEventIngressRouteHandler({
+      events,
+      route,
+      providers: {
+        'fixture-webhook': {
+          receive: async () => Promise.reject(failure),
+        },
+      },
+    });
+
+    const response = await handler(request('{}'));
+
+    expect(response.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledWith('Ontahi Next.js Event ingress failed.', failure);
+    consoleError.mockRestore();
+  });
+
   it('rejects requests that do not match the configured route before calling the provider', async () => {
     const { events, subscriber } = eventFixture();
     const receive = vi.fn();

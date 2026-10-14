@@ -13,9 +13,22 @@ export type CreateNextEventIngressRouteHandlerOptions = {
   reportError?: (error: unknown, request: Request) => void;
 };
 
+const unavailableResponse = () =>
+  Response.json({ ok: false, error: 'Event ingress is temporarily unavailable.' }, { status: 500 });
+
+const responseError = async (response: Response) => {
+  const body = (await response.clone().json()) as { error: string };
+  return new Error(body.error);
+};
+
 export const createNextEventIngressRouteHandler = (
   options: CreateNextEventIngressRouteHandlerOptions,
 ) => {
+  const reportError =
+    options.reportError ??
+    ((error: unknown) => {
+      globalThis.console.error('Ontahi Next.js Event ingress failed.', error);
+    });
   const router = createGraphHttpEventIngressRouter({
     routes: [options.route],
     providers: options.providers,
@@ -24,13 +37,14 @@ export const createNextEventIngressRouteHandler = (
 
   return async (request: Request): Promise<Response> => {
     try {
-      return await router.handle(request);
+      const response = await router.handle(request);
+      if (response.status !== 500) return response;
+
+      reportError(await responseError(response), request);
+      return unavailableResponse();
     } catch (error) {
-      options.reportError?.(error, request);
-      return Response.json(
-        { ok: false, error: 'Event ingress is temporarily unavailable.' },
-        { status: 500 },
-      );
+      reportError(error, request);
+      return unavailableResponse();
     }
   };
 };
