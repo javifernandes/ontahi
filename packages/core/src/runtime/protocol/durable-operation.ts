@@ -464,7 +464,8 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
       isIdentitySegment(value.waitingOn.id) &&
       isIdentitySegment(value.waitingOn.eventId) &&
       Number.isInteger(value.waitingOn.eventVersion) &&
-      (value.waitingOn.correlation === undefined || isJsonValue(value.waitingOn.correlation)) &&
+      (value.waitingOn.correlation === undefined ||
+        (isRecord(value.waitingOn.correlation) && isJsonValue(value.waitingOn.correlation))) &&
       isTimestamp(value.waitingOn.createdAt) &&
       isOptionalTimestamp(value.waitingOn.timeoutAt)
       ? {

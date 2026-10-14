@@ -18,6 +18,7 @@ import {
   materializeTaskEventWait,
   taskEventWaitSubscriptionId,
 } from './event-waits.js';
+import { cancelTaskEventWait } from './facade.js';
 import { createInProcessTaskRuntime } from './in-process-adapter.js';
 import { createInMemoryTaskStorage } from './memory-store.js';
 
@@ -305,6 +306,56 @@ describe('durable Task Event waits', () => {
     });
   });
 
+  it('does not consume a retained delivery until the recovered Task definition is registered', async () => {
+    const events = createDurableRuntime();
+    const storage = createInMemoryTaskStorage();
+    const task = createExportTask();
+    const run = { taskId: task.id, runId: 'register-later' };
+    await Effect.runPromise(storage.create({ ...run, input: { requestId: 'register-later' } }));
+    await Effect.runPromise(
+      storage.update(run, {
+        status: 'waiting',
+        checkpoint: {
+          version: 1,
+          state: { step: 'wait' },
+          eventWait: {
+            id: 'export:register-later',
+            kind: 'event',
+            eventId: ExportReady.id,
+            eventVersion: ExportReady.version,
+            correlation: { requestId: 'register-later' },
+            createdAt: '2026-10-14T00:00:00.000Z',
+          },
+        },
+      }),
+    );
+    const recovered = createInProcessTaskRuntime({
+      storage,
+      events: { runtime: events, declarations: [ExportReady] },
+    });
+    await Effect.runPromise(recovered.getSnapshot(run));
+    await events.accept({
+      ...ExportReady.emit({
+        requestId: 'register-later',
+        url: 'https://example.com/register-later',
+      }),
+      correlation: { requestId: 'register-later' },
+    });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await expect(Effect.runPromise(storage.getSnapshot(run))).resolves.toHaveProperty(
+      'status',
+      'waiting',
+    );
+
+    recovered.register?.(task);
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(recovered.getSnapshot(run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { url: 'https://example.com/register-later' },
+      });
+    });
+  });
+
   it('retries transient registration, claim, and acknowledgement failures', async () => {
     const failures = { register: 1, claim: 1, acknowledge: 1 };
     const events = createDurableRuntime(failures);
@@ -444,11 +495,11 @@ describe('durable Task Event waits', () => {
         'waiting',
       );
     });
-    await expect(Effect.runPromise(runtime.cancelEventWait!(run))).resolves.toHaveProperty(
+    await expect(Effect.runPromise(cancelTaskEventWait(runtime, run))).resolves.toHaveProperty(
       'status',
       'cancelled',
     );
-    await expect(Effect.runPromise(runtime.cancelEventWait!(run))).rejects.toThrow(
+    await expect(Effect.runPromise(cancelTaskEventWait(runtime, run))).rejects.toThrow(
       'task_event_wait_not_pending',
     );
     await events.accept({
@@ -460,5 +511,50 @@ describe('durable Task Event waits', () => {
       'status',
       'cancelled',
     );
+  });
+
+  it('reports when Task Event wait cancellation is unavailable', async () => {
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    await expect(
+      Effect.runPromise(
+        cancelTaskEventWait(
+          { ...runtime, cancelEventWait: undefined },
+          { taskId: 'TodoList.export', runId: 'missing' },
+        ),
+      ),
+    ).rejects.toThrow('task_cancellation_unavailable');
+  });
+
+  it('stops polling when another Task Runtime cancels the persisted wait', async () => {
+    const events = createDurableRuntime();
+    const claim = vi.spyOn(events.durableDelivery!, 'claim');
+    const storage = createInMemoryTaskStorage();
+    const task = createExportTask();
+    const owner = createInProcessTaskRuntime({
+      storage,
+      events: { runtime: events, declarations: [ExportReady] },
+    });
+    const run = await Effect.runPromise(
+      owner.start(task, { requestId: 'cross-runtime-cancel' }, { runId: 'cross-runtime-cancel' }),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(owner.getSnapshot(run))).resolves.toHaveProperty(
+        'status',
+        'waiting',
+      );
+    });
+    const observer = createInProcessTaskRuntime({
+      storage,
+      events: { runtime: events, declarations: [ExportReady] },
+    });
+    observer.register?.(task);
+    await Effect.runPromise(observer.getSnapshot(run));
+    await Effect.runPromise(owner.cancelEventWait!(run));
+    await new Promise(resolve => setTimeout(resolve, 40));
+    const settledClaims = claim.mock.calls.length;
+    await new Promise(resolve => setTimeout(resolve, 40));
+
+    expect(claim).toHaveBeenCalled();
+    expect(claim).toHaveBeenCalledTimes(settledClaims);
   });
 });

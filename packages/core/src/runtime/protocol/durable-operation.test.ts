@@ -332,6 +332,31 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
+  it.each(['request-1', ['request-1'], 1])(
+    'rejects a non-record Event wait correlation: %j',
+    correlation => {
+      const response = {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'waiting',
+          updatedAt: '2026-10-14T00:00:00.000Z',
+          waitingOn: {
+            id: 'export:request-1',
+            kind: 'event',
+            eventId: 'TodoListExportReady',
+            eventVersion: 1,
+            correlation,
+            createdAt: '2026-10-14T00:00:00.000Z',
+          },
+        },
+      };
+
+      expect(parseDurableOperationProtocolResponse(response)).toMatchObject({ success: false });
+    },
+  );
+
   it.each([
     { type: 'string' as const },
     { type: 'number' as const, nullable: true as const },

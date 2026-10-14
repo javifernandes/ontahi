@@ -224,8 +224,16 @@ export const createInProcessTaskRuntime = ({
             await delivery.cancel(subscriptionId);
             return;
           }
+          if (!taskDefinitions.get(source.taskId)?.execution) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            continue;
+          }
           const claim = await delivery.claim(subscriptionId, { consumerId, leaseMs: 1_000 });
           if (!claim) {
+            const latest = await Effect.runPromise(storage.loadSource(source));
+            if (latest.status !== 'waiting' || latest.checkpoint?.eventWait?.id !== wait.id) {
+              return;
+            }
             await new Promise(resolve => setTimeout(resolve, 10));
             continue;
           }
