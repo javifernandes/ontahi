@@ -8,6 +8,7 @@ import {
   createRuntimeBoundDataGraphApi,
   entity as defineEntitySchema,
   field,
+  graphSchema,
   query,
   selection,
   Selection,
@@ -28,6 +29,9 @@ import {
 } from '@ontahi/core/runtime/protocol';
 import {
   configureServerRuntime,
+  createEventApplication,
+  createInMemoryEventRuntime,
+  eventDeclaration,
   getCurrentPrincipal,
   ontahi,
   resetServerRuntimeForTests,
@@ -835,5 +839,196 @@ describe('Ontahi Express application middleware', () => {
       path: '/webhooks/github',
     });
     expect(application.invokeOperation).toHaveBeenCalledWith(listOperation, {});
+  });
+
+  it('mounts authenticated Event ingress with the raw provider request', async () => {
+    const ExportReady = eventDeclaration.define({
+      id: 'TodoListExportReady',
+      version: 1,
+      description: 'A requested Todo export is ready.',
+      payload: graphSchema.object({
+        requestId: graphSchema.string(),
+        url: graphSchema.string(),
+      }),
+    });
+    let sequence = 0;
+    const eventApplication = createEventApplication({
+      declarations: [ExportReady],
+      runtime: createInMemoryEventRuntime({
+        createId: () => `express-event-${++sequence}`,
+        now: () => new Date('2026-10-14T05:00:01.000Z'),
+      }),
+    });
+    const application = Object.assign(createApplication(), { events: eventApplication.api });
+    const subscriber = vi.fn();
+    eventApplication.api.subscribe(ExportReady, subscriber);
+    let receivedRequest: { body: string; signature: string | null; path: string } | undefined;
+    const expressApp = express();
+    expressApp.use(
+      ontahiExpress(application, {
+        mountPath: '/internal/ontahi',
+        ingress: {
+          providers: {
+            'fixture-webhook': {
+              receive: async request => {
+                receivedRequest = {
+                  body: await request.text(),
+                  signature: request.headers.get('x-fixture-signature'),
+                  path: new URL(request.url).pathname,
+                };
+                if (receivedRequest.signature !== 'valid') {
+                  return { kind: 'rejected', status: 401, error: 'Invalid signature' };
+                }
+                return {
+                  kind: 'accepted',
+                  provider: 'fixture',
+                  providerKey: 'fixture-webhook',
+                  channel: 'todo.export-ready',
+                  event: 'export.ready',
+                  deliveryId: 'provider-delivery-1',
+                  correlation: { requestId: 'request-1' },
+                  payload: JSON.parse(receivedRequest.body) as unknown,
+                  status: 202,
+                };
+              },
+            },
+          },
+          eventRoutes: [
+            {
+              eventId: ExportReady.id,
+              eventVersion: ExportReady.version,
+              method: 'POST',
+              route: '/webhooks/export-ready',
+              provider: 'fixture-webhook',
+              channel: 'todo.export-ready',
+            },
+          ],
+        },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const body = JSON.stringify({
+      requestId: 'request-1',
+      url: 'https://example.test/export/1',
+    });
+
+    await expect(
+      fetch(`${origin}/internal/ontahi/webhooks/export-ready`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-fixture-signature': 'valid',
+        },
+        body,
+      }).then(async response => ({ body: await response.json(), status: response.status })),
+    ).resolves.toEqual({
+      body: {
+        ok: true,
+        occurrenceId: 'express-event-2',
+        eventId: ExportReady.id,
+        eventVersion: ExportReady.version,
+        provider: 'fixture',
+        event: 'export.ready',
+        deliveryId: 'provider-delivery-1',
+      },
+      status: 202,
+    });
+    expect(receivedRequest).toEqual({
+      body,
+      signature: 'valid',
+      path: '/webhooks/export-ready',
+    });
+    expect(subscriber).toHaveBeenCalledWith(
+      expect.objectContaining({
+        occurrence: expect.objectContaining({
+          occurrenceId: 'express-event-2',
+          payload: { requestId: 'request-1', url: 'https://example.test/export/1' },
+          causation: {
+            kind: 'ingress',
+            provider: 'fixture',
+            event: 'export.ready',
+            deliveryId: 'provider-delivery-1',
+            receivedAt: expect.any(String),
+          },
+          correlation: { requestId: 'request-1' },
+        }),
+      }),
+    );
+
+    const rejected = await fetch(`${origin}/internal/ontahi/webhooks/export-ready`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-fixture-signature': 'invalid' },
+      body,
+    });
+    expect(rejected.status).toBe(401);
+    await expect(rejected.json()).resolves.toEqual({ ok: false, error: 'Invalid signature' });
+    expect(subscriber).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects Event ingress without an Event application', () => {
+    expect(() =>
+      ontahiExpress(createApplication(), {
+        ingress: {
+          providers: {},
+          eventRoutes: [
+            {
+              eventId: 'TodoListExportReady',
+              eventVersion: 1,
+              method: 'POST',
+              route: '/webhooks/export-ready',
+              provider: 'fixture-webhook',
+              channel: 'todo.export-ready',
+            },
+          ],
+        },
+      }),
+    ).toThrow('requires an application created with ontahi() and registered Events');
+  });
+
+  it('rejects ambiguous Operation and Event ingress paths', () => {
+    const ExportReady = eventDeclaration.define({
+      id: 'TodoListExportReady',
+      version: 1,
+      description: 'A requested Todo export is ready.',
+      payload: graphSchema.object({ requestId: graphSchema.string() }),
+    });
+    const eventApplication = createEventApplication({
+      declarations: [ExportReady],
+      runtime: createInMemoryEventRuntime(),
+    });
+    const application = Object.assign(createApplication(), { events: eventApplication.api });
+    application.graph.listHttpIngress = () => [
+      {
+        operationId: 'Todo.list',
+        entityName: 'Todo',
+        operationName: 'list',
+        kind: 'http',
+        method: 'POST',
+        route: '/webhooks/shared',
+        provider: 'fixture-webhook',
+        channel: 'todo.list',
+      },
+    ];
+
+    expect(() =>
+      ontahiExpress(application, {
+        ingress: {
+          providers: {},
+          eventRoutes: [
+            {
+              eventId: ExportReady.id,
+              eventVersion: ExportReady.version,
+              method: 'POST',
+              route: '/webhooks/shared',
+              provider: 'fixture-webhook',
+              channel: 'todo.export-ready',
+            },
+          ],
+        },
+      }),
+    ).toThrow('cannot mount Operation and Event ingress on the same path /webhooks/shared');
   });
 });

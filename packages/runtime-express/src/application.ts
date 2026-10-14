@@ -9,6 +9,8 @@ import type {
 } from '@ontahi/core/data-graph';
 import {
   createOperationInvocationDispatcher,
+  type AnyEventDeclaration,
+  type EventApplication,
   type GraphCommandableOntahiApplication,
   type GraphReadableOntahiApplication,
   type InvocationContext,
@@ -239,11 +241,17 @@ export const ontahiExpress = <
   }
 
   if (options.ingress) {
+    const eventApplication = (
+      application as typeof application & {
+        events?: EventApplication<readonly AnyEventDeclaration[]>;
+      }
+    ).events;
     mountExpressHttpIngress({
       router,
       routes: application.graph.listHttpIngress(),
       ingress: options.ingress,
       dispatcher,
+      ...(eventApplication ? { events: eventApplication } : {}),
       reportError: options.reportError,
     });
   }

@@ -1,7 +1,11 @@
 import type { OperationInvocationDispatcher } from '@ontahi/core/runtime/operation-invocation';
+import type { AnyEventDeclaration, EventApplication } from '@ontahi/core/runtime/server';
 import {
+  createGraphHttpEventIngressDispatcher,
+  createGraphHttpEventIngressRouter,
   createGraphHttpIngressOperationDispatcher,
   createGraphHttpIngressRouter,
+  type GraphHttpEventIngressRoute,
   type GraphHttpIngressProviderRegistry,
   type GraphHttpIngressRoute,
 } from '@ontahi/core/runtime/server/ingress';
@@ -13,8 +17,11 @@ import express, {
   type Router,
 } from 'express';
 
+export type { GraphHttpEventIngressRoute } from '@ontahi/core/runtime/server/ingress';
+
 export type OntahiExpressIngressOptions = {
   providers: GraphHttpIngressProviderRegistry;
+  eventRoutes?: readonly GraphHttpEventIngressRoute[];
   bodyLimit?: number | string;
 };
 
@@ -23,6 +30,7 @@ type MountExpressHttpIngressOptions = {
   routes: readonly GraphHttpIngressRoute[];
   ingress: OntahiExpressIngressOptions;
   dispatcher: OperationInvocationDispatcher;
+  events?: EventApplication<readonly AnyEventDeclaration[]>;
   reportError?: (error: unknown, request: Request) => void;
 };
 
@@ -89,22 +97,52 @@ export const mountExpressHttpIngress = ({
   routes,
   ingress,
   dispatcher,
+  events,
   reportError,
 }: MountExpressHttpIngressOptions) => {
-  if (routes.length === 0) return;
+  const eventRoutes = ingress.eventRoutes ?? [];
+  if (routes.length === 0 && eventRoutes.length === 0) return;
+
+  const operationPaths = new Set(routes.map(route => route.route));
+  const sharedPath = eventRoutes.find(route => operationPaths.has(route.route))?.route;
+  if (sharedPath) {
+    throw new Error(
+      `Ontahi Express cannot mount Operation and Event ingress on the same path ${sharedPath}.`,
+    );
+  }
+  if (eventRoutes.length > 0 && !events) {
+    throw new Error(
+      'Ontahi Express Event ingress requires an application created with ontahi() and registered Events.',
+    );
+  }
 
   const graphIngress = createGraphHttpIngressRouter({
     routes,
     providers: ingress.providers,
     dispatch: createGraphHttpIngressOperationDispatcher({ dispatcher }),
   });
-  const handle = ingressHandler({ handle: graphIngress.handle, reportError });
+  const operationHandle = ingressHandler({ handle: graphIngress.handle, reportError });
+  const eventIngress = events
+    ? createGraphHttpEventIngressRouter({
+        routes: eventRoutes,
+        providers: ingress.providers,
+        dispatch: createGraphHttpEventIngressDispatcher({ events }),
+      })
+    : undefined;
+  const eventHandle = eventIngress
+    ? ingressHandler({ handle: eventIngress.handle, reportError })
+    : undefined;
   const rawBody = express.raw({
     type: '*/*',
     ...(ingress.bodyLimit === undefined ? {} : { limit: ingress.bodyLimit }),
   });
 
   Array.from(new Set(routes.map(route => route.route))).forEach(path =>
-    router.all(path, rawBody, handle),
+    router.all(path, rawBody, operationHandle),
   );
+  if (eventHandle) {
+    Array.from(new Set(eventRoutes.map(route => route.route))).forEach(path =>
+      router.all(path, rawBody, eventHandle),
+    );
+  }
 };
