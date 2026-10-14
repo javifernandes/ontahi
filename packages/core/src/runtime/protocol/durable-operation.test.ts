@@ -281,27 +281,29 @@ describe('Runtime Protocol Durable Operation family', () => {
   });
 
   it('transports an exact approval proposal without response values', () => {
+    const interaction = {
+      id: 'approve-delete',
+      kind: 'approval' as const,
+      prompt: 'Delete these items?',
+      proposal: {
+        id: 'delete-items-v1',
+        summary: 'Delete two items from Shopping.',
+        requests: [
+          {
+            version: 1 as const,
+            kind: 'graph-command' as const,
+            command: { action: 'delete' as const, entityName: 'TodoItem', id: 'todo-1' },
+          },
+        ],
+      },
+      createdAt: '2026-08-30T23:50:01.000Z',
+    };
     const response = toDurableOperationSnapshotResponse({
       ...run,
       status: 'waiting',
       updatedAt: '2026-08-30T23:50:01.000Z',
-      interaction: {
-        id: 'approve-delete',
-        kind: 'approval',
-        prompt: 'Delete these items?',
-        proposal: {
-          id: 'delete-items-v1',
-          summary: 'Delete two items from Shopping.',
-          requests: [
-            {
-              version: 1,
-              kind: 'graph-command',
-              command: { action: 'delete', entityName: 'TodoItem', id: 'todo-1' },
-            },
-          ],
-        },
-        createdAt: '2026-08-30T23:50:01.000Z',
-      },
+      interaction,
+      waitingOn: { kind: 'interaction', interaction },
     });
 
     expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
