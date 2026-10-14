@@ -77,6 +77,7 @@ const createProps = (
   completeAllDisabled: false,
   eventWaitDemo: false,
   isExporting: false,
+  exportDisabled: false,
   isDragging: false,
   isColorPickerOpen: false,
   closePopovers: vi.fn(),

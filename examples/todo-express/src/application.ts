@@ -31,6 +31,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
   const authentication = options.authentication ?? createTodoAuthentication();
   const modelCommandRuntime = todoModelRuntime;
+  const eventWaitFixtureEnabled = process.env.NODE_ENV !== 'production';
   const runtimeProtocol = createApplicationRuntimeProtocol<TodoRuntimeAuthority>({
     application: TodoApplication,
     policies: todoRuntimePolicies,
@@ -56,47 +57,51 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   server.use(
     ontahiExpress(TodoApplication, {
       legacyRuntimeEndpoints: false,
-      ingress: {
-        providers: {
-          'todo-export-fixture': {
-            receive: async request => {
-              if (request.headers.get('x-todo-export-fixture') !== 'ready') {
-                return { kind: 'rejected', status: 401, error: 'Invalid fixture signature.' };
-              }
-              const payload = (await request.json()) as unknown;
-              if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).requestId !== 'string'
-              ) {
-                return { kind: 'rejected', status: 400, error: 'requestId is required.' };
-              }
-              const requestId = (payload as { requestId: string }).requestId;
-              return {
-                kind: 'accepted',
-                provider: 'todo-export-fixture',
-                providerKey: 'todo-export-fixture',
-                channel: 'todo.export-ready',
-                event: 'export.ready',
-                deliveryId: request.headers.get('x-todo-delivery') ?? crypto.randomUUID(),
-                correlation: { requestId },
-                payload,
-                status: 202,
-              };
+      ...(eventWaitFixtureEnabled
+        ? {
+            ingress: {
+              providers: {
+                'todo-export-fixture': {
+                  receive: async (request: globalThis.Request) => {
+                    if (request.headers.get('x-todo-export-fixture') !== 'ready') {
+                      return { kind: 'rejected', status: 401, error: 'Invalid fixture header.' };
+                    }
+                    const payload = (await request.json()) as unknown;
+                    if (
+                      typeof payload !== 'object' ||
+                      payload === null ||
+                      typeof (payload as Record<string, unknown>).requestId !== 'string'
+                    ) {
+                      return { kind: 'rejected', status: 400, error: 'requestId is required.' };
+                    }
+                    const requestId = (payload as { requestId: string }).requestId;
+                    return {
+                      kind: 'accepted',
+                      provider: 'todo-export-fixture',
+                      providerKey: 'todo-export-fixture',
+                      channel: 'todo.export-ready',
+                      event: 'export.ready',
+                      deliveryId: request.headers.get('x-todo-delivery') ?? crypto.randomUUID(),
+                      correlation: { requestId },
+                      payload,
+                      status: 202,
+                    };
+                  },
+                },
+              },
+              eventRoutes: [
+                {
+                  eventId: TodoListExportReady.id,
+                  eventVersion: TodoListExportReady.version,
+                  method: 'POST' as const,
+                  route: '/fixtures/todo-list-export-ready',
+                  provider: 'todo-export-fixture',
+                  channel: 'todo.export-ready',
+                },
+              ],
             },
-          },
-        },
-        eventRoutes: [
-          {
-            eventId: TodoListExportReady.id,
-            eventVersion: TodoListExportReady.version,
-            method: 'POST',
-            route: '/fixtures/todo-list-export-ready',
-            provider: 'todo-export-fixture',
-            channel: 'todo.export-ready',
-          },
-        ],
-      },
+          }
+        : {}),
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
       }),
@@ -115,7 +120,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
       storage: TodoApplication.storage.kind,
       taskRuntime: todoTaskRuntime,
       commandChat: Boolean(todoCommandProvider),
-      eventWaitDemo: Boolean(todoEventRuntime),
+      eventWaitDemo: Boolean(todoEventRuntime) && eventWaitFixtureEnabled,
     }),
   );
   server.get('/', (_request, response) =>

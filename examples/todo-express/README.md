@@ -155,8 +155,10 @@ TODO_AUTH_MODE=disabled pnpm --filter @ontahi/example-todo-express dev:postgres
 Open `http://localhost:3001`, create a list if the PostgreSQL database is empty, and open Devtools.
 Each list exposes **Export**. It starts `TodoList.export()` and waits for a correlated
 `TodoListExportReady`. Once the UI says **Waiting…**, click **Simulate ready**. That button posts a
-signed fixture payload through `/fixtures/todo-list-export-ready`, the same Express Event-ingress
-boundary an external worker would call. Devtools should show one causal progress timeline:
+development-only fixture payload with the fixed `x-todo-export-fixture: ready` demo header through
+`/fixtures/todo-list-export-ready`, the same Express Event-ingress boundary an external worker would
+call. The fixture route is not mounted when `NODE_ENV=production`. Devtools should show one causal
+progress timeline:
 
 ```text
 Waiting for TodoListExportReady

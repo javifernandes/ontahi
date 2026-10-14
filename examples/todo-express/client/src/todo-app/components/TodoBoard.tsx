@@ -126,6 +126,8 @@ export const TodoBoard = ({
     [canvasWidth, deskLayout, reconciledListIds],
   );
   const addListPosition = defaultDeskCardPosition(orderedLists.length, canvasWidth);
+  const exportActive =
+    exportRun.isExecuting || exportRun.isQueued || exportRun.isRunning || exportRun.isWaiting;
 
   useEffect(() => {
     if (!isLoading && !sameValue(orderedListIds, reconciledListIds)) {
@@ -329,6 +331,7 @@ export const TodoBoard = ({
                 }
                 eventWaitDemo={eventWaitDemo}
                 isExporting={exportingListId === list.id}
+                exportDisabled={exportActive && exportingListId !== list.id}
                 exportRun={exportingListId === list.id ? exportRun : undefined}
                 isDragging={draggingListId === list.id}
                 completingTodoId={completingTodoId}

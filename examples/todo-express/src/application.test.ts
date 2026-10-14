@@ -201,7 +201,7 @@ describe('Ontahi todo portability example', () => {
     }
   });
 
-  it('sends the simulated export callback through authenticated Event ingress', async () => {
+  it('sends the simulated export callback through the development Event ingress fixture', async () => {
     const deliveries: EventDeliveryFor<typeof TodoListExportReady>[] = [];
     const subscription = TodoApplication.events.subscribe(TodoListExportReady, delivery => {
       deliveries.push(delivery);
@@ -250,6 +250,33 @@ describe('Ontahi todo portability example', () => {
       ]);
     } finally {
       subscription.cancel();
+    }
+  });
+
+  it('does not mount the export callback fixture in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const runtimeHost = createTodoExpressServer({ authentication: testAuthentication });
+    const server = await new Promise<Server>(resolve => {
+      const started = runtimeHost.server.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const productionOrigin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      await expect(
+        fetch(`${productionOrigin}/fixtures/todo-list-export-ready`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-todo-export-fixture': 'ready',
+          },
+          body: JSON.stringify({
+            requestId: 'request-1',
+            url: 'https://example.test/todo-exports/request-1.json',
+          }),
+        }).then(async response => ({ body: await response.text(), status: response.status })),
+      ).resolves.toMatchObject({ status: 404 });
+    } finally {
+      await runtimeHost.close();
+      vi.unstubAllEnvs();
     }
   });
 

@@ -39,6 +39,7 @@ type TodoListCardProps = {
   completeAllStatus?: Pick<Dashboard['completeAll'], 'isCompleted' | 'progress' | 'finalValue'>;
   eventWaitDemo: boolean;
   isExporting: boolean;
+  exportDisabled: boolean;
   exportRun?: Dashboard['exportRun'];
   isDragging: boolean;
   completingTodoId?: string;
@@ -107,6 +108,7 @@ export const TodoListCard = ({
   completeAllStatus,
   eventWaitDemo,
   isExporting,
+  exportDisabled,
   exportRun,
   isDragging,
   completingTodoId,
@@ -473,6 +475,7 @@ export const TodoListCard = ({
                   onClick={() => void exportTodoList(list.id)}
                   disabled={
                     !canComplete ||
+                    exportDisabled ||
                     exportRun?.isExecuting ||
                     exportRun?.isQueued ||
                     exportRun?.isRunning ||
