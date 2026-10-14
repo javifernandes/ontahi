@@ -13,6 +13,8 @@ This package depends on `@ontahi/core` and owns the Next.js / `next-safe-action`
 4. `@ontahi/runtime-nextjs/graph-read`: an App Router adapter for policy-scoped remote data graph reads.
 5. `@ontahi/runtime-nextjs/runtime-protocol`: an App Router adapter for an injected common Runtime
    Protocol dispatcher and receiver-owned context factory.
+6. `@ontahi/runtime-nextjs/event-ingress`: an App Router adapter that authenticates and normalizes
+   an external provider request before ingesting a declared Event.
 
 New generic consumers should import action metadata and result helpers from `@ontahi/core/runtime/actions`. React hooks and operation bridge adapters live in `@ontahi/react/actions` so this package can stay focused on Next.js runtime concerns.
 
@@ -126,3 +128,34 @@ export const POST = createNextGraphReadRouteHandler({
 Malformed graph programs return `400`, denied reads return `403`, unavailable execution returns
 `503`, and successful reads return `200`. Caller-provided authority in the request body is never
 used to authorize dispatch.
+
+## Event ingress
+
+Bind one App Router endpoint to an explicit Event declaration identity, provider, and channel. The
+provider receives the original Web `Request`, so signature verification can use the unmodified raw
+body before returning a normalized domain payload:
+
+```ts
+import { createNextEventIngressRouteHandler } from '@ontahi/runtime-nextjs/event-ingress';
+
+import { TodoApplication, TodoListExportReady } from '@/application';
+import { githubWebhookProvider } from '@/github-webhooks';
+
+export const POST = createNextEventIngressRouteHandler({
+  events: TodoApplication.events,
+  route: {
+    eventId: TodoListExportReady.id,
+    eventVersion: TodoListExportReady.version,
+    method: 'POST',
+    route: '/api/events/export-ready',
+    provider: 'github-webhook',
+    channel: 'todo.export-ready',
+  },
+  providers: { 'github-webhook': githubWebhookProvider },
+});
+```
+
+The provider owns authentication and normalization. Ontahi matches the accepted provider identity
+and channel against the explicit route, validates the payload against the registered declaration,
+and only then creates the Event occurrence. Rejected or ignored deliveries never materialize an
+occurrence.
