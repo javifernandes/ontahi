@@ -78,6 +78,7 @@ const snapshotKeys = new Set([
   'completedAt',
   'progress',
   'interaction',
+  'waitingOn',
   'error',
   'result',
 ]);
@@ -87,6 +88,15 @@ const choiceInteractionKeys = new Set(['id', 'kind', 'prompt', 'options', 'creat
 const inputInteractionKeys = new Set(['id', 'kind', 'prompt', 'input', 'createdAt']);
 const inputDescriptorKeys = new Set(['type', 'values', 'nullable']);
 const approvalInteractionKeys = new Set(['id', 'kind', 'prompt', 'proposal', 'createdAt']);
+const eventWaitKeys = new Set([
+  'id',
+  'kind',
+  'eventId',
+  'eventVersion',
+  'correlation',
+  'createdAt',
+  'timeoutAt',
+]);
 const interactionOptionKeys = new Set(['id', 'label']);
 const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
 const taskErrorKeys = new Set(['code', 'message']);
@@ -443,13 +453,44 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
   const subject = parseSubject(value.subject);
   const progress = parseProgress(value.progress);
   const interaction = parseTaskPendingInteraction(value.interaction);
+  const waitingOn = (() => {
+    if (!isRecord(value.waitingOn)) return undefined;
+    if (value.waitingOn.kind === 'interaction') {
+      const parsed = parseTaskPendingInteraction(value.waitingOn.interaction);
+      return parsed ? ({ kind: 'interaction', interaction: parsed } as const) : undefined;
+    }
+    return hasOnlyKeys(value.waitingOn, eventWaitKeys) &&
+      value.waitingOn.kind === 'event' &&
+      isIdentitySegment(value.waitingOn.id) &&
+      isIdentitySegment(value.waitingOn.eventId) &&
+      Number.isInteger(value.waitingOn.eventVersion) &&
+      (value.waitingOn.correlation === undefined ||
+        (isRecord(value.waitingOn.correlation) && isJsonValue(value.waitingOn.correlation))) &&
+      isTimestamp(value.waitingOn.createdAt) &&
+      isOptionalTimestamp(value.waitingOn.timeoutAt)
+      ? {
+          id: value.waitingOn.id,
+          kind: 'event' as const,
+          eventId: value.waitingOn.eventId,
+          eventVersion: value.waitingOn.eventVersion as number,
+          ...(value.waitingOn.correlation === undefined
+            ? {}
+            : { correlation: value.waitingOn.correlation as Record<string, JsonValue> }),
+          createdAt: value.waitingOn.createdAt,
+          ...(value.waitingOn.timeoutAt === undefined
+            ? {}
+            : { timeoutAt: value.waitingOn.timeoutAt }),
+        }
+      : undefined;
+  })();
   const error = parseTaskError(value.error);
   if (
     (value.subject !== undefined && subject === undefined) ||
     (value.progress !== undefined && progress === undefined) ||
     (value.interaction !== undefined && interaction === undefined) ||
+    (value.waitingOn !== undefined && waitingOn === undefined) ||
     (value.error !== undefined && error === undefined) ||
-    (value.status === 'waiting') !== (interaction !== undefined)
+    (value.status === 'waiting') !== (waitingOn !== undefined || interaction !== undefined)
   ) {
     return { success: false };
   }
@@ -467,6 +508,7 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
       ...(value.completedAt === undefined ? {} : { completedAt: value.completedAt }),
       ...(progress === undefined ? {} : { progress }),
       ...(interaction === undefined ? {} : { interaction }),
+      ...(waitingOn === undefined ? {} : { waitingOn }),
       ...(error === undefined ? {} : { error }),
       ...(value.result === undefined ? {} : { result: cloneJson(value.result) }),
     },

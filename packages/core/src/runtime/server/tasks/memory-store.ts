@@ -24,6 +24,9 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   completedAt: source.completedAt,
   progress: source.progress,
   interaction: source.checkpoint?.interaction,
+  waitingOn: source.checkpoint?.interaction
+    ? { kind: 'interaction', interaction: source.checkpoint.interaction }
+    : source.checkpoint?.eventWait,
   error: source.error,
   result: source.result,
   ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
@@ -114,6 +117,44 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           ...current,
           status: 'running',
           checkpoint,
+          updatedAt: now(),
+        } satisfies TaskRunSource;
+        runs.set(key, next);
+        return toSnapshot(next);
+      }),
+    claimEvent: (ref, waitId, checkpoint) =>
+      Effect.gen(function* () {
+        const key = keyOf(ref);
+        const current = runs.get(key);
+
+        if (!current) return yield* Effect.fail(missingTaskRunFailure(ref));
+        if (current.status !== 'waiting' || current.checkpoint?.eventWait?.id !== waitId) {
+          return undefined;
+        }
+
+        const next = {
+          ...current,
+          status: 'running',
+          checkpoint,
+          updatedAt: now(),
+        } satisfies TaskRunSource;
+        runs.set(key, next);
+        return toSnapshot(next);
+      }),
+    cancelEvent: (ref, waitId, status, error) =>
+      Effect.gen(function* () {
+        const key = keyOf(ref);
+        const current = runs.get(key);
+        if (!current) return yield* Effect.fail(missingTaskRunFailure(ref));
+        if (current.status !== 'waiting' || current.checkpoint?.eventWait?.id !== waitId) {
+          return undefined;
+        }
+        const next = {
+          ...current,
+          status,
+          completedAt: now(),
+          checkpoint: undefined,
+          error,
           updatedAt: now(),
         } satisfies TaskRunSource;
         runs.set(key, next);

@@ -19,7 +19,13 @@ export {
   toTaskFailure,
 } from './tasks/failures.js';
 export {
+  eventWaitMatchesOccurrence,
+  materializeTaskEventWait,
+  taskEventWaitSubscriptionId,
+} from './tasks/event-waits.js';
+export {
   createConfiguredTaskFacade,
+  cancelTaskEventWait,
   getTaskSnapshot,
   listRecentTasks,
   observeTaskRun,
@@ -99,6 +105,9 @@ export type {
   TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
   TaskPendingInteraction,
+  TaskPendingEventWait,
+  TaskWaitingOn,
+  TaskEventWaitRequest,
   TaskRuntimeRef,
   TaskSnapshot,
   TaskStartOptions,

@@ -12,6 +12,11 @@ import {
 } from '../unit-of-work.js';
 
 import {
+  eventWaitMatchesOccurrence,
+  materializeTaskEventWait,
+  taskEventWaitSubscriptionId,
+} from './event-waits.js';
+import {
   isTaskExecutionState,
   materializeTaskExecutionInteraction,
   validateTaskApprovalInteractionRequest,
@@ -119,11 +124,16 @@ export const createInProcessTaskRuntime = ({
   createRunId: createConfiguredRunId = createRunId,
   onBackgroundError,
   createExecutionContext,
+  events,
 }: InProcessTaskRuntimeOptions): TaskRuntime => {
   const taskRuns = getInMemoryTaskRunProjection(storage);
   const pendingInteractions = getPendingInteractions(storage);
   const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
   const activeExplicitExecutions = new Set<string>();
+  const activeEventWaits = new Map<string, AbortController>();
+  const eventDeclarations = new Map(
+    events?.declarations.map(declaration => [declaration.id, declaration]),
+  );
   const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
   const withPendingInteraction = (snapshot: TaskSnapshot): TaskSnapshot => {
     const key = keyOf(snapshot);
@@ -133,6 +143,139 @@ export const createInProcessTaskRuntime = ({
   };
   const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
+  let resumeEventWait: (source: TaskRunSource) => boolean;
+  const observeEventWait = (source: TaskRunSource) => {
+    const wait = source.checkpoint?.eventWait;
+    if (!wait) return false;
+    if (!events) {
+      void Effect.runPromise(
+        update(source, {
+          status: 'failed',
+          completedAt: now(),
+          checkpoint: undefined,
+          error: {
+            code: 'task_event_runtime_unavailable',
+            message: 'A durable Event Runtime is required for Task Event waits.',
+          },
+        }),
+      );
+      return false;
+    }
+
+    let delivery;
+    try {
+      delivery = events.runtime.durableDelivery;
+      if (
+        !delivery ||
+        !events.runtime.capabilities.retention ||
+        !events.runtime.capabilities.durableAcceptance ||
+        !events.runtime.capabilities.durableDelivery ||
+        !events.runtime.capabilities.acknowledgement
+      ) {
+        throw new TypeError('The configured Event Runtime does not support durable delivery.');
+      }
+    } catch (error) {
+      void Effect.runPromise(
+        update(source, {
+          status: 'failed',
+          completedAt: now(),
+          checkpoint: undefined,
+          error: {
+            code: 'task_event_runtime_unavailable',
+            message: String(error),
+          },
+        }),
+      );
+      return false;
+    }
+
+    const key = keyOf(source);
+    if (activeEventWaits.has(key)) return false;
+    const controller = new AbortController();
+    activeEventWaits.set(key, controller);
+    const subscriptionId = taskEventWaitSubscriptionId(source, wait.id);
+    const consumerId = `task-runtime:${source.taskId}:${source.runId}`;
+    const retryDelay = () => new Promise(resolve => setTimeout(resolve, 100));
+    const run = async () => {
+      while (!controller.signal.aborted) {
+        try {
+          await delivery.register({
+            id: subscriptionId,
+            eventId: wait.eventId,
+            eventVersion: wait.eventVersion,
+            ...(wait.correlation ? { correlation: wait.correlation } : {}),
+          });
+          break;
+        } catch (error) {
+          onBackgroundError?.(error);
+          await retryDelay();
+        }
+      }
+      while (!controller.signal.aborted) {
+        try {
+          if (wait.timeoutAt && Date.parse(wait.timeoutAt) <= Date.now()) {
+            const snapshot = await Effect.runPromise(
+              storage.cancelEvent(source, wait.id, 'failed', {
+                code: 'task_event_wait_timed_out',
+                message: `Timed out waiting for Event ${wait.eventId}@${wait.eventVersion}.`,
+              }),
+            );
+            if (snapshot) await Effect.runPromise(taskRuns.publish(snapshot));
+            await delivery.cancel(subscriptionId);
+            return;
+          }
+          if (!taskDefinitions.get(source.taskId)?.execution) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            continue;
+          }
+          const claim = await delivery.claim(subscriptionId, { consumerId, leaseMs: 1_000 });
+          if (!claim) {
+            const latest = await Effect.runPromise(storage.loadSource(source));
+            if (latest.status !== 'waiting' || latest.checkpoint?.eventWait?.id !== wait.id) {
+              return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 10));
+            continue;
+          }
+          if (!eventWaitMatchesOccurrence(wait, claim.delivery.occurrence)) {
+            await delivery.release(claim);
+            await retryDelay();
+            continue;
+          }
+          const checkpoint = {
+            version: 1 as const,
+            state: source.checkpoint!.state,
+            eventOccurrence: cloneJson(claim.delivery.occurrence),
+          };
+          const snapshot = await Effect.runPromise(storage.claimEvent(source, wait.id, checkpoint));
+          if (!snapshot) {
+            const latest = await Effect.runPromise(storage.loadSource(source));
+            if (latest.status === 'waiting') await delivery.release(claim);
+            else {
+              await delivery.acknowledge(claim);
+              await delivery.cancel(subscriptionId);
+            }
+            return;
+          }
+          await Effect.runPromise(taskRuns.publish(snapshot));
+          const latest = await Effect.runPromise(storage.loadSource(source));
+          resumeEventWait(latest);
+          await delivery.acknowledge(claim);
+          await delivery.cancel(subscriptionId);
+          return;
+        } catch (error) {
+          onBackgroundError?.(error);
+          await retryDelay();
+        }
+      }
+    };
+    void run()
+      .catch(error => onBackgroundError?.(error))
+      .finally(() => {
+        if (activeEventWaits.get(key) === controller) activeEventWaits.delete(key);
+      });
+    return true;
+  };
   const restoreCommittedMutations = (source: TaskRunSource) => {
     if (source.executionMetadata?.committedMutations) {
       commitMutationSetToCurrentUnitOfWork(source.executionMetadata.committedMutations);
@@ -356,6 +499,7 @@ export const createInProcessTaskRuntime = ({
           input: source.input,
           state: checkpoint.state,
           ...(checkpoint.response ? { response: checkpoint.response } : {}),
+          ...(checkpoint.eventOccurrence ? { event: checkpoint.eventOccurrence } : {}),
           context,
         });
 
@@ -397,6 +541,23 @@ export const createInProcessTaskRuntime = ({
           continue;
         }
 
+        if (transition.kind === 'event') {
+          const eventWait = yield* Effect.try({
+            try: () => materializeTaskEventWait(ref, transition.event, eventDeclarations),
+            catch: toTaskFailure,
+          });
+          checkpoint = { version: 1, state: cloneJson(transition.state), eventWait };
+          const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
+          yield* update(ref, {
+            status: 'waiting',
+            checkpoint,
+            ...(executionMetadata ? { executionMetadata } : {}),
+          });
+          const waitingSource = { ...source, status: 'waiting' as const, checkpoint };
+          observeEventWait(waitingSource);
+          return;
+        }
+
         const interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
         checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
         const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
@@ -436,12 +597,21 @@ export const createInProcessTaskRuntime = ({
   const recoverExplicitExecution = (source: TaskRunSource) => {
     const checkpoint = source.checkpoint;
     const task = taskDefinitions.get(source.taskId);
-    if (source.status !== 'running' || !checkpoint || checkpoint.interaction || !task?.execution) {
+    if (
+      source.status !== 'running' ||
+      !checkpoint ||
+      checkpoint.interaction ||
+      checkpoint.eventWait ||
+      !task?.execution
+    ) {
       return false;
     }
 
     return launchExplicitExecution(source, task, source, createTaskOperationContext(source));
   };
+  resumeEventWait = recoverExplicitExecution;
+  const recoverEventWait = (source: TaskRunSource) =>
+    source.status === 'waiting' && source.checkpoint?.eventWait ? observeEventWait(source) : false;
 
   return {
     register: task => {
@@ -547,12 +717,42 @@ export const createInProcessTaskRuntime = ({
       Effect.gen(function* () {
         const source = yield* storage.loadSource(ref);
         recoverExplicitExecution(source);
+        recoverEventWait(source);
         const snapshot = yield* storage.getSnapshot(ref);
         const projected = withPendingInteraction(snapshot);
         yield* taskRuns.publish(projected);
         return projected;
       }),
     listRecent: limit => storage.listRecent(limit),
+    cancelEventWait: ref =>
+      Effect.gen(function* () {
+        const source = yield* storage.loadSource(ref);
+        const wait = source.checkpoint?.eventWait;
+        if (!wait || source.status !== 'waiting') {
+          return yield* Effect.fail({
+            reason: 'task_event_wait_not_pending',
+            message: 'Task run has no pending Event wait.',
+            ...ref,
+          });
+        }
+        const snapshot = yield* storage.cancelEvent(ref, wait.id, 'cancelled');
+        if (!snapshot) {
+          return yield* Effect.fail({
+            reason: 'task_event_wait_not_pending',
+            message: 'Task run has no pending Event wait.',
+            ...ref,
+          });
+        }
+        const controller = activeEventWaits.get(keyOf(ref));
+        controller?.abort();
+        if (events?.runtime.durableDelivery) {
+          yield* Effect.promise(() =>
+            events.runtime.durableDelivery!.cancel(taskEventWaitSubscriptionId(ref, wait.id)),
+          );
+        }
+        yield* taskRuns.publish(snapshot);
+        return snapshot;
+      }),
     respondToInteraction: (
       ref,
       response: TaskInteractionResponse,
@@ -644,6 +844,7 @@ export const createInProcessTaskRuntime = ({
         Effect.gen(function* () {
           const source = yield* storage.loadSource(ref);
           recoverExplicitExecution(source);
+          recoverEventWait(source);
           const snapshot = withPendingInteraction(yield* storage.getSnapshot(ref));
           yield* taskRuns.publish(snapshot);
           return taskRuns.observe(ref);

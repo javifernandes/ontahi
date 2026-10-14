@@ -281,26 +281,50 @@ describe('Runtime Protocol Durable Operation family', () => {
   });
 
   it('transports an exact approval proposal without response values', () => {
+    const interaction = {
+      id: 'approve-delete',
+      kind: 'approval' as const,
+      prompt: 'Delete these items?',
+      proposal: {
+        id: 'delete-items-v1',
+        summary: 'Delete two items from Shopping.',
+        requests: [
+          {
+            version: 1 as const,
+            kind: 'graph-command' as const,
+            command: { action: 'delete' as const, entityName: 'TodoItem', id: 'todo-1' },
+          },
+        ],
+      },
+      createdAt: '2026-08-30T23:50:01.000Z',
+    };
     const response = toDurableOperationSnapshotResponse({
       ...run,
       status: 'waiting',
       updatedAt: '2026-08-30T23:50:01.000Z',
-      interaction: {
-        id: 'approve-delete',
-        kind: 'approval',
-        prompt: 'Delete these items?',
-        proposal: {
-          id: 'delete-items-v1',
-          summary: 'Delete two items from Shopping.',
-          requests: [
-            {
-              version: 1,
-              kind: 'graph-command',
-              command: { action: 'delete', entityName: 'TodoItem', id: 'todo-1' },
-            },
-          ],
-        },
-        createdAt: '2026-08-30T23:50:01.000Z',
+      interaction,
+      waitingOn: { kind: 'interaction', interaction },
+    });
+
+    expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
+      success: true,
+      response,
+    });
+  });
+
+  it('transports a serializable Event waiting reason without an Interaction', () => {
+    const response = toDurableOperationSnapshotResponse({
+      ...run,
+      status: 'waiting',
+      updatedAt: '2026-10-14T00:00:00.000Z',
+      waitingOn: {
+        id: 'export:request-1',
+        kind: 'event',
+        eventId: 'TodoListExportReady',
+        eventVersion: 1,
+        correlation: { requestId: 'request-1' },
+        createdAt: '2026-10-14T00:00:00.000Z',
+        timeoutAt: '2026-10-14T00:05:00.000Z',
       },
     });
 
@@ -309,6 +333,31 @@ describe('Runtime Protocol Durable Operation family', () => {
       response,
     });
   });
+
+  it.each(['request-1', ['request-1'], 1])(
+    'rejects a non-record Event wait correlation: %j',
+    correlation => {
+      const response = {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'waiting',
+          updatedAt: '2026-10-14T00:00:00.000Z',
+          waitingOn: {
+            id: 'export:request-1',
+            kind: 'event',
+            eventId: 'TodoListExportReady',
+            eventVersion: 1,
+            correlation,
+            createdAt: '2026-10-14T00:00:00.000Z',
+          },
+        },
+      };
+
+      expect(parseDurableOperationProtocolResponse(response)).toMatchObject({ success: false });
+    },
+  );
 
   it.each([
     { type: 'string' as const },

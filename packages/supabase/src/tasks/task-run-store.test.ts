@@ -192,6 +192,59 @@ describe('createSupabaseTaskStorage', () => {
     });
   });
 
+  it('atomically claims or cancels a pending Event wait once', async () => {
+    const store = createSupabaseTaskStorage({ client: createFakeSupabaseClient() });
+    const createWait = async (runId: string) => {
+      const ref = { taskId: 'demo.export', runId };
+      await Effect.runPromise(store.create({ ...ref, trigger: { cause: 'system' } }));
+      await Effect.runPromise(
+        store.update(ref, {
+          status: 'waiting',
+          checkpoint: {
+            version: 1,
+            state: { step: 'wait' },
+            eventWait: {
+              id: 'export-ready',
+              kind: 'event',
+              eventId: 'TodoListExportReady',
+              eventVersion: 1,
+              correlation: { requestId: runId },
+              createdAt: '2026-06-03T00:00:00.000Z',
+            },
+          },
+        }),
+      );
+      return ref;
+    };
+    const claimedRef = await createWait('claim');
+    const resumed = {
+      version: 1 as const,
+      state: { step: 'wait' },
+      eventOccurrence: {
+        kind: 'event-occurrence' as const,
+        occurrenceId: 'occurrence-1',
+        eventId: 'TodoListExportReady',
+        eventVersion: 1,
+        occurredAt: '2026-06-03T00:01:00.000Z',
+        payload: { requestId: 'claim', url: 'https://example.com/export' },
+      },
+    };
+    await expect(
+      Effect.runPromise(store.claimEvent(claimedRef, 'export-ready', resumed)),
+    ).resolves.toMatchObject({ status: 'running', waitingOn: undefined });
+    await expect(
+      Effect.runPromise(store.claimEvent(claimedRef, 'export-ready', resumed)),
+    ).resolves.toBeUndefined();
+
+    const cancelledRef = await createWait('cancel');
+    await expect(
+      Effect.runPromise(store.cancelEvent(cancelledRef, 'export-ready', 'cancelled')),
+    ).resolves.toMatchObject({ status: 'cancelled', waitingOn: undefined });
+    await expect(
+      Effect.runPromise(store.cancelEvent(cancelledRef, 'export-ready', 'cancelled')),
+    ).resolves.toBeUndefined();
+  });
+
   it('creates, reads, updates, and loads task run sources', async () => {
     const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(),
