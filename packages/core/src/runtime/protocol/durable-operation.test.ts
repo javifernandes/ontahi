@@ -334,6 +334,40 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
+  it('transports payload-free Event resume and ingress provenance', () => {
+    const response = toDurableOperationSnapshotResponse({
+      ...run,
+      status: 'running',
+      updatedAt: '2026-10-14T00:00:02.000Z',
+      resumedBy: {
+        kind: 'event',
+        waitId: 'export:request-1',
+        eventId: 'TodoListExportReady',
+        eventVersion: 1,
+        occurrenceId: 'occurrence-1',
+        occurredAt: '2026-10-14T00:00:01.000Z',
+        deliveryId: 'delivery-1',
+        subscriptionId: 'subscription-1',
+        attempt: 1,
+        claimId: 'claim-1',
+        consumerId: 'worker-1',
+        leaseExpiresAt: '2026-10-14T00:01:01.000Z',
+        ingress: {
+          provider: 'fixture-worker',
+          event: 'export.ready',
+          deliveryId: 'external-delivery-1',
+          receivedAt: '2026-10-14T00:00:01.000Z',
+        },
+      },
+    });
+
+    expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
+      success: true,
+      response,
+    });
+    expect(response).not.toHaveProperty('snapshot.resumedBy.payload');
+  });
+
   it.each(['request-1', ['request-1'], 1])(
     'rejects a non-record Event wait correlation: %j',
     correlation => {

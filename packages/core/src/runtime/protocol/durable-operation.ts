@@ -79,6 +79,7 @@ const snapshotKeys = new Set([
   'progress',
   'interaction',
   'waitingOn',
+  'resumedBy',
   'error',
   'result',
 ]);
@@ -97,6 +98,22 @@ const eventWaitKeys = new Set([
   'createdAt',
   'timeoutAt',
 ]);
+const eventResumeKeys = new Set([
+  'kind',
+  'waitId',
+  'eventId',
+  'eventVersion',
+  'occurrenceId',
+  'occurredAt',
+  'deliveryId',
+  'subscriptionId',
+  'attempt',
+  'claimId',
+  'consumerId',
+  'leaseExpiresAt',
+  'ingress',
+]);
+const eventResumeIngressKeys = new Set(['provider', 'receivedAt', 'event', 'deliveryId']);
 const interactionOptionKeys = new Set(['id', 'label']);
 const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
 const taskErrorKeys = new Set(['code', 'message']);
@@ -483,12 +500,66 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
         }
       : undefined;
   })();
+  const resumedBy = (() => {
+    if (!isRecord(value.resumedBy)) return undefined;
+    const ingress = (() => {
+      if (!isRecord(value.resumedBy.ingress)) return undefined;
+      return hasOnlyKeys(value.resumedBy.ingress, eventResumeIngressKeys) &&
+        isIdentitySegment(value.resumedBy.ingress.provider) &&
+        isTimestamp(value.resumedBy.ingress.receivedAt) &&
+        isOptionalString(value.resumedBy.ingress.event) &&
+        isOptionalString(value.resumedBy.ingress.deliveryId)
+        ? {
+            provider: value.resumedBy.ingress.provider,
+            receivedAt: value.resumedBy.ingress.receivedAt,
+            ...(value.resumedBy.ingress.event === undefined
+              ? {}
+              : { event: value.resumedBy.ingress.event }),
+            ...(value.resumedBy.ingress.deliveryId === undefined
+              ? {}
+              : { deliveryId: value.resumedBy.ingress.deliveryId }),
+          }
+        : undefined;
+    })();
+    return hasOnlyKeys(value.resumedBy, eventResumeKeys) &&
+      value.resumedBy.kind === 'event' &&
+      isIdentitySegment(value.resumedBy.waitId) &&
+      isIdentitySegment(value.resumedBy.eventId) &&
+      Number.isInteger(value.resumedBy.eventVersion) &&
+      isIdentitySegment(value.resumedBy.occurrenceId) &&
+      isTimestamp(value.resumedBy.occurredAt) &&
+      isIdentitySegment(value.resumedBy.deliveryId) &&
+      isIdentitySegment(value.resumedBy.subscriptionId) &&
+      Number.isInteger(value.resumedBy.attempt) &&
+      (value.resumedBy.attempt as number) > 0 &&
+      isIdentitySegment(value.resumedBy.claimId) &&
+      isIdentitySegment(value.resumedBy.consumerId) &&
+      isTimestamp(value.resumedBy.leaseExpiresAt) &&
+      (value.resumedBy.ingress === undefined || ingress !== undefined)
+      ? {
+          kind: 'event' as const,
+          waitId: value.resumedBy.waitId,
+          eventId: value.resumedBy.eventId,
+          eventVersion: value.resumedBy.eventVersion as number,
+          occurrenceId: value.resumedBy.occurrenceId,
+          occurredAt: value.resumedBy.occurredAt,
+          deliveryId: value.resumedBy.deliveryId,
+          subscriptionId: value.resumedBy.subscriptionId,
+          attempt: value.resumedBy.attempt as number,
+          claimId: value.resumedBy.claimId,
+          consumerId: value.resumedBy.consumerId,
+          leaseExpiresAt: value.resumedBy.leaseExpiresAt,
+          ...(ingress ? { ingress } : {}),
+        }
+      : undefined;
+  })();
   const error = parseTaskError(value.error);
   if (
     (value.subject !== undefined && subject === undefined) ||
     (value.progress !== undefined && progress === undefined) ||
     (value.interaction !== undefined && interaction === undefined) ||
     (value.waitingOn !== undefined && waitingOn === undefined) ||
+    (value.resumedBy !== undefined && resumedBy === undefined) ||
     (value.error !== undefined && error === undefined) ||
     (value.status === 'waiting') !== (waitingOn !== undefined || interaction !== undefined)
   ) {
@@ -509,6 +580,7 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
       ...(progress === undefined ? {} : { progress }),
       ...(interaction === undefined ? {} : { interaction }),
       ...(waitingOn === undefined ? {} : { waitingOn }),
+      ...(resumedBy === undefined ? {} : { resumedBy }),
       ...(error === undefined ? {} : { error }),
       ...(value.result === undefined ? {} : { result: cloneJson(value.result) }),
     },

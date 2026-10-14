@@ -27,6 +27,7 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   waitingOn: source.checkpoint?.interaction
     ? { kind: 'interaction', interaction: source.checkpoint.interaction }
     : source.checkpoint?.eventWait,
+  resumedBy: source.checkpoint?.eventResume,
   error: source.error,
   result: source.result,
   ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),

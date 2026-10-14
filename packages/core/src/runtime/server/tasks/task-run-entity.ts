@@ -24,6 +24,7 @@ export const TaskRun = entity('TaskRun', {
   progress: field.optional(field.json<NonNullable<TaskSnapshot['progress']>>()),
   interaction: field.optional(field.json<NonNullable<TaskSnapshot['interaction']>>()),
   waitingOn: field.optional(field.json<NonNullable<TaskSnapshot['waitingOn']>>()),
+  resumedBy: field.optional(field.json<NonNullable<TaskSnapshot['resumedBy']>>()),
   error: field.optional(field.json<NonNullable<TaskSnapshot['error']>>()),
   result: field.optional(field.json<unknown>()),
 })

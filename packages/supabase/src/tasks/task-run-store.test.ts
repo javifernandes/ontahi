@@ -217,6 +217,20 @@ describe('createSupabaseTaskStorage', () => {
       return ref;
     };
     const claimedRef = await createWait('claim');
+    const eventResume = {
+      kind: 'event' as const,
+      waitId: 'export-ready',
+      eventId: 'TodoListExportReady',
+      eventVersion: 1,
+      occurrenceId: 'occurrence-1',
+      occurredAt: '2026-06-03T00:01:00.000Z',
+      deliveryId: 'delivery-1',
+      subscriptionId: 'subscription-1',
+      attempt: 1,
+      claimId: 'claim-1',
+      consumerId: 'worker-1',
+      leaseExpiresAt: '2026-06-03T00:02:00.000Z',
+    };
     const resumed = {
       version: 1 as const,
       state: { step: 'wait' },
@@ -228,10 +242,15 @@ describe('createSupabaseTaskStorage', () => {
         occurredAt: '2026-06-03T00:01:00.000Z',
         payload: { requestId: 'claim', url: 'https://example.com/export' },
       },
+      eventResume,
     };
     await expect(
       Effect.runPromise(store.claimEvent(claimedRef, 'export-ready', resumed)),
-    ).resolves.toMatchObject({ status: 'running', waitingOn: undefined });
+    ).resolves.toMatchObject({
+      status: 'running',
+      waitingOn: undefined,
+      resumedBy: eventResume,
+    });
     await expect(
       Effect.runPromise(store.claimEvent(claimedRef, 'export-ready', resumed)),
     ).resolves.toBeUndefined();
