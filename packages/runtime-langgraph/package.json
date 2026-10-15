@@ -40,11 +40,11 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.ts\" --fix --max-warnings 0"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.13",
-    "@langchain/langgraph": "^1.4.18",
+    "@langchain/core": "^1.2.17",
+    "@langchain/langgraph": "^1.4.21",
     "@ontahi/core": "workspace:*",
     "effect": "^3.21.0",
-    "zod": "^4.3.6"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
