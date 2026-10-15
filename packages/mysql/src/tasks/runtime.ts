@@ -20,14 +20,14 @@ type MysqlTaskRow = RowDataPacket & {
   run_id: string;
   status: TaskStatus;
   input: unknown | null;
-  trigger: TaskRunSource['trigger'] | string;
-  subject: TaskRunSource['subject'] | string | null;
-  runtime: TaskRunSource['runtime'] | string | null;
-  progress: TaskRunSource['progress'] | string | null;
-  checkpoint: TaskRunSource['checkpoint'] | string | null;
+  trigger: TaskRunSource['trigger'];
+  subject: TaskRunSource['subject'] | null;
+  runtime: TaskRunSource['runtime'] | null;
+  progress: TaskRunSource['progress'] | null;
+  checkpoint: TaskRunSource['checkpoint'] | null;
   result: unknown | null;
-  execution_metadata: TaskRunSource['executionMetadata'] | string | null;
-  error: TaskRunSource['error'] | string | null;
+  execution_metadata: TaskRunSource['executionMetadata'] | null;
+  error: TaskRunSource['error'] | null;
   created_at: string;
   started_at: string | null;
   updated_at: string;
@@ -40,10 +40,7 @@ export type MysqlTaskStorageOptions = {
   readonly now?: () => Date;
 };
 
-const jsonValue = <T>(value: T | string | null): T | undefined => {
-  if (value === null) return undefined;
-  return (typeof value === 'string' ? JSON.parse(value) : value) as T;
-};
+const jsonValue = <T>(value: T | null): T | undefined => (value === null ? undefined : value);
 
 const fromRow = (row: MysqlTaskRow): TaskRunSource => {
   const {
@@ -203,12 +200,12 @@ export const createMysqlTaskStorage = ({
       return rows.map(fromRow);
     },
     listRecentForActor: async (actor: TaskActor, limit) => {
-      const idFilter = actor.id === undefined ? 'actor_id IS NULL' : 'actor_id = ?';
+      const idFilter = actor.id === undefined ? '' : ' AND actor_id = ?';
       const parameters =
         actor.id === undefined ? [actor.kind, limit] : [actor.kind, actor.id, limit];
       const [rows] = await pool.query<MysqlTaskRow[]>(
         `SELECT * FROM ${table}
-           WHERE actor_kind = ? AND ${idFilter}
+           WHERE actor_kind = ?${idFilter}
            ORDER BY created_at DESC LIMIT ?`,
         parameters,
       );

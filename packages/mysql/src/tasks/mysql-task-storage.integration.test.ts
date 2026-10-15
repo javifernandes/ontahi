@@ -135,6 +135,42 @@ describe('MySQL Task Storage', () => {
     ).resolves.toMatchObject({ reason: 'task_run_not_found' });
   });
 
+  it('round-trips string JSON values and applies canonical actor matching', async () => {
+    const taskStorage = storage();
+    const upper = { taskId: 'TodoList.export', runId: 'upper-actor' };
+    const lower = { taskId: 'TodoList.export', runId: 'lower-actor' };
+    await Effect.runPromise(
+      taskStorage.create({
+        ...upper,
+        input: 'hello',
+        trigger: { cause: 'user_request', actor: { kind: 'user', id: 'Alex' } },
+      }),
+    );
+    await Effect.runPromise(taskStorage.update(upper, { result: 'true' }));
+    await Effect.runPromise(
+      taskStorage.create({
+        ...lower,
+        trigger: { cause: 'user_request', actor: { kind: 'user', id: 'alex' } },
+      }),
+    );
+
+    await expect(Effect.runPromise(taskStorage.loadSource(upper))).resolves.toMatchObject({
+      input: 'hello',
+      result: 'true',
+    });
+    await expect(
+      Effect.runPromise(taskStorage.listRecentForActor({ kind: 'user', id: 'Alex' }, 20)),
+    ).resolves.toMatchObject([{ runId: upper.runId }]);
+    await expect(
+      Effect.runPromise(taskStorage.listRecentForActor({ kind: 'user' }, 20)),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ runId: upper.runId }),
+        expect.objectContaining({ runId: lower.runId }),
+      ]),
+    );
+  });
+
   it('resumes a Todo Event wait after recreating both MySQL-backed runtimes', async () => {
     const ExportReady = defineEvent({
       id: 'TodoListExportReady',

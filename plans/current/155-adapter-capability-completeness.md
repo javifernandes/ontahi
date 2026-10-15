@@ -19,7 +19,7 @@ Related plans:
 
 Ontahi now has provider-neutral Data Graph, Task Storage, Task Runtime, Event Runtime, Runtime
 Protocol, and Event ingress boundaries. The implementations prove those boundaries unevenly:
-PostgreSQL and MySQL provide Data Graph and durable Events but no Task Storage, while Supabase
+PostgreSQL and MySQL provide Data Graph, durable Task Storage, and durable Events, while Supabase
 provides Data Graph and Task Storage but no Event Runtime. Runtime hosts and task executors also
 support different deliberate subsets.
 

@@ -13,6 +13,9 @@ describe('MySQL Task schema', () => {
     expect(createMysqlTaskSchemaSql({ runs: 'custom_task_runs' }).join('\n')).toContain(
       '`ontahi_task_actor_idx`',
     );
+    expect(createMysqlTaskSchemaSql({ runs: 'custom_task_runs' }).join('\n')).toContain(
+      'actor_id varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin',
+    );
   });
 
   it('rejects unsafe or oversized table identifiers', () => {

@@ -36,9 +36,9 @@ export const createMysqlTaskSchemaSql = (tables?: MysqlTaskTableNames): readonly
       started_at varchar(30),
       updated_at varchar(30) NOT NULL,
       completed_at varchar(30),
-      actor_kind varchar(255) GENERATED ALWAYS AS
+      actor_kind varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin GENERATED ALWAYS AS
         (JSON_UNQUOTE(JSON_EXTRACT(\`trigger\`, '$.actor.kind'))) STORED,
-      actor_id varchar(255) GENERATED ALWAYS AS
+      actor_id varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin GENERATED ALWAYS AS
         (JSON_UNQUOTE(JSON_EXTRACT(\`trigger\`, '$.actor.id'))) STORED,
       PRIMARY KEY (task_id, run_id),
       INDEX \`ontahi_task_created_idx\` (created_at DESC),
