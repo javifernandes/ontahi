@@ -44,7 +44,15 @@ export {
   validateTaskInteractionResponse,
   type MaterializeTaskInteractionOptions,
 } from './tasks/execution-interactions.js';
-export { createInMemoryTaskStorage } from './tasks/memory-store.js';
+export {
+  createInMemoryTaskStorage,
+  projectTaskRunListItem,
+  projectTaskSnapshot,
+} from './tasks/memory-store.js';
+export {
+  verifyTaskStorageConformance,
+  type TaskStorageConformanceHarness,
+} from './tasks/conformance.js';
 export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
 export {

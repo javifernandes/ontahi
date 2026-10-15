@@ -13,7 +13,7 @@ import type {
 
 const now = () => new Date().toISOString();
 
-const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
+export const projectTaskSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   taskId: source.taskId,
   runId: source.runId,
   status: source.status,
@@ -33,8 +33,8 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
 });
 
-const toListItem = (source: TaskRunSource): TaskRunListItem => {
-  const { result: _result, ...snapshot } = toSnapshot(source);
+export const projectTaskRunListItem = (source: TaskRunSource): TaskRunListItem => {
+  const { result: _result, ...snapshot } = projectTaskSnapshot(source);
 
   return {
     ...snapshot,
@@ -102,7 +102,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         } satisfies TaskRunSource;
 
         runs.set(keyOf(ref), next);
-        return toSnapshot(next);
+        return projectTaskSnapshot(next);
       }),
     claimInteraction: (ref, interactionId, checkpoint) =>
       Effect.gen(function* () {
@@ -121,7 +121,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           updatedAt: now(),
         } satisfies TaskRunSource;
         runs.set(key, next);
-        return toSnapshot(next);
+        return projectTaskSnapshot(next);
       }),
     claimEvent: (ref, waitId, checkpoint) =>
       Effect.gen(function* () {
@@ -140,7 +140,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           updatedAt: now(),
         } satisfies TaskRunSource;
         runs.set(key, next);
-        return toSnapshot(next);
+        return projectTaskSnapshot(next);
       }),
     cancelEvent: (ref, waitId, status, error) =>
       Effect.gen(function* () {
@@ -159,7 +159,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           updatedAt: now(),
         } satisfies TaskRunSource;
         runs.set(key, next);
-        return toSnapshot(next);
+        return projectTaskSnapshot(next);
       }),
     attachRuntimeRef: (ref, runtime) =>
       Effect.gen(function* () {
@@ -177,7 +177,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         } satisfies TaskRunSource;
 
         runs.set(key, next);
-        return toSnapshot(next);
+        return projectTaskSnapshot(next);
       }),
     get: ref =>
       Effect.gen(function* () {
@@ -187,7 +187,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           return yield* Effect.fail(missingTaskRunFailure(ref));
         }
 
-        return toSnapshot(source);
+        return projectTaskSnapshot(source);
       }),
     getSnapshot: ref =>
       Effect.gen(function* () {
@@ -197,7 +197,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           return yield* Effect.fail(missingTaskRunFailure(ref));
         }
 
-        return toSnapshot(source);
+        return projectTaskSnapshot(source);
       }),
     loadSource: ref =>
       Effect.gen(function* () {
@@ -214,7 +214,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         Array.from(runs.values())
           .sort(compareByCreatedAtDescending)
           .slice(0, limit)
-          .map(toListItem),
+          .map(projectTaskRunListItem),
       ),
     listRecentForActor: (actor, limit = 20) =>
       Effect.sync(() =>
@@ -222,7 +222,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           .filter(source => matchesActor(source, actor))
           .sort(compareByCreatedAtDescending)
           .slice(0, limit)
-          .map(toListItem),
+          .map(projectTaskRunListItem),
       ),
   };
 };

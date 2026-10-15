@@ -328,6 +328,7 @@ export { combineRequirements } from './requirements.js';
 export { runServerEffect } from './runtime-effect.js';
 export {
   createInMemoryTaskStorage,
+  verifyTaskStorageConformance,
   createInProcessTaskExecutor,
   createInProcessTaskRuntime,
   defineTaskExecution,
@@ -391,6 +392,7 @@ export {
   type TaskSnapshot,
   type TaskStartOptions,
   type TaskStorage,
+  type TaskStorageConformanceHarness,
   type TaskStorageControl,
   type TaskStorageEngine,
   type TaskStatus,

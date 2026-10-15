@@ -7,6 +7,7 @@ import {
 import { createMysqlDataGraphStorage } from '@ontahi/mysql';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
 import { createPostgresEventRuntime } from '@ontahi/postgres/events';
+import { createPostgresTaskStorage } from '@ontahi/postgres/tasks';
 import { createPool } from 'mysql2/promise';
 import { Pool } from 'pg';
 
@@ -111,6 +112,9 @@ const createDefaultStorage = () => {
 export const defaultStorage = createDefaultStorage();
 export const todoEventRuntime = postgresPool
   ? createPostgresEventRuntime({ pool: postgresPool })
+  : undefined;
+export const todoTaskStorage = postgresPool
+  ? createPostgresTaskStorage({ pool: postgresPool })
   : undefined;
 
 export const createTodoDataGraphRuntime = (): DataGraphExecutionRuntime<unknown> =>

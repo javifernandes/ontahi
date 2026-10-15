@@ -10,7 +10,7 @@ import { langGraphTasks } from '@ontahi/runtime-langgraph';
 import { Effect } from 'effect';
 
 import { createTodoModelRuntime } from './command-chat/runtime.js';
-import { defaultStorage, todoEventRuntime } from './storage.js';
+import { defaultStorage, todoEventRuntime, todoTaskStorage } from './storage.js';
 import {
   Tag,
   TodoItem,
@@ -49,7 +49,10 @@ export const todoTaskRuntime =
 export const TodoApplication = ontahi({
   storage: defaultStorage,
   eventRuntime: todoEventRuntime,
-  tasks: todoTaskRuntime === 'langgraph' ? langGraphTasks() : inProcessTasks(),
+  tasks:
+    todoTaskRuntime === 'langgraph'
+      ? langGraphTasks({ storage: todoTaskStorage })
+      : inProcessTasks({ storage: todoTaskStorage }),
   capabilities: {
     effectors: {
       'emit-event': ({ event }: { event: TodoEvent }) =>
