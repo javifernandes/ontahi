@@ -2,14 +2,14 @@ import {
   duplicateTaskRunFailure,
   missingTaskRunFailure,
   normalizeTaskTrigger,
+  projectTaskRunListItem,
+  projectTaskSnapshot,
   type TaskActor,
   type TaskExecutionCheckpoint,
   type TaskFailure,
   type TaskRunCreateInput,
   type TaskRunIdentity,
-  type TaskRunListItem,
   type TaskRunSource,
-  type TaskSnapshot,
   type TaskStatus,
   type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
@@ -63,31 +63,6 @@ const fromRow = (row: PostgresTaskRow): TaskRunSource => ({
   updatedAt: isoDate(row.updated_at),
   completedAt: row.completed_at ? isoDate(row.completed_at) : undefined,
 });
-
-const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
-  taskId: source.taskId,
-  runId: source.runId,
-  status: source.status,
-  subject: source.subject,
-  createdAt: source.createdAt,
-  startedAt: source.startedAt,
-  updatedAt: source.updatedAt,
-  completedAt: source.completedAt,
-  progress: source.progress,
-  interaction: source.checkpoint?.interaction,
-  waitingOn: source.checkpoint?.interaction
-    ? { kind: 'interaction', interaction: source.checkpoint.interaction }
-    : source.checkpoint?.eventWait,
-  resumedBy: source.checkpoint?.eventResume,
-  error: source.error,
-  result: source.result,
-  ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
-});
-
-const toListItem = (source: TaskRunSource): TaskRunListItem => {
-  const { result: _result, ...snapshot } = toSnapshot(source);
-  return { ...snapshot, trigger: source.trigger, runtime: source.runtime };
-};
 
 const failure = (message: string, cause: unknown): TaskFailure => ({
   reason: 'task_run_store_failed',
@@ -172,7 +147,7 @@ export const createPostgresTaskStorage = ({
        RETURNING *`,
       [ref.taskId, ref.runId, waitColumn, json(checkpoint), now(), waitId],
     );
-    return result.rows[0] ? toSnapshot(fromRow(result.rows[0])) : undefined;
+    return result.rows[0] ? projectTaskSnapshot(fromRow(result.rows[0])) : undefined;
   };
 
   const create = async (input: TaskRunCreateInput) => {
@@ -206,7 +181,9 @@ export const createPostgresTaskStorage = ({
   return {
     create: input => attempt('Failed to create task run.', () => create(input)),
     update: (ref, patch) =>
-      attempt('Failed to update task run.', async () => toSnapshot(await update(ref, patch))),
+      attempt('Failed to update task run.', async () =>
+        projectTaskSnapshot(await update(ref, patch)),
+      ),
     claimInteraction: (ref, interactionId, checkpoint) =>
       attempt('Failed to claim task interaction.', () =>
         claim(ref, 'interaction', interactionId, checkpoint),
@@ -226,15 +203,16 @@ export const createPostgresTaskStorage = ({
            RETURNING *`,
           [ref.taskId, ref.runId, waitId, status, json(error), now()],
         );
-        return result.rows[0] ? toSnapshot(fromRow(result.rows[0])) : undefined;
+        return result.rows[0] ? projectTaskSnapshot(fromRow(result.rows[0])) : undefined;
       }),
     attachRuntimeRef: (ref, runtime) =>
       attempt('Failed to attach task runtime.', async () =>
-        toSnapshot(await update(ref, { runtime })),
+        projectTaskSnapshot(await update(ref, { runtime })),
       ),
-    get: ref => attempt('Failed to get task run.', async () => toSnapshot(await load(ref))),
+    get: ref =>
+      attempt('Failed to get task run.', async () => projectTaskSnapshot(await load(ref))),
     getSnapshot: ref =>
-      attempt('Failed to get task run snapshot.', async () => toSnapshot(await load(ref))),
+      attempt('Failed to get task run snapshot.', async () => projectTaskSnapshot(await load(ref))),
     loadSource: ref => attempt('Failed to load task run.', () => load(ref)),
     listRecent: (limit = 20) =>
       attempt('Failed to list task runs.', async () => {
@@ -242,7 +220,7 @@ export const createPostgresTaskStorage = ({
           `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT $1`,
           [limit],
         );
-        return result.rows.map(row => toListItem(fromRow(row)));
+        return result.rows.map(row => projectTaskRunListItem(fromRow(row)));
       }),
     listRecentForActor: (actor: TaskActor, limit = 20) =>
       attempt('Failed to list task runs for actor.', async () => {
@@ -256,7 +234,7 @@ export const createPostgresTaskStorage = ({
            ORDER BY created_at DESC LIMIT $${parameters.length}`,
           parameters,
         );
-        return result.rows.map(row => toListItem(fromRow(row)));
+        return result.rows.map(row => projectTaskRunListItem(fromRow(row)));
       }),
   };
 };

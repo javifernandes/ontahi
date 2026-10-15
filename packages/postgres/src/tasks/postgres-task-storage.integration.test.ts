@@ -21,6 +21,13 @@ import { createPostgresEventSchemaSql } from '../events/schema.js';
 import { createPostgresTaskStorage } from './runtime.js';
 import { createPostgresTaskSchemaSql } from './schema.js';
 
+const taskTables = { runs: 'ontahi_task_storage_test_runs' } as const;
+const eventTables = {
+  occurrences: 'ontahi_task_storage_test_event_occurrences',
+  subscriptions: 'ontahi_task_storage_test_event_subscriptions',
+  deliveries: 'ontahi_task_storage_test_event_deliveries',
+} as const;
+
 describe('PostgreSQL Task Storage', () => {
   let container: StartedPostgreSqlContainer | undefined;
   let pool: Pool;
@@ -32,13 +39,16 @@ describe('PostgreSQL Task Storage', () => {
       container = await new PostgreSqlContainer('postgres:17-alpine').start();
       pool = new Pool({ connectionString: container.getConnectionUri() });
     }
-    for (const statement of [...createPostgresTaskSchemaSql(), ...createPostgresEventSchemaSql()])
+    for (const statement of [
+      ...createPostgresTaskSchemaSql(taskTables),
+      ...createPostgresEventSchemaSql(eventTables),
+    ])
       await pool.query(statement);
   });
 
   beforeEach(() =>
     pool.query(
-      'TRUNCATE ontahi_task_runs, ontahi_event_deliveries, ontahi_event_subscriptions, ontahi_event_occurrences CASCADE',
+      `TRUNCATE ${taskTables.runs}, ${eventTables.deliveries}, ${eventTables.subscriptions}, ${eventTables.occurrences} CASCADE`,
     ),
   );
 
@@ -48,7 +58,11 @@ describe('PostgreSQL Task Storage', () => {
   });
 
   const storage = () =>
-    createPostgresTaskStorage({ pool, now: () => new Date('2026-10-14T00:00:00.000Z') });
+    createPostgresTaskStorage({
+      pool,
+      tables: taskTables,
+      now: () => new Date('2026-10-14T00:00:00.000Z'),
+    });
 
   it('passes the provider-neutral Task Storage conformance proof', async () => {
     await verifyTaskStorageConformance({
@@ -132,7 +146,7 @@ describe('PostgreSQL Task Storage', () => {
       }),
       run: () => Effect.dieMessage('Explicit execution must run.'),
     });
-    const firstEvents = createPostgresEventRuntime({ pool });
+    const firstEvents = createPostgresEventRuntime({ pool, tables: eventTables });
     const first = createInProcessTaskRuntime({
       storage: storage(),
       events: { runtime: firstEvents, declarations: [ExportReady] },
@@ -147,7 +161,7 @@ describe('PostgreSQL Task Storage', () => {
       });
     });
 
-    const recoveredEvents = createPostgresEventRuntime({ pool });
+    const recoveredEvents = createPostgresEventRuntime({ pool, tables: eventTables });
     const recovered = createInProcessTaskRuntime({
       storage: storage(),
       events: { runtime: recoveredEvents, declarations: [ExportReady] },
