@@ -1,19 +1,16 @@
 import {
+  applyTaskRunSourcePatch,
+  createTaskStorageAdapter,
   duplicateTaskRunFailure,
   missingTaskRunFailure,
   normalizeTaskTrigger,
-  projectTaskRunListItem,
-  projectTaskSnapshot,
   type TaskActor,
   type TaskExecutionCheckpoint,
-  type TaskFailure,
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunSource,
   type TaskStatus,
-  type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
-import { Effect } from 'effect';
 import type { Pool } from 'pg';
 
 import { resolvePostgresTaskTableName, type PostgresTaskTableNames } from './schema.js';
@@ -64,29 +61,13 @@ const fromRow = (row: PostgresTaskRow): TaskRunSource => ({
   completedAt: row.completed_at ? isoDate(row.completed_at) : undefined,
 });
 
-const failure = (message: string, cause: unknown): TaskFailure => ({
-  reason: 'task_run_store_failed',
-  message,
-  cause: cause instanceof Error ? cause.message : String(cause),
-});
-
-const caughtFailure =
-  (message: string) =>
-  (cause: unknown): TaskFailure =>
-    typeof cause === 'object' &&
-    cause !== null &&
-    'reason' in cause &&
-    typeof (cause as { reason: unknown }).reason === 'string'
-      ? (cause as TaskFailure)
-      : failure(message, cause);
-
 const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
 
 export const createPostgresTaskStorage = ({
   pool,
   tables,
   now = () => new Date(),
-}: PostgresTaskStorageOptions): TaskStorage => {
+}: PostgresTaskStorageOptions) => {
   const table = `"${resolvePostgresTaskTableName(tables)}"`;
   const load = async (ref: TaskRunIdentity) => {
     const result = await pool.query<PostgresTaskRow>(
@@ -100,7 +81,7 @@ export const createPostgresTaskStorage = ({
 
   const update = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) => {
     const current = await load(ref);
-    const updatedAt = patch.updatedAt ? new Date(patch.updatedAt) : now();
+    const next = applyTaskRunSourcePatch(current, patch, patch.updatedAt ?? now().toISOString());
     const result = await pool.query<PostgresTaskRow>(
       `UPDATE ${table} SET
         status = $3, input = $4::jsonb, trigger = $5::jsonb, subject = $6::jsonb,
@@ -111,23 +92,19 @@ export const createPostgresTaskStorage = ({
       [
         ref.taskId,
         ref.runId,
-        patch.status ?? current.status,
-        json(patch.input === undefined ? current.input : patch.input),
-        json(patch.trigger ?? current.trigger),
-        json(patch.subject === undefined ? current.subject : patch.subject),
-        json(patch.runtime === undefined ? current.runtime : patch.runtime),
-        json(patch.progress ? { ...current.progress, ...patch.progress } : current.progress),
-        json('checkpoint' in patch ? patch.checkpoint : current.checkpoint),
-        json(patch.result === undefined ? current.result : patch.result),
-        json(
-          patch.executionMetadata === undefined
-            ? current.executionMetadata
-            : patch.executionMetadata,
-        ),
-        json(patch.error === undefined ? current.error : patch.error),
-        patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,
-        updatedAt,
-        patch.completedAt === undefined ? (current.completedAt ?? null) : patch.completedAt,
+        next.status,
+        json(next.input),
+        json(next.trigger),
+        json(next.subject),
+        json(next.runtime),
+        json(next.progress),
+        json(next.checkpoint),
+        json(next.result),
+        json(next.executionMetadata),
+        json(next.error),
+        next.startedAt ?? null,
+        next.updatedAt,
+        next.completedAt ?? null,
       ],
     );
     return fromRow(result.rows[0]!);
@@ -147,7 +124,7 @@ export const createPostgresTaskStorage = ({
        RETURNING *`,
       [ref.taskId, ref.runId, waitColumn, json(checkpoint), now(), waitId],
     );
-    return result.rows[0] ? projectTaskSnapshot(fromRow(result.rows[0])) : undefined;
+    return result.rows[0] ? fromRow(result.rows[0]) : undefined;
   };
 
   const create = async (input: TaskRunCreateInput) => {
@@ -175,66 +152,42 @@ export const createPostgresTaskStorage = ({
     }
   };
 
-  const attempt = <T>(message: string, work: () => Promise<T>) =>
-    Effect.tryPromise({ try: work, catch: caughtFailure(message) });
-
-  return {
-    create: input => attempt('Failed to create task run.', () => create(input)),
-    update: (ref, patch) =>
-      attempt('Failed to update task run.', async () =>
-        projectTaskSnapshot(await update(ref, patch)),
-      ),
-    claimInteraction: (ref, interactionId, checkpoint) =>
-      attempt('Failed to claim task interaction.', () =>
-        claim(ref, 'interaction', interactionId, checkpoint),
-      ),
-    claimEvent: (ref, waitId, checkpoint) =>
-      attempt('Failed to claim task Event wait.', () =>
-        claim(ref, 'eventWait', waitId, checkpoint),
-      ),
-    cancelEvent: (ref, waitId, status, error) =>
-      attempt('Failed to cancel task Event wait.', async () => {
-        const result = await pool.query<PostgresTaskRow>(
-          `UPDATE ${table}
+  return createTaskStorageAdapter({
+    create,
+    update,
+    claim,
+    cancelEvent: async (ref, waitId, status, error) => {
+      const result = await pool.query<PostgresTaskRow>(
+        `UPDATE ${table}
            SET status = $4, checkpoint = NULL, error = $5::jsonb,
                completed_at = $6, updated_at = $6
            WHERE task_id = $1 AND run_id = $2 AND status = 'waiting'
              AND checkpoint -> 'eventWait' ->> 'id' = $3
            RETURNING *`,
-          [ref.taskId, ref.runId, waitId, status, json(error), now()],
-        );
-        return result.rows[0] ? projectTaskSnapshot(fromRow(result.rows[0])) : undefined;
-      }),
-    attachRuntimeRef: (ref, runtime) =>
-      attempt('Failed to attach task runtime.', async () =>
-        projectTaskSnapshot(await update(ref, { runtime })),
-      ),
-    get: ref =>
-      attempt('Failed to get task run.', async () => projectTaskSnapshot(await load(ref))),
-    getSnapshot: ref =>
-      attempt('Failed to get task run snapshot.', async () => projectTaskSnapshot(await load(ref))),
-    loadSource: ref => attempt('Failed to load task run.', () => load(ref)),
-    listRecent: (limit = 20) =>
-      attempt('Failed to list task runs.', async () => {
-        const result = await pool.query<PostgresTaskRow>(
-          `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT $1`,
-          [limit],
-        );
-        return result.rows.map(row => projectTaskRunListItem(fromRow(row)));
-      }),
-    listRecentForActor: (actor: TaskActor, limit = 20) =>
-      attempt('Failed to list task runs for actor.', async () => {
-        const parameters: unknown[] = [actor.kind];
-        const idFilter = actor.id === undefined ? '' : ` AND trigger -> 'actor' ->> 'id' = $2`;
-        if (actor.id !== undefined) parameters.push(actor.id);
-        parameters.push(limit);
-        const result = await pool.query<PostgresTaskRow>(
-          `SELECT * FROM ${table}
+        [ref.taskId, ref.runId, waitId, status, json(error), now()],
+      );
+      return result.rows[0] ? fromRow(result.rows[0]) : undefined;
+    },
+    load,
+    listRecent: async limit => {
+      const result = await pool.query<PostgresTaskRow>(
+        `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT $1`,
+        [limit],
+      );
+      return result.rows.map(fromRow);
+    },
+    listRecentForActor: async (actor: TaskActor, limit) => {
+      const parameters: unknown[] = [actor.kind];
+      const idFilter = actor.id === undefined ? '' : ` AND trigger -> 'actor' ->> 'id' = $2`;
+      if (actor.id !== undefined) parameters.push(actor.id);
+      parameters.push(limit);
+      const result = await pool.query<PostgresTaskRow>(
+        `SELECT * FROM ${table}
            WHERE trigger -> 'actor' ->> 'kind' = $1${idFilter}
            ORDER BY created_at DESC LIMIT $${parameters.length}`,
-          parameters,
-        );
-        return result.rows.map(row => projectTaskRunListItem(fromRow(row)));
-      }),
-  };
+        parameters,
+      );
+      return result.rows.map(fromRow);
+    },
+  });
 };

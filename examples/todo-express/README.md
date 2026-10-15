@@ -185,17 +185,19 @@ pnpm --filter @ontahi/example-todo-express db:mysql:start
 pnpm --filter @ontahi/example-todo-express dev:mysql
 ```
 
-`TODO_STORAGE=mysql` selects the adapter. The local host uses `TODO_MYSQL_PASSWORD` on port 33069;
+`TODO_STORAGE=mysql` composes independent MySQL Data Graph, Task Storage, and Event Runtime
+implementations. The local host uses `TODO_MYSQL_PASSWORD` on port 33069;
 `DATABASE_URL` can instead supply a complete connection URI. Keep the same password when restarting
 a database with an existing volume; generate a new one only for a new database. The MySQL Compose profile owns a separate named volume and initializes it
-from `migrations-mysql/`. Those SQL files own tables, foreign keys, edge uniqueness, and a trigger
+from `migrations-mysql/`. Those SQL files own graph, Event, and Task tables, foreign keys, edge uniqueness, and a trigger
 that assigns each new item a position while locking its list. Ontahi owns subsequent ordered moves.
 Changes to init SQL apply only when creating a fresh volume. Stop MySQL with
 `docker compose --profile mysql stop mysql` from this example directory; stopping retains its data.
 
 The integration test requires Docker running and generates a fresh random database password per run. It starts and removes its own isolated MySQL container,
 without using the Compose volume, and starts two separate Express host processes to
-verify that lists, items, tags, and order survive the first host's shutdown:
+verify that the composed host starts with all three concerns and that lists, items, tags, and order
+survive the first host's shutdown:
 
 ```sh
 pnpm --filter @ontahi/example-todo-express exec vitest run src/mysql-storage.integration.test.ts

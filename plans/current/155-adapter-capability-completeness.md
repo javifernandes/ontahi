@@ -19,7 +19,7 @@ Related plans:
 
 Ontahi now has provider-neutral Data Graph, Task Storage, Task Runtime, Event Runtime, Runtime
 Protocol, and Event ingress boundaries. The implementations prove those boundaries unevenly:
-PostgreSQL and MySQL provide Data Graph and durable Events but no Task Storage, while Supabase
+PostgreSQL and MySQL provide Data Graph, durable Task Storage, and durable Events, while Supabase
 provides Data Graph and Task Storage but no Event Runtime. Runtime hosts and task executors also
 support different deliberate subsets.
 
@@ -33,8 +33,8 @@ or concurrent behavior.
 | Adapter         | Data Graph                                   | Task Storage / Runtime                               | Event Runtime                   | Host / ingress             |
 | --------------- | -------------------------------------------- | ---------------------------------------------------- | ------------------------------- | -------------------------- |
 | Core in-memory  | reference runtime and storage                | storage and in-process runtime                       | ephemeral reference runtime     | transport-neutral protocol |
-| PostgreSQL      | transactional storage                        | missing Task Storage                                 | durable delivery                | not applicable             |
-| MySQL           | transactional storage with documented limits | missing Task Storage                                 | durable delivery                | not applicable             |
+| PostgreSQL      | transactional storage                        | durable Task Storage and in-process runtime          | durable delivery                | not applicable             |
+| MySQL           | transactional storage with documented limits | durable Task Storage and in-process runtime          | durable delivery                | not applicable             |
 | Supabase        | PostgREST and focused RPC capabilities       | Task Storage, currently without provider conformance | missing                         | not applicable             |
 | Express         | not a storage provider                       | Operation and Task observation host                  | Event ingress                   | HTTP, WebSocket, Explorer  |
 | Next.js         | not a storage provider                       | Operation host                                       | Event ingress                   | HTTP Runtime Protocol      |
@@ -78,9 +78,9 @@ adds a useful composition path.
 
 ### Slice 2: MySQL Task Storage
 
-- [ ] Implement `@ontahi/mysql/tasks` against the same conformance proof.
-- [ ] Prove InnoDB claim concurrency and restart recovery.
-- [ ] Wire the MySQL Todo mode without coupling Data Graph, Tasks, and Events at construction.
+- [x] Implement `@ontahi/mysql/tasks` against the same conformance proof.
+- [x] Prove InnoDB claim concurrency and restart recovery.
+- [x] Wire the MySQL Todo mode without coupling Data Graph, Tasks, and Events at construction.
 
 ### Slice 3: Supabase Task Storage Hardening
 

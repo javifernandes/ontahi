@@ -27,16 +27,22 @@ it('runs Todo graph mutations and preserves tags and ordering across Express hos
   const uri = `mysql://root:${password}@${container.getHost()}:${container.getMappedPort(3306)}/ontahi_todos`;
   const pool = createPool(uri);
   try {
-    const migration = await readFile(
-      new URL('../migrations-mysql/001-create-todos.sql', import.meta.url),
-      'utf8',
-    );
-    for (const statement of migration
-      .replaceAll(/^DELIMITER .*$/gm, '')
-      .split('$$')
-      .map(sql => sql.trim())
-      .filter(Boolean))
-      await pool.query(statement);
+    for (const [file, delimiter] of [
+      ['001-create-todos.sql', '$$'],
+      ['002-create-event-runtime.sql', ';'],
+      ['003-create-task-storage.sql', ';'],
+    ] as const) {
+      const migration = await readFile(
+        new URL(`../migrations-mysql/${file}`, import.meta.url),
+        'utf8',
+      );
+      for (const statement of migration
+        .replaceAll(/^DELIMITER .*$/gm, '')
+        .split(delimiter)
+        .map(sql => sql.trim())
+        .filter(Boolean))
+        await pool.query(statement);
+    }
     const invoke = promisify(execFile);
     for (const phase of ['write', 'read']) {
       const result = await invoke(

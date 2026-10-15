@@ -53,6 +53,11 @@ export {
   verifyTaskStorageConformance,
   type TaskStorageConformanceHarness,
 } from './tasks/conformance.js';
+export {
+  applyTaskRunSourcePatch,
+  createTaskStorageAdapter,
+  type TaskStorageAdapterOperations,
+} from './tasks/storage-adapter.js';
 export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
 export {
