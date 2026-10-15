@@ -22,6 +22,7 @@ import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import { createExpressRuntimeProtocolHandler } from '@ontahi/runtime-express/runtime-protocol';
 import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
+import { supabaseTaskClaimRpcSql } from '@ontahi/supabase/tasks';
 import { createElement, type ReactNode } from 'react';
 
 type PublicModules = [
@@ -76,6 +77,7 @@ type PublicModules = [
 ];
 
 export type PublicModuleCount = PublicModules['length'];
+void supabaseTaskClaimRpcSql;
 
 export const classifiedRuntimeContract = (runtime: DataGraphExecutionRuntime) => {
   const Base = entity('BoundContractNode', {

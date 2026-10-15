@@ -1,19 +1,17 @@
 import {
+  applyTaskRunSourcePatch,
+  createTaskStorageAdapter,
   duplicateTaskRunFailure,
   missingTaskRunFailure,
   normalizeTaskTrigger,
   type TaskActor,
-  type TaskFailure,
   type TaskExecutionCheckpoint,
   type TaskRunCreateInput,
   type TaskRunIdentity,
-  type TaskRunListItem,
   type TaskRunSource,
   type TaskSnapshot,
   type TaskStatus,
-  type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
-import { Effect } from 'effect';
 
 type SupabaseErrorLike = {
   code?: string;
@@ -37,6 +35,10 @@ export type SupabaseTaskStorageClient = {
     select(columns?: string): SupabaseTaskRunSelectQuery;
     update(row: Record<string, unknown>): SupabaseTaskRunMutationQuery;
   };
+  rpc?(
+    functionName: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ data?: unknown; error?: SupabaseErrorLike | null }>;
 };
 
 type SupabaseTaskRunSelectQuery = {
@@ -76,70 +78,23 @@ type TaskRunRow = {
 export type CreateSupabaseTaskStorageOptions = {
   client: SupabaseTaskStorageClient;
   tableName?: string;
+  claimRpcName?: string;
   now?: () => string;
 };
 
 const DEFAULT_TABLE_NAME = 'task_runs';
+const DEFAULT_CLAIM_RPC_NAME = 'ontahi_claim_task_run';
 
 const defaultNow = () => new Date().toISOString();
 
-const toTaskFailure = (
-  reason: string,
-  message: string,
-  extra?: Record<string, unknown>,
-): TaskFailure => ({
-  reason,
+const toPersistenceFailure = (message: string, error: SupabaseErrorLike | null) => ({
+  reason: 'task_run_store_failed',
   message,
-  ...(extra ?? {}),
-});
-
-const toPersistenceFailure = (message: string, error: SupabaseErrorLike | null): TaskFailure =>
-  toTaskFailure('task_run_store_failed', message, {
+  ...{
     ...(error?.code ? { code: error.code } : {}),
     ...(error?.message ? { cause: error.message } : {}),
-  });
-
-const toCaughtFailure = (error: unknown): TaskFailure =>
-  typeof error === 'object' &&
-  error !== null &&
-  'reason' in error &&
-  'message' in error &&
-  typeof (error as { reason: unknown }).reason === 'string' &&
-  typeof (error as { message: unknown }).message === 'string'
-    ? (error as TaskFailure)
-    : toTaskFailure('task_run_store_failed', 'Task run store operation failed.', {
-        cause: error instanceof Error ? error.message : String(error),
-      });
-
-const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
-  taskId: source.taskId,
-  runId: source.runId,
-  status: source.status,
-  subject: source.subject,
-  createdAt: source.createdAt,
-  startedAt: source.startedAt,
-  updatedAt: source.updatedAt,
-  completedAt: source.completedAt,
-  progress: source.progress,
-  interaction: source.checkpoint?.interaction,
-  waitingOn: source.checkpoint?.interaction
-    ? { kind: 'interaction', interaction: source.checkpoint.interaction }
-    : source.checkpoint?.eventWait,
-  resumedBy: source.checkpoint?.eventResume,
-  error: source.error,
-  result: source.result,
-  ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
+  },
 });
-
-const toListItem = (source: TaskRunSource): TaskRunListItem => {
-  const { result: _result, ...snapshot } = toSnapshot(source);
-
-  return {
-    ...snapshot,
-    trigger: source.trigger,
-    runtime: source.runtime,
-  };
-};
 
 const fromRow = (row: TaskRunRow): TaskRunSource => ({
   taskId: row.task_id,
@@ -177,30 +132,28 @@ const toPatchRow = (
   current: TaskRunSource,
   patch: Partial<TaskRunSource>,
   now: string,
-): Record<string, unknown> => ({
-  status: patch.status ?? current.status,
-  input: patch.input === undefined ? (current.input ?? null) : patch.input,
-  trigger: patch.trigger ?? current.trigger,
-  subject: patch.subject === undefined ? (current.subject ?? null) : patch.subject,
-  runtime: patch.runtime === undefined ? (current.runtime ?? null) : patch.runtime,
-  progress: patch.progress
-    ? { ...current.progress, ...patch.progress }
-    : (current.progress ?? null),
-  checkpoint: 'checkpoint' in patch ? (patch.checkpoint ?? null) : (current.checkpoint ?? null),
-  result: patch.result === undefined ? (current.result ?? null) : patch.result,
-  ...('executionMetadata' in patch || current.executionMetadata
-    ? {
-        execution_metadata:
-          patch.executionMetadata === undefined
-            ? (current.executionMetadata ?? null)
-            : patch.executionMetadata,
-      }
-    : {}),
-  error: patch.error === undefined ? (current.error ?? null) : patch.error,
-  started_at: patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,
-  updated_at: patch.updatedAt ?? now,
-  completed_at: patch.completedAt === undefined ? (current.completedAt ?? null) : patch.completedAt,
-});
+): Record<string, unknown> => {
+  const next = applyTaskRunSourcePatch(current, patch, patch.updatedAt ?? now);
+  return {
+    status: next.status,
+    input: next.input ?? null,
+    trigger: next.trigger,
+    subject: next.subject ?? null,
+    runtime: next.runtime ?? null,
+    progress: next.progress ?? null,
+    checkpoint: next.checkpoint ?? null,
+    result: next.result ?? null,
+    ...('executionMetadata' in patch || current.executionMetadata
+      ? {
+          execution_metadata: next.executionMetadata ?? null,
+        }
+      : {}),
+    error: next.error ?? null,
+    started_at: next.startedAt ?? null,
+    updated_at: next.updatedAt,
+    completed_at: next.completedAt ?? null,
+  };
+};
 
 const keyFilters = <TQuery extends { eq(column: string, value: unknown): TQuery }>(
   query: TQuery,
@@ -218,8 +171,14 @@ const actorFilters = <TQuery extends { eq(column: string, value: unknown): TQuer
 export const createSupabaseTaskStorage = ({
   client,
   tableName = DEFAULT_TABLE_NAME,
+  claimRpcName = DEFAULT_CLAIM_RPC_NAME,
   now = defaultNow,
-}: CreateSupabaseTaskStorageOptions): TaskStorage => {
+}: CreateSupabaseTaskStorageOptions) => {
+  const rpc = client.rpc?.bind(client);
+  if (!rpc) {
+    throw new TypeError('Supabase Task Storage requires a client with RPC support.');
+  }
+
   const loadRow = async (ref: TaskRunIdentity) => {
     const result = await keyFilters(client.from(tableName).select('*'), ref).maybeSingle();
 
@@ -254,44 +213,34 @@ export const createSupabaseTaskStorage = ({
     return fromRow(result.data);
   };
 
-  const claimInteraction = async (
+  const claim = async (
     ref: TaskRunIdentity,
-    interactionId: string,
-    checkpoint: TaskExecutionCheckpoint,
-  ) => {
-    const current = fromRow(await loadRow(ref));
-    const result = await keyFilters(
-      client.from(tableName).update(toPatchRow(current, { status: 'running', checkpoint }, now())),
-      ref,
-    )
-      .eq('checkpoint->interaction->>id', interactionId)
-      .select('*')
-      .maybeSingle();
-
-    if (result.error) {
-      throw toPersistenceFailure('Failed to claim task interaction.', result.error);
-    }
-
-    return result.data ? fromRow(result.data) : undefined;
-  };
-
-  const claimEvent = async (
-    ref: TaskRunIdentity,
+    kind: 'interaction' | 'eventWait',
     waitId: string,
     checkpoint: TaskExecutionCheckpoint,
   ) => {
-    const current = fromRow(await loadRow(ref));
-    const result = await keyFilters(
-      client.from(tableName).update(toPatchRow(current, { status: 'running', checkpoint }, now())),
-      ref,
-    )
-      .eq('status', 'waiting')
-      .eq('checkpoint->eventWait->>id', waitId)
-      .select('*')
-      .maybeSingle();
+    const result = await rpc(claimRpcName, {
+      command: {
+        version: 1,
+        action: kind === 'interaction' ? 'claim-interaction' : 'claim-event',
+        taskId: ref.taskId,
+        runId: ref.runId,
+        waitId,
+        checkpoint,
+        updatedAt: now(),
+      },
+    });
 
-    if (result.error) throw toPersistenceFailure('Failed to claim task Event wait.', result.error);
-    return result.data ? fromRow(result.data) : undefined;
+    if (result.error) {
+      throw toPersistenceFailure(
+        kind === 'interaction'
+          ? 'Failed to claim task interaction.'
+          : 'Failed to claim task Event wait.',
+        result.error,
+      );
+    }
+
+    return result.data ? fromRow(result.data as TaskRunRow) : undefined;
   };
 
   const cancelEvent = async (
@@ -300,135 +249,59 @@ export const createSupabaseTaskStorage = ({
     status: 'cancelled' | 'failed',
     error?: NonNullable<TaskSnapshot['error']>,
   ) => {
-    const current = fromRow(await loadRow(ref));
-    const result = await keyFilters(
-      client
-        .from(tableName)
-        .update(
-          toPatchRow(current, { status, completedAt: now(), checkpoint: undefined, error }, now()),
-        ),
-      ref,
-    )
-      .eq('status', 'waiting')
-      .eq('checkpoint->eventWait->>id', waitId)
-      .select('*')
-      .maybeSingle();
+    const result = await rpc(claimRpcName, {
+      command: {
+        version: 1,
+        action: 'cancel-event',
+        taskId: ref.taskId,
+        runId: ref.runId,
+        waitId,
+        status,
+        error: error ?? null,
+        updatedAt: now(),
+      },
+    });
     if (result.error) throw toPersistenceFailure('Failed to cancel task Event wait.', result.error);
-    return result.data ? fromRow(result.data) : undefined;
+    return result.data ? fromRow(result.data as TaskRunRow) : undefined;
   };
 
-  return {
-    create: input =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await client
-            .from(tableName)
-            .insert(toCreateRow(input, now()))
-            .select('*')
-            .single();
-
-          if (result.error) {
-            if (result.error.code === '23505') {
-              throw duplicateTaskRunFailure(input);
-            }
-
-            throw toPersistenceFailure('Failed to create task run.', result.error);
-          }
-
-          if (!result.data) {
-            throw toPersistenceFailure('Failed to create task run.', {
-              message: 'Supabase did not return the inserted task run.',
-            });
-          }
-
-          return fromRow(result.data);
-        },
-        catch: toCaughtFailure,
-      }),
-    update: (ref, patch) =>
-      Effect.tryPromise({
-        try: async () => toSnapshot(await updateFromPatch(ref, patch)),
-        catch: toCaughtFailure,
-      }),
-    claimInteraction: (ref, interactionId, checkpoint) =>
-      Effect.tryPromise({
-        try: async () => {
-          const source = await claimInteraction(ref, interactionId, checkpoint);
-          return source ? toSnapshot(source) : undefined;
-        },
-        catch: toCaughtFailure,
-      }),
-    claimEvent: (ref, waitId, checkpoint) =>
-      Effect.tryPromise({
-        try: async () => {
-          const source = await claimEvent(ref, waitId, checkpoint);
-          return source ? toSnapshot(source) : undefined;
-        },
-        catch: toCaughtFailure,
-      }),
-    cancelEvent: (ref, waitId, status, error) =>
-      Effect.tryPromise({
-        try: async () => {
-          const source = await cancelEvent(ref, waitId, status, error);
-          return source ? toSnapshot(source) : undefined;
-        },
-        catch: toCaughtFailure,
-      }),
-    attachRuntimeRef: (ref, runtime) =>
-      Effect.tryPromise({
-        try: async () => toSnapshot(await updateFromPatch(ref, { runtime })),
-        catch: toCaughtFailure,
-      }),
-    get: ref =>
-      Effect.tryPromise({
-        try: async () => toSnapshot(fromRow(await loadRow(ref))),
-        catch: toCaughtFailure,
-      }),
-    getSnapshot: ref =>
-      Effect.tryPromise({
-        try: async () => toSnapshot(fromRow(await loadRow(ref))),
-        catch: toCaughtFailure,
-      }),
-    loadSource: ref =>
-      Effect.tryPromise({
-        try: async () => fromRow(await loadRow(ref)),
-        catch: toCaughtFailure,
-      }),
-    listRecent: (limit = 20) =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await client
-            .from(tableName)
-            .select('*')
-            .order('created_at', {
-              ascending: false,
-            })
-            .limit(limit);
-
-          if (result.error) {
-            throw toPersistenceFailure('Failed to list task runs.', result.error);
-          }
-
-          return (result.data ?? []).map(row => toListItem(fromRow(row)));
-        },
-        catch: toCaughtFailure,
-      }),
-    listRecentForActor: (actor, limit = 20) =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await actorFilters(client.from(tableName).select('*'), actor)
-            .order('created_at', {
-              ascending: false,
-            })
-            .limit(limit);
-
-          if (result.error) {
-            throw toPersistenceFailure('Failed to list task runs for actor.', result.error);
-          }
-
-          return (result.data ?? []).map(row => toListItem(fromRow(row)));
-        },
-        catch: toCaughtFailure,
-      }),
-  };
+  return createTaskStorageAdapter({
+    create: async input => {
+      const result = await client
+        .from(tableName)
+        .insert(toCreateRow(input, now()))
+        .select('*')
+        .single();
+      if (result.error?.code === '23505') throw duplicateTaskRunFailure(input);
+      if (result.error) throw toPersistenceFailure('Failed to create task run.', result.error);
+      if (!result.data) {
+        throw toPersistenceFailure('Failed to create task run.', {
+          message: 'Supabase did not return the inserted task run.',
+        });
+      }
+      return fromRow(result.data);
+    },
+    update: updateFromPatch,
+    claim,
+    cancelEvent,
+    load: async ref => fromRow(await loadRow(ref)),
+    listRecent: async limit => {
+      const result = await client
+        .from(tableName)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (result.error) throw toPersistenceFailure('Failed to list task runs.', result.error);
+      return (result.data ?? []).map(fromRow);
+    },
+    listRecentForActor: async (actor, limit) => {
+      const result = await actorFilters(client.from(tableName).select('*'), actor)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (result.error) {
+        throw toPersistenceFailure('Failed to list task runs for actor.', result.error);
+      }
+      return (result.data ?? []).map(fromRow);
+    },
+  });
 };

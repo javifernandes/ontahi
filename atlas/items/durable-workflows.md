@@ -40,8 +40,10 @@ may provide native observation or explicitly use the polling compatibility adapt
 Task Storage is an adapter-author boundary independent from execution engines. Core's shared
 conformance proof covers private source persistence, public snapshot and listing projections,
 runtime recreation, canonical duplicate behavior, actor scoping, and exclusive Interaction and
-Event-wait claims. `@ontahi/postgres/tasks` and `@ontahi/mysql/tasks` persist restart-safe
-checkpoints and use conditional database updates so concurrent application processes cannot both
-claim one pending continuation. The MySQL implementation uses InnoDB and exact binary identities;
-neither adapter makes the Task lifecycle atomic with Data Graph mutations or Event acceptance
-merely because its concerns can share a pool.
+Event-wait claims. `@ontahi/postgres/tasks`, `@ontahi/mysql/tasks`, and
+`@ontahi/supabase/tasks` persist restart-safe checkpoints and use conditional database updates so
+concurrent application processes cannot both claim one pending continuation. Supabase owns that
+conditional update in an invoker-rights PostgREST RPC, preserving table grants and RLS; it does not
+claim native observation. The MySQL implementation uses InnoDB and exact binary identities. No
+adapter makes the Task lifecycle atomic with Data Graph mutations or Event acceptance merely
+because its concerns can share physical infrastructure.
