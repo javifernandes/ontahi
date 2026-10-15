@@ -7,8 +7,8 @@ import type {
 const hash = (value: string) => {
   let result = 2_166_136_261;
 
-  for (let index = 0; index < value.length; index += 1) {
-    result ^= value.charCodeAt(index);
+  for (const character of value) {
+    result ^= character.codePointAt(0) ?? 0;
     result = Math.imul(result, 16_777_619);
   }
 

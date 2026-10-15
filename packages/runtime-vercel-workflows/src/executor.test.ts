@@ -49,13 +49,13 @@ describe('vercel workflow task executor', () => {
     workflowSleep.mockClear();
     createHook.mockReset();
     hookResponses.length = 0;
-    createHook.mockImplementation(({ token }: { token: string }) => ({
-      token,
-      getConflict: () => Promise.resolve(null),
-      then: (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) =>
-        Promise.resolve(hookResponses.shift()).then(resolve, reject),
-      dispose: vi.fn(),
-    }));
+    createHook.mockImplementation(({ token }: { token: string }) =>
+      Object.assign(Promise.resolve(hookResponses.shift()), {
+        token,
+        getConflict: () => Promise.resolve(null),
+        dispose: vi.fn(),
+      }),
+    );
     update.mockImplementation(ref =>
       Effect.succeed({
         ...ref,
@@ -450,6 +450,90 @@ describe('vercel workflow task executor', () => {
         result: { completed: true },
       }),
     );
+  });
+
+  it('publishes a new wait after consuming a response when consecutive interactions reuse an id', async () => {
+    let source = {
+      taskId: 'fixture.repeated-interaction',
+      runId: 'bookops-run-1',
+      status: 'queued' as const,
+      input: {},
+      trigger: { cause: 'user_request' },
+      updatedAt: '2026-06-03T00:00:00.000Z',
+    };
+    loadSource.mockImplementation(() => Effect.succeed(source));
+    update.mockImplementation((_ref, patch) => {
+      source = { ...source, ...patch } as typeof source;
+      return Effect.succeed(source);
+    });
+    hookResponses.push(
+      { interactionId: 'approve', decision: 'approve' },
+      { interactionId: 'approve', decision: 'approve' },
+    );
+    taskDefinitions.set('fixture.repeated-interaction', {
+      id: 'fixture.repeated-interaction',
+      execution: {
+        initial: () => ({ step: 'approve', phase: 1 }),
+        steps: {
+          approve: {
+            run: ({ state, response }) => {
+              const phase = (state as { phase?: number }).phase;
+              if (!response) {
+                return Effect.succeed({
+                  kind: 'interaction',
+                  state,
+                  interaction: {
+                    id: 'approve',
+                    prompt: `Approve phase ${String(phase)}?`,
+                    proposal: {
+                      id: `proposal-${String(phase)}`,
+                      summary: `Apply phase ${String(phase)}.`,
+                      requests: [{ version: 1, kind: 'graph-command' }],
+                    },
+                  },
+                } as const);
+              }
+              if (phase === 1) {
+                return Effect.succeed({
+                  kind: 'interaction',
+                  state: { step: 'approve', phase: 2 },
+                  interaction: {
+                    id: 'approve',
+                    prompt: 'Approve phase 2?',
+                    proposal: {
+                      id: 'proposal-2',
+                      summary: 'Apply phase 2.',
+                      requests: [{ version: 1, kind: 'graph-command' }],
+                    },
+                  },
+                } as const);
+              }
+              return Effect.succeed({ kind: 'complete', result: { completed: true } } as const);
+            },
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask({ taskId: 'fixture.repeated-interaction', runId: 'bookops-run-1' }, vi.fn()),
+    ).resolves.toEqual({ completed: true });
+
+    const checkpoints = update.mock.calls
+      .map(([, patch]) => patch)
+      .filter(patch => patch.checkpoint);
+    expect(checkpoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 'running',
+          checkpoint: { version: 1, state: { step: 'approve', phase: 2 } },
+        }),
+      ]),
+    );
+    expect(checkpoints.filter(patch => patch.status === 'waiting')).toHaveLength(2);
+    expect(createHook).toHaveBeenCalledTimes(2);
   });
 
   it('keeps explicit Event waits outside this interaction vertical', async () => {

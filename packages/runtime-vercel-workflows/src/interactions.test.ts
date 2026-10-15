@@ -17,6 +17,9 @@ describe('Vercel Workflow interaction identities', () => {
     expect(vercelInteractionId(ref, { step: 'choose' }, { ...request, id: 'choose-list' })).toBe(
       'choose-list',
     );
+    expect(vercelInteractionId(ref, { step: 'elegir-🫡' }, request)).toBe(
+      vercelInteractionId(ref, { step: 'elegir-🫡' }, request),
+    );
   });
 
   it('keeps the native hook token deterministic and unambiguous', () => {
