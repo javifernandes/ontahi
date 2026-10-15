@@ -20,18 +20,52 @@ the host application.
 semantic mutation metadata in nullable `execution_metadata jsonb` columns on `task_runs`. The
 checkpoint is private runtime data; public snapshots expose only its pending interaction. Mutation
 metadata remains server-side until a Runtime Protocol host explicitly projects it for the caller's
-authority. Add the columns when upgrading an existing host:
+authority. The host owns the table migration; the minimum columns used by the adapter are:
 
 ```sql
-alter table task_runs add column if not exists checkpoint jsonb;
-alter table task_runs add column if not exists execution_metadata jsonb;
+create table public.task_runs (
+  task_id text not null,
+  run_id text not null,
+  status text not null,
+  input jsonb,
+  trigger jsonb not null,
+  subject jsonb,
+  runtime jsonb,
+  progress jsonb,
+  checkpoint jsonb,
+  result jsonb,
+  execution_metadata jsonb,
+  error jsonb,
+  created_at timestamptz not null,
+  started_at timestamptz,
+  updated_at timestamptz not null,
+  completed_at timestamptz,
+  primary key (task_id, run_id)
+);
 ```
 
 Keeping the checkpoint in the same row as task status lets a new application process reconstruct a
 named-step execution after the browser or server disconnects. Task definitions remain application
-code and are registered again at startup; functions and runtime contexts are never serialized. The
-adapter claims a `waiting` interaction with a conditional row update that also returns the run to
-`running`, so concurrent responses cannot continue the same checkpoint twice.
+code and are registered again at startup; functions and runtime contexts are never serialized.
+
+Install the SQL exported as `supabaseTaskClaimRpcSql` after the table migration. The RPC performs
+Interaction claims, Event-wait claims, and Event-wait cancellation as one conditional
+`UPDATE ... RETURNING`, so independent application processes cannot both resume one continuation.
+It is `security invoker`: table grants and RLS remain authoritative. Grant `select`, `insert`, and
+`update` on `public.task_runs` plus `execute` on
+`public.ontahi_claim_task_run(jsonb)` only to the roles that operate Tasks. Supabase grants function
+execution to `public` by default, so security-conscious hosts should revoke that default before
+granting their application roles explicitly.
+
+The exported function targets `public.task_runs`. A custom `tableName` therefore also requires a
+compatible host-owned RPC and its name passed as `claimRpcName`; Ontahi does not interpolate table
+names into RPC commands. The adapter has no native realtime observation, retention, or cleanup
+policy. Runtime observation uses Core's polling compatibility path, and the host remains responsible
+for archival and deletion. Task writes are not atomic with separate Data Graph or Event requests.
+
+Provider-backed tests run Core's complete Task Storage conformance proof through the real Supabase
+PostgREST client, PostgreSQL 17, and PostgREST 13. They race independent clients and verify that RLS
+also applies inside the claim RPC. They do not connect to a hosted Supabase project.
 
 ## Contextual Selection reads
 

@@ -30,16 +30,16 @@ or concurrent behavior.
 
 ## Current Capability Matrix
 
-| Adapter         | Data Graph                                   | Task Storage / Runtime                               | Event Runtime                   | Host / ingress             |
-| --------------- | -------------------------------------------- | ---------------------------------------------------- | ------------------------------- | -------------------------- |
-| Core in-memory  | reference runtime and storage                | storage and in-process runtime                       | ephemeral reference runtime     | transport-neutral protocol |
-| PostgreSQL      | transactional storage                        | durable Task Storage and in-process runtime          | durable delivery                | not applicable             |
-| MySQL           | transactional storage with documented limits | durable Task Storage and in-process runtime          | durable delivery                | not applicable             |
-| Supabase        | PostgREST and focused RPC capabilities       | Task Storage, currently without provider conformance | missing                         | not applicable             |
-| Express         | not a storage provider                       | Operation and Task observation host                  | Event ingress                   | HTTP, WebSocket, Explorer  |
-| Next.js         | not a storage provider                       | Operation host                                       | Event ingress                   | HTTP Runtime Protocol      |
-| Vercel Workflow | not applicable                               | durable executor subset                              | no Event waits                  | not applicable             |
-| LangGraph       | not applicable                               | interaction-capable executor subset                  | Event waits rejected explicitly | not applicable             |
+| Adapter         | Data Graph                                   | Task Storage / Runtime                      | Event Runtime                   | Host / ingress             |
+| --------------- | -------------------------------------------- | ------------------------------------------- | ------------------------------- | -------------------------- |
+| Core in-memory  | reference runtime and storage                | storage and in-process runtime              | ephemeral reference runtime     | transport-neutral protocol |
+| PostgreSQL      | transactional storage                        | durable Task Storage and in-process runtime | durable delivery                | not applicable             |
+| MySQL           | transactional storage with documented limits | durable Task Storage and in-process runtime | durable delivery                | not applicable             |
+| Supabase        | PostgREST and focused RPC capabilities       | durable Task Storage through PostgREST/RPC  | missing                         | not applicable             |
+| Express         | not a storage provider                       | Operation and Task observation host         | Event ingress                   | HTTP, WebSocket, Explorer  |
+| Next.js         | not a storage provider                       | Operation host                              | Event ingress                   | HTTP Runtime Protocol      |
+| Vercel Workflow | not applicable                               | durable executor subset                     | no Event waits                  | not applicable             |
+| LangGraph       | not applicable                               | interaction-capable executor subset         | Event waits rejected explicitly | not applicable             |
 
 The matrix is not a promise that every package implements every concern. A missing cell becomes
 work only when the underlying technology can provide the contract honestly and the implementation
@@ -84,9 +84,9 @@ adds a useful composition path.
 
 ### Slice 3: Supabase Task Storage Hardening
 
-- [ ] Run the shared Task Storage proof against a real PostgREST/Supabase-compatible stack.
-- [ ] Replace any read-then-write claim behavior that cannot prove atomic ownership.
-- [ ] State RLS, grants, schema, and realtime/observation limitations explicitly.
+- [x] Run the shared Task Storage proof against a real PostgREST/Supabase-compatible stack.
+- [x] Replace read-then-write claims with an invoker-rights conditional-update RPC.
+- [x] State RLS, grants, schema, and realtime/observation limitations explicitly.
 
 ### Slice 4: Remaining Runtime Gaps
 

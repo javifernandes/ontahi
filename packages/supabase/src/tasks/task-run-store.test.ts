@@ -152,9 +152,46 @@ class FakeSupabaseTable {
 
 const createFakeSupabaseClient = (rows: FakeRow[] = []): SupabaseTaskStorageClient => ({
   from: () => new FakeSupabaseTable(rows) as any,
+  rpc: async (_functionName, args) => {
+    const command = args.command as Record<string, any>;
+    const action = command.action as string;
+    const waitPath = action === 'claim-interaction' ? 'interaction' : 'eventWait';
+    const row = rows.find(
+      candidate =>
+        candidate.task_id === command.taskId &&
+        candidate.run_id === command.runId &&
+        candidate.status === 'waiting' &&
+        candidate.checkpoint?.[waitPath]?.id === command.waitId,
+    );
+    if (!row) return { data: null, error: null };
+    if (action === 'cancel-event') {
+      Object.assign(row, {
+        status: command.status,
+        checkpoint: null,
+        error: command.error,
+        completed_at: command.updatedAt,
+        updated_at: command.updatedAt,
+      });
+    } else {
+      Object.assign(row, {
+        status: 'running',
+        checkpoint: command.checkpoint,
+        updated_at: command.updatedAt,
+      });
+    }
+    return { data: row as any, error: null };
+  },
 });
 
 describe('createSupabaseTaskStorage', () => {
+  it('fails closed when the client cannot execute the atomic claim RPC', () => {
+    const client = createFakeSupabaseClient();
+    delete client.rpc;
+    expect(() => createSupabaseTaskStorage({ client })).toThrow(
+      'requires a client with RPC support',
+    );
+  });
+
   it('atomically claims a pending interaction once', async () => {
     const store = createSupabaseTaskStorage({ client: createFakeSupabaseClient() });
     const ref = { taskId: 'demo.approve', runId: 'claim-once' };

@@ -68,6 +68,11 @@ constructing a monolithic adapter or implying a shared transaction. The Task Sto
 verifier is public Core infrastructure for adapter authors; PostgreSQL and MySQL back exclusive
 continuation claims with conditional updates, while schema and migration ownership remain with the host.
 
+`@ontahi/supabase/tasks` passes the same contract through the real PostgREST client. Its
+invoker-rights PostgreSQL RPC owns Interaction claims, Event-wait claims, and cancellation as
+single conditional updates, while host grants and RLS remain authoritative. Supabase Task Storage
+does not advertise native observation or cross-request transactions with Data Graph or Events.
+
 Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
 
 For observability, core owns vendor-neutral telemetry and reporting ports. `@ontahi/opentelemetry` implements span creation and Ontahi runtime attributes, while each host registers its SDK, resources, processors, and exporters. BookOps keeps Sentry reporting local until another host proves that adapter reusable; Axiom and SigNoz remain interchangeable OTLP destinations rather than Ontahi adapters.
