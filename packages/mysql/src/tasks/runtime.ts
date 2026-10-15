@@ -1,19 +1,16 @@
 import {
+  applyTaskRunSourcePatch,
+  createTaskStorageAdapter,
   duplicateTaskRunFailure,
   missingTaskRunFailure,
   normalizeTaskTrigger,
-  projectTaskRunListItem,
-  projectTaskSnapshot,
   type TaskActor,
   type TaskExecutionCheckpoint,
-  type TaskFailure,
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunSource,
   type TaskStatus,
-  type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
-import { Effect } from 'effect';
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import { resolveMysqlTaskTableName, type MysqlTaskTableNames } from './schema.js';
@@ -87,29 +84,13 @@ const fromRow = (row: MysqlTaskRow): TaskRunSource => {
   };
 };
 
-const failure = (message: string, cause: unknown): TaskFailure => ({
-  reason: 'task_run_store_failed',
-  message,
-  cause: cause instanceof Error ? cause.message : String(cause),
-});
-
-const caughtFailure =
-  (message: string) =>
-  (cause: unknown): TaskFailure =>
-    typeof cause === 'object' &&
-    cause !== null &&
-    'reason' in cause &&
-    typeof (cause as { reason: unknown }).reason === 'string'
-      ? (cause as TaskFailure)
-      : failure(message, cause);
-
 const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
 
 export const createMysqlTaskStorage = ({
   pool,
   tables,
   now = () => new Date(),
-}: MysqlTaskStorageOptions): TaskStorage => {
+}: MysqlTaskStorageOptions) => {
   const table = `\`${resolveMysqlTaskTableName(tables)}\``;
   const load = async (ref: TaskRunIdentity) => {
     const [rows] = await pool.query<MysqlTaskRow[]>(
@@ -123,7 +104,7 @@ export const createMysqlTaskStorage = ({
 
   const update = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) => {
     const current = await load(ref);
-    const updatedAt = patch.updatedAt ?? now().toISOString();
+    const next = applyTaskRunSourcePatch(current, patch, patch.updatedAt ?? now().toISOString());
     await pool.query<ResultSetHeader>(
       `UPDATE ${table} SET
         status = ?, input = CAST(? AS JSON), \`trigger\` = CAST(? AS JSON),
@@ -133,23 +114,19 @@ export const createMysqlTaskStorage = ({
         started_at = ?, updated_at = ?, completed_at = ?
        WHERE task_id = ? AND run_id = ?`,
       [
-        patch.status ?? current.status,
-        json(patch.input === undefined ? current.input : patch.input),
-        json(patch.trigger ?? current.trigger),
-        json(patch.subject === undefined ? current.subject : patch.subject),
-        json(patch.runtime === undefined ? current.runtime : patch.runtime),
-        json(patch.progress ? { ...current.progress, ...patch.progress } : current.progress),
-        json('checkpoint' in patch ? patch.checkpoint : current.checkpoint),
-        json(patch.result === undefined ? current.result : patch.result),
-        json(
-          patch.executionMetadata === undefined
-            ? current.executionMetadata
-            : patch.executionMetadata,
-        ),
-        json(patch.error === undefined ? current.error : patch.error),
-        patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,
-        updatedAt,
-        patch.completedAt === undefined ? (current.completedAt ?? null) : patch.completedAt,
+        next.status,
+        json(next.input),
+        json(next.trigger),
+        json(next.subject),
+        json(next.runtime),
+        json(next.progress),
+        json(next.checkpoint),
+        json(next.result),
+        json(next.executionMetadata),
+        json(next.error),
+        next.startedAt ?? null,
+        next.updatedAt,
+        next.completedAt ?? null,
         ref.taskId,
         ref.runId,
       ],
@@ -170,7 +147,7 @@ export const createMysqlTaskStorage = ({
          AND JSON_UNQUOTE(JSON_EXTRACT(checkpoint, '$.${waitColumn}.id')) = ?`,
       [json(checkpoint), now().toISOString(), ref.taskId, ref.runId, waitId],
     );
-    return result.affectedRows === 1 ? projectTaskSnapshot(await load(ref)) : undefined;
+    return result.affectedRows === 1 ? load(ref) : undefined;
   };
 
   const create = async (input: TaskRunCreateInput) => {
@@ -201,65 +178,41 @@ export const createMysqlTaskStorage = ({
     }
   };
 
-  const attempt = <T>(message: string, work: () => Promise<T>) =>
-    Effect.tryPromise({ try: work, catch: caughtFailure(message) });
-
-  return {
-    create: input => attempt('Failed to create task run.', () => create(input)),
-    update: (ref, patch) =>
-      attempt('Failed to update task run.', async () =>
-        projectTaskSnapshot(await update(ref, patch)),
-      ),
-    claimInteraction: (ref, interactionId, checkpoint) =>
-      attempt('Failed to claim task interaction.', () =>
-        claim(ref, 'interaction', interactionId, checkpoint),
-      ),
-    claimEvent: (ref, waitId, checkpoint) =>
-      attempt('Failed to claim task Event wait.', () =>
-        claim(ref, 'eventWait', waitId, checkpoint),
-      ),
-    cancelEvent: (ref, waitId, status, error) =>
-      attempt('Failed to cancel task Event wait.', async () => {
-        const timestamp = now().toISOString();
-        const [result] = await pool.query<ResultSetHeader>(
-          `UPDATE ${table}
+  return createTaskStorageAdapter({
+    create,
+    update,
+    claim,
+    cancelEvent: async (ref, waitId, status, error) => {
+      const timestamp = now().toISOString();
+      const [result] = await pool.query<ResultSetHeader>(
+        `UPDATE ${table}
            SET status = ?, checkpoint = NULL, error = CAST(? AS JSON),
                completed_at = ?, updated_at = ?
            WHERE task_id = ? AND run_id = ? AND status = 'waiting'
              AND JSON_UNQUOTE(JSON_EXTRACT(checkpoint, '$.eventWait.id')) = ?`,
-          [status, json(error), timestamp, timestamp, ref.taskId, ref.runId, waitId],
-        );
-        return result.affectedRows === 1 ? projectTaskSnapshot(await load(ref)) : undefined;
-      }),
-    attachRuntimeRef: (ref, runtime) =>
-      attempt('Failed to attach task runtime.', async () =>
-        projectTaskSnapshot(await update(ref, { runtime })),
-      ),
-    get: ref =>
-      attempt('Failed to get task run.', async () => projectTaskSnapshot(await load(ref))),
-    getSnapshot: ref =>
-      attempt('Failed to get task run snapshot.', async () => projectTaskSnapshot(await load(ref))),
-    loadSource: ref => attempt('Failed to load task run.', () => load(ref)),
-    listRecent: (limit = 20) =>
-      attempt('Failed to list task runs.', async () => {
-        const [rows] = await pool.query<MysqlTaskRow[]>(
-          `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT ?`,
-          [limit],
-        );
-        return rows.map(row => projectTaskRunListItem(fromRow(row)));
-      }),
-    listRecentForActor: (actor: TaskActor, limit = 20) =>
-      attempt('Failed to list task runs for actor.', async () => {
-        const idFilter = actor.id === undefined ? 'actor_id IS NULL' : 'actor_id = ?';
-        const parameters =
-          actor.id === undefined ? [actor.kind, limit] : [actor.kind, actor.id, limit];
-        const [rows] = await pool.query<MysqlTaskRow[]>(
-          `SELECT * FROM ${table}
+        [status, json(error), timestamp, timestamp, ref.taskId, ref.runId, waitId],
+      );
+      return result.affectedRows === 1 ? load(ref) : undefined;
+    },
+    load,
+    listRecent: async limit => {
+      const [rows] = await pool.query<MysqlTaskRow[]>(
+        `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT ?`,
+        [limit],
+      );
+      return rows.map(fromRow);
+    },
+    listRecentForActor: async (actor: TaskActor, limit) => {
+      const idFilter = actor.id === undefined ? 'actor_id IS NULL' : 'actor_id = ?';
+      const parameters =
+        actor.id === undefined ? [actor.kind, limit] : [actor.kind, actor.id, limit];
+      const [rows] = await pool.query<MysqlTaskRow[]>(
+        `SELECT * FROM ${table}
            WHERE actor_kind = ? AND ${idFilter}
            ORDER BY created_at DESC LIMIT ?`,
-          parameters,
-        );
-        return rows.map(row => projectTaskRunListItem(fromRow(row)));
-      }),
-  };
+        parameters,
+      );
+      return rows.map(fromRow);
+    },
+  });
 };
