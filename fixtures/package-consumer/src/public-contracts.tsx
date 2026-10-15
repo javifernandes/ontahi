@@ -48,6 +48,7 @@ type PublicModules = [
   typeof import('@ontahi/mysql'),
   typeof import('@ontahi/mysql/data-graph'),
   typeof import('@ontahi/mysql/events'),
+  typeof import('@ontahi/mysql/tasks'),
   typeof import('@ontahi/postgres'),
   typeof import('@ontahi/postgres/data-graph'),
   typeof import('@ontahi/postgres/events'),

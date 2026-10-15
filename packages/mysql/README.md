@@ -2,7 +2,7 @@
 
 MySQL-backed runtime capabilities for Ontahi, tested with MySQL 8.4 and InnoDB. The package is not
 a generic SQL client or one monolithic adapter: applications may independently use its Data Graph
-storage, durable Event Runtime, or both. It uses `mysql2/promise`; the Data Graph implementation
+storage, durable Task Storage, Event Runtime, or any combination of them. It uses `mysql2/promise`; the Data Graph implementation
 also uses the shared `@ontahi/sql` read layer. This release does not claim full PostgreSQL parity.
 
 ```ts
@@ -28,6 +28,28 @@ compilers, reflection readers, and `MysqlDataGraphError`.
 
 The package root and `/events` export `createMysqlEventRuntime`,
 `createMysqlEventSchemaSql`, and the configurable Event table-name contract.
+
+The package root and `/tasks` export `createMysqlTaskStorage`, `createMysqlTaskSchemaSql`, and the
+configurable Task run table contract.
+
+## Durable Task Storage
+
+```ts
+import { createPool } from 'mysql2/promise';
+import { createMysqlTaskStorage } from '@ontahi/mysql/tasks';
+
+const pool = createPool(process.env.DATABASE_URL!);
+const taskStorage = createMysqlTaskStorage({ pool });
+```
+
+The host applies `createMysqlTaskSchemaSql()` through its migration system. The storage persists
+private execution checkpoints and public snapshots, supports actor-scoped listings and runtime
+references, and atomically claims pending Interaction and Event continuations with conditional
+InnoDB updates. It passes Core's provider-neutral Task Storage conformance proof and supports
+restart recovery when combined with the independently configured MySQL Event Runtime.
+
+Task writes are not automatically atomic with Data Graph mutations or Event acceptance. The host
+owns retention, migrations, grants, pool lifecycle, and any broader transaction composition.
 
 Storage infers plural snake-case tables and snake-case columns using the same conventions as
 PostgreSQL. Use `overrides` for physical exceptions, or pass explicit `mappings`. Standalone runtime
@@ -118,7 +140,7 @@ ordered moves lock the collection owner. All writers enforcing these semantic co
 use that coordination protocol. Arbitrary external SQL can bypass model constraints. MySQL can
 abort a transaction on a deadlock; this adapter propagates the failure without automatic retries.
 
-Automatic migrations, broader schema-contract diagnostics, task storage, Event replay/history,
+Automatic migrations, broader schema-contract diagnostics, Event replay/history,
 atomic Data Graph/Event publication, and MariaDB compatibility are separate work. Date/time, JSON,
 and large-number Data Graph conformance remain a bounded follow-up; this release does not promise
 every PostgreSQL physical representation works unchanged.

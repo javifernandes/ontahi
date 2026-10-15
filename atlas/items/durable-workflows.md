@@ -40,7 +40,8 @@ may provide native observation or explicitly use the polling compatibility adapt
 Task Storage is an adapter-author boundary independent from execution engines. Core's shared
 conformance proof covers private source persistence, public snapshot and listing projections,
 runtime recreation, canonical duplicate behavior, actor scoping, and exclusive Interaction and
-Event-wait claims. `@ontahi/postgres/tasks` is the first direct-SQL implementation: it persists
-restart-safe checkpoints and uses conditional PostgreSQL updates so concurrent application
-processes cannot both claim one pending continuation. It does not make the Task lifecycle atomic
-with Data Graph mutations or Event acceptance merely because those adapters can share a pool.
+Event-wait claims. `@ontahi/postgres/tasks` and `@ontahi/mysql/tasks` persist restart-safe
+checkpoints and use conditional database updates so concurrent application processes cannot both
+claim one pending continuation. The MySQL implementation uses InnoDB and exact binary identities;
+neither adapter makes the Task lifecycle atomic with Data Graph mutations or Event acceptance
+merely because its concerns can share a pool.

@@ -62,12 +62,11 @@ unused concerns or grant their capabilities; each configured implementation adve
 proven guarantees. Provider-neutral conformance establishes shared semantics while physical schema,
 locking, and transaction mechanisms remain adapter-owned.
 
-`@ontahi/postgres/tasks` extends that proof to a third independently selectable concern. A host can
-compose PostgreSQL Data Graph storage, Task Storage, and Event Runtime over one pool without
+`@ontahi/postgres/tasks` and `@ontahi/mysql/tasks` extend that proof to a third independently
+selectable concern. A host can compose either provider's Data Graph storage, Task Storage, and Event Runtime over one pool without
 constructing a monolithic adapter or implying a shared transaction. The Task Storage conformance
-verifier is public Core infrastructure for adapter authors; PostgreSQL backs its exclusive
-continuation claims with conditional updates, while schema and migration ownership remain with the
-host.
+verifier is public Core infrastructure for adapter authors; PostgreSQL and MySQL back exclusive
+continuation claims with conditional updates, while schema and migration ownership remain with the host.
 
 Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
 

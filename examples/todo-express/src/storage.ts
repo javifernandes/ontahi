@@ -4,7 +4,9 @@ import {
   type DataGraphExecutionRuntime,
   type RelationshipFact,
 } from '@ontahi/core/data-graph';
-import { createMysqlDataGraphStorage } from '@ontahi/mysql';
+import { createMysqlDataGraphStorage } from '@ontahi/mysql/data-graph';
+import { createMysqlEventRuntime } from '@ontahi/mysql/events';
+import { createMysqlTaskStorage } from '@ontahi/mysql/tasks';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
 import { createPostgresEventRuntime } from '@ontahi/postgres/events';
 import { createPostgresTaskStorage } from '@ontahi/postgres/tasks';
@@ -88,34 +90,42 @@ const postgresPool =
       })
     : undefined;
 
+const mysqlPool = (() => {
+  if (process.env.TODO_STORAGE !== 'mysql') return undefined;
+  const uri = process.env.DATABASE_URL;
+  const password = process.env.TODO_MYSQL_PASSWORD;
+  if (!uri && !password) throw new Error('MySQL requires DATABASE_URL or TODO_MYSQL_PASSWORD.');
+  return uri
+    ? createPool(uri)
+    : createPool({
+        host: '127.0.0.1',
+        port: 33069,
+        user: 'root',
+        database: 'ontahi_todos',
+        password,
+      });
+})();
+
 const createDefaultStorage = () => {
   if (process.env.TODO_STORAGE === 'postgres') {
     return createPostgresDataGraphStorage({ pool: postgresPool! });
   }
   if (process.env.TODO_STORAGE === 'mysql') {
-    const uri = process.env.DATABASE_URL;
-    const password = process.env.TODO_MYSQL_PASSWORD;
-    if (!uri && !password) throw new Error('MySQL requires DATABASE_URL or TODO_MYSQL_PASSWORD.');
-    const pool = uri
-      ? createPool(uri)
-      : createPool({
-          host: '127.0.0.1',
-          port: 33069,
-          user: 'root',
-          database: 'ontahi_todos',
-          password,
-        });
-    return createMysqlDataGraphStorage({ pool });
+    return createMysqlDataGraphStorage({ pool: mysqlPool! });
   }
   return createTodoInMemoryStorage();
 };
 export const defaultStorage = createDefaultStorage();
 export const todoEventRuntime = postgresPool
   ? createPostgresEventRuntime({ pool: postgresPool })
-  : undefined;
+  : mysqlPool
+    ? createMysqlEventRuntime({ pool: mysqlPool })
+    : undefined;
 export const todoTaskStorage = postgresPool
   ? createPostgresTaskStorage({ pool: postgresPool })
-  : undefined;
+  : mysqlPool
+    ? createMysqlTaskStorage({ pool: mysqlPool })
+    : undefined;
 
 export const createTodoDataGraphRuntime = (): DataGraphExecutionRuntime<unknown> =>
   defaultStorage.createRuntime();
