@@ -1,14 +1,20 @@
 import { field, value } from '@ontahi/core/data-graph';
-import type { TaskDefinition } from '@ontahi/core/runtime/server/tasks';
+import {
+  getRequiredDataGraphRuntime,
+  type OperationRuntimeContext,
+} from '@ontahi/core/runtime/server';
+import type { TaskDefinition, TaskRunSource } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { workflowSleep } = vi.hoisted(() => ({
+const { createHook, hookResponses, workflowSleep } = vi.hoisted(() => ({
+  createHook: vi.fn(),
+  hookResponses: [] as unknown[],
   workflowSleep: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('workflow', () => ({ sleep: workflowSleep }));
+vi.mock('workflow', () => ({ createHook, sleep: workflowSleep }));
 
 const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
 const loadSource = vi.fn();
@@ -16,7 +22,9 @@ const update = vi.fn();
 const writeProgressEvent = vi.fn(() => Promise.resolve());
 const writeResultEvent = vi.fn(() => Promise.resolve());
 
-const createExecutor = async () => {
+const createExecutor = async (
+  createExecutionContext?: (source: TaskRunSource) => OperationRuntimeContext | undefined,
+) => {
   const { createVercelWorkflowTaskExecutor } = await import('./executor.js');
 
   return createVercelWorkflowTaskExecutor({
@@ -25,6 +33,7 @@ const createExecutor = async () => {
       update,
     },
     getTaskDefinition: taskId => taskDefinitions.get(taskId),
+    ...(createExecutionContext ? { createExecutionContext } : {}),
     writeProgressEvent,
     writeResultEvent,
   });
@@ -38,6 +47,15 @@ describe('vercel workflow task executor', () => {
     writeProgressEvent.mockClear();
     writeResultEvent.mockClear();
     workflowSleep.mockClear();
+    createHook.mockReset();
+    hookResponses.length = 0;
+    createHook.mockImplementation(({ token }: { token: string }) => ({
+      token,
+      getConflict: () => Promise.resolve(null),
+      then: (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) =>
+        Promise.resolve(hookResponses.shift()).then(resolve, reject),
+      dispose: vi.fn(),
+    }));
     update.mockImplementation(ref =>
       Effect.succeed({
         ...ref,
@@ -165,6 +183,44 @@ describe('vercel workflow task executor', () => {
     expect(workflowSleep).toHaveBeenCalledWith(20_000);
   });
 
+  it('rehydrates the host execution context for graph-backed explicit steps', async () => {
+    const dataGraphRuntime = { name: 'todo-runtime' };
+    const source = {
+      taskId: 'fixture.context',
+      runId: 'bookops-run-1',
+      status: 'queued' as const,
+      input: {},
+      trigger: { cause: 'user_request' },
+      updatedAt: '2026-06-03T00:00:00.000Z',
+    };
+    loadSource.mockReturnValue(Effect.succeed(source));
+    taskDefinitions.set('fixture.context', {
+      id: 'fixture.context',
+      execution: {
+        initial: () => ({ step: 'complete' }),
+        steps: {
+          complete: {
+            run: () =>
+              Effect.succeed({
+                kind: 'complete',
+                result: { runtime: getRequiredDataGraphRuntime<typeof dataGraphRuntime>().name },
+              } as const),
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
+    });
+    const executor = await createExecutor(() => ({
+      scope: 'fixture.context',
+      telemetrySpanName: 'fixture.context',
+      resources: new Map([['dataGraph.runtime', dataGraphRuntime]]),
+    }));
+
+    await expect(
+      executor.runTask({ taskId: source.taskId, runId: source.runId }, vi.fn()),
+    ).resolves.toEqual({ runtime: 'todo-runtime' });
+  });
+
   it('fails explicitly when a workflow task requests an unsupported interaction', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({
@@ -290,15 +346,68 @@ describe('vercel workflow task executor', () => {
     });
   });
 
-  it('rejects explicit task execution before calling the legacy run function', async () => {
+  it('runs one explicit execution unchanged across choice and approval hooks', async () => {
     const run = vi.fn(() => Effect.succeed({ completed: true }));
+    const proposal = {
+      id: 'proposal-1',
+      summary: 'Delete the selected items.',
+      requests: [{ version: 1, kind: 'graph-command' }],
+    };
+    let source = {
+      taskId: 'fixture.explicit-execution',
+      runId: 'bookops-run-1',
+      status: 'queued' as const,
+      input: { candidates: ['one', 'two'] },
+      trigger: { cause: 'user_request' },
+      updatedAt: '2026-06-03T00:00:00.000Z',
+    };
+    loadSource.mockImplementation(() => Effect.succeed(source));
+    update.mockImplementation((_ref, patch) => {
+      source = { ...source, ...patch } as typeof source;
+      return Effect.succeed(source);
+    });
+    hookResponses.push(
+      { interactionId: 'choose-item', optionId: 'two' },
+      { interactionId: 'approve-item', decision: 'approve' },
+    );
     taskDefinitions.set('fixture.explicit-execution', {
       id: 'fixture.explicit-execution',
       execution: {
-        initial: () => ({ step: 'complete' }),
+        initial: () => ({ step: 'choose' }),
         steps: {
-          complete: {
-            run: () => Effect.succeed({ kind: 'complete', result: { completed: true } } as const),
+          choose: {
+            run: ({ state, response }) =>
+              response
+                ? Effect.succeed({ kind: 'continue', state: { step: 'approve' } } as const)
+                : Effect.succeed({
+                    kind: 'interaction',
+                    state,
+                    interaction: {
+                      id: 'choose-item',
+                      prompt: 'Which item?',
+                      options: [
+                        { id: 'one', label: 'One', value: 'one' },
+                        { id: 'two', label: 'Two', value: 'two' },
+                      ],
+                    },
+                  } as const),
+          },
+          approve: {
+            run: ({ state, response }) =>
+              response
+                ? Effect.succeed({
+                    kind: 'complete',
+                    result: { completed: true },
+                  } as const)
+                : Effect.succeed({
+                    kind: 'interaction',
+                    state,
+                    interaction: {
+                      id: 'approve-item',
+                      prompt: 'Apply?',
+                      proposal,
+                    },
+                  } as const),
           },
         },
       },
@@ -314,26 +423,128 @@ describe('vercel workflow task executor', () => {
         },
         vi.fn(),
       ),
-    ).rejects.toMatchObject({
-      reason: 'task_definition_invalid',
-      message: 'Explicit task execution is not supported by the Vercel Workflow runtime.',
-      taskId: 'fixture.explicit-execution',
-      runtime: 'vercel-workflow',
-    });
+    ).resolves.toEqual({ completed: true });
     expect(run).not.toHaveBeenCalled();
-    expect(loadSource).not.toHaveBeenCalled();
+    expect(createHook).toHaveBeenCalledTimes(2);
+    expect(createHook.mock.calls.map(([options]) => options.token)).toEqual([
+      expect.stringMatching(/^ontahi-task-interaction:/),
+      expect.stringMatching(/^ontahi-task-interaction:/),
+    ]);
+    expect(createHook.mock.calls[0]![0].token).not.toBe(createHook.mock.calls[1]![0].token);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 'fixture.explicit-execution' }),
+      expect.objectContaining({
+        status: 'waiting',
+        checkpoint: expect.objectContaining({
+          interaction: expect.objectContaining({ id: 'approve-item', proposal }),
+        }),
+      }),
+    );
     expect(update).toHaveBeenLastCalledWith(
       {
         taskId: 'fixture.explicit-execution',
         runId: 'bookops-run-1',
       },
       expect.objectContaining({
-        status: 'failed',
-        error: {
-          code: 'task_definition_invalid',
-          message: 'Explicit task execution is not supported by the Vercel Workflow runtime.',
-        },
+        status: 'completed',
+        result: { completed: true },
       }),
+    );
+  });
+
+  it('keeps explicit Event waits outside this interaction vertical', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.event-wait',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.event-wait', {
+      id: 'fixture.event-wait',
+      execution: {
+        initial: () => ({ step: 'wait' }),
+        steps: {
+          wait: {
+            run: ({ state }) =>
+              Effect.succeed({
+                kind: 'event',
+                state,
+                event: {
+                  declaration: { id: 'FixtureReady', version: 1 } as never,
+                },
+              } as const),
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask({ taskId: 'fixture.event-wait', runId: 'bookops-run-1' }, vi.fn()),
+    ).rejects.toMatchObject({
+      reason: 'task_definition_invalid',
+      message: 'Vercel Workflow Task Runtime does not support durable Event waits.',
+    });
+  });
+
+  it('fails rather than publishing a wait when another workflow owns the native hook', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.conflict',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    createHook.mockImplementation(() => ({
+      getConflict: () => Promise.resolve({ runId: 'other-workflow-run' }),
+      then: vi.fn(),
+      dispose: vi.fn(),
+    }));
+    taskDefinitions.set('fixture.conflict', {
+      id: 'fixture.conflict',
+      execution: {
+        initial: () => ({ step: 'approve' }),
+        steps: {
+          approve: {
+            run: ({ state }) =>
+              Effect.succeed({
+                kind: 'interaction',
+                state,
+                interaction: {
+                  id: 'approve',
+                  prompt: 'Approve?',
+                  proposal: {
+                    id: 'proposal',
+                    summary: 'Exact proposal',
+                    requests: [{ version: 1, kind: 'graph-command' }],
+                  },
+                },
+              } as const),
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask({ taskId: 'fixture.conflict', runId: 'bookops-run-1' }, vi.fn()),
+    ).rejects.toMatchObject({
+      reason: 'task_definition_invalid',
+      interactionId: 'approve',
+      workflowRunId: 'other-workflow-run',
+    });
+    expect(update).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'waiting' }),
     );
   });
 

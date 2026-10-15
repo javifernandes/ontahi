@@ -1,8 +1,13 @@
 import 'server-only';
 
+import { serverContext } from '@ontahi/core/runtime/server';
 import {
   invalidTaskDefinitionFailure,
+  isTaskExecutionState,
+  materializeTaskExecutionInteraction,
+  missingTaskStepFailure,
   validateTaskInput,
+  validateTaskInteractionResponse,
   validateTaskOutput,
   validateTaskProgress,
   validateTaskStepInput,
@@ -11,12 +16,15 @@ import {
   type TaskContext,
   type TaskDefinition,
   type TaskFailure,
+  type TaskExecutionState,
+  type TaskInteractionResponse,
   type TaskRunIdentity,
   type TaskRunSource,
   type TaskSnapshot,
 } from '@ontahi/core/runtime/server/tasks';
+import { cloneJson } from '@ontahi/core/value/json';
 import { Effect } from 'effect';
-import { sleep as workflowSleep } from 'workflow';
+import { createHook, sleep as workflowSleep } from 'workflow';
 
 import type {
   VercelTaskStepRunner,
@@ -24,6 +32,7 @@ import type {
   VercelTaskWorkflowInput,
   VercelWorkflowTaskExecutorOptions,
 } from './contracts.js';
+import { vercelInteractionHookToken, vercelInteractionId } from './interactions.js';
 
 export type {
   VercelTaskStepRunner,
@@ -131,6 +140,7 @@ const runTaskEffect = async <TValue>(effect: Effect.Effect<TValue, TaskFailure>)
 export const createVercelWorkflowTaskExecutor = ({
   taskRunStore,
   getTaskDefinition,
+  createExecutionContext,
   writeProgressEvent,
   writeResultEvent,
 }: VercelWorkflowTaskExecutorOptions) => {
@@ -138,6 +148,16 @@ export const createVercelWorkflowTaskExecutor = ({
 
   const updateTaskRun = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     runTaskEffect(taskRunStore.update(ref, patch));
+
+  const withExecutionContext = async <TValue>(
+    ref: TaskRunIdentity,
+    execute: () => Promise<TValue>,
+  ) => {
+    if (!createExecutionContext) return execute();
+    const source = await loadTaskRunSource(ref);
+    const context = createExecutionContext(source);
+    return context ? serverContext.run(context, execute) : execute();
+  };
 
   const writeProgress = async (runId: string, progress: NonNullable<TaskSnapshot['progress']>) => {
     if (!writeProgressEvent) {
@@ -219,7 +239,10 @@ export const createVercelWorkflowTaskExecutor = ({
     };
   };
 
-  const runTaskStep = async (input: VercelTaskStepWorkflowInput, runStep: VercelTaskStepRunner) => {
+  const runTaskStepInContext = async (
+    input: VercelTaskStepWorkflowInput,
+    runStep: VercelTaskStepRunner,
+  ) => {
     const task = getTaskDefinition(input.taskId);
 
     if (!task) {
@@ -245,7 +268,10 @@ export const createVercelWorkflowTaskExecutor = ({
     return runTaskEffect(validateTaskStepOutput(input.taskId, step, output));
   };
 
-  const runTask = async (input: VercelTaskWorkflowInput, runStep: VercelTaskStepRunner) => {
+  const runTaskInContext = async (
+    input: VercelTaskWorkflowInput,
+    runStep: VercelTaskStepRunner,
+  ) => {
     const task = getTaskDefinition(input.taskId);
 
     if (!task) {
@@ -268,11 +294,107 @@ export const createVercelWorkflowTaskExecutor = ({
 
     try {
       if (task.execution) {
-        throw invalidTaskDefinitionFailure(
-          task.id,
-          'Explicit task execution is not supported by the Vercel Workflow runtime.',
-          { runtime: 'vercel-workflow' },
-        );
+        const source = await loadTaskRunSource(ref);
+        const context = createTaskContext(source, task, runStep);
+        const parsedInput = await runTaskEffect(validateTaskInput(task, source.input));
+        await updateTaskRun(ref, { input: parsedInput, updatedAt: now() });
+        const initialState = source.checkpoint?.state ?? task.execution.initial(parsedInput);
+        if (!isTaskExecutionState(initialState)) {
+          throw invalidTaskDefinitionFailure(
+            task.id,
+            'Explicit execution initial state must be a JSON-safe object with a step.',
+            {},
+          );
+        }
+        let state = cloneJson(initialState) as TaskExecutionState;
+        let response: TaskInteractionResponse | undefined;
+
+        while (true) {
+          const step = task.execution.steps[state.step];
+          if (!step) throw missingTaskStepFailure(task.id, state.step);
+          const transition = await runTaskEffect(
+            step.run({
+              input: parsedInput,
+              state,
+              ...(response ? { response } : {}),
+              context,
+            }),
+          );
+          response = undefined;
+
+          if (transition.kind === 'complete') {
+            const parsedResult = await runTaskEffect(validateTaskOutput(task, transition.result));
+            const completedAt = now();
+            await updateTaskRun(ref, {
+              status: 'completed',
+              result: parsedResult,
+              checkpoint: undefined,
+              completedAt,
+              updatedAt: completedAt,
+            });
+            await writeResult(ref.runId, parsedResult);
+            return parsedResult;
+          }
+          if (!isTaskExecutionState(transition.state)) {
+            throw invalidTaskDefinitionFailure(
+              task.id,
+              'Explicit execution step returned an invalid JSON-safe state.',
+              { stepId: state.step },
+            );
+          }
+          state = cloneJson(transition.state) as TaskExecutionState;
+          if (transition.kind === 'event') {
+            throw invalidTaskDefinitionFailure(
+              task.id,
+              'Vercel Workflow Task Runtime does not support durable Event waits.',
+              { eventId: transition.event.declaration.id },
+            );
+          }
+          if (transition.kind === 'continue') {
+            await updateTaskRun(ref, {
+              status: 'running',
+              checkpoint: { version: 1, state },
+              updatedAt: now(),
+            });
+            continue;
+          }
+
+          const persisted = await loadTaskRunSource(ref);
+          const interactionId = vercelInteractionId(ref, state, transition.interaction);
+          const existing = persisted.checkpoint?.interaction;
+          const interaction =
+            existing?.id === interactionId
+              ? existing
+              : await runTaskEffect(
+                  materializeTaskExecutionInteraction(ref, transition.interaction, {
+                    id: interactionId,
+                  }),
+                );
+          const hook = createHook<TaskInteractionResponse>({
+            token: vercelInteractionHookToken(ref, interaction.id),
+          });
+          try {
+            const conflict = await hook.getConflict();
+            if (conflict) {
+              throw invalidTaskDefinitionFailure(
+                task.id,
+                'Vercel Workflow interaction hook is owned by another workflow run.',
+                { interactionId: interaction.id, workflowRunId: conflict.runId },
+              );
+            }
+            if (persisted.checkpoint?.response?.interactionId !== interaction.id) {
+              await updateTaskRun(ref, {
+                status: 'waiting',
+                checkpoint: { version: 1, state, interaction },
+                updatedAt: now(),
+              });
+            }
+            response = cloneJson(await hook);
+            await runTaskEffect(validateTaskInteractionResponse(ref, interaction, response));
+          } finally {
+            hook.dispose();
+          }
+        }
       }
       const source = await loadTaskRunSource(ref);
       const context = createTaskContext(source, task, runStep);
@@ -310,6 +432,12 @@ export const createVercelWorkflowTaskExecutor = ({
       throw failure;
     }
   };
+
+  const runTaskStep = (input: VercelTaskStepWorkflowInput, runStep: VercelTaskStepRunner) =>
+    withExecutionContext(input, () => runTaskStepInContext(input, runStep));
+
+  const runTask = (input: VercelTaskWorkflowInput, runStep: VercelTaskStepRunner) =>
+    withExecutionContext(input, () => runTaskInContext(input, runStep));
 
   return {
     runTask,

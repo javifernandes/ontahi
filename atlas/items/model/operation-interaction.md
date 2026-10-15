@@ -65,6 +65,13 @@ repeated failures. This reconnect behavior recovers observation only. Legacy fun
 still wait on process-local continuations, while explicit execution machines persist their current
 state and pending Interaction through Task Storage.
 
+Vercel Workflow maps those same explicit Interaction checkpoints to native durable hooks. The
+adapter registers its private hook before publishing `waiting`; the response path still authorizes
+and validates the canonical Ontahi Interaction, then atomically claims Task Storage before resuming
+the same provider workflow run. Task Run identity, workflow-run identity, and hook identity remain
+distinct. Concurrent or duplicate responses cannot start a second continuation, and provider hook
+tokens do not enter the reflected Operation contract.
+
 The Todo model-command path now consumes the same primitive for resumable clarification. Model
 interpretation may produce a typed choice only when every option is backed by disclosed context and
 contains a complete canonical request for the same action. The chat answers through
