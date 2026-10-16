@@ -6,10 +6,18 @@ import {
   type TaskRuntime,
   validateTaskInput,
 } from '@ontahi/core/runtime/server';
+import {
+  taskInteractionAccessDeniedFailure,
+  taskInteractionMismatchFailure,
+  taskInteractionNotPendingFailure,
+  validateTaskInteractionResponse,
+} from '@ontahi/core/runtime/server/tasks';
+import { cloneJson } from '@ontahi/core/value/json';
 import { Effect } from 'effect';
-import { start } from 'workflow/api';
+import { resumeHook, start } from 'workflow/api';
 
 import type { VercelWorkflowTaskRuntimeOptions } from './contracts.js';
+import { vercelInteractionHookToken } from './interactions.js';
 import { mapVercelWorkflowStatus, reconcileTaskSnapshot } from './reconciliation.js';
 
 const now = () => new Date().toISOString();
@@ -96,4 +104,59 @@ export const createVercelWorkflowTaskRuntime = ({
       return yield* reconcileTaskSnapshot(source, taskRunStore);
     }),
   listRecent: limit => taskRunStore.listRecent(limit),
+  respondToInteraction: (ref, response, context) =>
+    Effect.gen(function* () {
+      const source = yield* taskRunStore.loadSource(ref);
+      if (
+        source.trigger.actor?.kind !== context.actor.kind ||
+        source.trigger.actor.id !== context.actor.id
+      ) {
+        return yield* Effect.fail(taskInteractionAccessDeniedFailure(ref));
+      }
+      const checkpoint = source.checkpoint;
+      if (checkpoint?.response?.interactionId === response.interactionId) {
+        return yield* taskRunStore.getSnapshot(ref);
+      }
+      if (!checkpoint?.interaction) {
+        return yield* Effect.fail(taskInteractionNotPendingFailure(ref));
+      }
+      if (checkpoint.interaction.id !== response.interactionId) {
+        return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
+      }
+      yield* validateTaskInteractionResponse(ref, checkpoint.interaction, response);
+      const nextCheckpoint = {
+        version: 1 as const,
+        state: checkpoint.state,
+        response: cloneJson(response),
+      };
+      const snapshot = yield* taskRunStore.claimInteraction(
+        ref,
+        response.interactionId,
+        nextCheckpoint,
+      );
+      if (!snapshot) return yield* Effect.fail(taskInteractionNotPendingFailure(ref));
+      yield* Effect.tryPromise({
+        try: () =>
+          resumeHook(vercelInteractionHookToken(ref, response.interactionId), cloneJson(response)),
+        catch: error =>
+          toTaskFailure(
+            'task_interaction_resume_failed',
+            'Failed to resume task interaction.',
+            error,
+          ),
+      }).pipe(
+        Effect.tapError(error => {
+          const completedAt = now();
+          return taskRunStore
+            .update(ref, {
+              status: 'failed',
+              completedAt,
+              updatedAt: completedAt,
+              error: { code: error.reason, message: error.message },
+            })
+            .pipe(Effect.catchAll(() => Effect.void));
+        }),
+      );
+      return snapshot;
+    }),
 });

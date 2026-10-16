@@ -175,6 +175,9 @@ importers:
       '@ontahi/codegen':
         specifier: workspace:*
         version: link:../../packages/codegen
+      '@ontahi/runtime-vercel-workflows':
+        specifier: workspace:*
+        version: link:../../packages/runtime-vercel-workflows
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25

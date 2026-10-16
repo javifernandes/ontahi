@@ -1,4 +1,10 @@
-import type { TaskDefinition, TaskSnapshot, TaskStorage } from '@ontahi/core/runtime/server/tasks';
+import type { OperationRuntimeContext } from '@ontahi/core/runtime/server';
+import type {
+  TaskDefinition,
+  TaskRunSource,
+  TaskSnapshot,
+  TaskStorage,
+} from '@ontahi/core/runtime/server/tasks';
 
 export type VercelTaskWorkflowInput = {
   taskId: string;
@@ -18,7 +24,13 @@ export type VercelTaskStepRunner = (input: VercelTaskStepWorkflowInput) => Promi
 
 export type VercelWorkflowTaskStorage = Pick<
   TaskStorage,
-  'create' | 'attachRuntimeRef' | 'update' | 'loadSource' | 'listRecent'
+  | 'create'
+  | 'attachRuntimeRef'
+  | 'update'
+  | 'loadSource'
+  | 'getSnapshot'
+  | 'claimInteraction'
+  | 'listRecent'
 >;
 
 export type VercelWorkflowTaskRuntimeOptions = {
@@ -32,6 +44,7 @@ export type VercelWorkflowTaskExecutorStore = Pick<TaskStorage, 'loadSource' | '
 export type VercelWorkflowTaskExecutorOptions = {
   taskRunStore: VercelWorkflowTaskExecutorStore;
   getTaskDefinition(taskId: string): TaskDefinition<any, any> | undefined;
+  createExecutionContext?(source: TaskRunSource): OperationRuntimeContext | undefined;
   writeProgressEvent?(
     runId: string,
     progress: NonNullable<TaskSnapshot['progress']>,
