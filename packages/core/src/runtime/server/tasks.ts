@@ -19,6 +19,7 @@ export {
   toTaskFailure,
 } from './tasks/failures.js';
 export {
+  createTaskEventResume,
   eventWaitMatchesOccurrence,
   materializeTaskEventWait,
   taskEventWaitSubscriptionId,

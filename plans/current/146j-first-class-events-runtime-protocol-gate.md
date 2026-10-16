@@ -645,7 +645,8 @@ The causal Activity is reconstructed from the existing Task observation stream. 
 retains compact, payload-free resume evidence for the matched occurrence, durable delivery claim,
 and ingress provenance; it does not introduce a general Event history API. The LangGraph adapter was
 evaluated as the second runtime and rejects Event-wait transitions explicitly until it can preserve
-the same durable semantics.
+the same durable semantics. The Vercel Workflow adapter subsequently proved those semantics with
+durable workflow sleeps around the same Event Runtime delivery and Task Storage claim contracts.
 
 The first Express binding requires Operation ingress and Event ingress to use distinct HTTP paths.
 This avoids making middleware registration order decide whether one authenticated provider delivery

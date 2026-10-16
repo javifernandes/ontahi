@@ -12,6 +12,7 @@ import {
 } from '../unit-of-work.js';
 
 import {
+  createTaskEventResume,
   eventWaitMatchesOccurrence,
   materializeTaskEventWait,
   taskEventWaitSubscriptionId,
@@ -246,34 +247,7 @@ export const createInProcessTaskRuntime = ({
             version: 1 as const,
             state: source.checkpoint!.state,
             eventOccurrence: cloneJson(claim.delivery.occurrence),
-            eventResume: {
-              kind: 'event' as const,
-              waitId: wait.id,
-              eventId: claim.delivery.occurrence.eventId,
-              eventVersion: claim.delivery.occurrence.eventVersion,
-              occurrenceId: claim.delivery.occurrence.occurrenceId,
-              occurredAt: claim.delivery.occurrence.occurredAt,
-              deliveryId: claim.delivery.deliveryId,
-              subscriptionId: claim.delivery.subscriptionId,
-              attempt: claim.delivery.attempt,
-              claimId: claim.claimId,
-              consumerId: claim.consumerId,
-              leaseExpiresAt: claim.leaseExpiresAt,
-              ...(claim.delivery.occurrence.causation?.kind === 'ingress'
-                ? {
-                    ingress: {
-                      provider: claim.delivery.occurrence.causation.provider,
-                      receivedAt: claim.delivery.occurrence.causation.receivedAt,
-                      ...(claim.delivery.occurrence.causation.event
-                        ? { event: claim.delivery.occurrence.causation.event }
-                        : {}),
-                      ...(claim.delivery.occurrence.causation.deliveryId
-                        ? { deliveryId: claim.delivery.occurrence.causation.deliveryId }
-                        : {}),
-                    },
-                  }
-                : {}),
-            },
+            eventResume: createTaskEventResume(wait, claim),
           };
           const snapshot = await Effect.runPromise(storage.claimEvent(source, wait.id, checkpoint));
           if (!snapshot) {

@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/153e-vercel-workflow-interaction-resumption
   - ontahi://plans/153f-queue-backed-task-runtime
   - ontahi://plans/155-adapter-capability-completeness
+  - ontahi://plans/155a-vercel-workflow-event-waits
   - bookops://plans/90-event-driven-architecture-runtime
 migratedFrom: bookops://atlas/durable-workflows
 sourceCommit: 67713696
@@ -47,3 +48,10 @@ conditional update in an invoker-rights PostgREST RPC, preserving table grants a
 claim native observation. The MySQL implementation uses InnoDB and exact binary identities. No
 adapter makes the Task lifecycle atomic with Data Graph mutations or Event acceptance merely
 because its concerns can share physical infrastructure.
+
+The Vercel Workflow executor supports both canonical Interaction waits and durable Event waits for
+explicit Task executions. Interactions map to private native hooks after an atomic Task Storage
+claim. Event waits retain their distinct semantics: the workflow registers and claims a stable
+Event Runtime delivery, Task Storage chooses the single continuation winner, and the canonical
+occurrence resumes the existing state machine. Provider identities remain adapter-private in both
+paths.

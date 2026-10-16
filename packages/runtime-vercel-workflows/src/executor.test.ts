@@ -1,5 +1,6 @@
 import { field, value } from '@ontahi/core/data-graph';
 import {
+  defineEvent,
   getRequiredDataGraphRuntime,
   type OperationRuntimeContext,
 } from '@ontahi/core/runtime/server';
@@ -19,11 +20,24 @@ vi.mock('workflow', () => ({ createHook, sleep: workflowSleep }));
 const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
 const loadSource = vi.fn();
 const update = vi.fn();
+const claimEvent = vi.fn();
+const cancelEvent = vi.fn();
 const writeProgressEvent = vi.fn(() => Promise.resolve());
 const writeResultEvent = vi.fn(() => Promise.resolve());
 
+const ExportReady = defineEvent({
+  id: 'FixtureExportReady',
+  version: 1,
+  description: 'A fixture export is ready.',
+  payload: value('FixtureExportReadyPayload', {
+    requestId: field.string(),
+    url: field.string(),
+  }),
+});
+
 const createExecutor = async (
   createExecutionContext?: (source: TaskRunSource) => OperationRuntimeContext | undefined,
+  events?: Parameters<typeof import('./executor.js').createVercelWorkflowTaskExecutor>[0]['events'],
 ) => {
   const { createVercelWorkflowTaskExecutor } = await import('./executor.js');
 
@@ -31,9 +45,12 @@ const createExecutor = async (
     taskRunStore: {
       loadSource,
       update,
+      claimEvent,
+      cancelEvent,
     },
     getTaskDefinition: taskId => taskDefinitions.get(taskId),
     ...(createExecutionContext ? { createExecutionContext } : {}),
+    ...(events ? { events } : {}),
     writeProgressEvent,
     writeResultEvent,
   });
@@ -44,6 +61,8 @@ describe('vercel workflow task executor', () => {
     taskDefinitions.clear();
     loadSource.mockReset();
     update.mockReset();
+    claimEvent.mockReset();
+    cancelEvent.mockReset();
     writeProgressEvent.mockClear();
     writeResultEvent.mockClear();
     workflowSleep.mockClear();
@@ -536,10 +555,131 @@ describe('vercel workflow task executor', () => {
     expect(createHook).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps explicit Event waits outside this interaction vertical', async () => {
+  it('claims a durable Event delivery and resumes the explicit execution with its occurrence', async () => {
+    const ref = { taskId: 'fixture.event-wait', runId: 'bookops-run-1' };
+    let source: TaskRunSource = {
+      ...ref,
+      status: 'queued',
+      input: { requestId: 'request-1' },
+      trigger: { cause: 'user_request' },
+      updatedAt: '2026-06-03T00:00:00.000Z',
+    };
+    loadSource.mockImplementation(() => Effect.succeed(source));
+    update.mockImplementation((_identity, patch) => {
+      source = { ...source, ...patch };
+      return Effect.succeed(source);
+    });
+    const occurrence = {
+      kind: 'event-occurrence' as const,
+      occurrenceId: 'occurrence-1',
+      eventId: ExportReady.id,
+      eventVersion: ExportReady.version,
+      occurredAt: '2026-06-03T00:01:00.000Z',
+      payload: { requestId: 'request-1', url: 'https://example.test/export' },
+      correlation: { requestId: 'request-1' },
+    };
+    const claim = {
+      claimId: 'claim-1',
+      consumerId: `task-runtime:${ref.taskId}:${ref.runId}`,
+      leaseExpiresAt: '2026-06-03T00:02:00.000Z',
+      delivery: {
+        kind: 'event-delivery' as const,
+        deliveryId: 'delivery-1',
+        subscriptionId: `task:${ref.taskId}:${ref.runId}:event-wait:export-request-1`,
+        attempt: 1,
+        occurrence,
+      },
+    };
+    const register = vi.fn(() => Promise.resolve());
+    const claimDelivery = vi.fn(() => Promise.resolve(claim));
+    const acknowledge = vi.fn(() => Promise.resolve());
+    const cancel = vi.fn(() => Promise.resolve());
+    claimEvent.mockImplementation((_identity, _waitId, checkpoint) => {
+      source = { ...source, status: 'running', checkpoint };
+      return Effect.succeed(source);
+    });
+    taskDefinitions.set('fixture.event-wait', {
+      id: 'fixture.event-wait',
+      execution: {
+        initial: () => ({ step: 'wait', requestId: 'request-1' }),
+        steps: {
+          wait: {
+            run: ({ state, event }) =>
+              event
+                ? Effect.succeed({
+                    kind: 'complete',
+                    result: { url: (event.payload as { url: string }).url },
+                  } as const)
+                : Effect.succeed({
+                    kind: 'event',
+                    state,
+                    event: {
+                      id: 'export-request-1',
+                      declaration: ExportReady,
+                      correlation: { requestId: 'request-1' },
+                    },
+                  } as const),
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
+    });
+    const executor = await createExecutor(undefined, {
+      declarations: [ExportReady],
+      runtime: {
+        capabilities: {
+          liveSubscription: false,
+          retention: true,
+          replay: false,
+          durableAcceptance: true,
+          durableDelivery: true,
+          acknowledgement: true,
+          ordering: 'subscription',
+          deduplication: false,
+          atomicPublication: false,
+          overflowBehavior: 'spill',
+        },
+        accept: vi.fn(),
+        subscribe: vi.fn(),
+        durableDelivery: {
+          register,
+          claim: claimDelivery,
+          acknowledge,
+          release: vi.fn(() => Promise.resolve()),
+          cancel,
+        },
+      },
+    });
+
+    await expect(executor.runTask(ref, vi.fn())).resolves.toEqual({
+      url: 'https://example.test/export',
+    });
+    expect(register).toHaveBeenCalledWith({
+      id: claim.delivery.subscriptionId,
+      eventId: ExportReady.id,
+      eventVersion: ExportReady.version,
+      correlation: { requestId: 'request-1' },
+    });
+    expect(claimEvent).toHaveBeenCalledWith(
+      ref,
+      'export-request-1',
+      expect.objectContaining({
+        eventOccurrence: occurrence,
+        eventResume: expect.objectContaining({
+          occurrenceId: occurrence.occurrenceId,
+          deliveryId: claim.delivery.deliveryId,
+          claimId: claim.claimId,
+        }),
+      }),
+    );
+    expect(acknowledge).toHaveBeenCalledWith(claim);
+    expect(cancel).toHaveBeenCalledWith(claim.delivery.subscriptionId);
+  });
+
+  it('rejects Event waits before publishing when durable Event capabilities are unavailable', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({
-        taskId: 'fixture.event-wait',
+        taskId: 'fixture.event-wait-unavailable',
         runId: 'bookops-run-1',
         status: 'queued',
         input: {},
@@ -547,8 +687,8 @@ describe('vercel workflow task executor', () => {
         updatedAt: '2026-06-03T00:00:00.000Z',
       }),
     );
-    taskDefinitions.set('fixture.event-wait', {
-      id: 'fixture.event-wait',
+    taskDefinitions.set('fixture.event-wait-unavailable', {
+      id: 'fixture.event-wait-unavailable',
       execution: {
         initial: () => ({ step: 'wait' }),
         steps: {
@@ -557,9 +697,7 @@ describe('vercel workflow task executor', () => {
               Effect.succeed({
                 kind: 'event',
                 state,
-                event: {
-                  declaration: { id: 'FixtureReady', version: 1 } as never,
-                },
+                event: { declaration: ExportReady },
               } as const),
           },
         },
@@ -569,11 +707,65 @@ describe('vercel workflow task executor', () => {
     const executor = await createExecutor();
 
     await expect(
-      executor.runTask({ taskId: 'fixture.event-wait', runId: 'bookops-run-1' }, vi.fn()),
-    ).rejects.toMatchObject({
-      reason: 'task_definition_invalid',
-      message: 'Vercel Workflow Task Runtime does not support durable Event waits.',
+      executor.runTask(
+        { taskId: 'fixture.event-wait-unavailable', runId: 'bookops-run-1' },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({ reason: 'task_event_runtime_unavailable' });
+    expect(update).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'waiting' }),
+    );
+  });
+
+  it('replays a claimed Event occurrence from the persisted checkpoint without claiming again', async () => {
+    const ref = { taskId: 'fixture.event-replay', runId: 'bookops-run-1' };
+    const occurrence = {
+      kind: 'event-occurrence' as const,
+      occurrenceId: 'occurrence-1',
+      eventId: ExportReady.id,
+      eventVersion: ExportReady.version,
+      occurredAt: '2026-06-03T00:01:00.000Z',
+      payload: { requestId: 'request-1', url: 'https://example.test/replayed' },
+    };
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        ...ref,
+        status: 'running',
+        input: {},
+        trigger: { cause: 'user_request' },
+        checkpoint: {
+          version: 1,
+          state: { step: 'wait' },
+          eventOccurrence: occurrence,
+        },
+        updatedAt: '2026-06-03T00:01:00.000Z',
+      }),
+    );
+    taskDefinitions.set(ref.taskId, {
+      id: ref.taskId,
+      execution: {
+        initial: () => ({ step: 'wait' }),
+        steps: {
+          wait: {
+            run: ({ event }) =>
+              event
+                ? Effect.succeed({
+                    kind: 'complete',
+                    result: { url: (event.payload as { url: string }).url },
+                  } as const)
+                : Effect.die('persisted occurrence missing'),
+          },
+        },
+      },
+      run: () => Effect.die('unused'),
     });
+    const executor = await createExecutor();
+
+    await expect(executor.runTask(ref, vi.fn())).resolves.toEqual({
+      url: 'https://example.test/replayed',
+    });
+    expect(claimEvent).not.toHaveBeenCalled();
   });
 
   it('fails rather than publishing a wait when another workflow owns the native hook', async () => {

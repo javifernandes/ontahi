@@ -1,4 +1,8 @@
-import type { OperationRuntimeContext } from '@ontahi/core/runtime/server';
+import type {
+  AnyEventDeclaration,
+  EventRuntime,
+  OperationRuntimeContext,
+} from '@ontahi/core/runtime/server';
 import type {
   TaskDefinition,
   TaskRunSource,
@@ -30,6 +34,8 @@ export type VercelWorkflowTaskStorage = Pick<
   | 'loadSource'
   | 'getSnapshot'
   | 'claimInteraction'
+  | 'claimEvent'
+  | 'cancelEvent'
   | 'listRecent'
 >;
 
@@ -39,12 +45,21 @@ export type VercelWorkflowTaskRuntimeOptions = {
   createRunId?: () => string;
 };
 
-export type VercelWorkflowTaskExecutorStore = Pick<TaskStorage, 'loadSource' | 'update'>;
+export type VercelWorkflowTaskExecutorStore = Pick<
+  TaskStorage,
+  'loadSource' | 'update' | 'claimEvent' | 'cancelEvent'
+>;
+
+export type VercelWorkflowTaskEvents = {
+  readonly runtime: EventRuntime;
+  readonly declarations: readonly AnyEventDeclaration[];
+};
 
 export type VercelWorkflowTaskExecutorOptions = {
   taskRunStore: VercelWorkflowTaskExecutorStore;
   getTaskDefinition(taskId: string): TaskDefinition<any, any> | undefined;
   createExecutionContext?(source: TaskRunSource): OperationRuntimeContext | undefined;
+  events?: VercelWorkflowTaskEvents;
   writeProgressEvent?(
     runId: string,
     progress: NonNullable<TaskSnapshot['progress']>,

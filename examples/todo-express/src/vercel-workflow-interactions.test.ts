@@ -61,6 +61,8 @@ describe('Vercel Workflow Todo interaction integration', () => {
     const executor = createVercelWorkflowTaskExecutor({
       taskRunStore: {
         loadSource: () => Effect.succeed(source),
+        claimEvent: () => Effect.succeed(undefined),
+        cancelEvent: () => Effect.succeed(undefined),
         update: (_identity, patch) => {
           source = { ...source, ...patch };
           return Effect.succeed(source);

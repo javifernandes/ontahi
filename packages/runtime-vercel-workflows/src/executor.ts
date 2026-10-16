@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { serverContext } from '@ontahi/core/runtime/server';
+import { serverContext, type EventOccurrence } from '@ontahi/core/runtime/server';
 import {
   invalidTaskDefinitionFailure,
   isTaskExecutionState,
@@ -33,6 +33,7 @@ import type {
   VercelTaskWorkflowInput,
   VercelWorkflowTaskExecutorOptions,
 } from './contracts.js';
+import { waitForVercelWorkflowEvent } from './event-waits.js';
 import { vercelInteractionHookToken, vercelInteractionId } from './interactions.js';
 
 export type {
@@ -142,6 +143,7 @@ export const createVercelWorkflowTaskExecutor = ({
   taskRunStore,
   getTaskDefinition,
   createExecutionContext,
+  events,
   writeProgressEvent,
   writeResultEvent,
 }: VercelWorkflowTaskExecutorOptions) => {
@@ -344,12 +346,19 @@ export const createVercelWorkflowTaskExecutor = ({
     context: TaskContext,
     state: TaskExecutionState,
     response?: TaskInteractionResponse,
+    event?: EventOccurrence,
   ): Promise<unknown> => {
     const step = task.execution?.steps[state.step];
     if (!step) throw missingTaskStepFailure(task.id, state.step);
-    const responseWasConsumed = response !== undefined;
+    const stimulusWasConsumed = response !== undefined || event !== undefined;
     const transition = await runTaskEffect(
-      step.run({ input, state, ...(response ? { response } : {}), context }),
+      step.run({
+        input,
+        state,
+        ...(response ? { response } : {}),
+        ...(event ? { event } : {}),
+        context,
+      }),
     );
 
     if (transition.kind === 'complete') {
@@ -364,18 +373,31 @@ export const createVercelWorkflowTaskExecutor = ({
     }
     const nextState = cloneJson(transition.state) as TaskExecutionState;
     if (transition.kind === 'event') {
-      throw invalidTaskDefinitionFailure(
-        task.id,
-        'Vercel Workflow Task Runtime does not support durable Event waits.',
-        { eventId: transition.event.declaration.id },
-      );
+      if (!events) {
+        throw createTaskWorkflowFailure(
+          'task_event_runtime_unavailable',
+          'A durable Event Runtime is required for Task Event waits.',
+          { eventId: transition.event.declaration.id },
+        );
+      }
+      const result = await waitForVercelWorkflowEvent({
+        ref,
+        state: nextState,
+        request: transition.event,
+        store: taskRunStore,
+        events,
+        sleep: workflowSleep,
+      });
+      return result.kind === 'stopped'
+        ? undefined
+        : executeExplicitState(task, ref, input, context, nextState, undefined, result.occurrence);
     }
     if (transition.kind === 'continue') {
       await persistExecutionState(ref, nextState);
       return executeExplicitState(task, ref, input, context, nextState);
     }
 
-    if (responseWasConsumed) {
+    if (stimulusWasConsumed) {
       await persistExecutionState(ref, nextState);
     }
     const nextResponse = await waitForInteraction(task, ref, nextState, transition.interaction);
@@ -405,6 +427,8 @@ export const createVercelWorkflowTaskExecutor = ({
       parsedInput,
       context,
       cloneJson(initialState) as TaskExecutionState,
+      source.checkpoint?.response,
+      source.checkpoint?.eventOccurrence,
     );
   };
 
@@ -424,13 +448,15 @@ export const createVercelWorkflowTaskExecutor = ({
       taskId: input.taskId,
       runId: input.runId,
     };
-    const startedAt = now();
-
-    await updateTaskRun(ref, {
-      status: 'running',
-      startedAt,
-      updatedAt: startedAt,
-    });
+    const existing = await loadTaskRunSource(ref);
+    if (existing.status !== 'waiting') {
+      const startedAt = now();
+      await updateTaskRun(ref, {
+        status: 'running',
+        startedAt,
+        updatedAt: startedAt,
+      });
+    }
 
     try {
       if (task.execution) {

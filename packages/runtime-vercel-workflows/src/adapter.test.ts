@@ -13,6 +13,8 @@ const update = vi.fn();
 const loadSource = vi.fn();
 const getSnapshot = vi.fn();
 const claimInteraction = vi.fn();
+const claimEvent = vi.fn();
+const cancelEvent = vi.fn();
 const listRecent = vi.fn();
 
 describe('vercel workflow task runtime adapter', () => {
@@ -28,6 +30,8 @@ describe('vercel workflow task runtime adapter', () => {
     loadSource.mockReset();
     getSnapshot.mockReset();
     claimInteraction.mockReset();
+    claimEvent.mockReset();
+    cancelEvent.mockReset();
     listRecent.mockReset();
     vi.doMock('workflow/api', () => ({ getRun, resumeHook, start }));
   });
@@ -81,6 +85,8 @@ describe('vercel workflow task runtime adapter', () => {
         loadSource,
         getSnapshot,
         claimInteraction,
+        claimEvent,
+        cancelEvent,
         listRecent,
       },
       resolveWorkflow: getTaskWorkflow,
@@ -124,6 +130,53 @@ describe('vercel workflow task runtime adapter', () => {
     });
   });
 
+  it('atomically cancels a pending Event wait', async () => {
+    const ref = { taskId: 'TodoList.export', runId: 'task-run-1' };
+    const source = {
+      ...ref,
+      status: 'waiting' as const,
+      input: { requestId: 'request-1' },
+      trigger: { cause: 'user_request' },
+      checkpoint: {
+        version: 1 as const,
+        state: { step: 'wait-for-export' },
+        eventWait: {
+          id: 'export-request-1',
+          kind: 'event' as const,
+          eventId: 'TodoListExportReady',
+          eventVersion: 1,
+          createdAt: '2026-06-03T00:00:00.000Z',
+        },
+      },
+      updatedAt: '2026-06-03T00:00:00.000Z',
+    };
+    const cancelled = {
+      ...ref,
+      status: 'cancelled' as const,
+      updatedAt: '2026-06-03T00:01:00.000Z',
+    };
+    loadSource.mockReturnValue(Effect.succeed(source));
+    cancelEvent.mockReturnValue(Effect.succeed(cancelled));
+    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
+    const runtime = createVercelWorkflowTaskRuntime({
+      taskRunStore: {
+        create,
+        attachRuntimeRef,
+        update,
+        loadSource,
+        getSnapshot,
+        claimInteraction,
+        claimEvent,
+        cancelEvent,
+        listRecent,
+      },
+      resolveWorkflow: getTaskWorkflow,
+    });
+
+    await expect(Effect.runPromise(runtime.cancelEventWait!(ref))).resolves.toEqual(cancelled);
+    expect(cancelEvent).toHaveBeenCalledWith(ref, 'export-request-1', 'cancelled');
+  });
+
   it('authorizes, atomically claims, and resumes a persisted interaction after runtime recreation', async () => {
     const ref = { taskId: 'TodoItem.deleteFromNamedList', runId: 'task-run-1' };
     const interaction = {
@@ -164,6 +217,8 @@ describe('vercel workflow task runtime adapter', () => {
           loadSource,
           getSnapshot,
           claimInteraction,
+          claimEvent,
+          cancelEvent,
           listRecent,
         },
         resolveWorkflow: getTaskWorkflow,
@@ -223,6 +278,8 @@ describe('vercel workflow task runtime adapter', () => {
         loadSource,
         getSnapshot,
         claimInteraction,
+        claimEvent,
+        cancelEvent,
         listRecent,
       },
       resolveWorkflow: getTaskWorkflow,
@@ -281,6 +338,8 @@ describe('vercel workflow task runtime adapter', () => {
         loadSource,
         getSnapshot,
         claimInteraction,
+        claimEvent,
+        cancelEvent,
         listRecent,
       },
       resolveWorkflow: getTaskWorkflow,
@@ -334,6 +393,8 @@ describe('vercel workflow task runtime adapter', () => {
         loadSource,
         getSnapshot,
         claimInteraction,
+        claimEvent,
+        cancelEvent,
         listRecent,
       },
       resolveWorkflow: getTaskWorkflow,
@@ -397,6 +458,8 @@ describe('vercel workflow task runtime adapter', () => {
         loadSource,
         getSnapshot,
         claimInteraction,
+        claimEvent,
+        cancelEvent,
         listRecent,
       },
       resolveWorkflow: getTaskWorkflow,

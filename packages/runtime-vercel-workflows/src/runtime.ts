@@ -104,6 +104,27 @@ export const createVercelWorkflowTaskRuntime = ({
       return yield* reconcileTaskSnapshot(source, taskRunStore);
     }),
   listRecent: limit => taskRunStore.listRecent(limit),
+  cancelEventWait: ref =>
+    Effect.gen(function* () {
+      const source = yield* taskRunStore.loadSource(ref);
+      const wait = source.checkpoint?.eventWait;
+      if (!wait || source.status !== 'waiting') {
+        return yield* Effect.fail({
+          reason: 'task_event_wait_not_pending',
+          message: 'Task run has no pending Event wait.',
+          ...ref,
+        } satisfies TaskFailure);
+      }
+      const snapshot = yield* taskRunStore.cancelEvent(ref, wait.id, 'cancelled');
+      if (!snapshot) {
+        return yield* Effect.fail({
+          reason: 'task_event_wait_not_pending',
+          message: 'Task run has no pending Event wait.',
+          ...ref,
+        } satisfies TaskFailure);
+      }
+      return snapshot;
+    }),
   respondToInteraction: (ref, response, context) =>
     Effect.gen(function* () {
       const source = yield* taskRunStore.loadSource(ref);

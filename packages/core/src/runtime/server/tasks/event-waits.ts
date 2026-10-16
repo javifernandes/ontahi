@@ -1,10 +1,11 @@
 import { cloneJson } from '../../../value/json.js';
-import type { EventOccurrence } from '../events/types.js';
+import type { EventDeliveryClaim, EventOccurrence } from '../events/types.js';
 
 import type {
   TaskEventWaitRequest,
   TaskFailure,
   TaskPendingEventWait,
+  TaskEventResume,
   TaskRunIdentity,
 } from './types.js';
 
@@ -66,3 +67,35 @@ export const eventWaitMatchesOccurrence = (
 
 export const taskEventWaitSubscriptionId = (ref: TaskRunIdentity, waitId: string) =>
   `task:${ref.taskId}:${ref.runId}:event-wait:${waitId}`;
+
+export const createTaskEventResume = (
+  wait: TaskPendingEventWait,
+  claim: EventDeliveryClaim,
+): TaskEventResume => ({
+  kind: 'event',
+  waitId: wait.id,
+  eventId: claim.delivery.occurrence.eventId,
+  eventVersion: claim.delivery.occurrence.eventVersion,
+  occurrenceId: claim.delivery.occurrence.occurrenceId,
+  occurredAt: claim.delivery.occurrence.occurredAt,
+  deliveryId: claim.delivery.deliveryId,
+  subscriptionId: claim.delivery.subscriptionId,
+  attempt: claim.delivery.attempt,
+  claimId: claim.claimId,
+  consumerId: claim.consumerId,
+  leaseExpiresAt: claim.leaseExpiresAt,
+  ...(claim.delivery.occurrence.causation?.kind === 'ingress'
+    ? {
+        ingress: {
+          provider: claim.delivery.occurrence.causation.provider,
+          receivedAt: claim.delivery.occurrence.causation.receivedAt,
+          ...(claim.delivery.occurrence.causation.event
+            ? { event: claim.delivery.occurrence.causation.event }
+            : {}),
+          ...(claim.delivery.occurrence.causation.deliveryId
+            ? { deliveryId: claim.delivery.occurrence.causation.deliveryId }
+            : {}),
+        },
+      }
+    : {}),
+});
