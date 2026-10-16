@@ -13,7 +13,8 @@ Related plans:
 1. [146j. First-Class Events Runtime Protocol Gate](./146j-first-class-events-runtime-protocol-gate.md)
 2. [151b. MySQL Type And Schema Conformance](../next/151b-mysql-type-and-schema-conformance.md)
 3. [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
-4. [153e. Vercel Workflow Interaction Resumption](../next/153e-vercel-workflow-interaction-resumption.md)
+4. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
+5. [155a. Vercel Workflow Event Waits](../done/155a-vercel-workflow-event-waits.md)
 
 ## Summary
 
@@ -38,7 +39,7 @@ or concurrent behavior.
 | Supabase        | PostgREST and focused RPC capabilities       | durable Task Storage through PostgREST/RPC  | missing                         | not applicable             |
 | Express         | not a storage provider                       | Operation and Task observation host         | Event ingress                   | HTTP, WebSocket, Explorer  |
 | Next.js         | not a storage provider                       | Operation host                              | Event ingress                   | HTTP Runtime Protocol      |
-| Vercel Workflow | not applicable                               | durable executor subset                     | no Event waits                  | not applicable             |
+| Vercel Workflow | not applicable                               | durable executor subset                     | durable Event waits             | not applicable             |
 | LangGraph       | not applicable                               | interaction-capable executor subset         | Event waits rejected explicitly | not applicable             |
 
 The matrix is not a promise that every package implements every concern. A missing cell becomes
@@ -91,7 +92,8 @@ adds a useful composition path.
 ### Slice 4: Remaining Runtime Gaps
 
 - [ ] Evaluate Supabase durable Events as a PostgREST/RPC-owned design.
-- [ ] Reconcile Vercel Workflow Interaction support through its owning plan.
+- [x] Reconcile Vercel Workflow Interaction support through its owning plan.
+- [x] Preserve durable Event-wait claims through the Vercel Workflow executor.
 - [ ] Re-evaluate LangGraph Event waits only when it can preserve the durable claim contract.
 - [ ] Extract real ingress providers and broker/egress adapters into focused follow-up plans.
 

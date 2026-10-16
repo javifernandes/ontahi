@@ -25,5 +25,21 @@ Hosts must provide Task Storage with `claimInteraction` support.
 Graph-backed executions also provide `createExecutionContext`, allowing each workflow task or step
 invocation to rehydrate the application resources used by the unchanged domain definition.
 
-Legacy imperative `context.interact.*` calls remain explicitly unavailable in this runtime. Durable
-Event waits are a separate provider capability and are not implemented by this interaction mapping.
+Legacy imperative `context.interact.*` calls remain explicitly unavailable in this runtime.
+
+## Durable Event waits
+
+Explicit executions may suspend on the same serializable Event waits supported by the native Task
+Runtime. The executor requires a configured Event Runtime with retention, durable acceptance,
+durable delivery, acknowledgement, and the durable claim API. It registers the canonical stable
+waiter subscription, uses Vercel durable sleeps between claim attempts, and supplies the claimed
+canonical occurrence to the unchanged execution step.
+
+Task Storage remains the lifecycle authority: `claimEvent` atomically selects the one continuation
+winner before the delivery is acknowledged. Occurrence, delivery, claim, ingress, and resume
+evidence remain in the canonical checkpoint rather than becoming Vercel-specific state. Hosts must
+provide `events` to the executor and Task Storage with `claimEvent` and `cancelEvent` support.
+
+This mapping does not provide Event history, general replay, arbitrary predicates, or stronger
+guarantees than the configured Event Runtime. Cancellation and timeout end the waiter subscription;
+they do not erase the retained occurrence.

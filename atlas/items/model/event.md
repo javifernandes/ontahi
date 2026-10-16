@@ -60,6 +60,13 @@ The shared conformance verifier is the adapter-author boundary for these lifecyc
 Passing it against two different locking and JSON implementations is evidence that the semantic
 contract does not depend on PostgreSQL mechanics.
 
+The Vercel Workflow Task adapter consumes that same durable boundary for Event waits. It registers
+the canonical stable waiter subscription, uses durable workflow sleeps between claims, and asks
+Task Storage to atomically claim the wait before acknowledging the Event delivery. The execution
+step receives the ordinary Event Occurrence; Vercel hook or workflow identities do not enter the
+Event model. Timeout and cancellation end the subscription without deleting the retained
+occurrence.
+
 Mutation Reactions enter the Event Runtime only from the existing Unit of Work post-commit queue.
 Rejected and rolled-back mutations create no occurrence. Publication or subscriber failure after
 commit cannot retroactively roll back domain state. Operation Effect Intents use the same built-in
