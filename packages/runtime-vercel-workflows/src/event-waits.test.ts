@@ -201,6 +201,35 @@ describe('Vercel Workflow Event waits', () => {
     expect(harness.claimDelivery).toHaveBeenCalledTimes(3);
   });
 
+  it('retries transient settlement failures before resuming', async () => {
+    const harness = createHarness();
+    harness.acknowledge.mockRejectedValueOnce(new Error('acknowledgement unavailable'));
+
+    await expect(wait(harness)).resolves.toMatchObject({ kind: 'resumed' });
+    expect(harness.acknowledge).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates stale settlement claims without retrying forever', async () => {
+    const harness = createHarness();
+    const staleClaim = new Error(
+      `Durable Event claim ${harness.claim.claimId} is stale or already settled.`,
+    );
+    harness.acknowledge.mockRejectedValue(staleClaim);
+
+    await expect(wait(harness)).rejects.toBe(staleClaim);
+    expect(harness.acknowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds retries for persistent delivery operation failures', async () => {
+    const harness = createHarness();
+    const unavailable = new Error('registration unavailable');
+    harness.register.mockRejectedValue(unavailable);
+
+    await expect(wait(harness)).rejects.toBe(unavailable);
+    expect(harness.register).toHaveBeenCalledTimes(3);
+    expect(harness.claimDelivery).not.toHaveBeenCalled();
+  });
+
   it('stops and cancels the subscription when the Task wait is cancelled externally', async () => {
     const harness = createHarness();
     harness.update.mockImplementation((_identity, patch) =>

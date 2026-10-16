@@ -22,6 +22,10 @@ type EventWaitResult =
   | { readonly kind: 'stopped' };
 
 const EVENT_WAIT_POLL_INTERVAL_MS = 1_000;
+const EVENT_DELIVERY_OPERATION_ATTEMPTS = 3;
+
+const isStaleDeliveryClaim = (error: unknown) =>
+  error instanceof Error && error.message.includes('is stale or already settled');
 
 const runTaskEffect = async <TValue>(effect: Effect.Effect<TValue, TaskFailure>) => {
   const result = await Effect.runPromise(effect.pipe(Effect.either));
@@ -89,12 +93,15 @@ export const waitForVercelWorkflowEvent = async ({
   }
   const subscriptionId = taskEventWaitSubscriptionId(ref, wait.id);
   const consumerId = `task-runtime:${ref.taskId}:${ref.runId}`;
-  const retry = async <TValue>(operation: () => Promise<TValue>): Promise<TValue> => {
+  const retry = async <TValue>(operation: () => Promise<TValue>, attempt = 1): Promise<TValue> => {
     try {
       return await operation();
-    } catch {
+    } catch (error) {
+      if (isStaleDeliveryClaim(error) || attempt >= EVENT_DELIVERY_OPERATION_ATTEMPTS) {
+        throw error;
+      }
       await sleep(EVENT_WAIT_POLL_INTERVAL_MS);
-      return retry(operation);
+      return retry(operation, attempt + 1);
     }
   };
   await retry(() =>
