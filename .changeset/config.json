@@ -15,6 +15,7 @@
       "@ontahi/postgres",
       "@ontahi/react",
       "@ontahi/runtime-express",
+      "@ontahi/runtime-langgraph",
       "@ontahi/runtime-nextjs",
       "@ontahi/runtime-vercel-workflows",
       "@ontahi/sql",

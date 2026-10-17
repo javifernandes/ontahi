@@ -1,6 +1,6 @@
 # 153d. LangGraph Task Runtime Comparison
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/153d-langgraph-task-runtime-comparison`
 
