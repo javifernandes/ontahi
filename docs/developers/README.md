@@ -6,8 +6,8 @@ Model the domain once. Let runtimes interpret it.
 [Visit ontahi.org](https://ontahi.org) ·
 [Explore the source](https://github.com/javifernandes/ontahi)
 
-This edition follows the `1.0.0-alpha.12` public surface. The
-[alpha.12 candidate and upgrade guide](../releases/1.0.0-alpha.12.md) records its release preparation;
+This edition follows the `1.0.0-alpha.13` public surface. The
+[alpha.13 candidate and upgrade guide](../releases/1.0.0-alpha.13.md) records its release preparation;
 the chapters below distinguish implemented alpha contracts from further directions.
 
 This book teaches the current Ontahí application model through its public declarations, executable

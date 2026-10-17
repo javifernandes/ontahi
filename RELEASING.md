@@ -1,6 +1,6 @@
 # Releasing Ontahi
 
-Ontahi publishes all fifteen `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
+Ontahi publishes all sixteen `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
 records its consumer-visible change; merging the generated release pull request publishes that
 immutable version.
 
@@ -33,7 +33,7 @@ A pull request that changes a package's behavior or public contract includes a c
 pnpm changeset
 ```
 
-Select the directly affected packages and describe the consumer-visible result. Ontahi's fifteen public
+Select the directly affected packages and describe the consumer-visible result. Ontahi's sixteen public
 packages are a fixed group: the highest requested release type determines one shared version for
 the complete set. Documentation, CI, examples, and repository-only tooling normally need no
 changeset.
@@ -133,7 +133,7 @@ stable-release change exits that train.
 
 ## Failure and rollback
 
-npm releases are immutable and the fifteen publishes cannot be transactional. Before publishing
+npm releases are immutable and the sixteen publishes cannot be transactional. Before publishing
 anything, the script checks every package version. If a network failure leaves a partial release,
 rerun the same workflow: identical existing tarballs are skipped and the missing packages continue
 in dependency order. A version that exists with different contents stops the release.

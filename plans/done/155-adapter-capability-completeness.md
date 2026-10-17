@@ -12,7 +12,7 @@ Related plans:
 
 1. [146j. First-Class Events Runtime Protocol Gate](./146j-first-class-events-runtime-protocol-gate.md)
 2. [151b. MySQL Type And Schema Conformance](../next/151b-mysql-type-and-schema-conformance.md)
-3. [153c. Interactive And Resumable Operation Execution](../current/153c-operation-interactions-and-resumption.md)
+3. [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
 4. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
 5. [155a. Vercel Workflow Event Waits](../done/155a-vercel-workflow-event-waits.md)
 

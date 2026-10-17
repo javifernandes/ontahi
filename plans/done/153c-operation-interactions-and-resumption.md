@@ -1,6 +1,6 @@
 # 153c. Interactive And Resumable Operation Execution
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/153c-operation-interactions-and-resumption`
 
@@ -16,8 +16,8 @@ Related plans:
 4. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
 5. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
 6. [153b. Declarative Operation Context Scope](../backlog/153b-declarative-operation-context-scope.md)
-7. [153d. LangGraph Task Runtime Comparison](./153d-langgraph-task-runtime-comparison.md)
-8. [153e. Vercel Workflow Interaction Resumption](../next/153e-vercel-workflow-interaction-resumption.md)
+7. [153d. LangGraph Task Runtime Comparison](../done/153d-langgraph-task-runtime-comparison.md)
+8. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
 9. [153f. Queue-Backed Task Runtime](../backlog/153f-queue-backed-task-runtime.md)
 
 ## Summary And Research Question
@@ -918,21 +918,23 @@ within replayed steps still need their own idempotency boundary.
 - [x] Complete the two-Interaction Todo Operation with exact proposal revalidation and execution.
 - [x] Express the native Todo workflow as named JSON-safe execution steps without suspending its
       Operation function.
-- [ ] Expose the Todo Operation through two surfaces using the same run and reply protocol.
+- [x] Expose the Todo Operation through two surfaces using the same run and reply protocol.
 - [x] Implement restart-safe native state-machine persistence for the comparison experiment.
-- [ ] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more
+- [x] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more
       general execution-run lifecycle from which durable tasks are projected.
-- [ ] Decide the first Interaction storage/protocol contract only after the experiment.
+- [x] Decide the first Interaction storage/protocol contract only after the experiment.
 
-Implementation continues in three explicit subplans. The completed 153d LangGraph comparison now
-feeds a Model Support consumer checkpoint in plan 153: model interpretation must pause a canonical
-effect proposal and resume it through the same Task and Interaction contracts. After that path is
-validated locally, 153e resumes the Vercel Workflow interaction gap. Plan 153f holds later
+The comparison resolved the lifecycle boundary: interactive execution is a Durable Operation Task
+Run, `TaskStorage` owns its public snapshot and pending Interaction, and `durable.operation` owns
+inspection and replies across both the Todo UI and Devtools. The same explicit execution definition
+now runs through native, LangGraph, and Vercel Workflow adapters without provider concepts entering
+the application model. The model-backed consumer also checkpoints canonical alternatives before
+resuming a selected request.
+
+The broader Model Support line remains open, but this research question is closed. It rejects two
+directions: making `model.command` the universal conversation protocol, and making LangGraph
+threads, nodes, or Commands part of Ontahí's public semantic model. Plan 153f retains later
 queue-backed runtime research including leases, checkpoint revisions, and duplicate delivery.
-
-The research remains open until the comparison experiment resolves the lifecycle boundary. It
-already rejects two directions: making `model.command` the universal conversation protocol, and
-making LangGraph threads/nodes/Commands part of Ontahí's public semantic model.
 
 ## Sources
 

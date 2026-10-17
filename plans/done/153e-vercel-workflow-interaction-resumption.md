@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/153e-vercel-workflow-interaction-resumption`
 
-Parent: [153c. Interactive And Resumable Operation Execution](../current/153c-operation-interactions-and-resumption.md)
+Parent: [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
 
 Shapes: [Operation Interaction](../../atlas/items/model/operation-interaction.md),
 [Durable Operation](../../atlas/items/model/durable-operation.md).
