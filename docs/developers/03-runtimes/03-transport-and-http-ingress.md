@@ -4,7 +4,7 @@ A \concept{Transport} carries an operation intention across a process boundary w
 a second definition of that operation. Node can invoke `TodoList.rename(...)` directly; a remote
 client needs that intention to reach the same application runtime.
 
-Ontahí currently has five relevant execution shapes:
+Ontahí currently has six relevant execution and ingress shapes:
 
 - an **operation bridge** carries generic invocations from an Ontahí client;
 - a **graph-read bridge** carries ordinary policy-scoped Queries without inventing an Operation;
@@ -12,6 +12,8 @@ Ontahí currently has five relevant execution shapes:
 - a **model-command bridge** interprets natural language into an existing canonical Graph Read,
   Graph Command, or Operation invocation;
 - **HTTP ingress** gives a particular operation an external route and provider channel.
+- **Event ingress and live observation** accept authenticated external facts and project declared
+  live subscriptions without turning Events into Operations.
 
 ## The Runtime Protocol foundation
 
@@ -49,10 +51,10 @@ result, and semantic rejection. An unknown envelope version, envelope key, famil
 version fails before execution. Authority is supplied by the receiving runtime's trusted context;
 it is never accepted from the portable message.
 
-The canonical registry tuple currently contains `operation`, `durable.operation`, `graph.read`,
-`graph.command`, and `model.command`. Graph Read and Graph Command delegate to their existing
-fail-closed parsers instead of reproducing Query or Command validation. Model Command carries the
-user's text, optional response language, and optional host-defined JSON context. A successful
+The canonical request/response registry tuple currently contains `operation`, `durable.operation`,
+`graph.read`, `graph.command`, and `model.command`. Graph Read and Graph Command delegate to their
+existing fail-closed parsers instead of reproducing Query or Command validation. Model Command
+carries the user's text, optional response language, and optional host-defined JSON context. A successful
 `executed` result includes the canonical Graph Read, Graph Command, or Operation invocation that
 the model selected and the runtime executed. A Graph Read also includes the actual
 `graph-read-result`; the model does not synthesize stored data from prompt context. Informational
@@ -165,6 +167,7 @@ and a request id is not an Entity identity, a task run id, or an observation id.
 | Operation invocation/permission, Graph Read, Graph Command | Correlated request/response                                  | The same exchanges multiplexed over a session          |
 | Durable run observation                                    | Repeated `inspect` requests                                  | A subscription pushing the same snapshot bodies        |
 | Graph Query observation                                    | No `graph.observe` capability in the current Fetch transport | Snapshots from an explicitly installed server observer |
+| Declared Event observation                                 | No Event observation capability                              | Live deliveries from a policy-aware Event observer     |
 
 WebSocket adds a versioned `ontahi.runtime.session` frame around, rather than inside, those Runtime
 Protocol messages. `request` frames contain the complete existing request envelope; `response`
@@ -234,6 +237,14 @@ overflow marker, and the resulting Graph observation snapshot carries those iden
 identity, so diagnostics can prove causality without timing heuristics. Teardown releases both
 semantic and native observation work. A multi-process host still needs an external change source;
 Ontahi does not broadcast these process-local commit descriptions across regions or replicas.
+
+`event-observe` / `event-unobserve` control a distinct live Event subscription. The socket must
+advertise `event-subscription-push`, and the server observer resolves the registered declaration
+through application policy before subscribing. Pushed frames carry the canonical Event Delivery
+plus an observation-scoped sequence. Unsubscribe or disconnect cancels the headless subscription.
+There is no automatic replay, resubscription, durable acknowledgement, arbitrary predicate, or
+history query on this browser surface. Those remain Event Runtime concerns rather than properties
+of WebSocket transport.
 
 ## Mount the socket on the host server
 

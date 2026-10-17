@@ -4,6 +4,11 @@ A \concept{Storage Adapter} interprets Queries and Commands for a composed appli
 Entities describe identity, relations, Selections, and operations. They do not know whether a Query
 runs over an object in memory or a PostgreSQL table.
 
+Storage is one adapter concern, not the definition of an entire provider package. PostgreSQL and
+MySQL also offer independently imported Task Storage and Event Runtime implementations; Supabase
+offers Task Storage but no Event Runtime. The verified cross-package view lives in the
+[Adapter Capability Matrix](05-adapter-capability-matrix.md).
+
 ## Start in memory
 
 The smallest host needs no external infrastructure:

@@ -10,7 +10,7 @@ Related plans:
 
 1. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 2. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
-3. [146j. First-Class Events And Configurable Event Runtime](../current/146j-first-class-events-runtime-protocol-gate.md)
+3. [146j. First-Class Events And Configurable Event Runtime](./146j-first-class-events-runtime-protocol-gate.md)
 
 ## Summary
 

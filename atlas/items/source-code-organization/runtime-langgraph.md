@@ -31,3 +31,8 @@ is absent or its execution state differs, the adapter clears that thread and reb
 `TaskStorage`. A response claimed before provider persistence recreates the corresponding interrupt
 before issuing the LangGraph resume Command. Explicit step effects still require replay-safe design
 because the two stores do not share a transaction.
+
+The adapter intentionally rejects Event-wait transitions. Supporting them requires retained Event
+delivery plus one atomic Task Storage continuation claim; a LangGraph interrupt by itself does not
+provide that contract. The explicit rejection keeps the supported subset honest while leaving the
+application's Event declaration and execution state machine provider-neutral.

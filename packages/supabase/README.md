@@ -14,6 +14,12 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+The package does not currently provide an Event Runtime. Supabase Task Storage can persist and
+atomically claim an Event-wait checkpoint, but occurrence retention and delivery must come from a
+separately configured durable Event Runtime. A future `@ontahi/supabase/events` implementation must
+define its own PostgREST/RPC, grant, RLS, lease, and stale-claim contract; direct PostgreSQL session
+assumptions are not inherited through the Supabase client.
+
 ## Task run storage
 
 `createSupabaseTaskStorage` persists explicit execution state in nullable `checkpoint jsonb` and

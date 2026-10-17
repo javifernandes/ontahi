@@ -51,3 +51,12 @@ then resumes it.
 Explicit steps may be replayed after failure, so application effects still require appropriate
 idempotency. The adapter is an execution comparison and does not add an LLM, agent loop, LangSmith,
 or model memory.
+
+## Event waits
+
+The adapter rejects Event-wait transitions explicitly. A LangGraph interrupt does not by itself
+retain an Event delivery or preserve the atomic Task Storage claim that selects one continuation.
+Applications may keep the same Event declaration and explicit execution state machine, but must
+select the native Task Runtime or Vercel Workflow executor when that execution waits for a durable
+Event. LangGraph support can be added only when it preserves the same provider-neutral claim
+contract rather than translating an Event into an untracked provider interrupt.

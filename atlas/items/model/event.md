@@ -3,7 +3,7 @@ id: ontahi.model.event
 kind: concept
 title: Event
 parent: ontahi.model
-status: shaping
+status: active
 horizon: now
 supports:
   - ontahi.model.reaction
@@ -72,3 +72,16 @@ Rejected and rolled-back mutations create no occurrence. Publication or subscrib
 commit cannot retroactively roll back domain state. Operation Effect Intents use the same built-in
 interpreter. Existing raw `emit-event` values continue through an explicitly configured legacy
 effector during migration, while typed Event emissions require no application-owned effector.
+
+The browser projection is a negotiated live Runtime Protocol session capability, not a durable
+Event family or history API. `event-observe` and `event-unobserve` bind a reflected declaration
+through server-owned policy to the application subscription API. Delivery frames preserve the
+canonical occurrence and delivery identities plus an observation-scoped sequence. Unsubscribe or
+disconnect cancels the live subscription; replay, automatic resubscription, durable claims, and
+arbitrary predicates are not implied.
+
+External facts enter through the HTTP-neutral Event ingress boundary. A provider authenticates and
+normalizes the original request, after which the explicit default-deny route and registered Event
+declaration validate provider, channel, version, payload, correlation, and JSON safety. Rejected or
+ignored deliveries do not become occurrences. Express and Next.js are host projections of this
+same boundary.

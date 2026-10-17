@@ -96,6 +96,11 @@ export const TodoApplication = ontahi({
 `ontahi(...)` is the composition boundary. It combines semantic declarations with the concrete
 storage, task runtime, and application Capabilities that will interpret them in this process.
 
+Data Graph storage, Task Storage and execution, and Event Runtime are separate concerns at that
+boundary. A provider package may implement several of them, but the host selects each implementation
+independently. See the [Adapter Capability Matrix](05-adapter-capability-matrix.md) for the verified
+combinations and their limits.
+
 The operation consumes one uniform Effect, but a host implementation may be synchronous,
 asynchronous, or already return an Effect. `adaptEffectMethods(...)` normalizes that resource once,
 at the host boundary, and preserves lazy execution. The implementation itself does not need

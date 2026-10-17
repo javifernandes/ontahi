@@ -73,6 +73,12 @@ invoker-rights PostgreSQL RPC owns Interaction claims, Event-wait claims, and ca
 single conditional updates, while host grants and RLS remain authoritative. Supabase Task Storage
 does not advertise native observation or cross-request transactions with Data Graph or Events.
 
+The verified adapter matrix is intentionally uneven. Express projects Runtime Protocol and Event
+ingress, Next.js projects HTTP Runtime Protocol and Event ingress, Vercel Workflow preserves
+Interactions and durable Event waits, and LangGraph preserves Interactions while explicitly
+rejecting Event waits. A missing cell is a truthful limitation, not an invitation to simulate a
+stronger capability with weaker provider primitives.
+
 Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
 
 For observability, core owns vendor-neutral telemetry and reporting ports. `@ontahi/opentelemetry` implements span creation and Ontahi runtime attributes, while each host registers its SDK, resources, processors, and exporters. BookOps keeps Sentry reporting local until another host proves that adapter reusable; Axiom and SigNoz remain interchangeable OTLP destinations rather than Ontahi adapters.

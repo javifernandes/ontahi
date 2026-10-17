@@ -16,6 +16,8 @@ relatedPlans:
   - ontahi://plans/146e-runtime-transport-durable-observation
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/154f-wait-and-continuation-semantics
+  - ontahi://plans/146j-first-class-events-runtime-protocol-gate
+  - ontahi://plans/155a-vercel-workflow-event-waits
   - bookops://plans/75c-durable-operation-result-contracts
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
   - bookops://plans/70-first-class-workflow-tier-in-architecture
@@ -35,6 +37,13 @@ A Task that checkpoints a typed Interaction reports `waiting`, and React exposes
 separately from `isRunning`. Claiming the matching response returns the run to `running` before the
 continuation evaluates. This one-shot wait is distinct from progress, Query observation, and domain
 Event reactions.
+
+A serializable Event wait is a separate `waiting` reason beside an Interaction. Its checkpoint
+names one registered Event declaration version, stable wait identity, optional JSON correlation,
+and optional timeout. A durable Event Runtime owns the retained delivery while Task Storage
+atomically selects the single continuation winner. The native executor and Vercel Workflow preserve
+this contract; LangGraph rejects the transition until its adapter can prove the same claim
+semantics. Timeout and cancellation end the waiter subscription without deleting the occurrence.
 
 Cache invalidation associated with a durable operation occurs when the run completes, rather than when the runtime merely accepts the start request.
 

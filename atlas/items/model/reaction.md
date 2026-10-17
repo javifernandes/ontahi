@@ -44,6 +44,12 @@ the Event Runtime separately states occurrence and subscriber-delivery guarantee
 `emit-event` values may use an explicitly registered legacy effector during migration, but a typed
 Event does not require one.
 
+For mutation-caused Events, the Unit of Work defers the complete Reaction interpretation of the
+Applied Mutation Outcome until the owning transaction commits. Event Runtime acceptance and
+publication therefore also happen after commit. Rollback and rejection run no Reaction and produce
+no occurrence. Publication or subscriber failure after commit remains follow-up evidence and
+cannot reverse the applied mutation.
+
 Applications register Relationship Reactions through `ontahi({ reactions })`. The
 `reaction.relationship(Entity, relationName).added(...)` and `.removed(...)` factories normalize
 forward and inverse authoring to the canonical Relation identity. Their `.react(...)`, `.emit(...)`,

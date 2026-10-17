@@ -1,4 +1,4 @@
-# Continuous Execution and First-Class Events
+# Continuous Execution
 
 Durable work already has two observation paths: Fetch polls, while WebSocket pushes snapshots of
 the same `TaskRunRef`. WebSocket also carries supported Graph Query observations. These are current
@@ -9,17 +9,11 @@ The remaining direction is broader: SSE or gRPC adapters, resumable delivery, an
 naturally produce many values need explicit contracts for identity, ordering, backpressure,
 completion, failure and reconnection. None follows merely from having a socket.
 
-Events are the other half. An operation invocation requests work and expects a result. An event
-states that something happened and may fan out, persist, replay, or feed projections. Ontahí's
-current effect events and typed HTTP ingress channels are evidence for one reflected event model
-covering both application facts and third-party facts.
-
-This is a deliberate design gate for the Ontahí Runtime Protocol. Events must not be added as just
-another transport message because BookOps happens to emit or consume something event-shaped.
-Before remote subscription or delivery is specified, Ontahí still needs a first-class answer for
-Event declaration, portable identity, emission, authority, lifecycle, ordering, durability,
-acknowledgement, replay, and failure. BookOps is implementation evidence for that work, not the
-framework contract.
+First-class Events are now a current contract rather than a further direction. See
+[Events](../02-core-concepts/10-events.md) for declaration, occurrence and delivery identity,
+ephemeral and durable runtimes, external ingress, durable waits, and live browser observation.
+General Event history, cursor replay, broker egress, and arbitrary durable processing remain future
+work; they do not follow automatically from the current live subscription or claim contracts.
 
 ```mermaid
 flowchart TB
@@ -27,9 +21,9 @@ flowchart TB
   Run --> Progress["Progress / produced values"]
   Progress --> Observe["Polling · WebSocket · SSE · stream"]
   Run --> Result["Canonical result"]
-  Run --> Event["Fact: something happened"]
-  Event --> Subscribers["Projections · workflows · notifications"]
+  Run --> Event["Declared Event Occurrence"]
+  Event --> Subscribers["Live subscribers · durable waits"]
 ```
 
-With that model, notifications, cache invalidation, projections, workflows, and realtime UI can
-subscribe to declared events without making domain code choose a queue or socket technology.
+Future continuous execution can build on those Event identities without redefining them. It still
+needs its own contracts for resumable streams, backpressure, ordering, terminal state, and replay.
