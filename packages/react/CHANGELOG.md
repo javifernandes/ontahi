@@ -1,5 +1,106 @@
 # @ontahi/react
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 375368a: Invalidate React Query Graph Reads from committed semantic mutations returned by the Runtime
+  Protocol. Graph Reads now retain canonical dependency metadata independently from query keys, while
+  Graph Command, Operation, and terminal durable Operation hooks prefer conservative semantic
+  matching and preserve existing declared invalidation as a compatibility fallback.
+- 69ccf41: Add a reusable Runtime Model Command client and let `OntahiGraphProvider` automatically invalidate
+  overlapping Graph Reads for committed semantic effects from any execution on its Runtime Transport,
+  including Model Commands and Devtools Console actions.
+
+  Let Runtime transports describe their implementation kind and let Devtools compose and discover
+  diagnostics directly from one routed Runtime Transport.
+
+  Generate a portable client application catalog, retain it on Runtime Graph clients, and expose the
+  resolved client session through `OntahiGraphProvider` so Devtools can discover Entities, identity,
+  cache, and transport without duplicate host wiring.
+
+- 00bc7a0: Add semantic invalidation for Entity Mutation Command hooks and expose committed mutation metadata
+  from Console actions, including terminal durable Operations. Applications can execute Todo-style
+  mutations without declaring React Query cache keys or post-success refetch callbacks.
+- 3fdc296: Represent a Task suspended on a typed Interaction with an explicit `waiting` lifecycle state.
+  Native and LangGraph execution now return to `running` only after one authorized, correlated
+  response is atomically claimed, including after runtime recreation.
+
+  Preserve waiting snapshots through Runtime Protocol transports, expose `isWaiting` from
+  `useDurableOperation`, and keep observation active until the run reaches a terminal state.
+
+- f335200: Carry client-local Graph Read refresh causality from semantic React invalidation into Runtime Transport diagnostics. Group causally refreshed reads and terminal operation metadata into one semantic Activity entry instead of duplicating them as top-level activity. Organize operation detail into Progress, Effects, and Runtime views so concrete refresh consequences remain distinct from lifecycle messages and lower-level protocol evidence.
+- fb78b34: Add an explicitly projected live Event subscription capability to Runtime Protocol WebSocket
+  sessions, including typed client observation and cancellation on unsubscribe or disconnect.
+- 7cf4162: Allow `useGraphQuery` to opt into complete-snapshot live observation while preserving the authored
+  Query, Graph Client Cache normalization, semantic mutation behavior, and deterministic cancellation.
+
+### Patch Changes
+
+- e23b9ab: Invalidate client queries from executed canonical Graph Commands and registered Operation bridge
+  metadata, allowing model-triggered mutations to refresh affected application state without
+  application-specific refetch callbacks.
+- b2cb4fe: Present pending durable Operation interactions in Activity, identify durable Console invocations as
+  start-and-observe work, and restore their WebSocket observation after transient session loss with
+  bounded exponential retries.
+- Updated dependencies [45e3083]
+- Updated dependencies [7a9bb92]
+- Updated dependencies [69ccf41]
+- Updated dependencies [b862f5b]
+- Updated dependencies [116f3ea]
+- Updated dependencies [5f213e4]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [31b5311]
+- Updated dependencies [0802a01]
+- Updated dependencies [03c1af6]
+- Updated dependencies [7d002a0]
+- Updated dependencies [3fdc296]
+- Updated dependencies [c275332]
+- Updated dependencies [f335200]
+- Updated dependencies [db4b8c9]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [fb78b34]
+- Updated dependencies [9e769f6]
+- Updated dependencies [f67fa6f]
+- Updated dependencies [2305a9d]
+- Updated dependencies [c01cd23]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [fb78b34]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5668f96]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [6d3a494]
+- Updated dependencies [f552bed]
+- Updated dependencies [67fc06a]
+- Updated dependencies [eebeeec]
+- Updated dependencies [8ff883f]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [072ad16]
+- Updated dependencies [6b3f847]
+- Updated dependencies [27d5253]
+- Updated dependencies [a2fb2b5]
+- Updated dependencies [848b50d]
+- Updated dependencies [24d99ef]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes

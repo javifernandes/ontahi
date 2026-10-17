@@ -1,5 +1,109 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 5b13c9a: Persist explicit Task execution checkpoints so registered named-step Operations can resume pending
+  interactions in a new in-process runtime. Store checkpoints in the Supabase task adapter and keep
+  the private execution state out of public Task snapshots.
+- 27d5253: Add opt-in Runtime Protocol metadata for committed semantic mutations from Graph Commands,
+  Operations, and terminal durable Operations. Hosts must explicitly project metadata for the
+  caller's authority, while receivers that do not advertise the capability keep the previous
+  response shape.
+
+  Durable Task execution now owns an isolated mutation journal and persists accumulated execution
+  metadata across human-in-the-loop resumes. Supabase Task stores persist this optional metadata in
+  an `execution_metadata` JSON column when a Task commits graph mutations.
+
+- 2817f0c: Harden Supabase Task Storage with an invoker-rights PostgreSQL RPC for atomic Interaction claims,
+  Event-wait claims, and cancellation. Export the installable RPC SQL and verify the complete shared
+  Task Storage contract, concurrent claims, restart persistence, and RLS behavior through real
+  PostgREST and PostgreSQL containers.
+
+### Patch Changes
+
+- 116f3ea: Expose payload-free Event resume evidence on durable Task snapshots. Native Task observations now
+  retain the Event wait, occurrence, delivery claim, and ingress provenance needed to explain a
+  restart-safe continuation without exposing the Event payload.
+
+  Devtools renders the Event wait, ingress-driven resume, and Task completion as one causal Operation
+  activity with expandable JSON details.
+
+- 3fdc296: Represent a Task suspended on a typed Interaction with an explicit `waiting` lifecycle state.
+  Native and LangGraph execution now return to `running` only after one authorized, correlated
+  response is atomically claimed, including after runtime recreation.
+
+  Preserve waiting snapshots through Runtime Protocol transports, expose `isWaiting` from
+  `useDurableOperation`, and keep observation active until the run reaches a terminal state.
+
+- 6b3f847: Add durable, correlated Event waits to native Task executions. Task snapshots now describe their
+  typed waiting reason, retained Event deliveries resume a persisted continuation once across runtime
+  recreation, and waits can time out or be cancelled without deleting the occurrence. Supabase Task
+  storage implements the corresponding atomic wait claim and cancellation transitions.
+
+  Durable Event waits are currently supported only by the native Task Runtime. LangGraph fails
+  explicitly when it encounters this transition until it can provide equivalent durable semantics,
+  instead of incorrectly treating the wait as an ordinary continuation.
+
+- Updated dependencies [45e3083]
+- Updated dependencies [7a9bb92]
+- Updated dependencies [69ccf41]
+- Updated dependencies [b862f5b]
+- Updated dependencies [116f3ea]
+- Updated dependencies [5f213e4]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [31b5311]
+- Updated dependencies [0802a01]
+- Updated dependencies [03c1af6]
+- Updated dependencies [7d002a0]
+- Updated dependencies [3fdc296]
+- Updated dependencies [c275332]
+- Updated dependencies [f335200]
+- Updated dependencies [db4b8c9]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [fb78b34]
+- Updated dependencies [9e769f6]
+- Updated dependencies [f67fa6f]
+- Updated dependencies [2305a9d]
+- Updated dependencies [c01cd23]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [fb78b34]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5668f96]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [6d3a494]
+- Updated dependencies [f552bed]
+- Updated dependencies [67fc06a]
+- Updated dependencies [eebeeec]
+- Updated dependencies [8ff883f]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [072ad16]
+- Updated dependencies [6b3f847]
+- Updated dependencies [27d5253]
+- Updated dependencies [a2fb2b5]
+- Updated dependencies [848b50d]
+- Updated dependencies [24d99ef]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes

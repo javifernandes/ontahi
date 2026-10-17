@@ -1,5 +1,216 @@
 # @ontahi/core
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 45e3083: Complete open Graph Commands whose update/delete target is a parameterized Selection. Validate
+  predicate and payload substitutions from Entity schemas, project authorized reference resolution
+  through Model Support, and bind the same Holes from both Semantic Console dialects before lowering
+  to the existing version 3 Graph Command protocol.
+- 7a9bb92: Reflect Field value ownership and nullability as explicit, orthogonal semantics. Descriptors now
+  distinguish caller-required, caller-optional, defaulted, receiver-generated, and derived values so
+  generic authoring and future partial-program consumers can interpret an omitted value without
+  reconstructing Field intent from schema wrappers.
+- 69ccf41: Add a reusable Runtime Model Command client and let `OntahiGraphProvider` automatically invalidate
+  overlapping Graph Reads for committed semantic effects from any execution on its Runtime Transport,
+  including Model Commands and Devtools Console actions.
+
+  Let Runtime transports describe their implementation kind and let Devtools compose and discover
+  diagnostics directly from one routed Runtime Transport.
+
+  Generate a portable client application catalog, retain it on Runtime Graph clients, and expose the
+  resolved client session through `OntahiGraphProvider` so Devtools can discover Entities, identity,
+  cache, and transport without duplicate host wiring.
+
+- 116f3ea: Expose payload-free Event resume evidence on durable Task snapshots. Native Task observations now
+  retain the Event wait, occurrence, delivery claim, and ingress provenance needed to explain a
+  restart-safe continuation without exposing the Event payload.
+
+  Devtools renders the Event wait, ingress-driven resume, and Task completion as one causal Operation
+  activity with expandable JSON details.
+
+- 5f213e4: Add a canonical Event-resume evidence helper for Task Runtime adapters and support retained,
+  durably claimed Event waits in Vercel Workflow explicit executions.
+- a35b2d0: Preserve model-proposed Operation applications across durable choice Interactions and substitute
+  ambiguous Entity Ref Holes one at a time. Reauthorize continuation and execute only after every
+  Hole is closed, without asking the model to reconstruct the invocation.
+
+  Add a DeepSeek Responses API adapter with JSON Schema structured output alongside the local Ollama
+  provider.
+
+- 8a7eaec: Allow Model Support to propose open Graph Read applications with Entity Ref holes and resolve
+  separate entity-match hints against authorized scoped candidates before canonical execution.
+- 7eaddca: Pair Model Support graph policies with their scoped read and command exposures so applications can
+  derive authorization dispatchers and the model catalog from one registration boundary. Keep dynamic
+  catalog data receiver-local, infer full Model exposures from directly registered policies, and allow
+  static graph-only activation without exposure factories or an empty scope callback. Read affordances
+  can narrow inferred limits and modes or customize their presentation without rebuilding the canonical
+  request schema. Generic interpretation guidance owns canonical protocol shaping and preservation of
+  user-supplied string values, leaving application instructions focused on domain semantics.
+- 0802a01: Add typed approval interactions with exact JSON-safe proposals and approve or reject responses to
+  durable Operation runs.
+- 3fdc296: Represent a Task suspended on a typed Interaction with an explicit `waiting` lifecycle state.
+  Native and LangGraph execution now return to `running` only after one authorized, correlated
+  response is atomically claimed, including after runtime recreation.
+
+  Preserve waiting snapshots through Runtime Protocol transports, expose `isWaiting` from
+  `useDurableOperation`, and keep observation active until the run reaches a terminal state.
+
+- c275332: Resolve model output into an envelope containing existing GraphCommandRequest or OperationInvokeRequest contracts. Parse with the existing protocol parsers, derive invocation inputs from operation declarations, revalidate scope before dispatch, and forward canonical requests without domain argument translation. Expose scoped graph commands through canonical request schemas and validators.
+- f335200: Carry client-local Graph Read refresh causality from semantic React invalidation into Runtime Transport diagnostics. Group causally refreshed reads and terminal operation metadata into one semantic Activity entry instead of duplicating them as top-level activity. Organize operation detail into Progress, Effects, and Runtime views so concrete refresh consequences remain distinct from lifecycle messages and lower-level protocol evidence.
+- db4b8c9: Carry bounded mutation commit identities from Runtime Protocol mutation responses and durable
+  completion into semantic Graph observation refreshes. Group those causally proven refreshes under
+  their mutation in Devtools while retaining identity when payload capture is disabled.
+- 399f7f5: Expose the Entity and Field positions occupied by named Graph Read application Holes so resolvers
+  and frontend projections can derive binding semantics from registered schemas.
+
+  Project direct Entity Ref predicate Holes in the Semantic Console as searchable, receiver-authorized
+  choices and substitute the selected candidate as a canonical Entity Ref before execution.
+  Render Boolean Holes as explicit choices, align every binding in a stable parameter grid, and expose
+  available Field descriptions as contextual help.
+  Normalize or clear retained bindings when an edited expression changes a Hole's projected control
+  type so the visible control and executable request stay consistent.
+
+- f5e085f: Declare stored scalar Field defaults with `field.default`, receiver-generated creation values with
+  `field.generated`, and persisted reference requirements with `field.existingRef`. Reflect these
+  contracts through graph schemas, materialize receiver-owned values in Entity creation commands, and
+  enforce required references across application mutation paths. Model graph-command validation now
+  also distinguishes direct proposals from explicit choice options. Entity create, update, and delete
+  outcomes can now drive declared post-commit Reactions, allowing structural mutations to retain
+  external effects without boilerplate Domain Operations. Intrinsic Entity Reactions may be
+  colocated in `entity({ reactions })`, while application-level declarations remain available for
+  cross-Entity behavior.
+
+  Relations can now declare structural delete lifecycle with `onDelete: 'cascade'` on `hasMany` and
+  `onDelete: 'detach'` on `manyToMany`. The application receiver applies those effects atomically
+  when the storage supports transactions and routes their outcomes through the same post-commit
+  Reaction machinery. Entity Mutation Command policies may also authorize individual actions after
+  canonical request resolution.
+
+- fb78b34: Execute canonical Effect Intents returned by durable Operations before validating and completing
+  their Task Run result, enabling typed domain Events to be emitted from committed durable work.
+- 9e769f6: Add a provider-neutral Task Storage conformance verifier and independently composable PostgreSQL
+  Task Storage with atomic Interaction and Event-wait claims, restart-safe checkpoints, schema SQL,
+  and a public `@ontahi/postgres/tasks` entrypoint.
+- f67fa6f: Add typed Event declarations, canonical JSON-safe emissions and occurrences, application
+  reflection, and a default ephemeral in-memory Event Runtime with headless fan-out and cancellation.
+  Typed Operation effects and post-commit Mutation Reactions now use the built-in Event interpreter,
+  while raw `emit-event` intents retain their existing effector compatibility path.
+- c01cd23: Add durable string-input interactions and let model-proposed Operation applications continue through omitted Entity choices and scalar Hole values without another model call.
+- 7c2a6b9: Add application-bound model command composition and an Ollama model provider.
+- c275332: Add a graph instruction runtime that derives operation descriptions from declarations, interprets scoped requests, revalidates proposals, and executes through the canonical dispatcher. Expose an optional Express model-command entry point with invocation context propagation and cancellation. Applications supply data scope and argument bindings without declaring domain operations for the chat itself.
+- 8ab4218: Add an optional LangGraph Task Runtime for explicit durable Operation steps. Preserve Ontahí Task
+  snapshots, Interaction authorization, atomic reply claims, and Runtime Protocol surfaces while
+  using an injected LangGraph checkpointer for replay and interrupt/resume.
+- fb78b34: Add an explicitly projected live Event subscription capability to Runtime Protocol WebSocket
+  sessions, including typed client observation and cancellation on unsubscribe or disconnect.
+- b807692: Separate model-command preparation from canonical execution and add a runtime-neutral durable Task
+  that checkpoints typed choices and optional effect approvals. Extend the model command protocol
+  with a pending run result while reusing `durable.operation` for observation and responses.
+- ddec3e7: Allow model-command runtimes to propose canonical Graph Reads, execute them through the configured
+  policy-aware dispatcher, and return their actual results. Render the canonical read and semantic
+  result together in Devtools Activity.
+- 3252d6c: Add the versioned `model.command` Runtime Protocol family for natural-language requests and return
+  the canonical Graph Command or Operation invocation with executed results. Forward transport
+  cancellation signals through Runtime Protocol dispatchers and render model requests, outcomes, and
+  executed actions in Devtools Activity.
+- c275332: Allow model interpretation to propose explicitly scoped entity field updates alongside operation invocations. Bind targets to canonical conditional EntityMutationCommands, recheck exposure and target uniqueness after inference, and dispatch through a host-supplied graph command policy boundary.
+- c275332: Support a `help` model interpretation rendered as an `answered` command result from operation descriptions without dispatch. Allow bindings to narrow descriptions for restricted exposures, and reauthorize after inference for every outcome.
+- c275332: Add provider-neutral model interpretation with per-operation input-schema projections, canonical request validation, and reusable scope revalidation. Interpretation produces a proposal without executing it; providers and data fetching remain host-owned.
+- c275332: Accept a validated response language on model command requests and pass it to interpretation instructions. Hosts can format capability help using localized descriptions through the optional formatHelp callback.
+- 5668f96: Add independently composable MySQL Task Storage with InnoDB-backed atomic Interaction and Event-wait
+  claims, restart-safe checkpoints, schema SQL, conformance evidence, and a public
+  `@ontahi/mysql/tasks` entrypoint. Add Core adapter-author helpers for the provider-neutral Task
+  Storage facade and patch semantics shared by durable storage implementations.
+- 96d8092: Expose the bounded experimental Graph Read application contract, let both Semantic Console
+  dialects author named predicate Holes, and project those Holes as schema-validated Devtools inputs
+  before dispatching the unchanged canonical Graph Read request.
+- 5b13c9a: Persist explicit Task execution checkpoints so registered named-step Operations can resume pending
+  interactions in a new in-process runtime. Store checkpoints in the Supabase task adapter and keep
+  the private execution state out of public Task snapshots.
+- 6d3a494: Add provider-neutral durable Event delivery contracts and a PostgreSQL Event Runtime with retained
+  occurrences, stable correlated subscriptions, leased claims, acknowledgement, retry, cancellation,
+  and an adapter conformance verifier.
+- eebeeec: Refresh active Runtime Protocol Graph Read observations after possibly overlapping committed
+  Commands and Operations. Reevaluation reapplies the subscriber's authority, coalesces slow-consumer
+  work, preserves native storage observation, and deduplicates equal snapshots.
+- e114d60: Reflect policy-authorized Entity mutation affordances once in Core and project them through Model
+  Support and Runtime Protocol discovery. Devtools Console completion and diagnostics now use the
+  published writable Fields, identity, conditions, Selection operators, and Field presence semantics
+  without treating discovery as execution authorization.
+- d1d3f36: Discover policy-registered direct, many-to-many, and ordered Relationship Commands through Runtime
+  Protocol. The semantic Console now lowers explicit attach, detach, and move placements to canonical
+  Graph Command bodies, and Devtools keeps those authoring affordances scoped to its live transport
+  context.
+- 82d155a: Transport policy-scoped Entity Selection updates and deletes through Graph Command protocol v3.
+  Support the mutations in both Semantic Console dialects, advertise their permissions separately
+  from exact Ref mutations, and reconcile every returned Entity mutation fact in Devtools.
+- 6b3f847: Add durable, correlated Event waits to native Task executions. Task snapshots now describe their
+  typed waiting reason, retained Event deliveries resume a persisted continuation once across runtime
+  recreation, and waits can time out or be cancelled without deleting the occurrence. Supabase Task
+  storage implements the corresponding atomic wait claim and cancellation transitions.
+
+  Durable Event waits are currently supported only by the native Task Runtime. LangGraph fails
+  explicitly when it encounters this transition until it can provide equivalent durable semantics,
+  instead of incorrectly treating the wait as an ordinary continuation.
+
+- 27d5253: Add opt-in Runtime Protocol metadata for committed semantic mutations from Graph Commands,
+  Operations, and terminal durable Operations. Hosts must explicitly project metadata for the
+  caller's authority, while receivers that do not advertise the capability keep the previous
+  response shape.
+
+  Durable Task execution now owns an isolated mutation journal and persists accumulated execution
+  metadata across human-in-the-loop resumes. Supabase Task stores persist this optional metadata in
+  an `execution_metadata` JSON column when a Task commits graph mutations.
+
+- a2fb2b5: Add a policy-aware HTTP ingress boundary for declared Events. Authenticated provider outcomes are
+  matched against explicit Event routes, normalized payloads are validated against the registered
+  declaration and version, and accepted occurrences retain provider, external event, delivery, and
+  receipt provenance without copying authentication secrets.
+
+  Event ingress now drives correlated durable Task waits through the same Event Runtime contract.
+  Runtimes that advertise no deduplication continue to create distinct occurrences for repeated
+  provider deliveries while preserving the stable external delivery identity as provenance.
+
+  Devtools Event details summarize external ingress provenance alongside Operation and mutation
+  causation.
+
+- 848b50d: Add experimental typed choice interactions to durable Operation runs and carry inspection and
+  responses through the existing Runtime Protocol.
+- 24d99ef: Derive durable Operation input interactions from their existing schemas and preserve string,
+  number, Boolean, enum/literal, and nullable values through validation and substitution. Render the
+  same neutral descriptors as typed controls in Devtools, including explicit null selection.
+- 9904cff: Resolve Model Support entity-match bindings for Graph Read and Operation applications through
+  registered display metadata and authorized Graph Read policies without requiring applications to
+  assemble candidate lists manually. Preserve typed Model Interpretation failures across the durable
+  Model Command Task boundary so transports can return actionable protocol errors.
+  Represent started durable Operations explicitly so clients can observe their completion before
+  refreshing affected graph data.
+
+### Patch Changes
+
+- b862f5b: Accept one application Runtime Protocol policy collection and add a high-level Express host with
+  same-origin WebSocket authorization and explicit lifecycle management.
+- 31b5311: Capture applied Graph Commands in a transaction-aware Unit of Work mutation journal that publishes
+  child effects only after commit.
+- 03c1af6: Add an experimental explicit Task execution machine whose JSON-safe states advance through named
+  steps, pending Interactions, and typed completion without suspending the Task function.
+  Vercel Workflow tasks now reject this execution mode explicitly until that adapter supports it.
+- 7d002a0: Compose application Runtime Protocol families, policies, and observers once in a transport-neutral
+  receiver that can be projected through HTTP, WebSocket, and Next.js adapters.
+- 2305a9d: Add conservative semantic matching between committed Graph Commands and canonical Graph Reads.
+- c275332: Allow operation bindings and graph-command exposures to return an unresolved reason from `validate` when a proposed request cannot be resolved. Their `message` callbacks describe successful execution results.
+- f552bed: Prefer declared operations over lower-level graph commands in model context and output contracts, and give interpreters one bounded repair attempt when a structurally valid proposal fails scoped runtime validation.
+- 5ea8abd: Organize model runtime internals by command, read, application, and provider responsibility while
+  preserving the public server API.
+- f552bed: Cancel active Runtime Protocol observations before finalizing their iterators so disconnecting a client cannot block the host runtime.
+- 67fc06a: Add explicit semantic mutation declarations and bounded conservative widening to the Unit of Work
+  mutation journal.
+- 8ff883f: Keep explicit in-process Task executions bound to the execution definition selected when the run
+  starts.
+- 072ad16: Preserve authenticated principals as durable Operation actors, let in-process interactions resume across later asynchronous effects, and record defects as terminal Task failures.
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes

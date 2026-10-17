@@ -1,5 +1,92 @@
 # @ontahi/language
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 45e3083: Complete open Graph Commands whose update/delete target is a parameterized Selection. Validate
+  predicate and payload substitutions from Entity schemas, project authorized reference resolution
+  through Model Support, and bind the same Holes from both Semantic Console dialects before lowering
+  to the existing version 3 Graph Command protocol.
+- 96d8092: Expose the bounded experimental Graph Read application contract, let both Semantic Console
+  dialects author named predicate Holes, and project those Holes as schema-validated Devtools inputs
+  before dispatching the unchanged canonical Graph Read request.
+- e114d60: Reflect policy-authorized Entity mutation affordances once in Core and project them through Model
+  Support and Runtime Protocol discovery. Devtools Console completion and diagnostics now use the
+  published writable Fields, identity, conditions, Selection operators, and Field presence semantics
+  without treating discovery as execution authorization.
+- d1d3f36: Discover policy-registered direct, many-to-many, and ordered Relationship Commands through Runtime
+  Protocol. The semantic Console now lowers explicit attach, detach, and move placements to canonical
+  Graph Command bodies, and Devtools keeps those authoring affordances scoped to its live transport
+  context.
+- 82d155a: Transport policy-scoped Entity Selection updates and deletes through Graph Command protocol v3.
+  Support the mutations in both Semantic Console dialects, advertise their permissions separately
+  from exact Ref mutations, and reconcile every returned Entity mutation fact in Devtools.
+- 6e9eb49: Extend the Semantic Console with safe TS-like and declarative syntax for exact Entity mutation
+  Commands and reflected Operation invocations. Lower actions through the existing `graph.command`
+  and `operation` Runtime Protocol families, and let generated client Entities provide the Console's
+  schemas and Operation metadata.
+
+### Patch Changes
+
+- Updated dependencies [45e3083]
+- Updated dependencies [7a9bb92]
+- Updated dependencies [69ccf41]
+- Updated dependencies [b862f5b]
+- Updated dependencies [116f3ea]
+- Updated dependencies [5f213e4]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [31b5311]
+- Updated dependencies [0802a01]
+- Updated dependencies [03c1af6]
+- Updated dependencies [7d002a0]
+- Updated dependencies [3fdc296]
+- Updated dependencies [c275332]
+- Updated dependencies [f335200]
+- Updated dependencies [db4b8c9]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [fb78b34]
+- Updated dependencies [9e769f6]
+- Updated dependencies [f67fa6f]
+- Updated dependencies [2305a9d]
+- Updated dependencies [c01cd23]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [fb78b34]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5668f96]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [6d3a494]
+- Updated dependencies [f552bed]
+- Updated dependencies [67fc06a]
+- Updated dependencies [eebeeec]
+- Updated dependencies [8ff883f]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [072ad16]
+- Updated dependencies [6b3f847]
+- Updated dependencies [27d5253]
+- Updated dependencies [a2fb2b5]
+- Updated dependencies [848b50d]
+- Updated dependencies [24d99ef]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes
