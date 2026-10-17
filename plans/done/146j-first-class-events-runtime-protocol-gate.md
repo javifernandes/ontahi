@@ -1,6 +1,6 @@
 # 146j. First-Class Events And Configurable Event Runtime
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/146j-first-class-events-runtime-protocol-gate`
 
@@ -13,7 +13,7 @@ Related plans:
 2. [135. Applied Mutation Outcomes And Reactions](../done/135-applied-mutation-outcomes-and-reactions.md)
 3. [135b. Declarative Reaction Authoring And Registration](../done/135b-declarative-reaction-authoring-and-registration.md)
 4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
-5. [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
+5. [153c. Interactive And Resumable Operation Execution](../current/153c-operation-interactions-and-resumption.md)
 6. [154. Semantic Program Kernel And Distributed Evaluation](../research/154-semantic-program-kernel-and-distributed-evaluation.md)
 7. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 8. [154f. Wait And Durable Continuation Semantics](../done/154f-wait-and-continuation-semantics.md)
@@ -655,11 +655,11 @@ until the provider outcome can be evaluated once and routed semantically after n
 
 ### Slice 6: Durable knowledge and protocol decision
 
-- [ ] Create or update the smallest Atlas items for the proven Event Declaration, Occurrence,
+- [x] Create or update the smallest Atlas items for the proven Event Declaration, Occurrence,
       Delivery, and Event Runtime boundaries.
-- [ ] Update Reaction and Durable Operation Atlas items with the proven integration.
-- [ ] Decide which Event protocol operations are stable enough to remain public.
-- [ ] Extract broker-specific, advanced filtering, or generalized event-processing work into linked
+- [x] Update Reaction and Durable Operation Atlas items with the proven integration.
+- [x] Decide which Event protocol operations are stable enough to remain public.
+- [x] Extract broker-specific, advanced filtering, or generalized event-processing work into linked
       follow-up plans.
 
 ## Testing Strategy
@@ -750,6 +750,13 @@ until the provider outcome can be evaluated once and routed semantically after n
 18. Repeating an accepted external delivery creates a distinct occurrence when the selected Event
     Runtime advertises `deduplication: false`. The stable provider delivery identity makes the
     duplicate observable without implying exactly-once acceptance.
+19. Runtime Protocol exposes only policy-aware live Event observation through negotiated WebSocket
+    session controls. Durable claims, replay, arbitrary predicates, provider topology, and Event
+    history remain outside the browser protocol.
+20. Supabase durable Events remain a focused provider design in
+    [Plan 146k](../backlog/146k-supabase-durable-event-runtime.md). Broker egress, replay, and
+    generalized durable processing remain a separate research vertical in
+    [Plan 146l](../backlog/146l-event-brokers-egress-and-processing.md).
 
 ## Open Questions
 
@@ -780,20 +787,20 @@ until the provider outcome can be evaluated once and routed semantically after n
 
 ## Exit Criteria
 
-- [ ] Event declaration, emission, occurrence, subscription, delivery, policy, and runtime
+- [x] Event declaration, emission, occurrence, subscription, delivery, policy, and runtime
       capabilities have implementation evidence and durable Atlas definitions.
-- [ ] Applications use typed Events without manually registering an `emit-event` effector.
-- [ ] The in-memory runtime states and proves its ephemeral guarantees.
-- [ ] One stronger runtime proves durable acceptance or delivery without changing semantic authoring.
-- [ ] Commit, rollback, publication failure, fan-out, cancellation, replay, and duplicate behavior
+- [x] Applications use typed Events without manually registering an `emit-event` effector.
+- [x] The in-memory runtime states and proves its ephemeral guarantees.
+- [x] One stronger runtime proves durable acceptance or delivery without changing semantic authoring.
+- [x] Commit, rollback, publication failure, fan-out, cancellation, replay, and duplicate behavior
       are explicit and tested where supported.
-- [ ] Todo emits and consumes one bulk Event end to end while cache invalidation remains independent.
+- [x] Todo emits and consumes one bulk Event end to end while cache invalidation remains independent.
 - [x] One authenticated external Event resumes one correlated durable continuation across restart.
-- [ ] Devtools explains occurrence and delivery beneath their causal Operation, Command, Reaction,
+- [x] Devtools explains occurrence and delivery beneath their causal Operation, Command, Reaction,
       or ingress Activity.
-- [ ] Runtime Protocol transports only the accepted semantic contracts and advertises lifecycle
+- [x] Runtime Protocol transports only the accepted semantic contracts and advertises lifecycle
       limitations honestly.
-- [ ] Deferred event processing, broker adapters, and generalized distribution work are preserved in
+- [x] Deferred event processing, broker adapters, and generalized distribution work are preserved in
       linked follow-up plans rather than silently dropped.
 
 ## Closure And Evolution
@@ -801,6 +808,13 @@ until the provider outcome can be evaluated once and routed semantically after n
 This plan closes when Verticals A, B, and C establish a first-class Event model, one local runtime,
 one browser bridge, causal inspection, and one restart-safe Event-backed continuation. The plan
 need not ship every broker adapter or a general event-processing platform.
+
+All three verticals are complete. PostgreSQL and MySQL independently prove durable delivery, the
+native and Vercel Workflow executors prove restart-safe Event waits, Express and Next.js project the
+same authenticated ingress boundary, and Runtime Protocol exposes the bounded live browser
+subscription. [Plan 146k](../backlog/146k-supabase-durable-event-runtime.md) and
+[Plan 146l](../backlog/146l-event-brokers-egress-and-processing.md) retain the deliberately deferred
+provider and processing work.
 
 At closure, keep only concepts with implementation evidence as Atlas knowledge. Candidate APIs and
 unanswered options remain in plan history. Plan 154 may proceed to bounded distributed evaluation

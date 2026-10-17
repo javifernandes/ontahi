@@ -125,6 +125,43 @@ suppresses unchanged snapshots and never makes the browser poll. Unsubscribe and
 active iterators. The session does not promise replay, automatic resubscription, or exactly-once
 snapshot delivery.
 
+When the injected application receiver includes `observeEvent`, the same socket advertises
+`event-subscription-push`. Browser `event-observe` controls subscribe to a reflected Event through
+the receiver's `projectEventDelivery` policy; unobserve and disconnect cancel the live headless
+subscription. This projection carries canonical Event Deliveries but does not add replay, durable
+acknowledgement, arbitrary predicates, or Event history.
+
+## Event ingress
+
+`ontahiExpress(...)` can also project authenticated Event ingress independently from Operation
+ingress. The host registers provider adapters and explicit default-deny routes:
+
+```ts
+server.use(
+  ontahiExpress(TodoApplication, {
+    ingress: {
+      providers: { 'export-worker': exportWorkerProvider },
+      eventRoutes: [
+        {
+          eventId: TodoListExportReady.id,
+          eventVersion: TodoListExportReady.version,
+          method: 'POST',
+          route: '/events/export-ready',
+          provider: 'export-worker',
+          channel: 'todo.export-ready',
+        },
+      ],
+    },
+  }),
+);
+```
+
+The provider receives the original Express request projected as a Web `Request`, authenticates it,
+and returns a normalized outcome. Ontahí then verifies route provider, channel, declaration version,
+payload, correlation, and JSON safety before accepting an occurrence. Rejected or ignored
+deliveries create no occurrence. Event and Operation ingress routes stay distinct so middleware
+order cannot decide their semantic meaning.
+
 Browser WebSockets send matching cookies during the HTTP upgrade but do not use CORS as an access
 control boundary. A credentialed host should use `authorizeUpgrade` to validate the browser
 `Origin` against its canonical public origin before `context` restores the shared HTTP session.

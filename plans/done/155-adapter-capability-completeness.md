@@ -1,6 +1,6 @@
 # 155. Adapter Capability Completeness
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/155-adapter-capability-completeness`
 
@@ -12,7 +12,7 @@ Related plans:
 
 1. [146j. First-Class Events Runtime Protocol Gate](./146j-first-class-events-runtime-protocol-gate.md)
 2. [151b. MySQL Type And Schema Conformance](../next/151b-mysql-type-and-schema-conformance.md)
-3. [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
+3. [153c. Interactive And Resumable Operation Execution](../current/153c-operation-interactions-and-resumption.md)
 4. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
 5. [155a. Vercel Workflow Event Waits](../done/155a-vercel-workflow-event-waits.md)
 
@@ -91,18 +91,18 @@ adds a useful composition path.
 
 ### Slice 4: Remaining Runtime Gaps
 
-- [ ] Evaluate Supabase durable Events as a PostgREST/RPC-owned design.
+- [x] Evaluate Supabase durable Events as a PostgREST/RPC-owned design.
 - [x] Reconcile Vercel Workflow Interaction support through its owning plan.
 - [x] Preserve durable Event-wait claims through the Vercel Workflow executor.
-- [ ] Re-evaluate LangGraph Event waits only when it can preserve the durable claim contract.
-- [ ] Extract real ingress providers and broker/egress adapters into focused follow-up plans.
+- [x] Re-evaluate LangGraph Event waits only when it can preserve the durable claim contract.
+- [x] Extract real ingress providers and broker/egress adapters into focused follow-up plans.
 
 ### Slice 5: Documentation And Atlas Reconciliation
 
-- [ ] Publish a verified capability matrix with guarantees, limitations, and conformance evidence.
-- [ ] Update package READMEs and canonical developer documentation from the executable matrix.
-- [ ] Update the smallest Atlas items for stable adapter-author contracts.
-- [ ] Close or link every remaining gap rather than leaving an ambiguous compatibility claim.
+- [x] Publish a verified capability matrix with guarantees, limitations, and conformance evidence.
+- [x] Update package READMEs and canonical developer documentation from the executable matrix.
+- [x] Update the smallest Atlas items for stable adapter-author contracts.
+- [x] Close or link every remaining gap rather than leaving an ambiguous compatibility claim.
 
 ## Verification
 
@@ -123,6 +123,14 @@ adds a useful composition path.
    center between the existing PostgreSQL Data Graph and Event Runtime proofs.
 5. Supabase Event Runtime remains a separate design slice because PostgREST cannot inherit direct
    PostgreSQL session and transaction semantics implicitly.
+6. Supabase durable Events move to
+   [Plan 146k](../backlog/146k-supabase-durable-event-runtime.md) rather than becoming a parity
+   checkbox; the adapter must own an invoker-rights RPC and RLS design.
+7. LangGraph Event waits remain an explicit rejection because a provider interrupt does not by
+   itself preserve retained Event delivery and the atomic Task Storage continuation claim.
+8. Broker egress and generalized durable processing move to
+   [Plan 146l](../backlog/146l-event-brokers-egress-and-processing.md); current Event Runtime
+   conformance does not claim those semantics.
 
 ## Open Questions
 
@@ -140,3 +148,8 @@ adds a useful composition path.
 This plan closes when the capability matrix is executable and documented, PostgreSQL and MySQL
 provide verified Task Storage, Supabase Task Storage passes real provider conformance, and every
 remaining partial cell is either an honest limitation or a linked focused plan.
+
+The matrix is now backed by shared Task Storage and Event Runtime conformance, real-provider
+concurrency and restart evidence, independently composable provider entrypoints, and canonical
+developer documentation. Supabase Events and broker processing remain explicit linked plans;
+LangGraph Event waits remain a documented unsupported transition.

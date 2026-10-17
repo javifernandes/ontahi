@@ -53,8 +53,8 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 9. [`@ontahi/runtime-langgraph`](./source-code-organization/runtime-langgraph.md): experimental adapter that runs explicit Task execution machines through private LangGraph checkpoint and interrupt mechanics.
 10. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
 11. [`Ontahí Devtools`](./source-code-organization/devtools.md): browser-resident diagnostics for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection.
-12. [`@ontahi/postgres`](./source-code-organization/postgres.md): independently composable PostgreSQL implementations of Data Graph and durable Event Runtime concerns.
-13. [`@ontahi/mysql`](./source-code-organization/mysql.md): independently composable MySQL implementations of Data Graph and durable Event Runtime concerns.
+12. [`@ontahi/postgres`](./source-code-organization/postgres.md): independently composable PostgreSQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
+13. [`@ontahi/mysql`](./source-code-organization/mysql.md): independently composable MySQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
 
 ## Repository Topology
 

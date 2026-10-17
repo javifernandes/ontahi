@@ -41,33 +41,35 @@ candidate release reconcile its code and documentation in the same review.
 9. [Operations](02-core-concepts/07-operations.md)
 10. [Operation Contracts and Failures](02-core-concepts/08-operation-contracts-and-failures.md)
 11. [Durable Operations](02-core-concepts/09-durable-operations.md)
+12. [Events](02-core-concepts/10-events.md)
 
 ### Part III — Runtimes
 
-12. [Runtime Composition and Capabilities](03-runtimes/01-runtime-composition-and-capabilities.md)
-13. [Storage Adapters](03-runtimes/02-storage-adapters.md)
-14. [Runtime Transport, WebSocket, and HTTP Ingress](03-runtimes/03-transport-and-http-ingress.md)
-15. [Authentication and Principals](03-runtimes/04-authentication-and-principals.md)
+13. [Runtime Composition and Capabilities](03-runtimes/01-runtime-composition-and-capabilities.md)
+14. [Storage Adapters](03-runtimes/02-storage-adapters.md)
+15. [Runtime Transport, WebSocket, and HTTP Ingress](03-runtimes/03-transport-and-http-ingress.md)
+16. [Authentication and Principals](03-runtimes/04-authentication-and-principals.md)
+17. [Adapter Capability Matrix](03-runtimes/05-adapter-capability-matrix.md)
 
 ### Part IV — Reflection and Clients
 
-16. [Reflection and Explorer](04-reflection-and-clients/01-reflection-and-explorer.md)
-17. [Browser Client and Projection](04-reflection-and-clients/02-browser-client-and-projection.md)
-18. [Semantic Console and Devtools](04-reflection-and-clients/03-semantic-console-and-devtools.md)
+18. [Reflection and Explorer](04-reflection-and-clients/01-reflection-and-explorer.md)
+19. [Browser Client and Projection](04-reflection-and-clients/02-browser-client-and-projection.md)
+20. [Semantic Console and Devtools](04-reflection-and-clients/03-semantic-console-and-devtools.md)
 
 ### Part V — Further Directions
 
-19. [Further Directions](05-further-directions/01-further-directions.md)
-20. [AI Operations](05-further-directions/02-ai-operations.md)
-21. [Selection as an Editable Language](05-further-directions/03-selection-as-an-editable-language.md)
-22. [Runtime Data Reflection](05-further-directions/04-runtime-data-reflection.md)
-23. [Alive UI](05-further-directions/05-alive-ui.md)
-24. [Continuous Execution and First-Class Events](05-further-directions/06-continuous-execution-and-first-class-events.md)
-25. [Semantic Operational Policy](05-further-directions/07-semantic-operational-policy.md)
-26. [A Topology of Graphs](05-further-directions/08-a-topology-of-graphs.md)
-27. [More Adapters, Same Contracts](05-further-directions/09-more-adapters-same-contracts.md)
-28. [Living Entities](05-further-directions/10-living-entities.md)
-29. [Data Graph Across Boundaries](05-further-directions/11-data-graph-across-boundaries.md)
+21. [Further Directions](05-further-directions/01-further-directions.md)
+22. [AI Operations](05-further-directions/02-ai-operations.md)
+23. [Selection as an Editable Language](05-further-directions/03-selection-as-an-editable-language.md)
+24. [Runtime Data Reflection](05-further-directions/04-runtime-data-reflection.md)
+25. [Alive UI](05-further-directions/05-alive-ui.md)
+26. [Continuous Execution](05-further-directions/06-continuous-execution-and-first-class-events.md)
+27. [Semantic Operational Policy](05-further-directions/07-semantic-operational-policy.md)
+28. [A Topology of Graphs](05-further-directions/08-a-topology-of-graphs.md)
+29. [More Adapters, Same Contracts](05-further-directions/09-more-adapters-same-contracts.md)
+30. [Living Entities](05-further-directions/10-living-entities.md)
+31. [Data Graph Across Boundaries](05-further-directions/11-data-graph-across-boundaries.md)
 
 Part I gets a small application running. Part II is the semantic backbone: Entity, Ref, Relation,
 Selection, Query, Command, and Operation each carry a distinct job. Part III explains where that

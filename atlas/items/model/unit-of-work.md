@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/139d-postgres-classroom-transfer
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/142d-existing-operation-refs
+  - ontahi://plans/146j-first-class-events-runtime-protocol-gate
 ---
 
 A UnitOfWork is the server runtime identity boundary shared by one top-level invocation/Operation
@@ -76,3 +77,9 @@ Child UnitOfWorks own fresh Ref-resolution stores. A transaction therefore canno
 through its scoped runtime into the restored parent after commit or rollback. Durable workflow
 steps and browser/client normalized caches remain separate future boundaries; the server store is
 neither cross-request cache nor hidden property-triggered I/O.
+
+The UnitOfWork also owns the transaction-local post-commit queue used by Reactions and typed Event
+emissions. Mutation-caused Event intents retain portable Applied Mutation Outcome causation while
+the transaction is pending. Commit drains the queue against the restored parent runtime; rejection
+or rollback discards it. This provides local commit-before-occurrence ordering, not a durable
+outbox, atomic Data Graph/Event persistence, or exactly-once publication.

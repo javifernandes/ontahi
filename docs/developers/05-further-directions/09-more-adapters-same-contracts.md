@@ -26,3 +26,10 @@ its guarantees and limits, and pass the same behavioral contract as the existing
 document store, relational database, browser runtime, and queue do not offer identical semantics;
 Ontahí should preserve those differences rather than hiding them behind the lowest common
 denominator.
+
+The current verified matrix and adapter-author checklist live in
+[Adapter Capability Matrix](../03-runtimes/05-adapter-capability-matrix.md). PostgreSQL and MySQL
+already demonstrate multi-concern packages: each independently exposes Data Graph, Task Storage,
+and Event Runtime implementations. Supabase exposes Data Graph and Task Storage but deliberately no
+Event Runtime. New adapters should extend that evidence one concern at a time rather than imitate a
+monolithic provider integration.

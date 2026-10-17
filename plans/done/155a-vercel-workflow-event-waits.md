@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/155a-vercel-workflow-event-waits`
 
-Parent: [155. Adapter Capability Completeness](../current/155-adapter-capability-completeness.md)
+Parent: [155. Adapter Capability Completeness](./155-adapter-capability-completeness.md)
 
 Shapes: [Event](../../atlas/items/model/event.md),
 [Durable Workflow](../../atlas/items/durable-workflows.md), and

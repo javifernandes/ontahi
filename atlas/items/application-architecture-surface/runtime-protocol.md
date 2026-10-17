@@ -3,7 +3,7 @@ id: ontahi.runtime-protocol
 kind: system-primitive
 title: Ontahí Runtime Protocol
 parent: ontahi.application-architecture-surface
-status: in-progress
+status: active
 horizon: now
 supports:
   - ontahi.data-graph-execution-routing
@@ -26,13 +26,16 @@ relatedPlans:
   - ontahi://plans/146g-unified-fetch-runtime-protocol-clients
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/150-ontahi-devtools-semantic-console
+  - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/155-declarative-basic-entity-mutations
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
-runtimes exchange semantic requests, results, rejections, lifecycle observations, and Events. Its
-message families cover Operation invocation, Durable Operation lifecycle, Data Graph reads, Data
-Graph Commands, and future Event subscription and delivery.
+runtimes exchange semantic requests, results, rejections, lifecycle observations, and live Event
+deliveries. Its request/response families cover Operation invocation, Durable Operation lifecycle,
+Data Graph reads, Data Graph Commands, and Model Commands. WebSocket session capabilities add
+Durable, Graph Query, and declared Event observation without pretending those lifecycles are one
+protocol family.
 
 One protocol does not make these concepts interchangeable. Each family retains its own portable
 and independently versioned body, authority and policy checks, execution semantics, results,
@@ -118,8 +121,7 @@ duplicate-detection window. Abort, terminal delivery, failed sends, socket repla
 disconnect release their owned resources; disconnect never implies replay, resubscription, or
 exactly-once delivery. A bounded server-side inspection observer supports Task Runtimes without
 native push while keeping polling out of the browser. Cancellation remains only an observable
-status because no current Task Runtime exposes a truthful cancellation capability. Event intents
-are internal and no remote subscription contract exists.
+status because no current Task Runtime exposes a truthful cancellation capability.
 
 The in-process Task Runtime now uses the native path: runtime instances sharing one Task storage
 also share the framework TaskRun Query projection. A Stream adapter binds WebSocket unsubscribe and
@@ -155,9 +157,14 @@ outside portable frames, and enforce family policy after connection. A session-s
 authorization snapshot; immediate logout or permission revocation requires socket closure or
 host-owned revalidation.
 
-Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
-Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,
-ordering, and durability. BookOps provides useful evidence, not a protocol definition to copy.
+Declared Event observation is a negotiated WebSocket session capability named
+`event-subscription-push`. `event-observe` and `event-unobserve` control a policy-aware live
+subscription; pushed delivery frames retain canonical occurrence and delivery identities and add
+an observation-scoped monotonic sequence. Disconnect and unsubscribe cancel the live subscription.
+The protocol does not expose durable delivery claims, provider credentials, arbitrary predicates,
+automatic replay or resubscription, or a general Event history API. Event ingress remains a
+separate authenticated HTTP-neutral application boundary rather than a caller-authored protocol
+request.
 
 The protocol is also the prospective boundary between Ontahí as a specification and TypeScript as
 its reference implementation. A compatible implementation in another language must preserve the

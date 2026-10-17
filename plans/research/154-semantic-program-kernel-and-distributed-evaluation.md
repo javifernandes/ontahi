@@ -9,7 +9,7 @@ Related plans:
 1. [142. Declarative Model Semantics And Execution Planning](../done/142-declarative-model-semantics-and-execution-planning.md)
 2. [144. Executable Ontologies](../backlog/144-executable-ontologies.md)
 3. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
-4. [146j. First-Class Events And Configurable Event Runtime](../current/146j-first-class-events-runtime-protocol-gate.md)
+4. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
 5. [128h. Observable Query Runtime And Durable Progress](../done/128h-observable-query-runtime-and-durable-progress.md)
 6. [150. Ontahí DevTools Semantic Console](../current/150-ontahi-devtools-semantic-console.md)
 7. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
@@ -1130,7 +1130,7 @@ slices that have not been created yet:
 5. [`154e`: run-once and reactive evaluation of one canonical Query](../done/154e-reactive-program-evaluation.md);
 6. [`154f`: typed waits and durable continuation semantics](../done/154f-wait-and-continuation-semantics.md);
 7. [Plan `146j`: first-class Event declarations, occurrences, deliveries, and configurable Event
-   Runtime](../current/146j-first-class-events-runtime-protocol-gate.md), intentionally preceding
+   Runtime](../done/146j-first-class-events-runtime-protocol-gate.md), intentionally preceding
    distributed evaluation;
 8. `154g`: distributed evaluation and substitution routing;
 9. `154h`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
