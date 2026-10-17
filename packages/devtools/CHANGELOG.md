@@ -1,5 +1,169 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 45e3083: Complete open Graph Commands whose update/delete target is a parameterized Selection. Validate
+  predicate and payload substitutions from Entity schemas, project authorized reference resolution
+  through Model Support, and bind the same Holes from both Semantic Console dialects before lowering
+  to the existing version 3 Graph Command protocol.
+- 69ccf41: Add a reusable Runtime Model Command client and let `OntahiGraphProvider` automatically invalidate
+  overlapping Graph Reads for committed semantic effects from any execution on its Runtime Transport,
+  including Model Commands and Devtools Console actions.
+
+  Let Runtime transports describe their implementation kind and let Devtools compose and discover
+  diagnostics directly from one routed Runtime Transport.
+
+  Generate a portable client application catalog, retain it on Runtime Graph clients, and expose the
+  resolved client session through `OntahiGraphProvider` so Devtools can discover Entities, identity,
+  cache, and transport without duplicate host wiring.
+
+- 00bc7a0: Add semantic invalidation for Entity Mutation Command hooks and expose committed mutation metadata
+  from Console actions, including terminal durable Operations. Applications can execute Todo-style
+  mutations without declaring React Query cache keys or post-success refetch callbacks.
+- f335200: Carry client-local Graph Read refresh causality from semantic React invalidation into Runtime Transport diagnostics. Group causally refreshed reads and terminal operation metadata into one semantic Activity entry instead of duplicating them as top-level activity. Organize operation detail into Progress, Effects, and Runtime views so concrete refresh consequences remain distinct from lifecycle messages and lower-level protocol evidence.
+- db4b8c9: Carry bounded mutation commit identities from Runtime Protocol mutation responses and durable
+  completion into semantic Graph observation refreshes. Group those causally proven refreshes under
+  their mutation in Devtools while retaining identity when payload capture is disabled.
+- 399f7f5: Expose the Entity and Field positions occupied by named Graph Read application Holes so resolvers
+  and frontend projections can derive binding semantics from registered schemas.
+
+  Project direct Entity Ref predicate Holes in the Semantic Console as searchable, receiver-authorized
+  choices and substitute the selected candidate as a canonical Entity Ref before execution.
+  Render Boolean Holes as explicit choices, align every binding in a stable parameter grid, and expose
+  available Field descriptions as contextual help.
+  Normalize or clear retained bindings when an edited expression changes a Hole's projected control
+  type so the visible control and executable request stay consistent.
+
+- fb78b34: Add an explicitly projected live Event subscription capability to Runtime Protocol WebSocket
+  sessions, including typed client observation and cancellation on unsubscribe or disconnect.
+- ddec3e7: Allow model-command runtimes to propose canonical Graph Reads, execute them through the configured
+  policy-aware dispatcher, and return their actual results. Render the canonical read and semantic
+  result together in Devtools Activity.
+- 3252d6c: Add the versioned `model.command` Runtime Protocol family for natural-language requests and return
+  the canonical Graph Command or Operation invocation with executed results. Forward transport
+  cancellation signals through Runtime Protocol dispatchers and render model requests, outcomes, and
+  executed actions in Devtools Activity.
+- 96d8092: Expose the bounded experimental Graph Read application contract, let both Semantic Console
+  dialects author named predicate Holes, and project those Holes as schema-validated Devtools inputs
+  before dispatching the unchanged canonical Graph Read request.
+- e114d60: Reflect policy-authorized Entity mutation affordances once in Core and project them through Model
+  Support and Runtime Protocol discovery. Devtools Console completion and diagnostics now use the
+  published writable Fields, identity, conditions, Selection operators, and Field presence semantics
+  without treating discovery as execution authorization.
+- d1d3f36: Discover policy-registered direct, many-to-many, and ordered Relationship Commands through Runtime
+  Protocol. The semantic Console now lowers explicit attach, detach, and move placements to canonical
+  Graph Command bodies, and Devtools keeps those authoring affordances scoped to its live transport
+  context.
+- 82d155a: Transport policy-scoped Entity Selection updates and deletes through Graph Command protocol v3.
+  Support the mutations in both Semantic Console dialects, advertise their permissions separately
+  from exact Ref mutations, and reconcile every returned Entity mutation fact in Devtools.
+- 6e9eb49: Extend the Semantic Console with safe TS-like and declarative syntax for exact Entity mutation
+  Commands and reflected Operation invocations. Lower actions through the existing `graph.command`
+  and `operation` Runtime Protocol families, and let generated client Entities provide the Console's
+  schemas and Operation metadata.
+- 848b50d: Add experimental typed choice interactions to durable Operation runs and carry inspection and
+  responses through the existing Runtime Protocol.
+- 24d99ef: Derive durable Operation input interactions from their existing schemas and preserve string,
+  number, Boolean, enum/literal, and nullable values through validation and substitution. Render the
+  same neutral descriptors as typed controls in Devtools, including explicit null selection.
+
+### Patch Changes
+
+- 116f3ea: Expose payload-free Event resume evidence on durable Task snapshots. Native Task observations now
+  retain the Event wait, occurrence, delivery claim, and ingress provenance needed to explain a
+  restart-safe continuation without exposing the Event payload.
+
+  Devtools renders the Event wait, ingress-driven resume, and Task completion as one causal Operation
+  activity with expandable JSON details.
+
+- b807692: Render raw JSON payloads as accessible, collapsible trees while preserving whole-payload copying.
+  Present HTTP operation exchanges as request and response columns, and align timeline metadata without
+  duplicating terminal snapshots.
+- 9a64911: Observe durable Operation runs from the Devtools Console and answer choice or approval Interactions through Runtime Protocol.
+- b2cb4fe: Present pending durable Operation interactions in Activity, identify durable Console invocations as
+  start-and-observe work, and restore their WebSocket observation after transient session loss with
+  bounded exponential retries.
+- a2fb2b5: Add a policy-aware HTTP ingress boundary for declared Events. Authenticated provider outcomes are
+  matched against explicit Event routes, normalized payloads are validated against the registered
+  declaration and version, and accepted occurrences retain provider, external event, delivery, and
+  receipt provenance without copying authentication secrets.
+
+  Event ingress now drives correlated durable Task waits through the same Event Runtime contract.
+  Runtimes that advertise no deduplication continue to create distinct occurrences for repeated
+  provider deliveries while preserving the stable external delivery identity as provenance.
+
+  Devtools Event details summarize external ingress provenance alongside Operation and mutation
+  causation.
+
+- Updated dependencies [45e3083]
+- Updated dependencies [375368a]
+- Updated dependencies [7a9bb92]
+- Updated dependencies [69ccf41]
+- Updated dependencies [b862f5b]
+- Updated dependencies [e23b9ab]
+- Updated dependencies [116f3ea]
+- Updated dependencies [5f213e4]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [31b5311]
+- Updated dependencies [0802a01]
+- Updated dependencies [00bc7a0]
+- Updated dependencies [03c1af6]
+- Updated dependencies [7d002a0]
+- Updated dependencies [3fdc296]
+- Updated dependencies [c275332]
+- Updated dependencies [f335200]
+- Updated dependencies [db4b8c9]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [fb78b34]
+- Updated dependencies [9e769f6]
+- Updated dependencies [f67fa6f]
+- Updated dependencies [2305a9d]
+- Updated dependencies [c01cd23]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [fb78b34]
+- Updated dependencies [7cf4162]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5668f96]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [6d3a494]
+- Updated dependencies [f552bed]
+- Updated dependencies [67fc06a]
+- Updated dependencies [eebeeec]
+- Updated dependencies [8ff883f]
+- Updated dependencies [b2cb4fe]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [6e9eb49]
+- Updated dependencies [072ad16]
+- Updated dependencies [6b3f847]
+- Updated dependencies [27d5253]
+- Updated dependencies [a2fb2b5]
+- Updated dependencies [848b50d]
+- Updated dependencies [24d99ef]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+  - @ontahi/language@1.0.0-alpha.13
+  - @ontahi/react@1.0.0-alpha.13
+  - @ontahi/language-codemirror@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes

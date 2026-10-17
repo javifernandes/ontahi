@@ -1,5 +1,88 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- d1e70ba: Mount explicit Event ingress routes in Express applications using the same provider registry and
+  raw request boundary as Operation ingress. Accepted provider outcomes now enter the application's
+  registered Event Runtime, while rejected authentication outcomes never publish an occurrence.
+
+  Reject ambiguous configurations that assign one HTTP path to both Operation and Event ingress.
+
+- c275332: Add a graph instruction runtime that derives operation descriptions from declarations, interprets scoped requests, revalidates proposals, and executes through the canonical dispatcher. Expose an optional Express model-command entry point with invocation context propagation and cancellation. Applications supply data scope and argument bindings without declaring domain operations for the chat itself.
+- fb78b34: Add an explicitly projected live Event subscription capability to Runtime Protocol WebSocket
+  sessions, including typed client observation and cancellation on unsubscribe or disconnect.
+- 3252d6c: Add the versioned `model.command` Runtime Protocol family for natural-language requests and return
+  the canonical Graph Command or Operation invocation with executed results. Forward transport
+  cancellation signals through Runtime Protocol dispatchers and render model requests, outcomes, and
+  executed actions in Devtools Activity.
+
+### Patch Changes
+
+- b862f5b: Accept one application Runtime Protocol policy collection and add a high-level Express host with
+  same-origin WebSocket authorization and explicit lifecycle management.
+- 7d002a0: Compose application Runtime Protocol families, policies, and observers once in a transport-neutral
+  receiver that can be projected through HTTP, WebSocket, and Next.js adapters.
+- Updated dependencies [45e3083]
+- Updated dependencies [7a9bb92]
+- Updated dependencies [69ccf41]
+- Updated dependencies [b862f5b]
+- Updated dependencies [116f3ea]
+- Updated dependencies [5f213e4]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [31b5311]
+- Updated dependencies [0802a01]
+- Updated dependencies [03c1af6]
+- Updated dependencies [7d002a0]
+- Updated dependencies [3fdc296]
+- Updated dependencies [c275332]
+- Updated dependencies [f335200]
+- Updated dependencies [db4b8c9]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [fb78b34]
+- Updated dependencies [9e769f6]
+- Updated dependencies [f67fa6f]
+- Updated dependencies [2305a9d]
+- Updated dependencies [c01cd23]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [fb78b34]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5668f96]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [6d3a494]
+- Updated dependencies [f552bed]
+- Updated dependencies [67fc06a]
+- Updated dependencies [eebeeec]
+- Updated dependencies [8ff883f]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [072ad16]
+- Updated dependencies [6b3f847]
+- Updated dependencies [27d5253]
+- Updated dependencies [a2fb2b5]
+- Updated dependencies [848b50d]
+- Updated dependencies [24d99ef]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+  - @ontahi/explorer-react@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes
