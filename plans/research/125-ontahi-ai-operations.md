@@ -276,9 +276,10 @@ implementation scope for this framework spike.
 ## Intent Resolution Closure And Remaining Proof — 2026-10-20
 
 Plan 153 closed after establishing the versioned `model.command` path from natural language to
-explicitly exposed canonical Graph Reads, Graph Commands, and Operation Invocations. It also proved
-typed clarification/approval through shared durable Interactions and correlated Activity evidence.
-That is substantial AI-native ingress, but it does not satisfy this research Plan's executor
+explicitly exposed canonical Graph Reads, Graph Commands, and Operation Invocations. It also
+supports typed clarification and optional approval through shared durable Interactions, with
+correlated Activity evidence; the approval path was not itself executed and evaluated by the
+spike. That is substantial AI-native ingress, but it does not satisfy this research Plan's executor
 verification: the model did not implement an already selected Domain Operation.
 
 The next experiment should bind one read-only Domain Operation to a model executor, validate its
