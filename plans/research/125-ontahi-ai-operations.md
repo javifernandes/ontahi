@@ -286,3 +286,8 @@ ordinary typed result, and then replace that binding with a code implementation 
 callers or the Operation contract. Both bindings do not need to be active simultaneously. Multiple
 concurrent implementations are a separate host policy for feature flags, rollout, shadow
 evaluation, fallback, or migration and should not enter the minimum executor contract.
+
+[Plan 125a](../backlog/125a-model-execution-resource-governance.md) records the following spike:
+provider-neutral usage evidence, budgets, limits, attribution, and operational visibility shared by
+Intent Resolution and model-backed Operations. It deliberately follows the executor proof so the
+governance boundary is not designed around `model.command` alone.
