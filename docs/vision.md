@@ -184,23 +184,24 @@ everything.
 
 This vision is not the description of one completed VM. Its current evidence is incremental:
 
-- Entities, Refs, Relations, Selections, Graph Reads, and Graph Commands provide canonical semantic
-  requests independent from current storage adapters.
+- Entities, Refs, Relations, and Selections provide the semantic data model; Graph Reads and Graph
+  Commands are canonical request families interpreted independently from current storage adapters.
 - Operation contracts preserve typed input, output, failure, policy, and execution identity across
   direct and durable execution.
 - Runtime Protocol carries canonical requests and observations across Fetch and WebSocket
   boundaries.
-- runtime capabilities bind one application model to in-memory, PostgreSQL, MySQL, Supabase,
-  Express, Next.js, native Task, LangGraph, and Vercel Workflow implementations without making
-  those providers the semantic vocabulary.
-- typed Event declarations distinguish emission, occurrence, and delivery, with both ephemeral and
+- The adapter capability matrix records verified implementations and their supported subsets across
+  in-memory, PostgreSQL, MySQL, Supabase, Express, Next.js, native Task, LangGraph, and Vercel
+  Workflow adapters. It does not imply that every listed provider or capability composes in one
+  configured application, and none becomes the semantic vocabulary.
+- Typed Event declarations distinguish emission, occurrence, and delivery, with both ephemeral and
   durable Event Runtime implementations.
-- typed Interactions can suspend and resume explicit durable Operations across native, LangGraph,
+- Typed Interactions can suspend and resume explicit durable Operations across native, LangGraph,
   and Vercel Workflow execution adapters.
-- model support resolves intent into existing Graph Read and Operation applications, retains typed
+- Model support resolves intent into existing Graph Read and Operation applications, retains typed
   holes and choices, and reuses canonical authorization and dispatch rather than inventing a model
   execution channel.
-- experimental semantic programs can remain open, accept schema-validated substitutions, and lower
+- Experimental semantic programs can remain open, accept schema-validated substitutions, and lower
   to existing closed Runtime Protocol requests.
 
 These proofs support the direction. They do not yet establish distributed evaluation, a stable
