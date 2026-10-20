@@ -29,6 +29,12 @@ not replace their authority, policy, validation, consistency, or lifecycle bound
 evaluates only the terms for which it owns declared capabilities and may delegate unresolved work
 without treating transport or provider formats as semantic truth.
 
+[`Ontahí Vision`](../../../docs/vision.md) places this hypothesis in the broader architectural
+direction: a modular, federable semantic virtual machine whose programs may be interpreted by
+independent local, remote, human, or model-backed implementations. This Atlas item remains the
+durable evidence record for the Kernel shape; the vision document states the thesis, constraints,
+current limits, and proof criteria without treating them as one implementation Plan.
+
 The hypothesis also separates addressable participants from the programs they evaluate. An
 Assistant may contribute grounding, presentation, provider selection, context, and execution
 strategy; a Session relates participants over time; each requested or autonomous unit of work has

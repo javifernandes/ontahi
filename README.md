@@ -6,7 +6,9 @@ model across storage, APIs, interfaces, and long-running work.
 
 [Website](https://ontahi.org) · [Developer guide](https://bookops.net/ontahi-for-devs) ·
 [Documentation source](./docs/developers/README.md) ·
-[npm packages](https://www.npmjs.com/search?q=%40ontahi%2F) · [Vision](https://ontahi.org/vision/)
+[Vision](./docs/vision.md) ·
+[npm packages](https://www.npmjs.com/search?q=%40ontahi%2F) ·
+[Interactive vision](https://ontahi.org/vision/)
 
 [![CI](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml/badge.svg)](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/javifernandes/ontahi/graph/badge.svg?token=Q6uxUP5uQS)](https://codecov.io/gh/javifernandes/ontahi)
