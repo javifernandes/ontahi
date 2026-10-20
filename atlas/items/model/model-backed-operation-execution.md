@@ -108,3 +108,11 @@ evidence, and dispatched without another model call. Approval remains a separate
 for effects that require review; it is not the default for every model-produced mutation.
 `model.command` starts this path, while `durable.operation` remains the shared inspection,
 observation, and response contract across chat and Devtools.
+
+Plan 153 ultimately closed on the adjacent Intent Resolution boundary. Its final runtime interprets
+text into an existing canonical Graph Read, Graph Command, or Operation Invocation and then uses
+ordinary dispatch. It does **not** select a model as the implementation of the invoked Domain
+Operation. A later bounded experiment must prove that remaining hypothesis without requiring code
+and model implementations to coexist simultaneously: replacement of one binding while preserving
+the Operation contract is sufficient. Concurrent bindings belong only to later rollout, shadowing,
+fallback, evaluation, or feature-flag policy.

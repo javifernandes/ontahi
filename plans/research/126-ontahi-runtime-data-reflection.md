@@ -13,7 +13,7 @@ Shapes: [`Runtime Data Reflection`](ontahi://atlas/application-architecture-surf
 Related plans:
 
 1. [`117. Alive UI From Reflected Selections`](../backlog/117-alive-ui-from-reflected-selections.md)
-2. [`118. Ontahi Selection Language Editor Research`](./118-ontahi-selection-language-editor.md)
+2. [`118. Ontahi Selection Language Editor Research`](../done/118-ontahi-selection-language-editor.md)
 3. [`91. Reflective Architecture Admin UI`](bookops://plans/91-reflective-architecture-admin-ui)
 4. [`100j. Ontahi In-Memory Persistence Runtime`](../done/100j-ontahi-in-memory-persistence-runtime.md)
 5. [`121. Ontahi Direct PostgreSQL Adapter`](../done/121-ontahi-direct-postgres-adapter.md)

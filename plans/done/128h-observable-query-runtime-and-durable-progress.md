@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/128h-observable-query-runtime-and-durable-progress`
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 
 Related plans:
 

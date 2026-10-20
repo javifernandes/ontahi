@@ -8,7 +8,7 @@ Migrated from: `bookops://plans/128a-recursive-views-and-projectable-operation-r
 Original path: `plans/done/128a-ontahi-recursive-views-and-projectable-operation-results.md`
 Source commit: `67713696`
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 
 Related plans:
 
@@ -290,5 +290,5 @@ core value.
 - Closed on: 2026-08-15
 - Effective effort: ~3-4h focused work
 - Follow-ups:
-  - [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+  - [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
   - [131. Ontahi Relationship Semantics](./131-ontahi-relationship-semantics.md)

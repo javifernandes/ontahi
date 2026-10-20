@@ -1,6 +1,6 @@
 # 150. Ontahí Devtools Semantic Console
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/150-ontahi-devtools-semantic-console`
 
@@ -8,12 +8,12 @@ Related plans:
 
 1. [100f. Operation Invocation Capability](../done/100f-operation-invocation-capability.md)
 2. [118. Ontahí Selection Language Editor](../done/118-ontahi-selection-language-editor.md)
-3. [128. Ontahí Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+3. [128. Ontahí Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 5. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 6. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 7. [147. Application-Bound Headless Graph Reads](../done/147-application-bound-headless-graph-reads.md)
-8. [148. Ontahí Devtools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
+8. [148. Ontahí Devtools Runtime Inspection](../backlog/148-ontahi-devtools-runtime-inspection.md)
 9. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 10. [150b. Language Modules And Dialect Contract](../done/150b-language-modules-and-dialect-contract.md)
 11. [150c. Ordered Read Composition](../done/150c-ordered-read-composition.md)
@@ -858,6 +858,12 @@ full CI run. Mutation, execution history, and headless session paths remain unim
     projection of Ontahí semantics, not the language used to implement its host or CLI.
 
 ## Open Questions
+
+State reconciliation on 2026-10-20 returns this umbrella Plan to `backlog`. The Read Console, two
+dialects, Graph Command authoring, Operation invocation, and named-Hole inputs have delivered much
+of the original direction. Remaining Command completeness, confirmation/history/session behavior,
+cross-family accessibility, and CLI projection are distinct selectable slices; none is active
+merely because it remains recorded here.
 
 1. Given the shipped TS-like Read chain, what declarative terminal spelling/defaults preserve its
    meaning, and how can switching dialect preserve incomplete authoring without executing?

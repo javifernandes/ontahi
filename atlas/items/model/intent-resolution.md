@@ -68,7 +68,11 @@ this for field updates and individual item deletion without parallel domain oper
 name-based intermediate mutation protocol. Automatic exposure discovery and semantic value
 conversion remain separate work.
 
-The next boundary is a reusable app capability configured with a provider and authorized graph
-scope. Interpretation and its downstream execution should be correlated in Devtools Activity;
-Natural console input should reuse that capability. Canonical reads and query-result presentation
-are planned extensions, not implemented interpretation outcomes in the current spike.
+The completed Todo spike exposes interpretation through the versioned `model.command` Runtime
+Protocol family. Its outcomes may contain canonical Graph Reads, Graph Commands, or Operation
+Invocations; executed Reads return their actual semantic query result. Interpretation and the
+downstream canonical execution appear as correlated Devtools Activity rather than a model-private
+trace. Reusable activation in another host and Natural Console authoring remain later work.
+
+This evidence establishes Intent Resolution, not model-backed implementation of a selected Domain
+Operation. That executor-binding question remains in AI Operations research.

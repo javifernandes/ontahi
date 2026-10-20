@@ -585,7 +585,7 @@ catch context-window regressions. Incomplete responses are rejected without effe
 successful requests do not establish a passing full evaluation. The previous `qwen3.5:0.8b` configuration was not reliable for this canonical contract: reasoning
 could exhaust the response budget, while non-reasoning requests could choose the wrong action.
 The reported list renames, quoted item rename, and new-list creation are explicit regression cases. The full real-model suite is currently failing: 4B can still invent ambiguity for a unique item or alter capitalization in a replacement name. Do not treat the model switch as a complete reliability fix. Ordinary suites use deterministic providers. Broader reliability remains in
-[plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
+[plan 153](../../plans/done/153-model-backed-todo-command-spike.md).
 
 The runtime rechecks context before dispatch, but this is not a transaction spanning inference and
 execution or a production security guarantee. Conversation continuation, cross-surface session

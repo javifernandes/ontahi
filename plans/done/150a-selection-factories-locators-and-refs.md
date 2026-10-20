@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/150a-selection-factories-locators-and-refs`
 
-Parent: [150. Ontahí Devtools Semantic Console](../current/150-ontahi-devtools-semantic-console.md)
+Parent: [150. Ontahí Devtools Semantic Console](../backlog/150-ontahi-devtools-semantic-console.md)
 
 Related work:
 

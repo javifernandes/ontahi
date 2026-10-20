@@ -87,9 +87,9 @@ Evidence: the root Changesets indexed below, [Core changelog](../../packages/cor
 [120a](../../plans/done/120a-pure-named-selection-factory-contract.md),
 [120b](../../plans/done/120b-contextual-selection-factories.md),
 [145](../../plans/done/145-ordered-relations-and-sequence-commands.md),
-[150](../../plans/current/150-ontahi-devtools-semantic-console.md),
+[150](../../plans/backlog/150-ontahi-devtools-semantic-console.md),
 [151](../../plans/done/151-mysql-data-graph-storage.md), and
-[152](../../plans/current/152-discriminated-entity-variants.md).
+[152](../../plans/backlog/152-discriminated-entity-variants.md).
 
 ### Pending Changeset index
 

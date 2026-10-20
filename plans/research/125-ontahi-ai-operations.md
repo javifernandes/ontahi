@@ -254,7 +254,7 @@ BookOps product workstream; this plan owns the reusable Ontahi execution model i
 
 ## Follow-Up: Todo Command Spike
 
-[Plan 153](../current/153-model-backed-todo-command-spike.md) is the selected narrow experiment. A
+[Plan 153](../done/153-model-backed-todo-command-spike.md) is the selected narrow experiment. A
 model-backed interpreter returns a non-authoritative invocation proposal; an explicitly enabled
 local Todo path executes at most one allowed mutation through the existing dispatcher with the
 caller's authority. It supplies the narrower persistence/application semantics anticipated by
@@ -272,3 +272,17 @@ Atlas captures [Intent Resolution](../../atlas/items/model/intent-resolution.md)
 [Operation Interaction](../../atlas/items/model/operation-interaction.md) as shaping concepts.
 Atlas application questions and later reviewed plan editing are downstream product use cases, not
 implementation scope for this framework spike.
+
+## Intent Resolution Closure And Remaining Proof — 2026-10-20
+
+Plan 153 closed after establishing the versioned `model.command` path from natural language to
+explicitly exposed canonical Graph Reads, Graph Commands, and Operation Invocations. It also proved
+typed clarification/approval through shared durable Interactions and correlated Activity evidence.
+That is substantial AI-native ingress, but it does not satisfy this research Plan's executor
+verification: the model did not implement an already selected Domain Operation.
+
+The next experiment should bind one read-only Domain Operation to a model executor, validate its
+ordinary typed result, and then replace that binding with a code implementation without changing
+callers or the Operation contract. Both bindings do not need to be active simultaneously. Multiple
+concurrent implementations are a separate host policy for feature flags, rollout, shadow
+evaluation, fallback, or migration and should not enter the minimum executor contract.

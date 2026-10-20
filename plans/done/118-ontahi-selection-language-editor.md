@@ -16,7 +16,7 @@ Related plans:
 4. [118a Explorer Selection Language Walking Skeleton](./118a-explorer-selection-language-walking-skeleton.md)
 5. [118b Selection Expression Algebra](118b-selection-expression-algebra.md)
 6. [118c Reflection-Powered Selection Language Service](118c-reflection-powered-selection-language-service.md)
-7. [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
+7. [118d Projectional Selection Editor Experiment](../next/118d-projectional-selection-editor-experiment.md)
 8. [119 Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
 9. [126 Ontahí Runtime Data Reflection](../research/126-ontahi-runtime-data-reflection.md)
 10. [147 Application-Bound Headless Graph Reads](./147-application-bound-headless-graph-reads.md)

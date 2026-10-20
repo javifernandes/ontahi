@@ -8,10 +8,10 @@ Related plans:
 
 1. [154. Semantic Program Kernel And Distributed Evaluation](../research/154-semantic-program-kernel-and-distributed-evaluation.md)
 2. [128h. Observable Query Runtime And Durable Progress](../done/128h-observable-query-runtime-and-durable-progress.md)
-3. [148. Ontahí DevTools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
-4. [150. Ontahí DevTools Semantic Console](../current/150-ontahi-devtools-semantic-console.md)
+3. [148. Ontahí DevTools Runtime Inspection](../backlog/148-ontahi-devtools-runtime-inspection.md)
+4. [150. Ontahí DevTools Semantic Console](../backlog/150-ontahi-devtools-semantic-console.md)
 5. [Operation Output Cache Semantics](../backlog/operation-output-cache-semantics.md)
-6. [Semantic Mutation Delivery To Active Observations](../backlog/semantic-mutation-delivery-to-active-observations.md)
+6. [Semantic Mutation Delivery To Active Observations](./semantic-mutation-delivery-to-active-observations.md)
 
 ## Summary
 
@@ -357,9 +357,9 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 
 Relationship membership and order Commands now participate in the same conservative client
 matching contract. The remaining server-observation delivery work was extracted to
-[Semantic Mutation Delivery To Active Observations](../backlog/semantic-mutation-delivery-to-active-observations.md).
+[Semantic Mutation Delivery To Active Observations](./semantic-mutation-delivery-to-active-observations.md).
 Causal journal and refresh presentation remains owned by
-[Plan 148](../current/148-ontahi-devtools-runtime-inspection.md). Neither follow-up is required for the
+[Plan 148](../backlog/148-ontahi-devtools-runtime-inspection.md). Neither follow-up is required for the
 initiating-client cache proof closed by this plan.
 
 ## Verification Strategy

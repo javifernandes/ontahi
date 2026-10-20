@@ -1,6 +1,6 @@
 # 152. Discriminated Entity Variants
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/152-discriminated-entity-variants`
 
@@ -525,3 +525,10 @@ alpha.3 packages. No host source or dependency change, installed-candidate trial
 release publication or new worktree occurred during this inventory. Next: checkpoint the reviewed
 host edits, establish the full baseline, and execute the temporary-tarball compatibility rehearsal.
 The final release still requires documentation reconciliation and explicit approval.
+
+## State Reconciliation — 2026-10-20
+
+The read-only variant surface and alpha.13 release evidence remain delivered. Variant mutation and
+discriminator-transition lifecycle, provider-specific lifecycle, Reader/View interaction, deferred
+classified inputs, and coordinated BookOps adoption are not one active slice. This Plan returns to
+`backlog` until one of those boundaries is selected explicitly.

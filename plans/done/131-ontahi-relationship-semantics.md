@@ -13,7 +13,7 @@ Related plans:
 1. [71a. Experimental Entity Relations Bridge](./71a-ontahi-relations-model-research.md)
 2. [78. First-Class Authorization And Relationship Policies](bookops://plans/78-first-class-authorization-and-relationship-policies)
 3. [125. Ontahi Reference Fields](./125-ontahi-reference-fields.md)
-4. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+4. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 5. [128a. Recursive Views And Projectable Operation Results](128a-ontahi-recursive-views-and-projectable-operation-results.md)
 6. [131a. Relationship Command And Delta Core Experiment](131a-relationship-command-delta-core-experiment.md)
 
@@ -560,5 +560,5 @@ experiment. Likely follow-ups are:
   - [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
   - [137. Reflected Relation Affordances](./137-reflected-relation-affordances.md)
   - [138. Entity Mutation Command Authoring](./138-entity-mutation-command-authoring.md)
-  - [128. Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md) owns
+  - [128. Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md) owns
     remaining client execution ergonomics and generic Entity Command transport.

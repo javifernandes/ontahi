@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/147-application-bound-headless-graph-reads`
 Related plans:
 
 1. [74a. Unit Of Work Runtime Scope](./74a-unit-of-work-runtime-scope.md)
-2. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+2. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 3. [146. Ontahí Runtime Protocol](./146-ontahi-runtime-protocol.md)
 
 ## Summary

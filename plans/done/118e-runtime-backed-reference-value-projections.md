@@ -1,12 +1,12 @@
 # 118e. Runtime-Backed Reference Value Projections
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/118e-runtime-backed-reference-value-projections`
 
 Shapes: [Ontahí Semantic Interaction Language](../../atlas/items/semantic-interaction-language.md)
 
-Depends on: [118d Projectional Selection Editor Experiment](118d-projectional-selection-editor-experiment.md)
+Depends on: [118d Projectional Selection Editor Experiment](../next/118d-projectional-selection-editor-experiment.md)
 
 Related plan: [126 Ontahí Runtime Data Reflection](../research/126-ontahi-runtime-data-reflection.md)
 
@@ -81,6 +81,10 @@ Dates or richer runtime-backed controls wait until a Reference identity can rema
 search, direct paste, failed resolution, source reveal, and authorized Graph Read execution.
 
 ## Delivery Evidence
+
+Closed on 2026-10-20 during Plan-state reconciliation. Every acceptance item is complete, the
+runtime-backed Reference boundary has executable Language, CodeMirror, Explorer, and Todo evidence,
+and later interaction work does not require this delivered slice to remain active.
 
 The headless language service accepts single-field Reference identities for `=`, `in`, and nullable
 `is null`, and lowers quoted identities to the existing canonical Entity Ref shape. It exposes only

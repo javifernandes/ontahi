@@ -1,6 +1,6 @@
 # 134. Semantic Codegen Pipeline, Organization, And Coverage
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage`
 
@@ -591,3 +591,11 @@ typecheck and runtime tests; and the legacy string renderer has been removed.
    2026-08-16 baseline.
 4. Propose a concrete Slice 1 TDD cut before changing production organization.
 5. Work in the main Ontahi checkout unless the user explicitly asks for a worktree.
+
+## State Reconciliation — 2026-10-20
+
+The characterization, analysis extraction, semantic module models, colocated tests, and incremental
+emitter migrations are delivered and continue to support later work. The completion signal is not
+yet satisfied: legacy projection/parity paths still exist and the final cutover has not been
+recorded. The Plan returns to `backlog` rather than remaining nominally active without a selected
+cutover slice.

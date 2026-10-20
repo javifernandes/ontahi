@@ -1,6 +1,6 @@
 # 153. Model-Backed Todo Command Spike
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/153-model-backed-todo-command-spike`
 
@@ -105,9 +105,9 @@ existing `durable.operation` family owns inspection, observation, and replies.
 - [x] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
 - [x] Dispatch failure is displayed honestly and never represented as successful model execution.
 - [x] Provider failure, timeout, and cancellation terminate cleanly without automatic effect retries.
-- [ ] Evidence records provider/model, context selection, proposed invocation, and dispatch outcome
+- [x] Evidence records provider/model, context selection, proposed invocation, and dispatch outcome
       with a deliberate local logging policy; secrets are excluded.
-- [ ] Evaluation examples and limitations are recorded without claiming a passing sample proves security.
+- [x] Evaluation examples and limitations are recorded without claiming a passing sample proves security.
 
 ## Decisions, Open Questions, And Closure
 
@@ -428,3 +428,26 @@ affected typechecks/lint/builds, Todo production build, and clean-room package a
 The real Qwen 3.5 4B evaluation produced the expected filtered list and count from actual Graph Read
 results without changing the dataset; the broader suite later stopped at its already documented
 replacement-capitalization failure.
+
+## Closure — 2026-10-20
+
+This spike closes as evidence for **Intent Resolution**, not as proof that a model implements a
+Domain Operation. The reusable `model.command` family accepts text, interprets it into explicitly
+exposed canonical Graph Read, Graph Command, or Operation Invocation requests, then revalidates,
+reauthorizes, and dispatches through the existing application boundaries. Typed choices and
+optional approvals reuse durable Operation Interactions without making model output authoritative.
+
+The deliberate local trace is split by ownership. Devtools Activity records the submitted text,
+typed outcome, timing, and correlated canonical request/result without retaining provider secrets
+or arbitrary raw context by default. The executable evaluation and this Plan record the provider,
+model, bounded context policy, successes, regressions, and known semantic failures. This evidence
+is sufficient for a local experimental path; it is not a production audit or security claim.
+
+Natural Console authoring remains part of the broader Console direction in Plan 150. Reusable
+activation ergonomics require evidence from another host and may be extracted when selected.
+Declarative context scope and security hardening remain Plans 153b and 153a. None is hidden closure
+work for this spike.
+
+Most importantly, this Plan did not prove the remaining AI Operations hypothesis: selecting a
+model as the implementation of an already chosen Domain Operation while preserving that
+Operation's public contract. Research 125 retains that question for the next bounded experiment.

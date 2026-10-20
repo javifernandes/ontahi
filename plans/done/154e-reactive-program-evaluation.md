@@ -9,7 +9,7 @@ Related plans:
 1. [154. Semantic Program Kernel And Distributed Evaluation](../research/154-semantic-program-kernel-and-distributed-evaluation.md)
 2. [128h. Observable Query Runtime And Durable Progress](../done/128h-observable-query-runtime-and-durable-progress.md)
 3. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
-4. [148. Ontahí DevTools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
+4. [148. Ontahí DevTools Runtime Inspection](../backlog/148-ontahi-devtools-runtime-inspection.md)
 
 ## Summary
 
