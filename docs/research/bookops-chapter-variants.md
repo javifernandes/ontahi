@@ -1,6 +1,6 @@
 # BookOps Chapter adoption rehearsal
 
-This is an executable proposal for [Plan 152](../../plans/current/152-discriminated-entity-variants.md),
+This is an executable proposal for [Plan 152](../../plans/backlog/152-discriminated-entity-variants.md),
 not a BookOps migration. The host checkout and its dependency pins are unchanged.
 
 ## Evidence snapshot

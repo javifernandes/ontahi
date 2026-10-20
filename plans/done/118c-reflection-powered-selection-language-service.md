@@ -10,7 +10,7 @@ Depends on: [118b Selection Expression Algebra](../done/118b-selection-expressio
 
 Related plan: [126 Ontahí Runtime Data Reflection](../research/126-ontahi-runtime-data-reflection.md)
 
-Followed by: [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
+Followed by: [118d Projectional Selection Editor Experiment](../next/118d-projectional-selection-editor-experiment.md)
 
 ## Architectural Question
 

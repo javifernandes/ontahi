@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/141-data-graph-progressive-module-boundaries`
 Related plans:
 
 1. [140. Colocated Test Topology](../done/140-colocated-test-topology.md)
-2. [134. Semantic Codegen Pipeline, Organization, And Coverage](../current/134-codegen-analysis-organization-and-semantic-coverage.md)
+2. [134. Semantic Codegen Pipeline, Organization, And Coverage](../backlog/134-codegen-analysis-organization-and-semantic-coverage.md)
 3. [139. Relations Lifecycle Release Proof](../done/139-relations-lifecycle-release-proof.md)
 
 ## Summary

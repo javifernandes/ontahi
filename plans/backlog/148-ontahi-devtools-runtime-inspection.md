@@ -1,6 +1,6 @@
 # 148. Ontahí Devtools Runtime Inspection
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/148-ontahi-devtools-runtime-inspection`
 
@@ -11,7 +11,7 @@ Durable shapes:
 
 Related plans:
 
-1. [128. Ontahí Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+1. [128. Ontahí Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [146h. WebSocket Runtime Transport And Durable Progress](../done/146h-websocket-runtime-transport-and-durable-progress.md)
 4. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
@@ -408,6 +408,12 @@ but it must not become an arbitrary credentialed endpoint editor.
    its first rendering independent until a genuinely shared UI surface emerges?
 
 ## Split And Closure Boundary
+
+State reconciliation on 2026-10-20 returns this umbrella Plan to `backlog`. Activity, Durable
+grouping, Settings, routing, cache causality, and later inspection work have delivered substantial
+parts of the direction, but the original checklist was not maintained as each child slice landed.
+Future work should first reconcile the checklist against executable evidence and select one bounded
+missing capability instead of treating the entire Devtools surface as concurrently active.
 
 The first reviewable implementation slice ends when an independently packaged headless diagnostic
 store plus Activity/Durable panel observes both an in-memory Fetch-like transport and WebSocket-like

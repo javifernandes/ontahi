@@ -16,7 +16,7 @@ reusable domain navigation, and the UI path that helps a person choose an input.
 `graphOps` path repeats relation information and includes `contents`/`children` names that are not
 both actual model relations. Do not turn those hints into executable relations by renaming them.
 
-Implement this plan before [152](../current/152-discriminated-entity-variants.md). In this plan `parts`
+Implement this plan before [152](../backlog/152-discriminated-entity-variants.md). In this plan `parts`
 and `chapters` still return ContentNode membership; they do not introduce Part/Chapter Entities.
 
 ## Entity authoring (local experimental API)
@@ -348,10 +348,10 @@ Keep observation/source invalidation, Commands and Entity variants separate.
 Scope retained: root scalar `by` clauses precede contextual hops, then target `where` and read
 shaping. Interleaved source filters and `by` after navigation, parameterized contextual factories,
 raw relation authoring, observation/source invalidation, and mutation support remain separate work.
-Keep richer Console composition with [150](../current/150-ontahi-devtools-semantic-console.md), relation membership
+Keep richer Console composition with [150](../backlog/150-ontahi-devtools-semantic-console.md), relation membership
 extensions with [119](../backlog/119-selection-relation-predicates.md), cardinality hardening with
 [116a](../done/116a-selection-cardinality-before-read-shaping.md), and variants with
-[152](../current/152-discriminated-entity-variants.md). Review this read-only boundary before commands
+[152](../backlog/152-discriminated-entity-variants.md). Review this read-only boundary before commands
 or adapting BookOps after a release.
 
 Follow-up: [150c](../done/150c-ordered-read-composition.md) now implements interleaved source/target
@@ -374,7 +374,7 @@ PR [#153](https://github.com/javifernandes/ontahi/pull/153) merged as `40b6e3c`,
 ordered-composition and exact-one follow-ups. The supported read-only boundary above is complete.
 The follow-ups already linked above retain parameterized/navigation composition, provider and
 observation limitations; Commands and general locator removal are not implied by this closure.
-Plan [152](../current/152-discriminated-entity-variants.md) can now begin its contract experiment.
+Plan [152](../backlog/152-discriminated-entity-variants.md) can now begin its contract experiment.
 
 ## MySQL provider follow-up — 2026-09-13
 

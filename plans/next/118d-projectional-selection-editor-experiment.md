@@ -1,6 +1,6 @@
 # 118d. Projectional Selection Editor Experiment
 
-Status: current
+Status: next
 
 Canonical ID: `ontahi://plans/118d-projectional-selection-editor-experiment`
 
@@ -97,6 +97,11 @@ reversible projection over text. If CodeMirror cannot preserve the acceptance pa
 headless language service and replace only the editor adapter; do not redesign Selection.
 
 ## Delivery Evidence
+
+State cleanup on 2026-10-20 moved this Plan from `current` to `next`. The implementation and
+automated evidence are complete, but the explicitly required manual screen-reader pass remains a
+concrete closure gate. No richer projectional-editing work should begin merely to keep this Plan
+active.
 
 The adapter derives Boolean and enum controls from resolved syntax ranges and exposes them only when
 the host opts in. Explorer enables the experiment for its Selection editor; the executable Todo

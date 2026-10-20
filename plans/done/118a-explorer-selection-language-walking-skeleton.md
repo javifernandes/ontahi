@@ -12,7 +12,7 @@ Followed by:
 
 1. [118b Selection Expression Algebra](118b-selection-expression-algebra.md)
 2. [118c Reflection-Powered Selection Language Service](118c-reflection-powered-selection-language-service.md)
-3. [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
+3. [118d Projectional Selection Editor Experiment](../next/118d-projectional-selection-editor-experiment.md)
 
 ## Architectural Question
 

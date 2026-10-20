@@ -10,7 +10,7 @@ Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-
 
 ## Context And Scope
 
-Follow [spike 153](../current/153-model-backed-todo-command-spike.md) with a threat model and enforceable
+Follow [spike 153](../done/153-model-backed-todo-command-spike.md) with a threat model and enforceable
 security boundaries before general-purpose or production model-driven mutations. Prompt injection
 and strong authorization coupling are explicit required work, not solved by structured output,
 allowlisted tool names, or prompt wording alone.
@@ -30,7 +30,10 @@ The model must not mint principal identity, expand graph scope, or act with ambi
 4. Add adversarial evaluations for injection, exfiltration, cross-list/tenant writes, confused-deputy
    behavior, fabricated refs, permission changes, and misleading model claims of success.
 5. Define bounded resources, redacted telemetry, retention, cancellation, and duplicate/retry behavior
-   in coordination with plan 132. Record residual risks and deployment requirements.
+   in coordination with plan 132 and
+   [125a](./125a-model-execution-resource-governance.md). Authorization selects the eligible
+   resource/accounting scope without conflating permission denial with capacity exhaustion. Record
+   residual risks and deployment requirements.
 
 ## Acceptance And Verification
 

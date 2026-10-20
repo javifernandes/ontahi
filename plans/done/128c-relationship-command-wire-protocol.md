@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 
 Source plan: [131a. Relationship Command And Delta Core Experiment](../done/131a-relationship-command-delta-core-experiment.md)
 

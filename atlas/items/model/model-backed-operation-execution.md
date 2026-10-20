@@ -16,6 +16,7 @@ relatedPlans:
   - bookops://plans/99-semantic-editorial-workflows
   - ontahi://plans/100f-operation-invocation-capability
   - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/125a-model-execution-resource-governance
   - ontahi://plans/153-model-backed-todo-command-spike
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/153b-declarative-operation-context-scope
@@ -108,3 +109,16 @@ evidence, and dispatched without another model call. Approval remains a separate
 for effects that require review; it is not the default for every model-produced mutation.
 `model.command` starts this path, while `durable.operation` remains the shared inspection,
 observation, and response contract across chat and Devtools.
+
+Plan 153 ultimately closed on the adjacent Intent Resolution boundary. Its final runtime interprets
+text into an existing canonical Graph Read, Graph Command, or Operation Invocation and then uses
+ordinary dispatch. It does **not** select a model as the implementation of the invoked Domain
+Operation. A later bounded experiment must prove that remaining hypothesis without requiring code
+and model implementations to coexist simultaneously: replacement of one binding while preserving
+the Operation contract is sufficient. Concurrent bindings belong only to later rollout, shadowing,
+fallback, evaluation, or feature-flag policy.
+
+Model calls also require operational governance after the executor seam is proven. Usage evidence,
+budgets, limits, attribution, and redacted visibility should compose across model-backed Operations
+and Intent Resolution without putting provider pricing or token formats into the Operation contract.
+Plan 125a owns that later spike.

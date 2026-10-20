@@ -1,6 +1,6 @@
 # 128. Ontahi Data Graph Execution Bridge
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/128-data-graph-execution-bridge`
 
@@ -539,3 +539,11 @@ Plan 128 remains current only for the graph-specific gaps that were deliberately
 [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) owns durable invocation
 identity and idempotency. [Plan 145](../done/145-ordered-relations-and-sequence-commands.md) owns
 ordered Relation mutations. Neither is hidden completion work for this Plan.
+
+## State Reconciliation — 2026-10-20
+
+The delivered read, Relationship Command, Entity Mutation Command, and Runtime Protocol bridge
+remain valid evidence. The remaining cache/telemetry integration, generated-client Relationship
+Command ergonomics, authority-derived atomic scopes, and hybrid routing questions are not one
+active implementation slice. This Plan returns to `backlog` until one concrete gap is selected or
+extracted; no delivered scope is reopened or discarded.

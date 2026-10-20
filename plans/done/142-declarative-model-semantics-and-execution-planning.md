@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/142-declarative-model-semantics-and-execution-plan
 Related plans:
 
 1. [74b. Schema-Native Operation Refs](../done/74b-schema-native-operation-refs.md)
-2. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+2. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 3. [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
 4. [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md)
 5. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)

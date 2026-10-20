@@ -1,6 +1,6 @@
 # 150. Ontahí Devtools Semantic Console
 
-Status: current
+Status: backlog
 
 Canonical ID: `ontahi://plans/150-ontahi-devtools-semantic-console`
 
@@ -8,12 +8,12 @@ Related plans:
 
 1. [100f. Operation Invocation Capability](../done/100f-operation-invocation-capability.md)
 2. [118. Ontahí Selection Language Editor](../done/118-ontahi-selection-language-editor.md)
-3. [128. Ontahí Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+3. [128. Ontahí Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 5. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 6. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 7. [147. Application-Bound Headless Graph Reads](../done/147-application-bound-headless-graph-reads.md)
-8. [148. Ontahí Devtools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
+8. [148. Ontahí Devtools Runtime Inspection](../backlog/148-ontahi-devtools-runtime-inspection.md)
 9. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 10. [150b. Language Modules And Dialect Contract](../done/150b-language-modules-and-dialect-contract.md)
 11. [150c. Ordered Read Composition](../done/150c-ordered-read-composition.md)
@@ -28,8 +28,10 @@ Related Atlas shapes:
 ## Summary
 
 Deliver a **Console** panel to Ontahí Devtools for semantic Graph Reads, Graph Commands, and
-Operation invocations against the connected application. The Read slice is shipped; Commands and
-Operation invocation are not yet implemented in the Console.
+Operation invocations against the connected application. Reads and the core Command and Operation
+authoring/execution paths are shipped in the Console. Command preconditions and complete ordered
+relationship execution proofs, effect-aware confirmation, history/session extraction, and broader
+cross-family accessibility remain incomplete.
 
 Supported today:
 
@@ -74,11 +76,12 @@ Extracting a reusable headless Console execution/session model remains pending: 
 coordination lives in the React panel. A future terminal CLI should reuse the same documents and
 outcomes without importing React or reconstructing Ontahí semantics.
 
-## Delivery Status — 2026-09-09
+## Delivery Status — reconciled 2026-10-20
 
 Read delivery evidence: [merged PR #148](https://github.com/javifernandes/ontahi/pull/148),
-included in `main` at `cfca984`. This plan remains `current`; delivering Reads did not complete
-its Command, Operation, session, or CLI scope.
+included in `main` at `cfca984`. Later slices added Command and Operation authoring and execution,
+but did not complete the full Command, confirmation, session, accessibility, or CLI scope. The
+umbrella plan is therefore preserved in `backlog` until one of those remaining slices is selected.
 
 | Area                            | Status                                 | Delivered or remaining                                                                                                                                                 |
 | ------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,8 +89,8 @@ its Command, Operation, session, or CLI scope.
 | B. Read walking skeleton        | Done for the agreed small Read surface | Filtered/unfiltered terminals, one-field ordering, limits, rich values, Visual/JSON, and source-backed table controls. Views and pagination were not delivered.        |
 | 150a. Locator/Ref investigation | Done; bounded deferrals accepted       | 21 research cases; canonical identity preserved. Factory declaration details, external resolution, and Ref migration deferred.                                         |
 | C. Two Read dialects            | Implemented; validation complete       | TS/Declarative selector, shared analysis, assistance, rich values, table edits, and reversible non-executing conversion.                                               |
-| D. Graph Commands               | Not started                            | Targeting, authoring, confirmation, execution, and results in the Console.                                                                                             |
-| E. Operation invocation         | Not started; after Commands            | Input assistance, invocation outcomes, confirmation, and durable progress links.                                                                                       |
+| D. Graph Commands               | Partial                                | Exact Entity, Selection-targeted, and Relationship Command authoring/lowering exist; preconditions, complete ordered Todo execution proof, and confirmation remain.    |
+| E. Operation invocation         | Partial                                | Reflected discovery, structured input assistance, canonical invocation, results, and Durable interaction handling exist; effect-aware confirmation remains.            |
 | F. Console experience           | Partial                                | Compact results, read assistance, undo, and pending/stale/error states exist; execution history, richer disclosures, and complete session/accessibility proofs remain. |
 | G. CLI projection               | Deferred                               | Headless execution proof, package decision, and separate CLI implementation plan.                                                                                      |
 
@@ -858,6 +861,12 @@ full CI run. Mutation, execution history, and headless session paths remain unim
     projection of Ontahí semantics, not the language used to implement its host or CLI.
 
 ## Open Questions
+
+State reconciliation on 2026-10-20 returns this umbrella Plan to `backlog`. The Read Console, two
+dialects, Graph Command authoring/execution, Operation invocation, and named-Hole inputs have
+delivered much of the original direction in the Console itself. Remaining Command completeness,
+confirmation/history/session behavior, cross-family accessibility, and CLI projection are distinct
+selectable slices; none is active merely because it remains recorded here.
 
 1. Given the shipped TS-like Read chain, what declarative terminal spelling/defaults preserve its
    meaning, and how can switching dialect preserve incomplete authoring without executing?

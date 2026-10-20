@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 
 Predecessor: [128f. Remote Identity-Scoped Entity Mutation Commands](./128f-remote-identity-scoped-entity-mutation-commands.md)
 

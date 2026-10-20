@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 
 Source plan: [128c. Relationship Command Wire Protocol](../done/128c-relationship-command-wire-protocol.md)
 

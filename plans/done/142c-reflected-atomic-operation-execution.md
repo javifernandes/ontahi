@@ -8,7 +8,7 @@ Parent: [142. Declarative Model Semantics And Execution Planning](./142-declarat
 
 Related plans:
 
-1. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+1. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 2. [139a. Composable Data Graph Transactions](./139a-composable-data-graph-transactions.md)
 3. [139b. Transaction-Scoped Unit Of Work](./139b-transaction-scoped-unit-of-work.md)
 

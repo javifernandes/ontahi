@@ -22,7 +22,7 @@ Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
 Related plans:
 
-1. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+1. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [138b. Conditional Exact Entity Mutations](../done/138b-conditional-exact-entity-mutations.md)
 4. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
@@ -314,7 +314,7 @@ historical activity timeline that Atlas did not observe.
    [Plan 141](../done/141-data-graph-progressive-module-boundaries.md),
    [Plan 142](../done/142-declarative-model-semantics-and-execution-planning.md), and
    [Plan 147](../done/147-application-bound-headless-graph-reads.md).
-3. [Plan 128](../current/128-ontahi-data-graph-execution-bridge.md) remains current for the bounded
+3. [Plan 128](../backlog/128-ontahi-data-graph-execution-bridge.md) remains current for the bounded
    graph-specific bridge gaps documented in its own checkpoint. The common request/response path
    through Plan 146g is complete.
 

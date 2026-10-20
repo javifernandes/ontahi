@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/145-ordered-relations-and-sequence-commands`
 Depends on:
 
 1. [131. Ontahi Relationship Semantics](../done/131-ontahi-relationship-semantics.md)
-2. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+2. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
 3. [135. Applied Mutation Outcomes And Reactions](../done/135-applied-mutation-outcomes-and-reactions.md)
 4. [137. Reflected Relation Affordances](../done/137-reflected-relation-affordances.md)
 

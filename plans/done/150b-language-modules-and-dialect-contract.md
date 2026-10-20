@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/150b-language-modules-and-dialect-contract`
 
-Related: [150](../current/150-ontahi-devtools-semantic-console.md),
+Related: [150](../backlog/150-ontahi-devtools-semantic-console.md),
 [120b](120b-contextual-selection-factories.md).
 
 ## Intent and scope
