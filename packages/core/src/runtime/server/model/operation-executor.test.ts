@@ -49,6 +49,30 @@ describe('model-backed Operation executor', () => {
     });
   });
 
+  it('runs declarative semantic validation with the assembled context', async () => {
+    const validate = vi.fn((output: { title: string }, context: { currentGoal: string }) =>
+      context.currentGoal === output.title
+        ? Effect.fail('duplicate' as const)
+        : Effect.succeed(output),
+    );
+    const run = modelOperation({
+      provider: { generate: vi.fn().mockResolvedValue({ title: 'Prepare dinner' }) },
+      operation: request.operation,
+      context: ({ goal }: InferGraphSchemaValue<typeof Input>) =>
+        Effect.succeed({ currentGoal: goal }),
+      validate,
+    });
+
+    await expect(Effect.runPromise(Effect.either(run(request.input)))).resolves.toMatchObject({
+      left: 'duplicate',
+    });
+    expect(validate).toHaveBeenCalledWith(
+      { title: 'Prepare dinner' },
+      { currentGoal: 'Prepare dinner' },
+      request.input,
+    );
+  });
+
   it('supplies the semantic contract, input, context, and output schema to the provider', async () => {
     const generate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
       title: '  Set the table  ',
@@ -106,6 +130,39 @@ describe('model-backed Operation executor', () => {
         reason: 'model_execution_failed',
         code: 'model_unavailable',
         message: 'Model is offline.',
+      },
+    });
+  });
+
+  it.each([
+    ['model_cancelled', 'model_execution_cancelled'],
+    ['model_output_invalid', 'model_output_invalid'],
+  ] as const)('maps provider %s failures to %s', async (code, reason) => {
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: vi
+          .fn()
+          .mockRejectedValue(new ModelInterpretationError(code, `Provider ${code}.`)),
+      },
+    });
+
+    await expect(
+      Effect.runPromise(Effect.either(executor.execute(request))),
+    ).resolves.toMatchObject({ left: { reason, code } });
+  });
+
+  it('normalizes an unknown provider rejection without leaking its value', async () => {
+    const executor = createModelOperationExecutor({
+      provider: { generate: vi.fn().mockRejectedValue({ secret: 'opaque' }) },
+    });
+
+    await expect(
+      Effect.runPromise(Effect.either(executor.execute(request))),
+    ).resolves.toMatchObject({
+      left: {
+        reason: 'model_execution_failed',
+        code: 'model_unavailable',
+        message: 'Model execution failed.',
       },
     });
   });

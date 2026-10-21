@@ -52,8 +52,8 @@ import {
   TodoApplication,
   TodoList,
   TodoListCompleted,
+  TodoListCreated,
   TodoListExportReady,
-  todoNotifications,
   todoTaskRuntime,
 } from './graph.js';
 import { createTodoDataGraphRuntime } from './storage.js';
@@ -525,21 +525,28 @@ describe('Ontahi todo portability example', () => {
   });
 
   it('emits the TodoList creation Reaction after a generic remote mutation', async () => {
-    const notified = vi
-      .spyOn(todoNotifications, 'todoListCreated')
-      .mockImplementation(() => Effect.succeed(undefined));
+    const deliveries: EventDeliveryFor<typeof TodoListCreated>[] = [];
+    const subscription = TodoApplication.events.subscribe(TodoListCreated, delivery => {
+      deliveries.push(delivery);
+    });
     const remoteClient = createFetchGraphClient({
       runtimeTransport: { endpoint: `${origin}/runtime` },
     });
 
-    await remoteClient.graphExecutor.runEntityMutationCommand!(
-      mutateEntity(ClientTodoListSchema).create({ name: 'Reading queue', color: '#dcebdc' }),
-    );
+    try {
+      await remoteClient.graphExecutor.runEntityMutationCommand!(
+        mutateEntity(ClientTodoListSchema).create({ name: 'Reading queue', color: '#dcebdc' }),
+      );
+      await vi.waitFor(() => expect(deliveries).toHaveLength(1));
+    } finally {
+      subscription.cancel();
+    }
     const created = getTodoDataset().TodoList?.find(list => list.name === 'Reading queue');
     expect(created).toMatchObject({ name: 'Reading queue', color: '#dcebdc' });
-    expect(notified).toHaveBeenCalledWith({
-      listId: created?.id,
-      name: 'Reading queue',
+    expect(deliveries[0]?.occurrence).toMatchObject({
+      eventId: 'TodoListCreated',
+      eventVersion: 1,
+      payload: { listId: created?.id, name: 'Reading queue' },
     });
   });
 

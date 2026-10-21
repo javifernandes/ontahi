@@ -47,12 +47,6 @@ const entityDefaults = {
   layer: 'todos',
 } as const;
 
-export type TodoEvent = {
-  type: 'TodoListCreated';
-  listId: string;
-  name: string;
-};
-
 const todoListFields = {
   id: field.generated(field.id(), 'uuid'),
   name: field.nonEmptyString({
@@ -96,6 +90,16 @@ export const TodoListExportReady = event.define({
   }),
 });
 
+export const TodoListCreated = event.define({
+  id: 'TodoListCreated',
+  version: 1,
+  description: 'A Todo List was created.',
+  payload: graphSchema.object({
+    listId: field.id(),
+    name: field.nonEmptyString({ trim: true }),
+  }),
+});
+
 type TodoListExportState = TaskExecutionState & {
   step: 'wait-for-export';
   requestId: string;
@@ -116,13 +120,12 @@ export const TodoList = entity({
   }),
   display: { primary: 'name', search: ['name'] },
   reactions: ({ created }) => [
-    created({ id: 'notify-todo-list-created', delivery: 'best-effort' }).emit(
-      outcome =>
-        ({
-          type: 'TodoListCreated',
-          listId: String(outcome.command.values.id),
-          name: String(outcome.command.values.name),
-        }) satisfies TodoEvent,
+    created({ id: 'todo-list-created', delivery: 'best-effort' }).emit(
+      TodoListCreated,
+      outcome => ({
+        listId: String(outcome.command.values.id),
+        name: String(outcome.command.values.name),
+      }),
     ),
   ],
   domainOperationDefaults: entityDefaults,

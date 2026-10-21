@@ -1,4 +1,3 @@
-import { adaptEffectMethods } from '@ontahi/core/computation/effect';
 import {
   createDeepSeekModelProvider,
   createOllamaModelProvider,
@@ -7,7 +6,6 @@ import {
   ontahi,
 } from '@ontahi/core/runtime/server';
 import { langGraphTasks } from '@ontahi/runtime-langgraph';
-import { Effect } from 'effect';
 
 import { createTodoModelRuntime } from './command-chat/runtime.js';
 import { defaultStorage, todoEventRuntime, todoTaskStorage } from './storage.js';
@@ -16,15 +14,9 @@ import {
   TodoItem,
   TodoList,
   TodoListCompleted,
+  TodoListCreated,
   TodoListExportReady,
-  type TodoEvent,
 } from './todo.js';
-
-export const todoNotifications = adaptEffectMethods<{
-  todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
-}>({
-  todoListCreated: ({ listId, name }) => console.info(`[todo] created list ${listId}: ${name}`),
-});
 
 const model = process.env.TODO_LLM_MODEL;
 const modelProvider = process.env.TODO_LLM_PROVIDER ?? 'ollama';
@@ -57,13 +49,9 @@ export const TodoApplication = ontahi({
     runtime: {
       model: { provider: todoCommandProvider },
     },
-    effectors: {
-      'emit-event': ({ event }: { event: TodoEvent }) =>
-        todoNotifications.todoListCreated({ listId: event.listId, name: event.name }),
-    },
   },
   entities: [TodoList, Tag, TodoItem],
-  events: [TodoListCompleted, TodoListExportReady],
+  events: [TodoListCreated, TodoListCompleted, TodoListExportReady],
 });
 
 const todoPreparedModelRuntime = todoCommandProvider
@@ -82,4 +70,4 @@ export const todoModelRuntime = todoPreparedModelRuntime
 
 export const TodoGraphApi = TodoApplication.graph;
 
-export { Tag, TodoItem, TodoList, TodoListCompleted, TodoListExportReady };
+export { Tag, TodoItem, TodoList, TodoListCompleted, TodoListCreated, TodoListExportReady };
