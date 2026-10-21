@@ -307,15 +307,18 @@ bounded host-assembled context, the exact output schema, and cancellation. Provi
 parsed through the existing Graph Schema before it can become an Operation success; provider,
 validation, and cancellation failures remain ordinary Operation failures.
 
-The Todo application declares `TodoList.suggestNextItem` once and supplies its implementation as a
-runtime capability at composition time. With `TODO_LLM_MODEL`, the capability uses the configured
-Ollama or DeepSeek provider; without it, a deterministic code implementation satisfies the same
-contract. Both paths were invoked through the canonical Operation surface. A local
+The Todo application declares `TodoList.suggestNextItem` once. Its declaration owns the
+instructions, bounded context assembler, and semantic output guard through Core's built-in
+`modelOperation` run helper. Application composition supplies only a generic model provider runtime
+capability. With `TODO_LLM_MODEL`, that capability uses the configured Ollama or DeepSeek provider;
+without it, a deterministic code implementation satisfies the same contract. Both paths were
+invoked through the canonical Operation surface. A local
 `qwen3.5:0.8b` Ollama evaluation returned a valid non-duplicate suggestion from the bounded list
 projection without mutating Todo state.
 
 The first UI consumer treats the result as autocomplete: it copies the suggested title into the
 ordinary editable draft, while the existing create Command remains the only acceptance path. This
 evidence supports a Core executor boundary but not a general executor registry or declarative
-context DSL. Application composition still owns binding policy and context assembly; Plans 125a,
-153a, and 153b retain resource governance, security hardening, and declarative scope respectively.
+context DSL. Application composition owns provider and binding policy; the Operation owns its
+instructions and current explicit context assembly. Plans 125a, 153a, and 153b retain resource
+governance, security hardening, and declarative scope respectively.

@@ -42,6 +42,25 @@ export type CreateModelOperationExecutorOptions = {
   readonly instructions?: string;
 };
 
+export type ModelOperationOptions<
+  TInput,
+  TOutput extends GraphSchemaDefinition,
+  TContext extends JsonValue,
+  TContextFailure,
+  TValidationFailure,
+  TOutputValue = GraphSchemaValue<TOutput>,
+> = {
+  readonly provider: ModelProvider;
+  readonly operation: ModelOperationContract<TOutput>;
+  readonly instructions?: string;
+  readonly context: (input: TInput) => Effect.Effect<TContext, TContextFailure>;
+  readonly validate?: (
+    output: TOutputValue,
+    context: TContext,
+    input: TInput,
+  ) => Effect.Effect<TOutputValue, TValidationFailure>;
+};
+
 const failureFromProvider = (cause: unknown): ModelOperationExecutionFailure => {
   const code = cause instanceof ModelInterpretationError ? cause.code : 'model_unavailable';
   const reason =
@@ -105,4 +124,50 @@ export const createModelOperationExecutor = ({
     );
 
   return { execute: execute as ModelOperationExecutor['execute'] };
+};
+
+/** Defines the ordinary run function for a model-backed Domain Operation. */
+export const modelOperation = <
+  TInput,
+  TOutput extends GraphSchemaDefinition,
+  TContext extends JsonValue,
+  TContextFailure = never,
+  TValidationFailure = never,
+  TOutputValue = GraphSchemaValue<TOutput>,
+>({
+  provider,
+  operation,
+  instructions,
+  context,
+  validate,
+}: ModelOperationOptions<
+  TInput,
+  TOutput,
+  TContext,
+  TContextFailure,
+  TValidationFailure,
+  TOutputValue
+>): ((
+  input: TInput,
+) => Effect.Effect<
+  TOutputValue,
+  ModelOperationExecutionFailure | TContextFailure | TValidationFailure
+>) => {
+  const executor = createModelOperationExecutor({ provider });
+  const executeRequest = executor.execute as (
+    request: ModelOperationExecutionRequest<TInput, GraphSchemaDefinition>,
+  ) => Effect.Effect<unknown, ModelOperationExecutionFailure>;
+  return input => {
+    const executeWithContext = (boundedContext: TContext) =>
+      Effect.flatMap(
+        executeRequest({ operation, input, context: boundedContext, instructions }),
+        output => {
+          const typedOutput = output as never;
+          return validate
+            ? validate(typedOutput, boundedContext, input)
+            : Effect.succeed(typedOutput);
+        },
+      ) as Effect.Effect<TOutputValue, ModelOperationExecutionFailure | TValidationFailure>;
+    return Effect.flatMap(context(input), executeWithContext);
+  };
 };

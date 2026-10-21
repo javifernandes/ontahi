@@ -6,6 +6,7 @@ import { field, graphSchema, type InferGraphSchemaValue } from '../../../data-gr
 import { ModelInterpretationError, type ModelProvider } from './interpretation.js';
 import {
   createModelOperationExecutor,
+  modelOperation,
   type ModelOperationExecutionRequest,
 } from './operation-executor.js';
 
@@ -27,6 +28,27 @@ const request = {
 } satisfies ModelOperationExecutionRequest<InferGraphSchemaValue<typeof Input>, typeof Output>;
 
 describe('model-backed Operation executor', () => {
+  it('builds an ordinary Operation run function from declarative context and instructions', async () => {
+    const generate = vi
+      .fn<ModelProvider['generate']>()
+      .mockResolvedValue({ title: 'Set the table' });
+    const run = modelOperation({
+      provider: { generate },
+      operation: request.operation,
+      instructions: 'Suggest a missing step.',
+      context: ({ goal }: InferGraphSchemaValue<typeof Input>) =>
+        Effect.succeed({ currentGoal: goal }),
+    });
+
+    await expect(Effect.runPromise(run(request.input))).resolves.toEqual({
+      title: 'Set the table',
+    });
+    expect(generate.mock.calls[0]![0]).toMatchObject({
+      instructions: expect.stringContaining('Suggest a missing step.'),
+      context: JSON.stringify({ currentGoal: 'Prepare dinner' }),
+    });
+  });
+
   it('supplies the semantic contract, input, context, and output schema to the provider', async () => {
     const generate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
       title: '  Set the table  ',

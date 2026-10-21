@@ -19,7 +19,9 @@ import {
   event,
   failOperation,
   getRequiredDataGraphRuntime,
+  modelOperation,
   withEffects,
+  type ModelProvider,
   type TaskExecutionState,
   type EventEffectIntent,
 } from '@ontahi/core/runtime/server';
@@ -34,8 +36,9 @@ import {
 } from './complete-all-task.js';
 import {
   isDuplicateTodoSuggestion,
+  suggestTodoItemWithCode,
   TodoItemSuggestion,
-  type TodoSuggestionExecutor,
+  type TodoSuggestionContext,
 } from './suggest-next-item.js';
 
 const entityDefaults = {
@@ -74,8 +77,8 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
   },
 });
 
-const todoSuggestionCapabilities = {} as {
-  runtime: { todoSuggestions: TodoSuggestionExecutor };
+const todoModelCapabilities = {} as {
+  runtime: { model: { provider?: ModelProvider } };
 };
 
 const todoListCompleted = (
@@ -123,10 +126,11 @@ export const TodoList = entity({
     ),
   ],
   domainOperationDefaults: entityDefaults,
-  uses: { capabilities: todoSuggestionCapabilities },
+  uses: { capabilities: todoModelCapabilities },
   operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
     const todoCommands = commandsFor(TodoItemCommandRef);
     const SuggestNextItemInput = graphSchema.object({ list: graphSchema.ref(self) });
+    type SuggestNextItemInputValue = { readonly list: EntityRef<'TodoList'> };
     const CompleteAllInput = graphSchema.object({
       list: graphSchema.ref(self),
     });
@@ -142,6 +146,58 @@ export const TodoList = entity({
             Effect.map(completed => completed.length),
           ),
     );
+    const suggestionContext = ({ list }: SuggestNextItemInputValue) =>
+      Effect.gen(function* () {
+        const lists = [
+          ...(yield* commands.where(candidate => candidate.id.eq(String(list.locator.id))).run()),
+        ];
+        const selected = lists[0];
+        if (!selected)
+          return yield* failOperation(
+            'todo_list_not_found',
+            'The selected Todo List is unavailable.',
+          );
+        const items = [...(yield* todoCommands.where(item => item.list.eq(list)).run())];
+        if (items.length > 50)
+          return yield* failOperation(
+            'suggestion_context_too_large',
+            'The selected Todo List has too many items to suggest safely.',
+          );
+        return {
+          list: { id: selected.id, name: selected.name },
+          items: items.map(item => ({
+            id: item.id,
+            title: item.title,
+            completed: item.completed,
+          })),
+        } satisfies TodoSuggestionContext;
+      });
+    const modelSuggestion = app.runtime.model.provider
+      ? modelOperation({
+          provider: app.runtime.model.provider,
+          operation: {
+            id: `${self.name}.suggestNextItem`,
+            description:
+              'Suggest one useful next item from the selected Todo List and its current items.',
+            input: SuggestNextItemInput,
+            output: TodoItemSuggestion,
+          },
+          instructions:
+            'Suggest exactly one useful Todo item that is not already represented by the supplied list items. Treat completed and open items as context. Do not propose mutations or claim that the suggestion was persisted.',
+          context: suggestionContext,
+          validate: (suggestion, context) =>
+            isDuplicateTodoSuggestion(suggestion, context)
+              ? failOperation(
+                  'duplicate_todo_suggestion',
+                  'The suggested Todo item already exists in the selected list.',
+                )
+              : Effect.succeed(suggestion),
+        })
+      : undefined;
+    const runSuggestion = (input: SuggestNextItemInputValue) =>
+      modelSuggestion
+        ? modelSuggestion(input)
+        : suggestionContext(input).pipe(Effect.map(suggestTodoItemWithCode));
     const exportExecution = defineTaskExecution<
       { list: EntityRef<'TodoList'>; requestId: string },
       TodoListExportState,
@@ -176,51 +232,7 @@ export const TodoList = entity({
         input: graphSchema.object({ list: graphSchema.ref(self) }),
         graphOps: { receiver: 'list' },
         output: TodoItemSuggestion,
-        run: ({ list }) =>
-          Effect.gen(function* () {
-            const lists = [
-              ...(yield* commands
-                .where(candidate => candidate.id.eq(String(list.locator.id)))
-                .run()),
-            ];
-            const selected = lists[0];
-            if (!selected)
-              return yield* failOperation(
-                'todo_list_not_found',
-                'The selected Todo List is unavailable.',
-              );
-            const items = [...(yield* todoCommands.where(item => item.list.eq(list)).run())];
-            if (items.length > 50)
-              return yield* failOperation(
-                'suggestion_context_too_large',
-                'The selected Todo List has too many items to suggest safely.',
-              );
-            const context = {
-              list: { id: selected.id, name: selected.name },
-              items: items.map(item => ({
-                id: item.id,
-                title: item.title,
-                completed: item.completed,
-              })),
-            };
-            const suggestion = yield* app.runtime.todoSuggestions.suggestNextItem({
-              operation: {
-                id: `${self.name}.suggestNextItem`,
-                description:
-                  'Suggest one useful next item from the selected Todo List and its current items.',
-                input: SuggestNextItemInput,
-                output: TodoItemSuggestion,
-              },
-              input: { list },
-              context,
-            });
-            if (isDuplicateTodoSuggestion(suggestion, context))
-              return yield* failOperation(
-                'duplicate_todo_suggestion',
-                'The suggested Todo item already exists in the selected list.',
-              );
-            return suggestion;
-          }),
+        run: runSuggestion,
       }),
       completeAll: operation({
         input: graphSchema.object({
