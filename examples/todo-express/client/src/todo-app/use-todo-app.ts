@@ -13,6 +13,7 @@ import {
   useManyToManyRelationshipCommand,
   useOrderedRelationshipCommand,
   useDurableOperation,
+  useOperation,
 } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -91,6 +92,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [actionError, setActionError] = useState<string>();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [creatingTodoFor, setCreatingTodoFor] = useState<string>();
+  const [suggestingTodoFor, setSuggestingTodoFor] = useState<string>();
   const [renamingListId, setRenamingListId] = useState<string>();
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
@@ -115,6 +117,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const executeEntityMutation = entityMutation.mutateAsync;
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
   const exportOperation = useDurableOperation(TodoList.domain.export);
+  const suggestNextItemOperation = useOperation(TodoList.domain.suggestNextItem);
   const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
   const linkTags = useManyToManyRelationshipCommand((input: TodoTagMutation) =>
     createTodoTagCommand('add', input),
@@ -232,6 +235,26 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       return false;
     } finally {
       setCreatingTodoFor(undefined);
+    }
+  };
+
+  const suggestTodo = async (listId: string) => {
+    setActionError(undefined);
+    setSuggestingTodoFor(listId);
+    try {
+      const result = await suggestNextItemOperation.executeAsync({
+        list: TodoList.refById(listId),
+      });
+      if (!result.ok) {
+        setActionError(result.message || 'A Todo suggestion could not be generated.');
+        return undefined;
+      }
+      return result.value;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'A Todo suggestion could not be generated.'));
+      return undefined;
+    } finally {
+      setSuggestingTodoFor(undefined);
     }
   };
 
@@ -471,6 +494,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       canComplete,
       isCreatingList,
       creatingTodoFor,
+      suggestingTodoFor,
       renamingListId,
       recoloringListId,
       deletingListId,
@@ -510,6 +534,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         finalValue: exportOperation.finalValue,
       },
       createTodo,
+      suggestTodo,
       setTodoCompleted,
       renameTodo,
       deleteTodo,

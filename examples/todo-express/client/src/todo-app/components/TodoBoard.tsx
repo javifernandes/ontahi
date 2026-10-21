@@ -63,6 +63,7 @@ export const TodoBoard = ({
   canComplete,
   isCreatingList,
   creatingTodoFor,
+  suggestingTodoFor,
   renamingListId,
   recoloringListId,
   deletingListId,
@@ -86,6 +87,7 @@ export const TodoBoard = ({
   simulateExportReady,
   exportRun,
   createTodo,
+  suggestTodo,
   setTodoCompleted,
   renameTodo,
   deleteTodo,
@@ -316,6 +318,7 @@ export const TodoBoard = ({
                 canComplete={canComplete}
                 focusTodoInput={focusTodoForListId === list.id}
                 isCreatingTodo={creatingTodoFor === list.id}
+                isSuggestingTodo={suggestingTodoFor === list.id}
                 isRenaming={renamingListId === list.id}
                 isRecoloring={recoloringListId === list.id}
                 isDeleting={deletingListId === list.id}
@@ -362,6 +365,7 @@ export const TodoBoard = ({
                 simulateExportReady={simulateExportReady}
                 completeAllDisabled={completeAll.isExecuting}
                 createTodo={createTodo}
+                suggestTodo={suggestTodo}
                 setTodoCompleted={setTodoCompleted}
                 renameTodo={renameTodo}
                 deleteTodo={deleteTodo}

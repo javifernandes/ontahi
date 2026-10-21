@@ -158,6 +158,33 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem).toHaveLength(51);
   });
 
+  it.runIf(process.env.TODO_LLM_MODEL)(
+    'evaluates the contextual suggestion against the configured real model provider',
+    async () => {
+      getTodoDataset().TodoItem = [
+        {
+          id: 'todo-1',
+          list: 'list-1',
+          title: 'Buy vegetables',
+          completed: false,
+        },
+      ];
+
+      const result = await TodoApplication.invokeOperation(
+        TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+        { list: createEntityRef(TodoList, { id: 'list-1' }) },
+      );
+
+      expect(result).toMatchObject({ ok: true, kind: 'success' });
+      if (!result.ok) throw new Error(result.message);
+      const suggestion = result.value as { title: string };
+      expect(suggestion.title.trim()).not.toBe('');
+      expect(suggestion.title.toLocaleLowerCase()).not.toBe('buy vegetables');
+      expect(getTodoDataset().TodoItem).toHaveLength(1);
+    },
+    120_000,
+  );
+
   it('discovers TodoItem ordering over HTTP and WebSocket before any data query', async () => {
     const http = createFetchRuntimeTransport({ endpoint: `${origin}/runtime` });
     const websocket = createWebSocketRuntimeTransport({

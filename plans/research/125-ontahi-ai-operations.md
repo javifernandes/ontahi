@@ -298,3 +298,24 @@ effectful proof joining generated content to authoritative Commands and observab
 provider-neutral usage evidence, budgets, limits, attribution, and operational visibility shared by
 Intent Resolution and model-backed Operations. It deliberately follows the executor proof so the
 governance boundary is not designed around `model.command` alone.
+
+## Direct Operation Executor Evidence — 2026-10-21
+
+Plan 156 now supplies the missing direct-execution proof. Core owns a provider-neutral executor
+request containing the already selected Operation identity and description, normalized input,
+bounded host-assembled context, the exact output schema, and cancellation. Provider output is
+parsed through the existing Graph Schema before it can become an Operation success; provider,
+validation, and cancellation failures remain ordinary Operation failures.
+
+The Todo application declares `TodoList.suggestNextItem` once and supplies its implementation as a
+runtime capability at composition time. With `TODO_LLM_MODEL`, the capability uses the configured
+Ollama or DeepSeek provider; without it, a deterministic code implementation satisfies the same
+contract. Both paths were invoked through the canonical Operation surface. A local
+`qwen3.5:0.8b` Ollama evaluation returned a valid non-duplicate suggestion from the bounded list
+projection without mutating Todo state.
+
+The first UI consumer treats the result as autocomplete: it copies the suggested title into the
+ordinary editable draft, while the existing create Command remains the only acceptance path. This
+evidence supports a Core executor boundary but not a general executor registry or declarative
+context DSL. Application composition still owns binding policy and context assembly; Plans 125a,
+153a, and 153b retain resource governance, security hardening, and declarative scope respectively.

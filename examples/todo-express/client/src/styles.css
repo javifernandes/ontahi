@@ -1084,7 +1084,7 @@ a {
 
 .quick-add {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 7px;
   align-items: center;
   margin-top: 13px;
@@ -1116,6 +1116,19 @@ a {
   background: #e3eee6;
   font-size: 10px;
   font-weight: 800;
+}
+
+.quick-add .suggest-todo-action {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: #615389;
+  background: #ebe7f5;
+}
+
+.quick-add .suggest-todo-action > svg {
+  width: 12px;
+  height: 12px;
 }
 
 .quick-add button:disabled,
