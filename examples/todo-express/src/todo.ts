@@ -32,6 +32,11 @@ import {
   CompleteAllProgress,
   createRunCompleteAll,
 } from './complete-all-task.js';
+import {
+  isDuplicateTodoSuggestion,
+  TodoItemSuggestion,
+  type TodoSuggestionExecutor,
+} from './suggest-next-item.js';
 
 const entityDefaults = {
   authority: 'server',
@@ -64,9 +69,14 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
   fields: {
     id: field.id(),
     list: field.existingRef(entity.ref('TodoList')),
+    title: field.nonEmptyString({ trim: true }),
     completed: field.boolean(),
   },
 });
+
+const todoSuggestionCapabilities = {} as {
+  runtime: { todoSuggestions: TodoSuggestionExecutor };
+};
 
 const todoListCompleted = (
   list: EntityRef<'TodoList'>,
@@ -113,8 +123,10 @@ export const TodoList = entity({
     ),
   ],
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commandsFor, operation, ingress }) => {
+  uses: { capabilities: todoSuggestionCapabilities },
+  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
     const todoCommands = commandsFor(TodoItemCommandRef);
+    const SuggestNextItemInput = graphSchema.object({ list: graphSchema.ref(self) });
     const CompleteAllInput = graphSchema.object({
       list: graphSchema.ref(self),
     });
@@ -158,6 +170,58 @@ export const TodoList = entity({
     });
 
     return {
+      suggestNextItem: operation({
+        description:
+          'Suggest one useful next item from the selected Todo List and its current items.',
+        input: graphSchema.object({ list: graphSchema.ref(self) }),
+        graphOps: { receiver: 'list' },
+        output: TodoItemSuggestion,
+        run: ({ list }) =>
+          Effect.gen(function* () {
+            const lists = [
+              ...(yield* commands
+                .where(candidate => candidate.id.eq(String(list.locator.id)))
+                .run()),
+            ];
+            const selected = lists[0];
+            if (!selected)
+              return yield* failOperation(
+                'todo_list_not_found',
+                'The selected Todo List is unavailable.',
+              );
+            const items = [...(yield* todoCommands.where(item => item.list.eq(list)).run())];
+            if (items.length > 50)
+              return yield* failOperation(
+                'suggestion_context_too_large',
+                'The selected Todo List has too many items to suggest safely.',
+              );
+            const context = {
+              list: { id: selected.id, name: selected.name },
+              items: items.map(item => ({
+                id: item.id,
+                title: item.title,
+                completed: item.completed,
+              })),
+            };
+            const suggestion = yield* app.runtime.todoSuggestions.suggestNextItem({
+              operation: {
+                id: `${self.name}.suggestNextItem`,
+                description:
+                  'Suggest one useful next item from the selected Todo List and its current items.',
+                input: SuggestNextItemInput,
+                output: TodoItemSuggestion,
+              },
+              input: { list },
+              context,
+            });
+            if (isDuplicateTodoSuggestion(suggestion, context))
+              return yield* failOperation(
+                'duplicate_todo_suggestion',
+                'The suggested Todo item already exists in the selected list.',
+              );
+            return suggestion;
+          }),
+      }),
       completeAll: operation({
         input: graphSchema.object({
           list: graphSchema.ref(self),

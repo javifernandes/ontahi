@@ -111,6 +111,53 @@ describe('Ontahi todo portability example', () => {
     await closeServer?.();
   });
 
+  it('invokes the contextual Todo item suggestion through the ordinary Operation surface', async () => {
+    getTodoDataset().TodoItem = [
+      {
+        id: 'todo-1',
+        list: 'list-1',
+        title: 'Review Inbox priorities',
+        completed: false,
+      },
+    ];
+
+    await expect(
+      TodoApplication.invokeOperation(
+        TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+        { list: createEntityRef(TodoList, { id: 'list-1' }) },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      kind: 'success',
+      value: {
+        title: 'Plan the next Inbox step',
+        reason: 'Suggested from the current Inbox list.',
+      },
+    });
+    expect(getTodoDataset().TodoItem).toHaveLength(1);
+  });
+
+  it('rejects suggestion context beyond its explicit item bound without mutation', async () => {
+    getTodoDataset().TodoItem = Array.from({ length: 51 }, (_, index) => ({
+      id: `todo-${index + 1}`,
+      list: 'list-1',
+      title: `Existing item ${index + 1}`,
+      completed: false,
+    }));
+
+    await expect(
+      TodoApplication.invokeOperation(
+        TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+        { list: createEntityRef(TodoList, { id: 'list-1' }) },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'failed',
+      failure: { reason: 'suggestion_context_too_large' },
+    });
+    expect(getTodoDataset().TodoItem).toHaveLength(51);
+  });
+
   it('discovers TodoItem ordering over HTTP and WebSocket before any data query', async () => {
     const http = createFetchRuntimeTransport({ endpoint: `${origin}/runtime` });
     const websocket = createWebSocketRuntimeTransport({

@@ -12,6 +12,10 @@ import { Effect } from 'effect';
 import { createTodoModelRuntime } from './command-chat/runtime.js';
 import { defaultStorage, todoEventRuntime, todoTaskStorage } from './storage.js';
 import {
+  codeBackedTodoSuggestionExecutor,
+  createModelBackedTodoSuggestionExecutor,
+} from './suggest-next-item.js';
+import {
   Tag,
   TodoItem,
   TodoList,
@@ -54,6 +58,11 @@ export const TodoApplication = ontahi({
       ? langGraphTasks({ storage: todoTaskStorage })
       : inProcessTasks({ storage: todoTaskStorage }),
   capabilities: {
+    runtime: {
+      todoSuggestions: todoCommandProvider
+        ? createModelBackedTodoSuggestionExecutor(todoCommandProvider)
+        : codeBackedTodoSuggestionExecutor,
+    },
     effectors: {
       'emit-event': ({ event }: { event: TodoEvent }) =>
         todoNotifications.todoListCreated({ listId: event.listId, name: event.name }),
