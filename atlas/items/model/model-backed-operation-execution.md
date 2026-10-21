@@ -21,6 +21,7 @@ relatedPlans:
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/153b-declarative-operation-context-scope
   - ontahi://plans/155-declarative-basic-entity-mutations
+  - ontahi://plans/156-model-backed-domain-operation-executor
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
@@ -50,6 +51,20 @@ Entity state.
 The design may support a progression from a soft semantic contract, through a prompt-backed
 implementation, toward a hardened implementation with stronger evidence or deterministic code.
 That progression describes implementation maturity, not whether the operation is durable.
+
+## Contextual Domain Operation Proof
+
+Plan 156 selects `TodoList.suggestNextItem` as the first direct executor proof. The caller invokes
+one typed read-only Domain Operation. Application composition supplies either a model-backed or
+code-backed implementation without changing the Operation identity, input/output schemas, canonical
+invocation, or caller. The model binding receives only an authorized host-assembled projection of
+the selected list and its current items; it has no graph or mutation authority.
+
+The later `TodoList.createFromGoal` example extends the shape from typed computation to effects.
+There, a model may generate a validated checklist draft, while Ontahi-owned execution checks
+authority and preconditions, performs canonical mutations, evaluates observable postconditions,
+and returns actual persisted Refs. Model output proposes content; it cannot establish that an
+application fact or postcondition is true.
 
 ## First Bounded Proof
 

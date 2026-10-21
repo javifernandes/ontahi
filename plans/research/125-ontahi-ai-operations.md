@@ -17,6 +17,7 @@ Related plans:
 3. [`70. First-Class Workflow Tier`](bookops://plans/70-first-class-workflow-tier-in-architecture)
 4. [`90. Event-Driven Architecture Runtime`](bookops://plans/90-event-driven-architecture-runtime)
 5. [`120. Ontahi Environment Resources And Semantic Bindings`](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
+6. [`156. Model-Backed Domain Operation Executor`](../current/156-model-backed-domain-operation-executor.md)
 
 ## Summary
 
@@ -287,6 +288,11 @@ ordinary typed result, and then replace that binding with a code implementation 
 callers or the Operation contract. Both bindings do not need to be active simultaneously. Multiple
 concurrent implementations are a separate host policy for feature flags, rollout, shadow
 evaluation, fallback, or migration and should not enter the minimum executor contract.
+
+[Plan 156](../current/156-model-backed-domain-operation-executor.md) activates that experiment as
+`TodoList.suggestNextItem`: a contextual, read-only Operation whose model-backed and code-backed
+bindings preserve one invocation contract. It also records `TodoList.createFromGoal` as the later
+effectful proof joining generated content to authoritative Commands and observable postconditions.
 
 [Plan 125a](../backlog/125a-model-execution-resource-governance.md) records the following spike:
 provider-neutral usage evidence, budgets, limits, attribution, and operational visibility shared by
