@@ -318,7 +318,7 @@ export const TodoBoard = ({
                 canComplete={canComplete}
                 focusTodoInput={focusTodoForListId === list.id}
                 isCreatingTodo={creatingTodoFor === list.id}
-                isSuggestingTodo={suggestingTodoFor === list.id}
+                isSuggestingTodo={suggestingTodoFor.has(list.id)}
                 isRenaming={renamingListId === list.id}
                 isRecoloring={recoloringListId === list.id}
                 isDeleting={deletingListId === list.id}

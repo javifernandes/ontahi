@@ -207,9 +207,10 @@ export const TodoListCard = ({
   };
 
   const suggestTodoTitle = async () => {
+    const pendingDraft = todoTitle;
     const suggestion = await suggestTodo(list.id);
     if (!suggestion) return;
-    setTodoTitle(suggestion.title);
+    setTodoTitle(current => (current === pendingDraft ? suggestion.title : current));
     quickAddInput.current?.focus();
   };
 

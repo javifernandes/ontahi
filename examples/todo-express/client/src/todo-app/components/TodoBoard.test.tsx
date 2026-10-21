@@ -26,7 +26,7 @@ const createProps = (overrides: Partial<TodoBoardProps> = {}): TodoBoardProps =>
   canComplete: true,
   isCreatingList: false,
   creatingTodoFor: undefined,
-  suggestingTodoFor: undefined,
+  suggestingTodoFor: new Set(),
   renamingListId: undefined,
   recoloringListId: undefined,
   deletingListId: undefined,

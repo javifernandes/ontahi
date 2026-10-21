@@ -62,7 +62,12 @@ export type ModelOperationOptions<
 };
 
 const failureFromProvider = (cause: unknown): ModelOperationExecutionFailure => {
-  const code = cause instanceof ModelInterpretationError ? cause.code : 'model_unavailable';
+  const code =
+    cause instanceof ModelInterpretationError
+      ? cause.code
+      : cause instanceof DOMException && cause.name === 'AbortError'
+        ? 'model_cancelled'
+        : 'model_unavailable';
   const reason =
     code === 'model_cancelled'
       ? 'model_execution_cancelled'

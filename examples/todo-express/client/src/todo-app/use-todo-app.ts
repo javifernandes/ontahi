@@ -92,7 +92,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [actionError, setActionError] = useState<string>();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [creatingTodoFor, setCreatingTodoFor] = useState<string>();
-  const [suggestingTodoFor, setSuggestingTodoFor] = useState<string>();
+  const [suggestingTodoFor, setSuggestingTodoFor] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [renamingListId, setRenamingListId] = useState<string>();
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
@@ -240,7 +242,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const suggestTodo = async (listId: string) => {
     setActionError(undefined);
-    setSuggestingTodoFor(listId);
+    setSuggestingTodoFor(current => new Set(current).add(listId));
     try {
       const result = await suggestNextItemOperation.executeAsync({
         list: TodoList.refById(listId),
@@ -254,7 +256,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       setActionError(thrownMessage(error, 'A Todo suggestion could not be generated.'));
       return undefined;
     } finally {
-      setSuggestingTodoFor(undefined);
+      setSuggestingTodoFor(current => {
+        const pending = new Set(current);
+        pending.delete(listId);
+        return pending;
+      });
     }
   };
 

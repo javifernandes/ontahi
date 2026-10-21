@@ -167,6 +167,22 @@ describe('model-backed Operation executor', () => {
     });
   });
 
+  it('recognizes an unwrapped provider AbortError as cancellation', async () => {
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: vi
+          .fn()
+          .mockRejectedValue(new DOMException('The request was aborted.', 'AbortError')),
+      },
+    });
+
+    await expect(
+      Effect.runPromise(Effect.either(executor.execute(request))),
+    ).resolves.toMatchObject({
+      left: { reason: 'model_execution_cancelled', code: 'model_cancelled' },
+    });
+  });
+
   it('propagates Effect interruption to the provider AbortSignal', async () => {
     let providerSignal: AbortSignal | undefined;
     const executor = createModelOperationExecutor({
