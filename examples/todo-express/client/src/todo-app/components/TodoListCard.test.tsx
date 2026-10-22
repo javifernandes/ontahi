@@ -49,6 +49,12 @@ const rect = (top: number, height: number) =>
     toJSON: () => undefined,
   }) satisfies DOMRect;
 
+const setInputValue = (input: HTMLInputElement, value: string) => {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  valueSetter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
 const createProps = (
   moveTodo: TodoListCardProps['moveTodo'],
   renameTodo: TodoListCardProps['renameTodo'] = vi.fn().mockResolvedValue(true),
@@ -70,6 +76,7 @@ const createProps = (
   canComplete: true,
   focusTodoInput: false,
   isCreatingTodo: false,
+  isSuggestingTodo: false,
   isRenaming: false,
   isRecoloring: false,
   isDeleting: false,
@@ -91,6 +98,10 @@ const createProps = (
   exportTodoList: vi.fn().mockResolvedValue(true),
   simulateExportReady: vi.fn().mockResolvedValue(true),
   createTodo: vi.fn().mockResolvedValue(true),
+  suggestTodo: vi.fn().mockResolvedValue({
+    title: 'Review Inbox priorities',
+    reason: 'A useful next step.',
+  }),
   setTodoCompleted: vi.fn().mockResolvedValue(true),
   renameTodo,
   deleteTodo: vi.fn().mockResolvedValue(true),
@@ -151,6 +162,58 @@ describe('TodoListCard item reordering', () => {
 
     act(() => action.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(completeAllTodos).toHaveBeenCalledWith('list-1');
+  });
+
+  it('places a tentative suggestion in the editable draft without creating an item', async () => {
+    const createTodo = vi.fn().mockResolvedValue(true);
+    const suggestTodo = vi.fn().mockResolvedValue({
+      title: 'Prepare the release notes',
+      reason: 'The list has implementation tasks but no release step.',
+    });
+    act(() =>
+      root.render(
+        <TodoListCard {...createProps(vi.fn(), undefined, { createTodo, suggestTodo })} />,
+      ),
+    );
+
+    const action = Array.from(container.querySelectorAll('button')).find(button =>
+      button.textContent?.includes('Suggest'),
+    )!;
+    await act(async () => {
+      action.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(suggestTodo).toHaveBeenCalledWith('list-1');
+    expect(createTodo).not.toHaveBeenCalled();
+    expect(
+      container.querySelector<HTMLInputElement>('input[aria-label="Add a todo to Inbox"]')!.value,
+    ).toBe('Prepare the release notes');
+  });
+
+  it('preserves a draft edited while a suggestion is pending', async () => {
+    let resolveSuggestion!: (suggestion: { title: string; reason: string }) => void;
+    const suggestTodo = vi.fn().mockReturnValue(
+      new Promise(resolve => {
+        resolveSuggestion = resolve;
+      }),
+    );
+    act(() => root.render(<TodoListCard {...createProps(vi.fn(), undefined, { suggestTodo })} />));
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Add a todo to Inbox"]',
+    )!;
+    const action = Array.from(container.querySelectorAll('button')).find(button =>
+      button.textContent?.includes('Suggest'),
+    )!;
+
+    act(() => action.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    act(() => setInputValue(input, 'Keep my newer draft'));
+    await act(async () => {
+      resolveSuggestion({ title: 'Delayed suggestion', reason: 'Generated from list context.' });
+      await Promise.resolve();
+    });
+
+    expect(input.value).toBe('Keep my newer draft');
   });
 
   it('simulates export readiness through an explicit fixture action while waiting', () => {

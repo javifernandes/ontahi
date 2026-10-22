@@ -7,6 +7,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ type TodoListCardProps = {
   canComplete: boolean;
   focusTodoInput: boolean;
   isCreatingTodo: boolean;
+  isSuggestingTodo: boolean;
   isRenaming: boolean;
   isRecoloring: boolean;
   isDeleting: boolean;
@@ -61,6 +63,7 @@ type TodoListCardProps = {
   exportTodoList: Dashboard['exportTodoList'];
   simulateExportReady: Dashboard['simulateExportReady'];
   createTodo: Dashboard['createTodo'];
+  suggestTodo: Dashboard['suggestTodo'];
   setTodoCompleted: Dashboard['setTodoCompleted'];
   renameTodo: Dashboard['renameTodo'];
   deleteTodo: Dashboard['deleteTodo'];
@@ -100,6 +103,7 @@ export const TodoListCard = ({
   canComplete,
   focusTodoInput,
   isCreatingTodo,
+  isSuggestingTodo,
   isRenaming,
   isRecoloring,
   isDeleting,
@@ -130,6 +134,7 @@ export const TodoListCard = ({
   exportTodoList,
   simulateExportReady,
   createTodo,
+  suggestTodo,
   setTodoCompleted,
   renameTodo,
   deleteTodo,
@@ -199,6 +204,14 @@ export const TodoListCard = ({
   const submitTodo = async (event: FormEvent) => {
     event.preventDefault();
     if (await createTodo(list.id, todoTitle)) setTodoTitle('');
+  };
+
+  const suggestTodoTitle = async () => {
+    const pendingDraft = todoTitle;
+    const suggestion = await suggestTodo(list.id);
+    if (!suggestion) return;
+    setTodoTitle(current => (current === pendingDraft ? suggestion.title : current));
+    quickAddInput.current?.focus();
   };
 
   const updateTodoDropPreview = useCallback((preview?: TodoDropPreview) => {
@@ -661,6 +674,16 @@ export const TodoListCard = ({
                 onChange={event => setTodoTitle(event.target.value)}
                 placeholder='Add a todo…'
               />
+              <button
+                type='button'
+                className='suggest-todo-action'
+                disabled={isSuggestingTodo}
+                onClick={() => void suggestTodoTitle()}
+                title='Run TodoList.suggestNextItem()'
+              >
+                <Sparkles aria-hidden='true' />
+                {isSuggestingTodo ? 'Thinking…' : 'Suggest'}
+              </button>
               <button type='submit' disabled={!todoTitle.trim() || isCreatingTodo}>
                 {isCreatingTodo ? 'Adding…' : 'Add'}
               </button>

@@ -66,6 +66,22 @@ authority and preconditions, performs canonical mutations, evaluates observable 
 and returns actual persisted Refs. Model output proposes content; it cannot establish that an
 application fact or postcondition is true.
 
+Implementation evidence now confirms the contextual proof. Core exposes a provider-neutral model
+Operation executor that carries the selected contract, input, bounded context, output schema, and
+cancellation into the existing `ModelProvider` seam. Todo's Operation declaration supplies its
+instructions, explicit context assembler, and semantic output guard through the built-in
+`modelOperation` helper. Application composition registers only the generic provider capability;
+without one, a deterministic code run satisfies the same public Operation and client invocation.
+Graph Schema validation and Todo's duplicate/context guards run before a suggestion succeeds. The
+UI consumes the result only as an editable draft, and a local
+`qwen3.5:0.8b` Ollama trial exercised the canonical invocation without persistence.
+
+The evidenced package boundary is deliberately narrow: generic provider execution and typed output
+validation belong to Core, while prompts, context assembly, and semantic quality guards remain
+Operation/application concerns and provider selection remains composition policy. Declarative
+context, authorization hardening, resource
+governance, and simultaneous rollout variants remain separate work.
+
 ## First Bounded Proof
 
 Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a

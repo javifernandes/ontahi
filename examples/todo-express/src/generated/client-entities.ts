@@ -81,6 +81,16 @@ const DeleteListItemsOutputValue = value('DeleteListItemsOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
+    suggestNextItem: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {},
+      input: graphSchema.object({ list: graphSchema.ref(TodoListSchema) }),
+      output: graphSchema.object({
+        title: field.nonEmptyString({ trim: true }),
+        reason: field.optional(field.nonEmptyString({ trim: true })),
+      }),
+    }),
     completeAll: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

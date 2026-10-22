@@ -52,8 +52,8 @@ import {
   TodoApplication,
   TodoList,
   TodoListCompleted,
+  TodoListCreated,
   TodoListExportReady,
-  todoNotifications,
   todoTaskRuntime,
 } from './graph.js';
 import { createTodoDataGraphRuntime } from './storage.js';
@@ -110,6 +110,83 @@ describe('Ontahi todo portability example', () => {
     vi.restoreAllMocks();
     await closeServer?.();
   });
+
+  it.runIf(!process.env.TODO_LLM_MODEL)(
+    'invokes the contextual Todo item suggestion through the ordinary Operation surface',
+    async () => {
+      getTodoDataset().TodoItem = [
+        {
+          id: 'todo-1',
+          list: 'list-1',
+          title: 'Review Inbox priorities',
+          completed: false,
+        },
+      ];
+
+      await expect(
+        TodoApplication.invokeOperation(
+          TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+          { list: createEntityRef(TodoList, { id: 'list-1' }) },
+        ),
+      ).resolves.toMatchObject({
+        ok: true,
+        kind: 'success',
+        value: {
+          title: 'Plan the next Inbox step',
+          reason: 'Suggested from the current Inbox list.',
+        },
+      });
+      expect(getTodoDataset().TodoItem).toHaveLength(1);
+    },
+  );
+
+  it('rejects suggestion context beyond its explicit item bound without mutation', async () => {
+    getTodoDataset().TodoItem = Array.from({ length: 51 }, (_, index) => ({
+      id: `todo-${index + 1}`,
+      list: 'list-1',
+      title: `Existing item ${index + 1}`,
+      completed: false,
+    }));
+
+    await expect(
+      TodoApplication.invokeOperation(
+        TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+        { list: createEntityRef(TodoList, { id: 'list-1' }) },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'failed',
+      failure: { reason: 'suggestion_context_too_large' },
+    });
+    expect(getTodoDataset().TodoItem).toHaveLength(51);
+  });
+
+  it.runIf(process.env.TODO_LLM_MODEL)(
+    'evaluates the contextual suggestion against the configured real model provider',
+    async () => {
+      getTodoDataset().TodoItem = [
+        {
+          id: 'todo-1',
+          list: 'list-1',
+          title: 'Buy vegetables',
+          completed: false,
+        },
+      ];
+
+      const result = await TodoApplication.invokeOperation(
+        TodoApplication.graph.entities.TodoList.domain.suggestNextItem,
+        { list: createEntityRef(TodoList, { id: 'list-1' }) },
+      );
+
+      expect(result).toMatchObject({ ok: true, kind: 'success' });
+      if (!result.ok) throw new Error(result.message);
+      const suggestion = result.value as { title: string };
+      expect(suggestion.title.trim()).not.toBe('');
+      expect(suggestion.title.toLocaleLowerCase()).not.toBe('buy vegetables');
+      expect(getTodoDataset().TodoItem).toHaveLength(1);
+    },
+    120_000,
+  );
 
   it('discovers TodoItem ordering over HTTP and WebSocket before any data query', async () => {
     const http = createFetchRuntimeTransport({ endpoint: `${origin}/runtime` });
@@ -451,21 +528,28 @@ describe('Ontahi todo portability example', () => {
   });
 
   it('emits the TodoList creation Reaction after a generic remote mutation', async () => {
-    const notified = vi
-      .spyOn(todoNotifications, 'todoListCreated')
-      .mockImplementation(() => Effect.succeed(undefined));
+    const deliveries: EventDeliveryFor<typeof TodoListCreated>[] = [];
+    const subscription = TodoApplication.events.subscribe(TodoListCreated, delivery => {
+      deliveries.push(delivery);
+    });
     const remoteClient = createFetchGraphClient({
       runtimeTransport: { endpoint: `${origin}/runtime` },
     });
 
-    await remoteClient.graphExecutor.runEntityMutationCommand!(
-      mutateEntity(ClientTodoListSchema).create({ name: 'Reading queue', color: '#dcebdc' }),
-    );
+    try {
+      await remoteClient.graphExecutor.runEntityMutationCommand!(
+        mutateEntity(ClientTodoListSchema).create({ name: 'Reading queue', color: '#dcebdc' }),
+      );
+      await vi.waitFor(() => expect(deliveries).toHaveLength(1));
+    } finally {
+      subscription.cancel();
+    }
     const created = getTodoDataset().TodoList?.find(list => list.name === 'Reading queue');
     expect(created).toMatchObject({ name: 'Reading queue', color: '#dcebdc' });
-    expect(notified).toHaveBeenCalledWith({
-      listId: created?.id,
-      name: 'Reading queue',
+    expect(deliveries[0]?.occurrence).toMatchObject({
+      eventId: 'TodoListCreated',
+      eventVersion: 1,
+      payload: { listId: created?.id, name: 'Reading queue' },
     });
   });
 

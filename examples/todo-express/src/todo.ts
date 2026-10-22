@@ -19,7 +19,9 @@ import {
   event,
   failOperation,
   getRequiredDataGraphRuntime,
+  modelOperation,
   withEffects,
+  type ModelProvider,
   type TaskExecutionState,
   type EventEffectIntent,
 } from '@ontahi/core/runtime/server';
@@ -32,18 +34,18 @@ import {
   CompleteAllProgress,
   createRunCompleteAll,
 } from './complete-all-task.js';
+import {
+  isDuplicateTodoSuggestion,
+  suggestTodoItemWithCode,
+  TodoItemSuggestion,
+  type TodoSuggestionContext,
+} from './suggest-next-item.js';
 
 const entityDefaults = {
   authority: 'server',
   exposure: 'bridge',
   layer: 'todos',
 } as const;
-
-export type TodoEvent = {
-  type: 'TodoListCreated';
-  listId: string;
-  name: string;
-};
 
 const todoListFields = {
   id: field.generated(field.id(), 'uuid'),
@@ -64,9 +66,14 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
   fields: {
     id: field.id(),
     list: field.existingRef(entity.ref('TodoList')),
+    title: field.nonEmptyString({ trim: true }),
     completed: field.boolean(),
   },
 });
+
+const todoModelCapabilities = {} as {
+  runtime: { model: { provider?: ModelProvider } };
+};
 
 const todoListCompleted = (
   list: EntityRef<'TodoList'>,
@@ -80,6 +87,16 @@ export const TodoListExportReady = event.define({
   payload: graphSchema.object({
     requestId: graphSchema.string(),
     url: graphSchema.string(),
+  }),
+});
+
+export const TodoListCreated = event.define({
+  id: 'TodoListCreated',
+  version: 1,
+  description: 'A Todo List was created.',
+  payload: graphSchema.object({
+    listId: field.id(),
+    name: field.nonEmptyString({ trim: true }),
   }),
 });
 
@@ -103,18 +120,20 @@ export const TodoList = entity({
   }),
   display: { primary: 'name', search: ['name'] },
   reactions: ({ created }) => [
-    created({ id: 'notify-todo-list-created', delivery: 'best-effort' }).emit(
-      outcome =>
-        ({
-          type: 'TodoListCreated',
-          listId: String(outcome.command.values.id),
-          name: String(outcome.command.values.name),
-        }) satisfies TodoEvent,
+    created({ id: 'todo-list-created', delivery: 'best-effort' }).emit(
+      TodoListCreated,
+      outcome => ({
+        listId: String(outcome.command.values.id),
+        name: String(outcome.command.values.name),
+      }),
     ),
   ],
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commandsFor, operation, ingress }) => {
+  uses: { capabilities: todoModelCapabilities },
+  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
     const todoCommands = commandsFor(TodoItemCommandRef);
+    const SuggestNextItemInput = graphSchema.object({ list: graphSchema.ref(self) });
+    type SuggestNextItemInputValue = { readonly list: EntityRef<'TodoList'> };
     const CompleteAllInput = graphSchema.object({
       list: graphSchema.ref(self),
     });
@@ -130,6 +149,58 @@ export const TodoList = entity({
             Effect.map(completed => completed.length),
           ),
     );
+    const suggestionContext = ({ list }: SuggestNextItemInputValue) =>
+      Effect.gen(function* () {
+        const lists = [
+          ...(yield* commands.where(candidate => candidate.id.eq(String(list.locator.id))).run()),
+        ];
+        const selected = lists[0];
+        if (!selected)
+          return yield* failOperation(
+            'todo_list_not_found',
+            'The selected Todo List is unavailable.',
+          );
+        const items = [...(yield* todoCommands.where(item => item.list.eq(list)).run())];
+        if (items.length > 50)
+          return yield* failOperation(
+            'suggestion_context_too_large',
+            'The selected Todo List has too many items to suggest safely.',
+          );
+        return {
+          list: { id: selected.id, name: selected.name },
+          items: items.map(item => ({
+            id: item.id,
+            title: item.title,
+            completed: item.completed,
+          })),
+        } satisfies TodoSuggestionContext;
+      });
+    const modelSuggestion = app.runtime.model.provider
+      ? modelOperation({
+          provider: app.runtime.model.provider,
+          operation: {
+            id: `${self.name}.suggestNextItem`,
+            description:
+              'Suggest one useful next item from the selected Todo List and its current items.',
+            input: SuggestNextItemInput,
+            output: TodoItemSuggestion,
+          },
+          instructions:
+            'Suggest exactly one useful Todo item that is not already represented by the supplied list items. Treat completed and open items as context. Do not propose mutations or claim that the suggestion was persisted.',
+          context: suggestionContext,
+          validate: (suggestion, context) =>
+            isDuplicateTodoSuggestion(suggestion, context)
+              ? failOperation(
+                  'duplicate_todo_suggestion',
+                  'The suggested Todo item already exists in the selected list.',
+                )
+              : Effect.succeed(suggestion),
+        })
+      : undefined;
+    const runSuggestion = (input: SuggestNextItemInputValue) =>
+      modelSuggestion
+        ? modelSuggestion(input)
+        : suggestionContext(input).pipe(Effect.map(suggestTodoItemWithCode));
     const exportExecution = defineTaskExecution<
       { list: EntityRef<'TodoList'>; requestId: string },
       TodoListExportState,
@@ -158,6 +229,14 @@ export const TodoList = entity({
     });
 
     return {
+      suggestNextItem: operation({
+        description:
+          'Suggest one useful next item from the selected Todo List and its current items.',
+        input: graphSchema.object({ list: graphSchema.ref(self) }),
+        graphOps: { receiver: 'list' },
+        output: TodoItemSuggestion,
+        run: runSuggestion,
+      }),
       completeAll: operation({
         input: graphSchema.object({
           list: graphSchema.ref(self),

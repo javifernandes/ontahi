@@ -32,6 +32,20 @@ answer questions such as:
 combines usage evidence, policy scopes, admission, enforcement, and operational visibility while
 keeping each concern independently replaceable.
 
+## Generalization Pressure: Governed Services
+
+A model provider is one instance of a broader runtime concern: an external or scarce service with
+latency, availability, concurrency, quota, rate, and monetary constraints. Paid APIs, search
+providers, geocoders, storage services, and partner systems may need the same admission,
+attribution, measurement, cancellation, and visibility vocabulary even when no model is involved.
+
+Keep that generalization visible, but do not begin this spike by inventing a universal service
+abstraction. First derive the smallest ports from two existing model consumers. Then compare those
+ports with Ontahi concerns, rate limiting, telemetry, runtime capabilities, and at least one real
+non-model service. Promote only the genuinely shared lifecycle and resource-policy concepts;
+provider-specific tokens, prompts, structured generation, and model identifiers remain model
+adapter evidence.
+
 ## Relationship To Authority
 
 Authorization and resource governance form a sequence but remain different decisions:
@@ -86,6 +100,8 @@ policy; they may consume usage evidence later but do not define this governance 
    instead of creating a model-only control plane?
 9. Does authority select a named resource policy, derive an immutable execution envelope, or both,
    and which parts may be disclosed through reflection?
+10. Which resulting ports describe governed services generally, and which remain irreducibly
+    specific to model generation?
 
 ## Proposed Experiment
 

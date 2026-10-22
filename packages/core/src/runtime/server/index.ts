@@ -452,6 +452,16 @@ export {
   type ModelOperationExposure,
 } from './model/interpretation.js';
 export {
+  createModelOperationExecutor,
+  modelOperation,
+  type CreateModelOperationExecutorOptions,
+  type ModelOperationContract,
+  type ModelOperationExecutionFailure,
+  type ModelOperationExecutionRequest,
+  type ModelOperationExecutor,
+  type ModelOperationOptions,
+} from './model/operation-executor.js';
+export {
   createModelCommandRuntime,
   type CreateModelCommandRuntimeOptions,
   type ModelCommandCanonicalRequest,
