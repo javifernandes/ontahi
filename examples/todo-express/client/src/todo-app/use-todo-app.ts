@@ -92,9 +92,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [actionError, setActionError] = useState<string>();
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [creatingTodoFor, setCreatingTodoFor] = useState<string>();
-  const [suggestingTodoFor, setSuggestingTodoFor] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const [suggestingTodoFor, setSuggestingTodoFor] = useState<ReadonlySet<string>>(() => new Set());
   const [renamingListId, setRenamingListId] = useState<string>();
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();

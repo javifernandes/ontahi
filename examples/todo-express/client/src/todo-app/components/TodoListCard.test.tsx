@@ -198,9 +198,7 @@ describe('TodoListCard item reordering', () => {
         resolveSuggestion = resolve;
       }),
     );
-    act(() =>
-      root.render(<TodoListCard {...createProps(vi.fn(), undefined, { suggestTodo })} />),
-    );
+    act(() => root.render(<TodoListCard {...createProps(vi.fn(), undefined, { suggestTodo })} />));
     const input = container.querySelector<HTMLInputElement>(
       'input[aria-label="Add a todo to Inbox"]',
     )!;
