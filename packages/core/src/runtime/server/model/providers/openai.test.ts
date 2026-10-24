@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { GraphJsonSchema } from '../../../../data-graph/index.js';
+
 import { createOpenAIModelProvider } from './openai.js';
 
 const request = () => ({
@@ -10,12 +12,12 @@ const request = () => ({
     type: 'object',
     additionalProperties: false,
     required: ['title'],
-    properties: { title: { type: 'string' } },
+    properties: { title: { type: 'string' }, reason: { type: 'string' } },
   },
   signal: new AbortController().signal,
 });
 
-const completed = (text = '{"title":"Prepare dinner"}') =>
+const completed = (text = '{"title":"Prepare dinner","reason":null}') =>
   Response.json({
     status: 'completed',
     output: [{ type: 'message', content: [{ type: 'output_text', text }] }],
@@ -50,7 +52,15 @@ describe('OpenAI model provider', () => {
         format: {
           type: 'json_schema',
           name: 'ontahi_model_interpretation',
-          schema: request().outputSchema,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['title', 'reason'],
+            properties: {
+              title: { type: 'string' },
+              reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+            },
+          },
         },
       },
     });
@@ -70,6 +80,37 @@ describe('OpenAI model provider', () => {
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
       max_output_tokens: 512,
     });
+  });
+
+  it('uses JSON Object guidance when the canonical schema is a root union', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(completed());
+    const outputSchema: GraphJsonSchema = {
+      anyOf: [
+        {
+          type: 'object' as const,
+          additionalProperties: false,
+          required: ['status'],
+          properties: { status: { const: 'help' } },
+        },
+        {
+          type: 'object' as const,
+          additionalProperties: false,
+          required: ['status', 'reason'],
+          properties: { status: { const: 'unresolved' }, reason: { type: 'string' as const } },
+        },
+      ],
+    };
+    await createOpenAIModelProvider({
+      model: 'gpt-test',
+      apiKey: 'secret',
+      fetchRequest,
+    }).generate({ ...request(), outputSchema });
+
+    const body = JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body));
+    expect(body.text.format).toEqual({ type: 'json_object' });
+    expect(body.instructions).toContain('Return a json object matching this schema:');
+    expect(body.instructions).toContain('unresolved');
+    expect(body.input[1].content).toContain('Return a json object.');
   });
 
   it('rejects missing credentials before making a request', async () => {
