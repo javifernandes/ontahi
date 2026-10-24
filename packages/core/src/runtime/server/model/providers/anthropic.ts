@@ -81,6 +81,8 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
     'x-ontahi-derived': _derived,
     'x-ontahi-generated-by': _generatedBy,
     'x-ontahi-string-exclusion': _stringExclusion,
+    'x-ontahi-selection': _selection,
+    'x-ontahi-entity-ref': _entityRef,
     enum: schemaEnum,
     properties,
     items,
@@ -94,10 +96,12 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   );
   const normalizedAnyOf =
     anyOf ?? (schemaEnum && !scalarEnum ? schemaEnum.map(schemaForLiteral) : undefined);
-  let projectedAdditionalProperties: boolean | undefined;
-  if (supported.type === 'object' || properties) projectedAdditionalProperties = false;
+  let projectedAdditionalProperties: GraphJsonSchema['additionalProperties'];
+  if (typeof additionalProperties === 'object')
+    projectedAdditionalProperties = toAnthropicJsonSchema(additionalProperties);
   else if (typeof additionalProperties === 'boolean')
     projectedAdditionalProperties = additionalProperties;
+  else if (supported.type === 'object' || properties) projectedAdditionalProperties = false;
   return {
     ...supported,
     ...(scalarEnum ? { enum: schemaEnum } : {}),
@@ -129,6 +133,18 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   };
 };
 
+const supportsAnthropicStructuredOutput = (schema: GraphJsonSchema): boolean => {
+  if ((schema.type === 'object' || schema.properties) && schema.additionalProperties !== false)
+    return false;
+  return [
+    ...Object.values(schema.properties ?? {}),
+    ...(schema.items ? [schema.items] : []),
+    ...(schema.anyOf ?? []),
+    ...Object.values(schema.$defs ?? {}),
+    ...(typeof schema.additionalProperties === 'object' ? [schema.additionalProperties] : []),
+  ].every(supportsAnthropicStructuredOutput);
+};
+
 /** Model provider backed by Anthropic's Messages API structured outputs. */
 export const createAnthropicModelProvider = ({
   model,
@@ -151,7 +167,10 @@ export const createAnthropicModelProvider = ({
       request: async providerSignal => {
         const providerSchema = toAnthropicJsonSchema(outputSchema);
         const complexity = schemaComplexity(providerSchema);
-        const useStructuredOutput = complexity.unions <= 16 && complexity.optional <= 24;
+        const useStructuredOutput =
+          complexity.unions <= 16 &&
+          complexity.optional <= 24 &&
+          supportsAnthropicStructuredOutput(providerSchema);
         const response = await fetchRequest(
           new URL('messages', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
           {

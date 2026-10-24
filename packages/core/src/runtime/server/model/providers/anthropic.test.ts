@@ -130,7 +130,6 @@ describe('Anthropic model provider', () => {
       properties: {
         states: { type: 'string' as const, enum: ['open', 'done', null] },
         tuples: { enum: [[1], [2, 3], []] },
-        extensible: { type: 'object' as const, additionalProperties: true },
       },
       $defs: {
         state: { type: 'string' as const, enum: ['open', 'done'] },
@@ -158,10 +157,36 @@ describe('Anthropic model provider', () => {
             { type: 'array' },
           ],
         },
-        extensible: { type: 'object', additionalProperties: false },
       },
       $defs: { state: { type: 'string', enum: ['open', 'done'] } },
     });
+  });
+
+  it('uses prompt guidance for schema-valued maps and strips Ontahi metadata', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(completed());
+    const outputSchema = {
+      type: 'object' as const,
+      additionalProperties: {
+        type: 'object' as const,
+        additionalProperties: false,
+        required: ['id'],
+        properties: { id: { type: 'string' as const } },
+        'x-ontahi-entity-ref': { entityName: 'TodoList' },
+        'x-ontahi-selection': { entityName: 'TodoList', cardinality: 'many' as const },
+      },
+    };
+
+    await createAnthropicModelProvider({
+      model: 'claude-test',
+      apiKey: 'secret',
+      fetchRequest,
+    }).generate({ ...request(), outputSchema });
+
+    const body = JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body));
+    expect(body).not.toHaveProperty('output_config');
+    expect(body.system).toContain('"additionalProperties":{"type":"object"');
+    expect(body.system).not.toContain('x-ontahi-entity-ref');
+    expect(body.system).not.toContain('x-ontahi-selection');
   });
 
   it('rejects missing credentials before making a request', async () => {
