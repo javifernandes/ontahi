@@ -541,9 +541,7 @@ describe('Devtools activity model', () => {
   it('summarizes model resource usage for the Activity list and detail header', () => {
     expect(
       modelResourceUsageSummary(
-        modelUsageActivity([
-          { provider: 'openai', model: 'gpt-6-luna', totalTokens: 138 },
-        ]),
+        modelUsageActivity([{ provider: 'openai', model: 'gpt-6-luna', totalTokens: 138 }]),
       ),
     ).toBe('openai · gpt-6-luna · 138 tokens');
 
