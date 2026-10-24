@@ -29,15 +29,22 @@ const request = {
 
 describe('model-backed Operation executor', () => {
   it('builds an ordinary Operation run function from declarative context and instructions', async () => {
-    const generate = vi
-      .fn<ModelProvider['generate']>()
-      .mockResolvedValue({ title: 'Set the table' });
+    const generate = vi.fn<ModelProvider['generate']>(async request => {
+      request.reportUsage?.({
+        provider: 'anthropic',
+        model: 'claude-test',
+        totalTokens: 42,
+      });
+      return { title: 'Set the table' };
+    });
+    const reportUsage = vi.fn();
     const run = modelOperation({
       provider: { generate },
       operation: request.operation,
       instructions: 'Suggest a missing step.',
       context: ({ goal }: InferGraphSchemaValue<typeof Input>) =>
         Effect.succeed({ currentGoal: goal }),
+      reportUsage,
     });
 
     await expect(Effect.runPromise(run(request.input))).resolves.toEqual({
@@ -46,6 +53,11 @@ describe('model-backed Operation executor', () => {
     expect(generate.mock.calls[0]![0]).toMatchObject({
       instructions: expect.stringContaining('Suggest a missing step.'),
       context: JSON.stringify({ currentGoal: 'Prepare dinner' }),
+    });
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'anthropic',
+      model: 'claude-test',
+      totalTokens: 42,
     });
   });
 

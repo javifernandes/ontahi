@@ -5,6 +5,7 @@ import type { JsonValue } from '../../../../value/json.js';
 import type {
   ModelCommandRequest,
   ModelCommandResult,
+  ModelResourceUsage,
   TaskRunIdentity,
   TaskRunRef,
   TaskSnapshot,
@@ -40,7 +41,7 @@ type ModelCommandTaskResult = ModelCommandResult<
   ModelGraphReadResult
 >;
 
-type ModelCommandTaskState =
+type ModelCommandTaskState = (
   | { readonly step: 'interpret' }
   | {
       readonly step: 'choose';
@@ -68,7 +69,8 @@ type ModelCommandTaskState =
       readonly step: 'execute';
       readonly request: ModelCommandCanonicalRequest;
       readonly validation?: 'choice-option';
-    };
+    }
+) & { readonly resourceUsage?: readonly ModelResourceUsage[] };
 
 export type ModelCommandApprovalPresentation = {
   prompt: string;
@@ -143,7 +145,10 @@ export const createModelCommandTask = ({
     prepared: Awaited<ReturnType<PreparedModelCommandRuntime['prepare']>>,
     input: ModelCommandRequest,
     validation?: 'choice-option',
+    inheritedUsage?: readonly ModelResourceUsage[],
   ) => {
+    const resourceUsage = [...(inheritedUsage ?? []), ...(prepared.resourceUsage ?? [])];
+    const hasResourceUsage = resourceUsage.length > 0;
     if (prepared.status === 'choice')
       return {
         kind: 'continue' as const,
@@ -151,19 +156,32 @@ export const createModelCommandTask = ({
           step: 'choose' as const,
           prompt: prepared.prompt,
           options: prepared.options,
+          ...(hasResourceUsage ? { resourceUsage } : {}),
         },
       };
     if (prepared.status === 'application-choice')
       return {
         kind: 'continue' as const,
-        state: { step: 'choose-application' as const, choice: prepared.choice },
+        state: {
+          step: 'choose-application' as const,
+          choice: prepared.choice,
+          ...(hasResourceUsage ? { resourceUsage } : {}),
+        },
       };
     if (prepared.status === 'application-input')
       return {
         kind: 'continue' as const,
-        state: { step: 'input-application' as const, input: prepared.input },
+        state: {
+          step: 'input-application' as const,
+          input: prepared.input,
+          ...(hasResourceUsage ? { resourceUsage } : {}),
+        },
       };
-    if (prepared.status !== 'proposed') return { kind: 'complete' as const, result: prepared };
+    if (prepared.status !== 'proposed')
+      return {
+        kind: 'complete' as const,
+        result: hasResourceUsage ? { ...prepared, resourceUsage } : prepared,
+      };
     return {
       kind: 'continue' as const,
       state:
@@ -172,11 +190,13 @@ export const createModelCommandTask = ({
               step: 'review' as const,
               request: prepared.request,
               ...(validation ? { validation } : {}),
+              ...(hasResourceUsage ? { resourceUsage } : {}),
             }
           : {
               step: 'execute' as const,
               request: prepared.request,
               ...(validation ? { validation } : {}),
+              ...(hasResourceUsage ? { resourceUsage } : {}),
             },
     };
   };
@@ -225,11 +245,13 @@ export const createModelCommandTask = ({
                     step: 'review' as const,
                     request: selected.request,
                     validation: 'choice-option' as const,
+                    ...(state.resourceUsage ? { resourceUsage: state.resourceUsage } : {}),
                   }
                 : {
                     step: 'execute' as const,
                     request: selected.request,
                     validation: 'choice-option' as const,
+                    ...(state.resourceUsage ? { resourceUsage: state.resourceUsage } : {}),
                   },
           });
         },
@@ -261,7 +283,7 @@ export const createModelCommandTask = ({
               response.optionId,
               new AbortController().signal,
             );
-            return routePreparation(prepared, input, 'choice-option');
+            return routePreparation(prepared, input, 'choice-option', state.resourceUsage);
           });
         },
       }),
@@ -288,7 +310,7 @@ export const createModelCommandTask = ({
               response.value,
               new AbortController().signal,
             );
-            return routePreparation(prepared, input, 'choice-option');
+            return routePreparation(prepared, input, 'choice-option', state.resourceUsage);
           });
         },
       }),
@@ -304,6 +326,7 @@ export const createModelCommandTask = ({
                   step: 'execute' as const,
                   request: state.request,
                   ...(state.validation ? { validation: state.validation } : {}),
+                  ...(state.resourceUsage ? { resourceUsage: state.resourceUsage } : {}),
                 },
               });
             return Effect.succeed({
@@ -329,11 +352,16 @@ export const createModelCommandTask = ({
                     step: 'execute' as const,
                     request: state.request,
                     ...(state.validation ? { validation: state.validation } : {}),
+                    ...(state.resourceUsage ? { resourceUsage: state.resourceUsage } : {}),
                   },
                 }
               : {
                   kind: 'complete' as const,
-                  result: { status: 'unresolved' as const, message: rejectedMessage(input) },
+                  result: {
+                    status: 'unresolved' as const,
+                    message: rejectedMessage(input),
+                    ...(state.resourceUsage ? { resourceUsage: state.resourceUsage } : {}),
+                  },
                 },
           );
         },
@@ -341,15 +369,20 @@ export const createModelCommandTask = ({
       execute: defineTaskExecutionStep({
         run: ({ input, state, context }) => {
           if (state.step !== 'execute') return Effect.dieMessage('Invalid model command state.');
-          return modelEffect(context.trigger, async () => ({
-            kind: 'complete' as const,
-            result: await runtime.execute(
+          return modelEffect(context.trigger, async () => {
+            const result = await runtime.execute(
               input,
               state.request,
               new AbortController().signal,
               state.validation ? { kind: state.validation } : undefined,
-            ),
-          }));
+            );
+            return {
+              kind: 'complete' as const,
+              result: state.resourceUsage
+                ? { ...result, resourceUsage: state.resourceUsage }
+                : result,
+            };
+          });
         },
       }),
     },

@@ -127,6 +127,16 @@ describe('SemanticPayload', () => {
               operationId: 'TodoList.rename',
               input: { name: 'Today' },
             },
+            resourceUsage: [
+              {
+                provider: 'openai',
+                model: 'gpt-test',
+                inputTokens: 120,
+                outputTokens: 18,
+                totalTokens: 138,
+                durationMs: 250,
+              },
+            ],
           },
         }}
       />,
@@ -135,6 +145,9 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('executed')).toBeTruthy();
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
+    expect(screen.getByText('Resource usage')).toBeTruthy();
+    expect(screen.getByText('openai · gpt-test')).toBeTruthy();
+    expect(screen.getByText('138')).toBeTruthy();
 
     ui.rerender(
       <SemanticPayload

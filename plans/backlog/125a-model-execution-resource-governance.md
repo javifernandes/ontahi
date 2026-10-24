@@ -120,6 +120,20 @@ Use the first model-backed Operation plus the existing Intent Resolution path:
 6. compare an Intent Resolution attempt and a model-backed Operation attempt through the same
    metering port while preserving their different semantic identities.
 
+## First Evidence Slice
+
+The provider boundary now supplies a concrete observational starting point before governance
+policy is designed. Ollama, DeepSeek, Anthropic, and OpenAI normalize one provider response into a
+provider/model identity plus available input, output, total, cached-input, reasoning-token, and
+duration measurements. Intent Resolution preserves every reported attempt on the canonical Model
+Command result and Devtools renders the evidence without exposing prompts, output, credentials, or
+graph context. Model-backed Operations receive the same record through an optional reporting port.
+
+This slice deliberately does not calculate monetary cost or persist accounting totals. Missing
+provider fields remain absent, retries remain separate records, and provider pricing is not part of
+the protocol. The next experiment must add semantic activity identity and explicit evidence quality
+before using these observations for budgets or enforcement.
+
 ## Non-Goals
 
 1. Do not build customer billing, invoicing, subscription plans, or payment integration.

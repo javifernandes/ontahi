@@ -3,6 +3,7 @@ import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
 import { runModelProviderRequest } from './request.js';
+import { cloudModelUsage } from './usage.js';
 
 export type AnthropicModelProviderOptions = {
   model: string;
@@ -154,7 +155,7 @@ export const createAnthropicModelProvider = ({
   maxOutputTokens = 2_048,
   fetchRequest = globalThis.fetch,
 }: AnthropicModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
+  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -165,6 +166,7 @@ export const createAnthropicModelProvider = ({
       timeoutMs,
       unavailableMessage: 'Cannot reach Anthropic. Check the network and provider configuration.',
       request: async providerSignal => {
+        const startedAt = Date.now();
         const providerSchema = toAnthropicJsonSchema(outputSchema);
         const complexity = schemaComplexity(providerSchema);
         const useStructuredOutput =
@@ -209,6 +211,15 @@ export const createAnthropicModelProvider = ({
             `Anthropic returned HTTP ${response.status}. Check the API key and configured model.`,
           );
         const envelope = await response.json();
+        if (isRecord(envelope))
+          reportUsage?.(
+            cloudModelUsage({
+              provider: 'anthropic',
+              model,
+              usage: envelope.usage,
+              durationMs: Date.now() - startedAt,
+            }),
+          );
         if (
           !isRecord(envelope) ||
           envelope.type !== 'message' ||

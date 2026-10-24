@@ -7,6 +7,7 @@ import {
   type GraphSchemaValue,
 } from '../../../data-graph/index.js';
 import type { JsonValue } from '../../../value/json.js';
+import type { ModelResourceUsage } from '../../contracts.js';
 import { createOperationFailure } from '../failures.js';
 import type { OperationFailure } from '../operation/types.js';
 
@@ -40,6 +41,7 @@ export type ModelOperationExecutor = {
 export type CreateModelOperationExecutorOptions = {
   readonly provider: ModelProvider;
   readonly instructions?: string;
+  readonly reportUsage?: (usage: ModelResourceUsage) => void;
 };
 
 export type ModelOperationOptions<
@@ -53,6 +55,7 @@ export type ModelOperationOptions<
   readonly provider: ModelProvider;
   readonly operation: ModelOperationContract<TOutput>;
   readonly instructions?: string;
+  readonly reportUsage?: (usage: ModelResourceUsage) => void;
   readonly context: (input: TInput) => Effect.Effect<TContext, TContextFailure>;
   readonly validate?: (
     output: TOutputValue,
@@ -99,6 +102,7 @@ const contractInstructions = <TOutput extends GraphSchemaDefinition>(
 export const createModelOperationExecutor = ({
   provider,
   instructions,
+  reportUsage,
 }: CreateModelOperationExecutorOptions): ModelOperationExecutor => {
   const execute = (
     request: ModelOperationExecutionRequest<unknown, GraphSchemaDefinition>,
@@ -111,6 +115,7 @@ export const createModelOperationExecutor = ({
           prompt: JSON.stringify(request.input),
           outputSchema: toGraphJsonSchema(request.operation.output),
           signal,
+          reportUsage,
         }),
       catch: failureFromProvider,
     }).pipe(
@@ -143,6 +148,7 @@ export const modelOperation = <
   provider,
   operation,
   instructions,
+  reportUsage,
   context,
   validate,
 }: ModelOperationOptions<
@@ -158,7 +164,7 @@ export const modelOperation = <
   TOutputValue,
   ModelOperationExecutionFailure | TContextFailure | TValidationFailure
 >) => {
-  const executor = createModelOperationExecutor({ provider });
+  const executor = createModelOperationExecutor({ provider, reportUsage });
   const executeRequest = executor.execute as (
     request: ModelOperationExecutionRequest<TInput, GraphSchemaDefinition>,
   ) => Effect.Effect<unknown, ModelOperationExecutionFailure>;

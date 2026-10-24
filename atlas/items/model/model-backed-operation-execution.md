@@ -87,9 +87,14 @@ contract: local Ollama, DeepSeek's Responses-compatible API, Anthropic Messages,
 Responses. Anthropic and OpenAI receive the same reflected JSON Schema through their native
 structured-output fields, while Core still performs canonical Graph Schema validation. Provider
 URLs, model identifiers, credentials, HTTP envelopes, and output extraction remain composition and
-adapter concerns rather than reflected Operation semantics. This variation supplies concrete usage
-and request-identity evidence for the Resource Governance spike without yet promoting a normalized
-metering contract.
+adapter concerns rather than reflected Operation semantics. This variation supplied the first
+Resource Governance evidence. The four adapters now report a small normalized resource-usage
+record containing provider/model identity and whichever token, cache, reasoning, and duration
+measurements the response makes available. Intent Resolution keeps multiple calls as distinct usage
+records on its canonical result and Devtools presents them beside the semantic outcome;
+model-backed Operations expose the same record through an optional reporting port. Monetary cost,
+durable accounting, evidence quality, attribution, budgets, and enforcement remain outside this
+observational contract.
 
 ## First Bounded Proof
 

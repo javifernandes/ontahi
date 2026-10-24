@@ -22,6 +22,12 @@ const completed = (text = '{"title":"Prepare dinner"}') =>
   Response.json({
     type: 'message',
     stop_reason: 'end_turn',
+    usage: {
+      input_tokens: 96,
+      output_tokens: 14,
+      cache_read_input_tokens: 32,
+      cache_creation_input_tokens: 8,
+    },
     content: [{ type: 'text', text }],
   });
 
@@ -33,8 +39,21 @@ describe('Anthropic model provider', () => {
       apiKey: 'secret',
       fetchRequest,
     });
+    const reportUsage = vi.fn();
 
-    await expect(provider.generate(request())).resolves.toEqual({ title: 'Prepare dinner' });
+    await expect(provider.generate({ ...request(), reportUsage })).resolves.toEqual({
+      title: 'Prepare dinner',
+    });
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'anthropic',
+      model: 'claude-test',
+      inputTokens: 136,
+      outputTokens: 14,
+      totalTokens: 150,
+      cachedInputTokens: 32,
+      cacheWriteInputTokens: 8,
+      durationMs: expect.any(Number),
+    });
     const [url, init] = fetchRequest.mock.calls[0]!;
     expect(String(url)).toBe('https://api.anthropic.com/v1/messages');
     expect(init?.headers).toEqual({

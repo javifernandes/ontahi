@@ -1,6 +1,8 @@
 import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
+import { ollamaModelUsage } from './usage.js';
+
 export type OllamaModelProviderOptions = {
   model: string;
   baseUrl?: string;
@@ -19,12 +21,13 @@ export const createOllamaModelProvider = ({
   contextWindowTokens = 32_768,
   fetchRequest = globalThis.fetch,
 }: OllamaModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
+  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
+    const startedAt = Date.now();
     try {
       const response = await fetchRequest(
         new URL('api/chat', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
@@ -56,6 +59,8 @@ export const createOllamaModelProvider = ({
           `Ollama returned HTTP ${response.status}. Check the configured model.`,
         );
       const envelope = await response.json();
+      if (isRecord(envelope))
+        reportUsage?.(ollamaModelUsage({ model, envelope, durationMs: Date.now() - startedAt }));
       if (
         !isRecord(envelope) ||
         envelope.done !== true ||
