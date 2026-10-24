@@ -1,5 +1,13 @@
 # @ontahi/core
 
+## 1.0.0-alpha.14
+
+### Minor Changes
+
+- d1fab2d: Add `defineGraphReadPolicy` for typed select, filter, and order capability allowlists that lower to
+  the canonical Graph Read policy shape.
+- fa7968e: Add a provider-neutral model-backed Domain Operation executor with typed output validation.
+
 ## 1.0.0-alpha.13
 
 ### Minor Changes

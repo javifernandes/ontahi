@@ -1,5 +1,16 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.14
+
+### Patch Changes
+
+- Updated dependencies [d1fab2d]
+- Updated dependencies [fa7968e]
+  - @ontahi/core@1.0.0-alpha.14
+  - @ontahi/language@1.0.0-alpha.14
+  - @ontahi/react@1.0.0-alpha.14
+  - @ontahi/language-codemirror@1.0.0-alpha.14
+
 ## 1.0.0-alpha.13
 
 ### Minor Changes
