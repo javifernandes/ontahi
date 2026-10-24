@@ -345,6 +345,11 @@ const createTodo = useOperation(TodoItem.domain.createItem);
 await createTodo.executeAsync({ id, list, title });
 ```
 
+`onSuccess` observes the committed invocation before semantic query invalidation finishes. Use it
+for immediate UI transitions such as closing a confirmation dialog or navigating away. The Promise
+returned by `executeAsync()` settles after affected reads have been invalidated, so await it when
+subsequent code requires refreshed query state.
+
 The declaration form is reusable: each execution supplies its input. A component may instead bind
 its current semantic input into a first-class invocation:
 

@@ -14,6 +14,33 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+## Conventional Data Graph storage
+
+`createSupabaseDataGraphStorage` assembles the query/command runtime, reflected Entity readers and
+conventional mappings around one host-created client:
+
+```ts
+import { ontahi } from '@ontahi/core/runtime/server';
+import { createSupabaseDataGraphStorage } from '@ontahi/supabase/data-graph';
+
+const storage = createSupabaseDataGraphStorage({ client: supabase });
+
+export const app = ontahi({
+  entities: [Experiment, Participation, AnalysisRun],
+  storage,
+  operations,
+});
+```
+
+The application bind supplies the complete Entity registry and applies conventional mappings once.
+Pass `naming` or `overrides` when physical names differ, and `createError` when the host uses a
+custom error type. Graph reads, commands and reflected Console reads reuse the same client.
+
+The factory never reads environment variables or creates a Supabase client. The host still owns
+credentials, service-role versus user-session choice, RLS configuration and client lifetime. Use
+the lower-level `createSupabaseDataGraphRuntime` when read and command clients require different
+acquisition or authority-dependent behavior.
+
 The package does not currently provide an Event Runtime. Supabase Task Storage can persist and
 atomically claim an Event-wait checkpoint, but occurrence retention and delivery must come from a
 separately configured durable Event Runtime. A future `@ontahi/supabase/events` implementation must

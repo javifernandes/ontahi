@@ -24,6 +24,7 @@ export * from './many-to-many.js';
 export * from './many-to-many-rpc-sql.js';
 export * from './relationship-command.js';
 export * from './relationship-rpc-sql.js';
+export * from './storage.js';
 
 export type SupabaseFieldPredicate =
   | { operator: 'eq'; fieldName: string; value: unknown }

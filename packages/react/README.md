@@ -145,6 +145,20 @@ await completeVisible.executeAsync();
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
 
+`onSuccess` runs as soon as the invocation succeeds, before semantic query invalidation finishes.
+Use it for UI reactions that should follow the committed result immediately, such as closing a
+confirmation dialog or navigating away:
+
+```tsx
+const removeTodo = useOperation(TodoItem.domain.remove, {
+  onSuccess: () => navigate('/todos'),
+});
+```
+
+By contrast, `executeAsync()` settles after affected reads have been invalidated. Await it when the
+next statement requires refreshed query state. An invalidation delay therefore does not postpone
+`onSuccess`, but it can keep the returned Promise pending.
+
 `OntahiGraphProvider` consumes committed semantic metadata from every execution exchange on its
 Runtime Transport. Every cached `useGraphQuery` retains its canonical `GraphReadRequest` in React
 Query metadata; after commit, Ontahí compares those Reads with the bounded

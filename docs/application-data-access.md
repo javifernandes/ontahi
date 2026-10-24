@@ -69,35 +69,40 @@ the permitted modes, cardinalities, limit, fields, operators, ordering, relation
 scope:
 
 ```ts
-import { selection, type GraphReadPolicy } from '@ontahi/core/data-graph';
+import { defineGraphReadPolicy, selection } from '@ontahi/core/data-graph';
 import type { Principal } from '@ontahi/core/runtime/server';
 
 type TodoReadAuthority = {
   principal: Principal;
 };
 
-export const TodoItemReadPolicy = {
+export const TodoItemReadPolicy = defineGraphReadPolicy<typeof TodoItem, TodoReadAuthority>({
   entity: TodoItem,
   modes: ['get', 'run', 'count'],
   cardinalities: ['one', 'many'],
   maxLimit: 200,
-  fields: {
-    id: { select: true, filter: ['eq', 'in'] },
-    ownerId: { filter: ['eq'] },
-    title: { select: true, filter: ['eq'], order: true },
-    completed: { select: true, filter: ['eq'] },
+  allow: {
+    select: ['id', 'title', 'completed'],
+    filter: {
+      id: ['eq', 'in'],
+      ownerId: ['eq'],
+      title: ['eq'],
+      completed: ['eq'],
+    },
+    order: ['title'],
   },
   scope: ({ authority, entity }) =>
     selection(entity, todo => todo.ownerId.eq(authority.principal.subject)),
-} satisfies GraphReadPolicy<typeof TodoItem, TodoReadAuthority>;
+});
 ```
 
 The server intersects the caller's Selection with the policy scope. A client cannot supply or
 weaken that scope. Use `scope: 'all'` only when every row is deliberately public. Missing policies,
 fields, operators, relation nodes, or scope are never interpreted as implicit access.
 
-The policy declaration is a public alpha surface and will gain more authoring ergonomics. Its
-default-deny meaning and server-side enforcement are architectural contracts.
+`defineGraphReadPolicy` only lowers the three typed allowlists to the canonical `fields` policy
+shape. It does not infer authorization from application Queries. The default-deny meaning and
+server-side enforcement remain architectural contracts.
 
 ## Mount Express
 

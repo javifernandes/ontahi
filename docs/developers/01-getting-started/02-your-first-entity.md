@@ -3,7 +3,7 @@
 An \concept{Entity} declares a named kind of thing.
 
 ```ts
-import { field as f } from '@ontahi/core/data-graph';
+import { defineGraphReadPolicy, field as f } from '@ontahi/core/data-graph';
 import { entity } from '@ontahi/core/entity';
 
 export const TodoList = entity({
@@ -47,17 +47,18 @@ Registering an Entity does not grant remote access. A server-backed browser Quer
 default-deny read policy:
 
 ```ts
-const TodoListReadPolicy = {
+const TodoListReadPolicy = defineGraphReadPolicy({
   entity: TodoList,
   modes: ['get', 'run', 'count'],
   cardinalities: ['one', 'many'],
   maxLimit: 100,
-  fields: {
-    id: { select: true, filter: ['eq'] },
-    name: { select: true, order: true },
+  allow: {
+    select: ['id', 'name'],
+    filter: { id: ['eq'] },
+    order: ['name'],
   },
   scope: 'all',
-} satisfies GraphReadPolicy<typeof TodoList>;
+});
 ```
 
 `scope: 'all'` is deliberate public access. An authenticated application can instead derive a

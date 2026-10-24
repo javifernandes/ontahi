@@ -39,6 +39,7 @@ export * from './reaction.js';
 export * from './relationship-command.js';
 export * from './relationship-command-result.js';
 export * from './read-dispatcher.js';
+export * from './read-policy-authoring.js';
 export * from './read-protocol.js';
 export * from './reference-field.js';
 export * from './remote-runtime.js';
