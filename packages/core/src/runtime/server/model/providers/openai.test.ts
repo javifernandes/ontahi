@@ -20,6 +20,13 @@ const request = () => ({
 const completed = (text = '{"title":"Prepare dinner","reason":null}') =>
   Response.json({
     status: 'completed',
+    usage: {
+      input_tokens: 120,
+      output_tokens: 18,
+      total_tokens: 138,
+      input_tokens_details: { cached_tokens: 40 },
+      output_tokens_details: { reasoning_tokens: 6 },
+    },
     output: [{ type: 'message', content: [{ type: 'output_text', text }] }],
   });
 
@@ -31,8 +38,21 @@ describe('OpenAI model provider', () => {
       apiKey: 'secret',
       fetchRequest,
     });
+    const reportUsage = vi.fn();
 
-    await expect(provider.generate(request())).resolves.toEqual({ title: 'Prepare dinner' });
+    await expect(provider.generate({ ...request(), reportUsage })).resolves.toEqual({
+      title: 'Prepare dinner',
+    });
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'openai',
+      model: 'gpt-test',
+      inputTokens: 120,
+      outputTokens: 18,
+      totalTokens: 138,
+      cachedInputTokens: 40,
+      reasoningTokens: 6,
+      durationMs: expect.any(Number),
+    });
     const [url, init] = fetchRequest.mock.calls[0]!;
     expect(String(url)).toBe('https://api.openai.com/v1/responses');
     expect(init?.headers).toEqual({

@@ -15,13 +15,26 @@ describe('Ollama model provider', () => {
     const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
         done: true,
+        prompt_eval_count: 42,
+        prompt_eval_cached_count: 10,
+        eval_count: 9,
         message: { content: '{"status":"unresolved","reason":"Missing item"}' },
       }),
     );
     const provider = createOllamaModelProvider({ model: 'local-small', fetchRequest });
-    expect(await provider.generate(request())).toEqual({
+    const reportUsage = vi.fn();
+    expect(await provider.generate({ ...request(), reportUsage })).toEqual({
       status: 'unresolved',
       reason: 'Missing item',
+    });
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'ollama',
+      model: 'local-small',
+      inputTokens: 42,
+      outputTokens: 9,
+      totalTokens: 51,
+      cachedInputTokens: 10,
+      durationMs: expect.any(Number),
     });
     const [url, init] = fetchRequest.mock.calls[0]!;
     expect(String(url)).toBe('http://127.0.0.1:11434/api/chat');

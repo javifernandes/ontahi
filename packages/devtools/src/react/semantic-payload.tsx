@@ -263,6 +263,43 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
               />
             </div>
           )}
+          {!Array.isArray(body.result.resourceUsage)
+            ? null
+            : body.result.resourceUsage.map((usage, index) =>
+                !isRecord(usage) ? null : (
+                  <div key={index} style={styles.semanticCard}>
+                    <span style={styles.semanticLabel}>Resource usage</span>
+                    <span style={styles.semanticValue}>
+                      {String(usage.provider ?? 'model')} · {String(usage.model ?? 'unknown')}
+                    </span>
+                    {[
+                      ['Input', usage.inputTokens],
+                      ['Output', usage.outputTokens],
+                      ['Total', usage.totalTokens],
+                      ['Cached input', usage.cachedInputTokens],
+                      ['Cache write', usage.cacheWriteInputTokens],
+                      ['Reasoning', usage.reasoningTokens],
+                    ].map(([label, value]) =>
+                      value === undefined ? null : (
+                        <span key={String(label)} style={styles.semanticValue}>
+                          {String(label)} ·{' '}
+                          {typeof value === 'number' ? value.toLocaleString() : String(value)}{' '}
+                          tokens
+                        </span>
+                      ),
+                    )}
+                    {usage.durationMs === undefined ? null : (
+                      <span style={styles.semanticValue}>
+                        Duration ·{' '}
+                        {typeof usage.durationMs === 'number'
+                          ? usage.durationMs.toLocaleString()
+                          : String(usage.durationMs)}{' '}
+                        ms
+                      </span>
+                    )}
+                  </div>
+                ),
+              )}
         </div>
       </>
     );

@@ -3,6 +3,7 @@ import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
 import { runModelProviderRequest } from './request.js';
+import { cloudModelUsage } from './usage.js';
 
 export type OpenAIModelProviderOptions = {
   model: string;
@@ -107,7 +108,7 @@ export const createOpenAIModelProvider = ({
   maxOutputTokens = 2_048,
   fetchRequest = globalThis.fetch,
 }: OpenAIModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
+  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -118,6 +119,7 @@ export const createOpenAIModelProvider = ({
       timeoutMs,
       unavailableMessage: 'Cannot reach OpenAI. Check the network and provider configuration.',
       request: async providerSignal => {
+        const startedAt = performance.now();
         const providerSchema = toOpenAIJsonSchema(outputSchema);
         const useStructuredOutput = providerSchema.type === 'object' && !providerSchema.anyOf;
         const response = await fetchRequest(
@@ -161,6 +163,15 @@ export const createOpenAIModelProvider = ({
             `OpenAI returned HTTP ${response.status}. Check the API key and configured model.`,
           );
         const envelope = await response.json();
+        if (isRecord(envelope))
+          reportUsage?.(
+            cloudModelUsage({
+              provider: 'openai',
+              model,
+              usage: envelope.usage,
+              durationMs: performance.now() - startedAt,
+            }),
+          );
         if (!isRecord(envelope) || envelope.status !== 'completed')
           throw new ModelInterpretationError(
             'model_output_invalid',

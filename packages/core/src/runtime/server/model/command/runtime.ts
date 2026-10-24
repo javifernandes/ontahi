@@ -12,6 +12,7 @@ import { isRecord } from '../../../../value/object.js';
 import type {
   ModelCommandRequest,
   ModelCommandResult,
+  ModelResourceUsage,
   TaskInputValue,
 } from '../../../contracts.js';
 import type { OperationInvokeRequest } from '../../../operation-invocation.js';
@@ -72,7 +73,7 @@ export type ModelCommandCanonicalRequest =
   | GraphReadRequest
   | GraphCommandRequest
   | OperationInvokeRequest;
-export type ModelCommandPreparation =
+export type ModelCommandPreparation = (
   | ModelCommandResult<ModelCommandCanonicalRequest, ModelGraphReadResult>
   | {
       status: 'choice';
@@ -85,7 +86,8 @@ export type ModelCommandPreparation =
     }
   | { status: 'application-choice'; choice: ModelOperationApplicationChoice }
   | { status: 'application-input'; input: ModelOperationApplicationInput }
-  | { status: 'proposed'; request: ModelCommandCanonicalRequest };
+  | { status: 'proposed'; request: ModelCommandCanonicalRequest }
+) & { readonly resourceUsage?: readonly ModelResourceUsage[] };
 export type ModelCommandRuntime = {
   submit(
     request: ModelCommandRequest,
@@ -250,7 +252,11 @@ export const createModelCommandRuntime = ({
     }
   };
 
-  const prepare: PreparedModelCommandRuntime['prepare'] = async (request, signal) => {
+  const prepareValue = async (
+    request: ModelCommandRequest,
+    signal: AbortSignal,
+    reportUsage: (usage: ModelResourceUsage) => void,
+  ): Promise<ModelCommandPreparation> => {
     validateRequest(request);
     await authorize();
     signal.throwIfAborted();
@@ -265,6 +271,7 @@ export const createModelCommandRuntime = ({
       context: initial.context,
       prompt: request.text,
       signal,
+      reportUsage,
       instructions: [
         instructions,
         request.language
@@ -429,6 +436,12 @@ export const createModelCommandRuntime = ({
             .join('\n')}`,
       };
     return { status: 'unresolved', message: proposal.reason };
+  };
+
+  const prepare: PreparedModelCommandRuntime['prepare'] = async (request, signal) => {
+    const resourceUsage: ModelResourceUsage[] = [];
+    const prepared = await prepareValue(request, signal, usage => resourceUsage.push(usage));
+    return resourceUsage.length === 0 ? prepared : { ...prepared, resourceUsage };
   };
 
   const continueApplication: PreparedModelCommandRuntime['continueApplication'] = async (
@@ -621,7 +634,12 @@ export const createModelCommandRuntime = ({
     execute,
     submit: async (request, signal) => {
       const prepared = await prepare(request, signal);
-      if (prepared.status === 'proposed') return execute(request, prepared.request, signal);
+      if (prepared.status === 'proposed') {
+        const result = await execute(request, prepared.request, signal);
+        return prepared.resourceUsage
+          ? { ...result, resourceUsage: prepared.resourceUsage }
+          : result;
+      }
       if (
         prepared.status === 'choice' ||
         prepared.status === 'application-choice' ||
@@ -635,6 +653,7 @@ export const createModelCommandRuntime = ({
               : prepared.status === 'application-choice'
                 ? prepared.choice.prompt
                 : prepared.input.prompt,
+          ...(prepared.resourceUsage ? { resourceUsage: prepared.resourceUsage } : {}),
         };
       return prepared;
     },

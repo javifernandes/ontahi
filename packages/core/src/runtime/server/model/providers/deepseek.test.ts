@@ -18,6 +18,13 @@ const request = () => ({
 const completed = (text = '{"status":"help"}') =>
   Response.json({
     status: 'completed',
+    usage: {
+      input_tokens: 80,
+      output_tokens: 20,
+      total_tokens: 100,
+      input_tokens_details: { cached_tokens: 12 },
+      output_tokens_details: { reasoning_tokens: 8 },
+    },
     output: [
       { type: 'reasoning', content: [{ type: 'reasoning_text', text: 'ignored' }] },
       { type: 'message', content: [{ type: 'output_text', text }] },
@@ -32,8 +39,21 @@ describe('DeepSeek model provider', () => {
       apiKey: 'secret',
       fetchRequest,
     });
+    const reportUsage = vi.fn();
 
-    await expect(provider.generate(request())).resolves.toEqual({ status: 'help' });
+    await expect(provider.generate({ ...request(), reportUsage })).resolves.toEqual({
+      status: 'help',
+    });
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'deepseek',
+      model: 'deepseek-flash',
+      inputTokens: 80,
+      outputTokens: 20,
+      totalTokens: 100,
+      cachedInputTokens: 12,
+      reasoningTokens: 8,
+      durationMs: expect.any(Number),
+    });
     const [url, init] = fetchRequest.mock.calls[0]!;
     expect(String(url)).toBe('https://api.deepseek.com/responses');
     expect(init?.headers).toEqual({

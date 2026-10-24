@@ -146,7 +146,8 @@ export const CommandChat = () => {
       }
       const outcome = result.value;
       applyOutcome(id, outcome);
-    } catch {
+    } catch (error) {
+      console.error('[todo:model-command] Model command response could not be applied.', error);
       // A lost response may follow a successful write. Never automatically resubmit.
       answer(id, 'failed', 'The server response was lost. Check the list before submitting again.');
     } finally {
@@ -171,7 +172,8 @@ export const CommandChat = () => {
         return;
       }
       applyOutcome(entry.id, result.value);
-    } catch {
+    } catch (error) {
+      console.error('[todo:model-command] Interaction response could not be applied.', error);
       answer(
         entry.id,
         'failed',

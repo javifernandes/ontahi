@@ -8,7 +8,7 @@ import {
 } from '../../data-graph/index.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
-import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
+import type { ModelCommandRequest, ModelCommandResult, ModelResourceUsage } from '../contracts.js';
 import {
   parseOperationInvocationRequest,
   type OperationInvokeRequest,
@@ -54,11 +54,55 @@ export type ModelCommandProtocolResponseParseResult =
 
 const requestKeys = new Set(['version', 'kind', 'text', 'language', 'context']);
 const responseKeys = new Set(['version', 'kind', 'result', 'error']);
-const resultKeys = new Set(['status', 'message', 'request', 'response', 'run', 'interaction']);
+const resultKeys = new Set([
+  'status',
+  'message',
+  'request',
+  'response',
+  'run',
+  'interaction',
+  'resourceUsage',
+]);
 const errorKeys = new Set(['code', 'message']);
 const readResponseKeys = new Set(['kind', 'value', 'capabilities']);
+const resourceUsageKeys = new Set([
+  'provider',
+  'model',
+  'inputTokens',
+  'outputTokens',
+  'totalTokens',
+  'cachedInputTokens',
+  'cacheWriteInputTokens',
+  'reasoningTokens',
+  'durationMs',
+]);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
+
+const parseModelResourceUsage = (value: unknown): ModelResourceUsage | undefined => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, resourceUsageKeys) ||
+    typeof value.provider !== 'string' ||
+    !value.provider ||
+    typeof value.model !== 'string' ||
+    !value.model
+  )
+    return undefined;
+  for (const key of resourceUsageKeys) {
+    if (key === 'provider' || key === 'model' || value[key] === undefined) continue;
+    if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0)
+      return undefined;
+  }
+  return cloneJson(value) as ModelResourceUsage;
+};
+
+const parseModelResourceUsageList = (value: unknown): readonly ModelResourceUsage[] | undefined => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const parsed = value.map(parseModelResourceUsage);
+  return parsed.every(item => item !== undefined) ? parsed : undefined;
+};
 
 export type ModelCommandCanonicalRequest =
   | GraphReadRequest
@@ -186,6 +230,13 @@ export const parseModelCommandProtocolResponse = (
     typeof value.result.message === 'string' &&
     isJsonValue(value)
   ) {
+    const resourceUsage = parseModelResourceUsageList(value.result.resourceUsage);
+    if (!resourceUsage)
+      return {
+        success: false,
+        error: requestError('invalid_request', 'Model command response is invalid.'),
+      };
+    const usage = resourceUsage.length === 0 ? {} : { resourceUsage };
     if (
       (value.result.status === 'answered' || value.result.status === 'unresolved') &&
       value.result.request === undefined &&
@@ -198,7 +249,7 @@ export const parseModelCommandProtocolResponse = (
         response: {
           version: 1,
           kind: 'model-command-result',
-          result: { status: value.result.status, message: value.result.message },
+          result: { status: value.result.status, message: value.result.message, ...usage },
         },
       };
     if (
@@ -226,6 +277,7 @@ export const parseModelCommandProtocolResponse = (
               message: value.result.message,
               request,
               ...(response === undefined ? {} : { response }),
+              ...usage,
             },
           },
         };
@@ -247,6 +299,7 @@ export const parseModelCommandProtocolResponse = (
               message: value.result.message,
               request,
               run: { taskId: value.result.run.taskId, runId: value.result.run.runId },
+              ...usage,
             },
           },
         };
@@ -269,6 +322,7 @@ export const parseModelCommandProtocolResponse = (
               message: value.result.message,
               run: { taskId: value.result.run.taskId, runId: value.result.run.runId },
               interaction,
+              ...usage,
             },
           },
         };

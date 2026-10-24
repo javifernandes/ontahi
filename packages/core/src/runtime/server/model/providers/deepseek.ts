@@ -1,6 +1,8 @@
 import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
+import { cloudModelUsage } from './usage.js';
+
 export type DeepSeekModelProviderOptions = {
   model: string;
   apiKey: string;
@@ -32,7 +34,7 @@ export const createDeepSeekModelProvider = ({
   reasoningEffort = 'none',
   fetchRequest = globalThis.fetch,
 }: DeepSeekModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
+  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -43,6 +45,7 @@ export const createDeepSeekModelProvider = ({
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
+    const startedAt = performance.now();
     try {
       const response = await fetchRequest(
         new URL('responses', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
@@ -80,6 +83,15 @@ export const createDeepSeekModelProvider = ({
           `DeepSeek returned HTTP ${response.status}. Check the API key and configured model.`,
         );
       const envelope = await response.json();
+      if (isRecord(envelope))
+        reportUsage?.(
+          cloudModelUsage({
+            provider: 'deepseek',
+            model,
+            usage: envelope.usage,
+            durationMs: performance.now() - startedAt,
+          }),
+        );
       if (!isRecord(envelope) || envelope.status !== 'completed')
         throw new ModelInterpretationError(
           'model_output_invalid',

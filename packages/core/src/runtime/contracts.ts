@@ -378,7 +378,19 @@ export type TaskRunListItem = TaskSnapshot & {
 
 /** Context is optional host-defined interaction context, never an authority credential. */
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
-export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
+/** Provider-reported metering for one model invocation. Monetary cost is deliberately excluded. */
+export type ModelResourceUsage = {
+  readonly provider: string;
+  readonly model: string;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly cachedInputTokens?: number;
+  readonly cacheWriteInputTokens?: number;
+  readonly reasoningTokens?: number;
+  readonly durationMs?: number;
+};
+export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {
       status: 'pending';
       message: string;
@@ -399,4 +411,5 @@ export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
       /** Canonical protocol response when the selected request produces data. */
       response?: TResponse;
     }
-  | { status: 'answered' | 'unresolved'; message: string };
+  | { status: 'answered' | 'unresolved'; message: string }
+) & { readonly resourceUsage?: readonly ModelResourceUsage[] };

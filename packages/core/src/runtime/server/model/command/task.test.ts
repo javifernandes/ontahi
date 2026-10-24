@@ -118,9 +118,11 @@ describe('Model Command Task', () => {
   });
 
   it('completes immediately when interpretation answers without a canonical request', async () => {
+    const resourceUsage = [{ provider: 'openai', model: 'gpt-test', totalTokens: 9 }];
     const prepare = vi.fn(async () => ({
       status: 'answered' as const,
       message: 'You can rename documents.',
+      resourceUsage,
     }));
     const execute = vi.fn();
     const task = createModelCommandTask({
@@ -133,13 +135,14 @@ describe('Model Command Task', () => {
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
         status: 'completed',
-        result: { status: 'answered', message: 'You can rename documents.' },
+        result: { status: 'answered', message: 'You can rename documents.', resourceUsage },
       });
     });
     expect(execute).not.toHaveBeenCalled();
   });
 
   it('checkpoints a model choice and executes the selected canonical request', async () => {
+    const resourceUsage = [{ provider: 'openai', model: 'gpt-test', totalTokens: 11 }];
     const second = { ...proposal, input: { name: 'Archive' } };
     const prepare = vi.fn(async () => ({
       status: 'choice' as const,
@@ -148,6 +151,7 @@ describe('Model Command Task', () => {
         { id: 'notes', label: 'Notes', request: proposal },
         { id: 'archive', label: 'Archive', request: second },
       ],
+      resourceUsage,
     }));
     const execute = vi.fn(async (_input, request) => ({
       status: 'executed' as const,
@@ -190,7 +194,7 @@ describe('Model Command Task', () => {
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
         status: 'completed',
-        result: { status: 'executed', request: second },
+        result: { status: 'executed', request: second, resourceUsage },
       });
     });
     expect(execute).toHaveBeenCalledWith(input, second, expect.any(AbortSignal), {
@@ -199,6 +203,8 @@ describe('Model Command Task', () => {
   });
 
   it('continues a partial Operation application through consecutive Hole choices', async () => {
+    const interpretedUsage = [{ provider: 'openai', model: 'gpt-test', totalTokens: 12 }];
+    const continuedUsage = [{ provider: 'openai', model: 'gpt-test', totalTokens: 4 }];
     const openApplication = {
       kind: 'operation-application' as const,
       operationId: 'Document.move',
@@ -246,11 +252,16 @@ describe('Model Command Task', () => {
     const prepare = vi.fn(async () => ({
       status: 'application-choice' as const,
       choice: sourceChoice,
+      resourceUsage: interpretedUsage,
     }));
     const continueApplication = vi
       .fn()
-      .mockResolvedValueOnce({ status: 'application-choice', choice: destinationChoice })
-      .mockResolvedValueOnce({ status: 'proposed', request });
+      .mockResolvedValueOnce({
+        status: 'application-choice',
+        choice: destinationChoice,
+        resourceUsage: continuedUsage,
+      })
+      .mockResolvedValueOnce({ status: 'proposed', request, resourceUsage: continuedUsage });
     const execute = vi.fn(async () => ({
       status: 'executed' as const,
       message: 'Document moved.',
@@ -317,7 +328,11 @@ describe('Model Command Task', () => {
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
         status: 'completed',
-        result: { status: 'executed', request },
+        result: {
+          status: 'executed',
+          request,
+          resourceUsage: [...interpretedUsage, ...continuedUsage, ...continuedUsage],
+        },
       });
     });
     expect(continueApplication).toHaveBeenNthCalledWith(
@@ -338,6 +353,7 @@ describe('Model Command Task', () => {
   });
 
   it('checkpoints scalar Hole input and continues the same partial application', async () => {
+    const resourceUsage = [{ provider: 'openai', model: 'gpt-test', totalTokens: 13 }];
     const applicationInput = {
       status: 'input' as const,
       prompt: 'What should the item say?',
@@ -364,6 +380,7 @@ describe('Model Command Task', () => {
     const prepare = vi.fn(async () => ({
       status: 'application-input' as const,
       input: applicationInput,
+      resourceUsage,
     }));
     const submitApplicationInput = vi.fn(async () => ({
       status: 'proposed' as const,
@@ -411,7 +428,7 @@ describe('Model Command Task', () => {
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
         status: 'completed',
-        result: { status: 'executed', message: 'Item added.' },
+        result: { status: 'executed', message: 'Item added.', resourceUsage },
       });
     });
     expect(prepare).toHaveBeenCalledOnce();

@@ -4,6 +4,7 @@ import type { DiagnosticProtocolEnvelope } from '../diagnostics.js';
 
 import {
   outcomeColor,
+  modelResourceUsageSummary,
   semanticSummary,
   type DerivedGraphRefresh,
   type ExchangeActivity,
@@ -84,6 +85,7 @@ export const ExchangeDetail = ({
   const event = activity.settled ?? activity.started;
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
+  const modelUsage = modelResourceUsageSummary(activity);
   const requestEnvelope = activity.started?.request;
   const responseEnvelope = activity.settled?.response;
   const responseBody = responseEnvelope?.body ?? responseEnvelope?.error ?? activity.settled?.error;
@@ -98,6 +100,7 @@ export const ExchangeDetail = ({
             <span>{event.transportId}</span>
             <span>{activity.settled?.durationMs ?? '…'} ms</span>
             <span>{outcome}</span>
+            {modelUsage ? <span>{modelUsage}</span> : null}
           </span>
         </span>
       </header>

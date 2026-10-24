@@ -67,6 +67,16 @@ describe('Runtime Protocol model.command family', () => {
         operationId: 'TodoList.rename',
         input: { id: 'list-1', name: 'Today' },
       },
+      resourceUsage: [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          inputTokens: 120,
+          outputTokens: 18,
+          totalTokens: 138,
+          durationMs: 250,
+        },
+      ],
     });
     expect(parseModelCommandProtocolResponse(executed)).toEqual({
       success: true,
@@ -75,6 +85,27 @@ describe('Runtime Protocol model.command family', () => {
 
     const error = modelCommandProtocolError('command_unauthorized', 'Sign in first.');
     expect(parseModelCommandProtocolResponse(error)).toEqual({ success: true, response: error });
+  });
+
+  it.each<[unknown]>([
+    [[]],
+    [[null]],
+    [[{}]],
+    [[{ provider: 'openai', model: '' }]],
+    [[{ provider: 'openai', model: 'gpt-test', unknown: 1 }]],
+    [[{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }]],
+  ])('rejects malformed model resource usage: %j', resourceUsage => {
+    expect(
+      parseModelCommandProtocolResponse({
+        version: 1,
+        kind: 'model-command-result',
+        result: {
+          status: 'answered',
+          message: 'Done.',
+          resourceUsage,
+        },
+      }),
+    ).toMatchObject({ success: false });
   });
 
   it('parses a pending durable interaction without weakening its canonical shape', () => {

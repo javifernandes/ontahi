@@ -9,6 +9,7 @@ import {
   type GraphSchemaDefinition,
 } from '../../../data-graph/index.js';
 import { isRecord } from '../../../value/object.js';
+import type { ModelResourceUsage } from '../../contracts.js';
 import {
   parseOperationInvocationRequest,
   type OperationInvokeRequest,
@@ -38,6 +39,8 @@ export type ModelRequest = {
   prompt: string;
   outputSchema: GraphJsonSchema;
   signal: AbortSignal;
+  /** Reports provider metering separately from the generated semantic value. */
+  reportUsage?: (usage: ModelResourceUsage) => void;
 };
 export type ModelProvider = { generate(request: ModelRequest): Promise<unknown> };
 
@@ -244,6 +247,7 @@ export const interpretModelRequest = async ({
   signal,
   instructions = '',
   maxContextCharacters = 24_000,
+  reportUsage,
 }: {
   provider: ModelProvider;
   operations: readonly ModelOperationExposure[];
@@ -255,6 +259,7 @@ export const interpretModelRequest = async ({
   signal: AbortSignal;
   instructions?: string;
   maxContextCharacters?: number;
+  reportUsage?: (usage: ModelResourceUsage) => void;
 }): Promise<ModelInterpretationValue> => {
   signal.throwIfAborted();
   const project = createModelContextSchema(context);
@@ -451,6 +456,7 @@ export const interpretModelRequest = async ({
       prompt: currentPrompt,
       outputSchema,
       signal,
+      reportUsage,
     });
     signal.throwIfAborted();
     const proposal = parseModelInterpretation(raw);

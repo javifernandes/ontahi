@@ -114,6 +114,44 @@ it('reports a durable Operation as started with its child Task identity', async 
   });
 });
 
+it('preserves provider resource usage beside the executed semantic result', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    application: f.application,
+    provider: {
+      generate: async request => {
+        request.reportUsage?.({
+          provider: 'openai',
+          model: 'gpt-test',
+          inputTokens: 50,
+          outputTokens: 10,
+          totalTokens: 60,
+          durationMs: 100,
+        });
+        return f.generate(request);
+      },
+    },
+    authorize: f.authorize,
+    scope: f.scope,
+  });
+
+  await expect(
+    runtime.submit({ text: 'Rename to Notes' }, new AbortController().signal),
+  ).resolves.toMatchObject({
+    status: 'executed',
+    resourceUsage: [
+      {
+        provider: 'openai',
+        model: 'gpt-test',
+        inputTokens: 50,
+        outputTokens: 10,
+        totalTokens: 60,
+        durationMs: 100,
+      },
+    ],
+  });
+});
+
 it('rejects a durable Operation result without a Task identity', async () => {
   const input = graphSchema.object({});
   const operation = {

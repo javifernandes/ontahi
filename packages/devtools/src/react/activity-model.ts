@@ -471,6 +471,34 @@ export const semanticSummary = (
   return event?.family ?? 'Runtime exchange';
 };
 
+export const modelResourceUsageSummary = (activity: ExchangeActivity): string | undefined => {
+  const body = activity.settled?.response?.body;
+  if (!isRecord(body) || body.kind !== 'model-command-result' || !isRecord(body.result))
+    return undefined;
+  const usage = Array.isArray(body.result.resourceUsage)
+    ? body.result.resourceUsage.filter(isRecord)
+    : [];
+  if (usage.length === 0) return undefined;
+  const providers = [
+    ...new Set(
+      usage.map(item =>
+        [item.provider, item.model].filter(value => typeof value === 'string').join(' · '),
+      ),
+    ),
+  ].filter(Boolean);
+  const totals = usage.map(item => item.totalTokens);
+  const totalTokens = totals.every(value => typeof value === 'number')
+    ? totals.reduce<number>((total, value) => total + (value as number), 0)
+    : undefined;
+  return [
+    providers.join(', '),
+    usage.length > 1 ? `${usage.length} calls` : undefined,
+    totalTokens === undefined ? undefined : `${totalTokens.toLocaleString()} tokens`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
 export const viewFields = (view: unknown, prefix = ''): string[] => {
   if (!isRecord(view) || !isRecord(view.fields)) return [];
   return Object.entries(view.fields).flatMap(([name, field]) => {
