@@ -23,6 +23,21 @@ import {
 const model = process.env.TODO_LLM_MODEL;
 const modelProvider = process.env.TODO_LLM_PROVIDER ?? 'ollama';
 const modelBaseUrl = process.env.TODO_LLM_URL || undefined;
+const modelProviderErrorDetails = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object' || !('error' in payload)) return {};
+  const providerError = (payload as { error?: unknown }).error;
+  if (!providerError || typeof providerError !== 'object') return {};
+  return {
+    type:
+      'type' in providerError && typeof providerError.type === 'string'
+        ? providerError.type
+        : undefined,
+    message:
+      'message' in providerError && typeof providerError.message === 'string'
+        ? providerError.message
+        : undefined,
+  };
+};
 const loggedModelFetch: typeof fetch = async (input, init) => {
   try {
     const response = await fetch(input, init);
@@ -31,26 +46,13 @@ const loggedModelFetch: typeof fetch = async (input, init) => {
         .clone()
         .json()
         .catch(() => undefined);
-      const providerError =
-        payload && typeof payload === 'object' && 'error' in payload
-          ? (payload as { error?: unknown }).error
-          : undefined;
-      const details =
-        providerError && typeof providerError === 'object'
-          ? {
-              type:
-                'type' in providerError && typeof providerError.type === 'string'
-                  ? providerError.type
-                  : undefined,
-              message:
-                'message' in providerError && typeof providerError.message === 'string'
-                  ? providerError.message
-                  : undefined,
-            }
-          : undefined;
       console.error(
         '[todo:model-provider]',
-        JSON.stringify({ provider: modelProvider, status: response.status, ...details }),
+        JSON.stringify({
+          provider: modelProvider,
+          status: response.status,
+          ...modelProviderErrorDetails(payload),
+        }),
       );
     }
     return response;

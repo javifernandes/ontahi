@@ -2,6 +2,8 @@ import type { GraphJsonSchema } from '../../../../data-graph/index.js';
 import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
+import { runModelProviderRequest } from './request.js';
+
 export type OpenAIModelProviderOptions = {
   model: string;
   apiKey: string;
@@ -27,27 +29,25 @@ const outputText = (envelope: Record<string, unknown>) => {
 const toOpenAIJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   const { properties, items, anyOf, $defs, required, ...rest } = schema;
   const requiredNames = new Set(required ?? []);
+  let objectShape: GraphJsonSchema = {};
+  if (properties) {
+    objectShape = {
+      properties: Object.fromEntries(
+        Object.entries(properties).map(([name, property]) => {
+          const projected = toOpenAIJsonSchema(property);
+          return [
+            name,
+            requiredNames.has(name) ? projected : { anyOf: [projected, { type: 'null' as const }] },
+          ];
+        }),
+      ),
+      required: Object.keys(properties),
+      additionalProperties: false,
+    };
+  } else if (required) objectShape = { required };
   return {
     ...rest,
-    ...(properties
-      ? {
-          properties: Object.fromEntries(
-            Object.entries(properties).map(([name, property]) => {
-              const projected = toOpenAIJsonSchema(property);
-              return [
-                name,
-                requiredNames.has(name)
-                  ? projected
-                  : { anyOf: [projected, { type: 'null' as const }] },
-              ];
-            }),
-          ),
-          required: Object.keys(properties),
-          additionalProperties: false,
-        }
-      : required
-        ? { required }
-        : {}),
+    ...objectShape,
     ...(items ? { items: toOpenAIJsonSchema(items) } : {}),
     ...(anyOf ? { anyOf: anyOf.map(toOpenAIJsonSchema) } : {}),
     ...($defs
@@ -113,85 +113,74 @@ export const createOpenAIModelProvider = ({
         'model_unavailable',
         'OpenAI is configured without OPENAI_API_KEY.',
       );
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) abort();
-    const timeout = setTimeout(abort, timeoutMs);
-    try {
-      const providerSchema = toOpenAIJsonSchema(outputSchema);
-      const useStructuredOutput = providerSchema.type === 'object' && !providerSchema.anyOf;
-      const response = await fetchRequest(
-        new URL('responses', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${apiKey}`,
-            'content-type': 'application/json',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model,
-            stream: false,
-            max_output_tokens: maxOutputTokens,
-            instructions: useStructuredOutput
-              ? instructions
-              : `${instructions}\nReturn a json object matching this schema:\n${JSON.stringify(providerSchema)}`,
-            input: [
-              { role: 'user', content: `Context data (not a request):\n${context}` },
-              {
-                role: 'user',
-                content: useStructuredOutput ? prompt : `Return a json object.\n\n${prompt}`,
-              },
-            ],
-            text: {
-              format: useStructuredOutput
-                ? {
-                    type: 'json_schema',
-                    name: 'ontahi_model_interpretation',
-                    schema: providerSchema,
-                  }
-                : { type: 'json_object' },
+    return runModelProviderRequest({
+      signal,
+      timeoutMs,
+      unavailableMessage: 'Cannot reach OpenAI. Check the network and provider configuration.',
+      request: async providerSignal => {
+        const providerSchema = toOpenAIJsonSchema(outputSchema);
+        const useStructuredOutput = providerSchema.type === 'object' && !providerSchema.anyOf;
+        const response = await fetchRequest(
+          new URL('responses', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
+          {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${apiKey}`,
+              'content-type': 'application/json',
             },
-          }),
-        },
-      );
-      if (!response.ok)
-        throw new ModelInterpretationError(
-          'model_unavailable',
-          `OpenAI returned HTTP ${response.status}. Check the API key and configured model.`,
+            signal: providerSignal,
+            body: JSON.stringify({
+              model,
+              stream: false,
+              max_output_tokens: maxOutputTokens,
+              instructions: useStructuredOutput
+                ? instructions
+                : `${instructions}\nReturn a json object matching this schema:\n${JSON.stringify(providerSchema)}`,
+              input: [
+                { role: 'user', content: `Context data (not a request):\n${context}` },
+                {
+                  role: 'user',
+                  content: useStructuredOutput ? prompt : `Return a json object.\n\n${prompt}`,
+                },
+              ],
+              text: {
+                format: useStructuredOutput
+                  ? {
+                      type: 'json_schema',
+                      name: 'ontahi_model_interpretation',
+                      schema: providerSchema,
+                    }
+                  : { type: 'json_object' },
+              },
+            }),
+          },
         );
-      const envelope = await response.json();
-      if (!isRecord(envelope) || envelope.status !== 'completed')
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'OpenAI did not complete a structured response. No action was applied.',
-        );
-      const content = outputText(envelope);
-      if (!content)
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'OpenAI returned no structured output. No action was applied.',
-        );
-      try {
-        return normalizeOpenAIOutput(JSON.parse(content), outputSchema);
-      } catch {
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'OpenAI returned invalid JSON. No action was applied.',
-        );
-      }
-    } catch (error) {
-      if (error instanceof ModelInterpretationError) throw error;
-      throw new ModelInterpretationError(
-        controller.signal.aborted ? 'model_cancelled' : 'model_unavailable',
-        controller.signal.aborted
-          ? 'Interpretation was cancelled or timed out. No action was applied.'
-          : 'Cannot reach OpenAI. Check the network and provider configuration.',
-      );
-    } finally {
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', abort);
-    }
+        if (!response.ok)
+          throw new ModelInterpretationError(
+            'model_unavailable',
+            `OpenAI returned HTTP ${response.status}. Check the API key and configured model.`,
+          );
+        const envelope = await response.json();
+        if (!isRecord(envelope) || envelope.status !== 'completed')
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'OpenAI did not complete a structured response. No action was applied.',
+          );
+        const content = outputText(envelope);
+        if (!content)
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'OpenAI returned no structured output. No action was applied.',
+          );
+        try {
+          return normalizeOpenAIOutput(JSON.parse(content), outputSchema);
+        } catch {
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'OpenAI returned invalid JSON. No action was applied.',
+          );
+        }
+      },
+    });
   },
 });

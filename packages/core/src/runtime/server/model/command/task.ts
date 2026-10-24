@@ -21,10 +21,7 @@ import {
   type TaskFailure,
   type TaskStartOptions,
 } from '../../tasks.js';
-import {
-  commitMutationSetToUnitOfWork,
-  getCurrentUnitOfWork,
-} from '../../unit-of-work.js';
+import { commitMutationSetToUnitOfWork, getCurrentUnitOfWork } from '../../unit-of-work.js';
 import type {
   ModelOperationApplicationChoice,
   ModelOperationApplicationInput,

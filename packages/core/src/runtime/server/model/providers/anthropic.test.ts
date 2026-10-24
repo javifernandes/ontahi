@@ -122,6 +122,48 @@ describe('Anthropic model provider', () => {
     expect(body.system).toContain('variant-16');
   });
 
+  it('projects arrays, scalar enums, definitions and explicit additional properties', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(completed());
+    const outputSchema = {
+      type: 'object' as const,
+      required: ['states', 'tuples'],
+      properties: {
+        states: { type: 'string' as const, enum: ['open', 'done', null] },
+        tuples: { enum: [[1], [2, 3], []] },
+        extensible: { type: 'object' as const, additionalProperties: true },
+      },
+      $defs: {
+        state: { type: 'string' as const, enum: ['open', 'done'] },
+      },
+    };
+
+    await createAnthropicModelProvider({
+      model: 'claude-test',
+      apiKey: 'secret',
+      fetchRequest,
+    }).generate({ ...request(), outputSchema });
+
+    const body = JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body));
+    expect(body.output_config.format.schema).toMatchObject({
+      properties: {
+        states: { enum: ['open', 'done', null] },
+        tuples: {
+          anyOf: [
+            { type: 'array', minItems: 1, items: { const: 1 } },
+            {
+              type: 'array',
+              minItems: 1,
+              items: { anyOf: [{ const: 2 }, { const: 3 }] },
+            },
+            { type: 'array' },
+          ],
+        },
+        extensible: { type: 'object', additionalProperties: false },
+      },
+      $defs: { state: { type: 'string', enum: ['open', 'done'] } },
+    });
+  });
+
   it('rejects missing credentials before making a request', async () => {
     const fetchRequest = vi.fn<typeof fetch>();
     await expect(

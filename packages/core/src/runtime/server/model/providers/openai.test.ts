@@ -113,6 +113,58 @@ describe('OpenAI model provider', () => {
     expect(body.input[1].content).toContain('Return a json object.');
   });
 
+  it('projects definitions and normalizes nested arrays and union objects', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(
+      completed(
+        JSON.stringify({
+          entries: [{ kind: 'count', value: 2, note: null }],
+          result: { code: 'ok' },
+        }),
+      ),
+    );
+    const outputSchema: GraphJsonSchema = {
+      type: 'object',
+      required: ['entries', 'result'],
+      properties: {
+        entries: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['kind', 'value'],
+            properties: {
+              kind: { const: 'count' },
+              value: { type: 'integer' },
+              note: { type: 'string' },
+            },
+          },
+        },
+        result: {
+          anyOf: [
+            {
+              type: 'object',
+              required: ['code'],
+              properties: { code: { type: 'string' } },
+            },
+            { type: 'null' },
+          ],
+        },
+      },
+      $defs: { label: { type: 'string' } },
+    };
+    const provider = createOpenAIModelProvider({
+      model: 'gpt-test',
+      apiKey: 'secret',
+      fetchRequest,
+    });
+
+    await expect(provider.generate({ ...request(), outputSchema })).resolves.toEqual({
+      entries: [{ kind: 'count', value: 2 }],
+      result: { code: 'ok' },
+    });
+    const body = JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body));
+    expect(body.text.format.schema.$defs).toEqual({ label: { type: 'string' } });
+  });
+
   it('rejects missing credentials before making a request', async () => {
     const fetchRequest = vi.fn<typeof fetch>();
     await expect(
@@ -153,6 +205,29 @@ describe('OpenAI model provider', () => {
         timeoutMs: 5,
         fetchRequest,
       }).generate(request()),
+    ).rejects.toMatchObject({ code: 'model_cancelled' });
+  });
+
+  it('maps network failures and already-aborted requests to stable provider errors', async () => {
+    await expect(
+      createOpenAIModelProvider({
+        model: 'gpt-test',
+        apiKey: 'secret',
+        fetchRequest: vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')),
+      }).generate(request()),
+    ).rejects.toMatchObject({ code: 'model_unavailable' });
+
+    const controller = new AbortController();
+    controller.abort();
+    const fetchRequest = vi.fn<typeof fetch>(async (_url, init) => {
+      expect(init?.signal?.aborted).toBe(true);
+      throw new Error('aborted');
+    });
+    await expect(
+      createOpenAIModelProvider({ model: 'gpt-test', apiKey: 'secret', fetchRequest }).generate({
+        ...request(),
+        signal: controller.signal,
+      }),
     ).rejects.toMatchObject({ code: 'model_cancelled' });
   });
 });

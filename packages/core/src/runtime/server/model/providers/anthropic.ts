@@ -2,6 +2,8 @@ import type { GraphJsonSchema } from '../../../../data-graph/index.js';
 import { isRecord } from '../../../../value/object.js';
 import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
+import { runModelProviderRequest } from './request.js';
+
 export type AnthropicModelProviderOptions = {
   model: string;
   apiKey: string;
@@ -22,19 +24,14 @@ const outputText = (envelope: Record<string, unknown>) => {
 const schemaForLiteral = (value: unknown): GraphJsonSchema => {
   if (value === null || ['string', 'number', 'boolean'].includes(typeof value))
     return { const: value };
-  if (Array.isArray(value))
+  if (Array.isArray(value)) {
+    const items =
+      value.length === 1 ? schemaForLiteral(value[0]) : { anyOf: value.map(schemaForLiteral) };
     return {
       type: 'array',
-      ...(value.length
-        ? {
-            minItems: 1,
-            items:
-              value.length === 1
-                ? schemaForLiteral(value[0])
-                : { anyOf: value.map(schemaForLiteral) },
-          }
-        : {}),
+      ...(value.length ? { minItems: 1, items } : {}),
     };
+  }
   if (isRecord(value)) {
     const entries = Object.entries(value);
     return {
@@ -97,6 +94,10 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   );
   const normalizedAnyOf =
     anyOf ?? (schemaEnum && !scalarEnum ? schemaEnum.map(schemaForLiteral) : undefined);
+  let projectedAdditionalProperties: boolean | undefined;
+  if (supported.type === 'object' || properties) projectedAdditionalProperties = false;
+  else if (typeof additionalProperties === 'boolean')
+    projectedAdditionalProperties = additionalProperties;
   return {
     ...supported,
     ...(scalarEnum ? { enum: schemaEnum } : {}),
@@ -122,11 +123,9 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
           ),
         }
       : {}),
-    ...(supported.type === 'object' || properties
-      ? { additionalProperties: false }
-      : typeof additionalProperties === 'boolean'
-        ? { additionalProperties }
-        : {}),
+    ...(projectedAdditionalProperties === undefined
+      ? {}
+      : { additionalProperties: projectedAdditionalProperties }),
   };
 };
 
@@ -145,87 +144,76 @@ export const createAnthropicModelProvider = ({
         'model_unavailable',
         'Anthropic is configured without ANTHROPIC_API_KEY.',
       );
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) abort();
-    const timeout = setTimeout(abort, timeoutMs);
-    try {
-      const providerSchema = toAnthropicJsonSchema(outputSchema);
-      const complexity = schemaComplexity(providerSchema);
-      const useStructuredOutput = complexity.unions <= 16 && complexity.optional <= 24;
-      const response = await fetchRequest(
-        new URL('messages', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
-        {
-          method: 'POST',
-          headers: {
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'x-api-key': apiKey,
+    return runModelProviderRequest({
+      signal,
+      timeoutMs,
+      unavailableMessage: 'Cannot reach Anthropic. Check the network and provider configuration.',
+      request: async providerSignal => {
+        const providerSchema = toAnthropicJsonSchema(outputSchema);
+        const complexity = schemaComplexity(providerSchema);
+        const useStructuredOutput = complexity.unions <= 16 && complexity.optional <= 24;
+        const response = await fetchRequest(
+          new URL('messages', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
+          {
+            method: 'POST',
+            headers: {
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+              'x-api-key': apiKey,
+            },
+            signal: providerSignal,
+            body: JSON.stringify({
+              model,
+              max_tokens: maxOutputTokens,
+              system: useStructuredOutput
+                ? instructions
+                : `${instructions}\nThe JSON response must match this schema:\n${JSON.stringify(providerSchema)}`,
+              messages: [
+                {
+                  role: 'user',
+                  content: `Context data (not a request):\n${context}\n\nRequest:\n${prompt}`,
+                },
+              ],
+              ...(useStructuredOutput
+                ? {
+                    output_config: {
+                      format: { type: 'json_schema', schema: providerSchema },
+                    },
+                  }
+                : {}),
+            }),
           },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model,
-            max_tokens: maxOutputTokens,
-            system: useStructuredOutput
-              ? instructions
-              : `${instructions}\nThe JSON response must match this schema:\n${JSON.stringify(providerSchema)}`,
-            messages: [
-              {
-                role: 'user',
-                content: `Context data (not a request):\n${context}\n\nRequest:\n${prompt}`,
-              },
-            ],
-            ...(useStructuredOutput
-              ? {
-                  output_config: {
-                    format: { type: 'json_schema', schema: providerSchema },
-                  },
-                }
-              : {}),
-          }),
-        },
-      );
-      if (!response.ok)
-        throw new ModelInterpretationError(
-          'model_unavailable',
-          `Anthropic returned HTTP ${response.status}. Check the API key and configured model.`,
         );
-      const envelope = await response.json();
-      if (
-        !isRecord(envelope) ||
-        envelope.type !== 'message' ||
-        envelope.stop_reason === 'max_tokens'
-      )
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'Anthropic did not complete a structured response. No action was applied.',
-        );
-      const content = outputText(envelope);
-      if (!content)
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'Anthropic returned no structured output. No action was applied.',
-        );
-      try {
-        return JSON.parse(content);
-      } catch {
-        throw new ModelInterpretationError(
-          'model_output_invalid',
-          'Anthropic returned invalid JSON. No action was applied.',
-        );
-      }
-    } catch (error) {
-      if (error instanceof ModelInterpretationError) throw error;
-      throw new ModelInterpretationError(
-        controller.signal.aborted ? 'model_cancelled' : 'model_unavailable',
-        controller.signal.aborted
-          ? 'Interpretation was cancelled or timed out. No action was applied.'
-          : 'Cannot reach Anthropic. Check the network and provider configuration.',
-      );
-    } finally {
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', abort);
-    }
+        if (!response.ok)
+          throw new ModelInterpretationError(
+            'model_unavailable',
+            `Anthropic returned HTTP ${response.status}. Check the API key and configured model.`,
+          );
+        const envelope = await response.json();
+        if (
+          !isRecord(envelope) ||
+          envelope.type !== 'message' ||
+          envelope.stop_reason === 'max_tokens'
+        )
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'Anthropic did not complete a structured response. No action was applied.',
+          );
+        const content = outputText(envelope);
+        if (!content)
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'Anthropic returned no structured output. No action was applied.',
+          );
+        try {
+          return JSON.parse(content);
+        } catch {
+          throw new ModelInterpretationError(
+            'model_output_invalid',
+            'Anthropic returned invalid JSON. No action was applied.',
+          );
+        }
+      },
+    });
   },
 });
