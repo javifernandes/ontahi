@@ -46,8 +46,8 @@ import { createOperationInvocationDispatcher } from './operation-invocation.js';
 import {
   COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
   createCommittedMutationCommit,
-  deliverCommittedMutationsToCurrentRuntime,
-  sealCurrentUnitOfWorkMutationJournal,
+  getRequiredUnitOfWork,
+  sealUnitOfWorkMutationJournal,
   type CommittedMutationDelivery,
 } from './unit-of-work.js';
 
@@ -217,10 +217,11 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             resources,
           },
           async () => {
+            const unitOfWork = getRequiredUnitOfWork();
             const body = await run();
-            const committedMutations = sealCurrentUnitOfWorkMutationJournal();
+            const committedMutations = sealUnitOfWorkMutationJournal(unitOfWork);
             const commit = createCommittedMutationCommit(committedMutations);
-            deliverCommittedMutationsToCurrentRuntime(commit);
+            delivery(commit);
             return withRuntimeProtocolMetadata(
               body,
               committedMutations.mutations.length === 0
