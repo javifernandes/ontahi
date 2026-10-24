@@ -61,4 +61,17 @@ describe('Graph Read policy authoring', () => {
       scope: 'all',
     });
   });
+
+  it('keeps an empty allowlist default-deny', () => {
+    const policy = defineGraphReadPolicy({
+      entity: Experiment,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 10,
+      allow: {},
+      scope: 'all',
+    });
+
+    expect(policy.fields).toEqual({});
+  });
 });
