@@ -868,6 +868,10 @@ For local development, `createOllamaModelProvider({model, baseUrl?, ...})` imple
 stays on the server and can be replaced without changing the model command runtime or application
 scope. `createDeepSeekModelProvider({model, apiKey, baseUrl?, ...})` implements the same contract
 through DeepSeek's Responses API and constrains interpretations with the runtime's JSON Schema.
+`createAnthropicModelProvider(...)` uses the Messages API with `output_config.format`, while
+`createOpenAIModelProvider(...)` uses the Responses API with `text.format`. Both accept the same
+provider-neutral instructions, context, prompt, output schema, and cancellation signal. API keys
+remain server configuration and are never part of an Operation or model-command request.
 
 Derive editable value schemas from entity fields. A request must match an exposed command schema
 before its validator runs. The runtime reloads scope and validates again after inference, then

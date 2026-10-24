@@ -492,9 +492,17 @@ export {
   type CreateApplicationModelCommandRuntimeOptions,
 } from './model/command/application-runtime.js';
 export {
+  createAnthropicModelProvider,
+  type AnthropicModelProviderOptions,
+} from './model/providers/anthropic.js';
+export {
   createDeepSeekModelProvider,
   type DeepSeekModelProviderOptions,
 } from './model/providers/deepseek.js';
+export {
+  createOpenAIModelProvider,
+  type OpenAIModelProviderOptions,
+} from './model/providers/openai.js';
 export {
   createOllamaModelProvider,
   type OllamaModelProviderOptions,

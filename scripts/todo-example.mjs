@@ -10,13 +10,16 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { loadEnvFile } from 'node:process';
 
 import { assert, lockstepVersion, repositoryRoot } from './release/public-packages.mjs';
 
 const todoPackageName = '@ontahi/example-todo-express';
 const todoSourceDirectory = path.join(repositoryRoot, 'examples/todo-express');
 const registryArtifactsRoot = path.join(repositoryRoot, '.artifacts/todo-registry');
-const ignoredCopyEntries = new Set(['coverage', 'dist', 'node_modules']);
+const ignoredCopyEntries = new Set(['.env', 'coverage', 'dist', 'node_modules']);
+const localEnvironmentFile = path.join(todoSourceDirectory, '.env');
+if (existsSync(localEnvironmentFile)) loadEnvFile(localEnvironmentFile);
 const usage =
   'Usage: node scripts/todo-example.mjs <local|registry> [--auth <disabled|github>] [--version <version>]';
 

@@ -6,4 +6,6 @@ node_modules
 .verification
 .artifacts
 .DS_Store
+.env
+!.env.example
 *.tsbuildinfo

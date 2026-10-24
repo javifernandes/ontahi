@@ -82,6 +82,15 @@ Operation/application concerns and provider selection remains composition policy
 context, authorization hardening, resource
 governance, and simultaneous rollout variants remain separate work.
 
+Provider portability is now exercised by four server adapters behind the same `ModelProvider`
+contract: local Ollama, DeepSeek's Responses-compatible API, Anthropic Messages, and OpenAI
+Responses. Anthropic and OpenAI receive the same reflected JSON Schema through their native
+structured-output fields, while Core still performs canonical Graph Schema validation. Provider
+URLs, model identifiers, credentials, HTTP envelopes, and output extraction remain composition and
+adapter concerns rather than reflected Operation semantics. This variation supplies concrete usage
+and request-identity evidence for the Resource Governance spike without yet promoting a normalized
+metering contract.
+
 ## First Bounded Proof
 
 Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a

@@ -17,7 +17,7 @@ Related plans:
 3. [`70. First-Class Workflow Tier`](bookops://plans/70-first-class-workflow-tier-in-architecture)
 4. [`90. Event-Driven Architecture Runtime`](bookops://plans/90-event-driven-architecture-runtime)
 5. [`120. Ontahi Environment Resources And Semantic Bindings`](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
-6. [`156. Model-Backed Domain Operation Executor`](../current/156-model-backed-domain-operation-executor.md)
+6. [`156. Model-Backed Domain Operation Executor`](../done/156-model-backed-domain-operation-executor.md)
 
 ## Summary
 
@@ -184,45 +184,45 @@ broader tool, graph, or persistence authority inside the executed operation.
 
 ### Slice 1: Contract Inventory
 
-- [ ] Inventory current dispatcher, operation implementation, durable lifecycle, capability, and
+- [x] Inventory current dispatcher, operation implementation, durable lifecycle, capability, and
       telemetry boundaries.
-- [ ] Identify which model-executor needs already exist as runtime resources or concerns.
-- [ ] Separate enduring semantic metadata from provider-specific configuration.
+- [x] Identify which model-executor needs already exist as runtime resources or concerns.
+- [x] Separate enduring semantic metadata from provider-specific configuration.
 
 ### Slice 2: Invocation And Executor Model
 
-- [ ] Specify intent resolution, proposal, invocation, executor binding, and lifecycle as distinct
+- [x] Specify intent resolution, proposal, invocation, executor binding, and lifecycle as distinct
       stages.
-- [ ] Decide whether executor binding occurs at declaration, application composition, or runtime
+- [x] Decide whether executor binding occurs at declaration, application composition, or runtime
       routing—and whether several bindings can coexist safely.
-- [ ] Specify typed output validation and canonical failures for model execution.
+- [x] Specify typed output validation and canonical failures for model execution.
 - [ ] Specify context-source, tool-authority, budget, trace, and approval boundaries.
 
 ### Slice 3: Narrow Prototype
 
-- [ ] Implement one non-authoritative, read-only operation with a model executor.
-- [ ] Invoke it through the same public surface and dispatcher as a code-backed operation.
-- [ ] Prove a code-backed replacement without changing the operation's public identity or input.
+- [x] Implement one non-authoritative, read-only operation with a model executor.
+- [x] Invoke it through the same public surface and dispatcher as a code-backed operation.
+- [x] Prove a code-backed replacement without changing the operation's public identity or input.
 - [ ] Exercise one durable variant if immediate execution cannot answer the lifecycle questions.
 
 ### Slice 4: Recommendation
 
-- [ ] Record the package and composition boundaries.
-- [ ] Record the minimal reflection surface and what must remain host-private.
+- [x] Record the package and composition boundaries.
+- [x] Record the minimal reflection surface and what must remain host-private.
 - [ ] Extract implementation work into an actionable plan only after the prototype resolves the
       executor-binding and authority questions.
 
 ## Verification
 
-- [ ] One operation preserves its public invocation across code-backed and model-backed executors.
-- [ ] Model output is validated against the operation output contract.
-- [ ] Undeclared sources and tools are unavailable to the executor.
+- [x] One operation preserves its public invocation across code-backed and model-backed executors.
+- [x] Model output is validated against the operation output contract.
+- [x] Undeclared sources and tools are unavailable to the executor.
 - [ ] Trace evidence identifies selected sources, tool use, provider/model, cost, and outcome
       without leaking secrets or private content.
 - [ ] Immediate and durable lifecycle choices do not alter the operation's semantic identity.
 - [ ] Fuzzy intent cannot bypass canonical validation, authority, or proposal review.
 - [ ] Private workspace state has an explicit owner, scope, retention policy, and cleanup path.
-- [ ] The resulting contract can be explained without requiring one model vendor or agent SDK.
+- [x] The resulting contract can be explained without requiring one model vendor or agent SDK.
 
 ## Decisions
 
@@ -289,7 +289,7 @@ callers or the Operation contract. Both bindings do not need to be active simult
 concurrent implementations are a separate host policy for feature flags, rollout, shadow
 evaluation, fallback, or migration and should not enter the minimum executor contract.
 
-[Plan 156](../current/156-model-backed-domain-operation-executor.md) activates that experiment as
+[Plan 156](../done/156-model-backed-domain-operation-executor.md) completed that experiment as
 `TodoList.suggestNextItem`: a contextual, read-only Operation whose model-backed and code-backed
 bindings preserve one invocation contract. It also records `TodoList.createFromGoal` as the later
 effectful proof joining generated content to authoritative Commands and observable postconditions.
@@ -310,9 +310,11 @@ validation, and cancellation failures remain ordinary Operation failures.
 The Todo application declares `TodoList.suggestNextItem` once. Its declaration owns the
 instructions, bounded context assembler, and semantic output guard through Core's built-in
 `modelOperation` run helper. Application composition supplies only a generic model provider runtime
-capability. With `TODO_LLM_MODEL`, that capability uses the configured Ollama or DeepSeek provider;
-without it, a deterministic code implementation satisfies the same contract. Both paths were
-invoked through the canonical Operation surface. A local
+capability. With `TODO_LLM_MODEL`, that capability uses the configured Ollama, DeepSeek, Anthropic,
+or OpenAI provider; without it, a deterministic code implementation satisfies the same contract.
+The remote adapters translate the same JSON Schema contract to provider-native structured-output
+APIs without changing Operation semantics. Both execution paths were invoked through the canonical
+Operation surface. A local
 `qwen3.5:0.8b` Ollama evaluation returned a valid non-duplicate suggestion from the bounded list
 projection without mutating Todo state.
 

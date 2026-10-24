@@ -1,5 +1,7 @@
 import {
+  createAnthropicModelProvider,
   createDeepSeekModelProvider,
+  createOpenAIModelProvider,
   createOllamaModelProvider,
   createTaskBackedModelCommandRuntime,
   inProcessTasks,
@@ -20,20 +22,36 @@ import {
 
 const model = process.env.TODO_LLM_MODEL;
 const modelProvider = process.env.TODO_LLM_PROVIDER ?? 'ollama';
-if (model && modelProvider !== 'ollama' && modelProvider !== 'deepseek')
+const modelBaseUrl = process.env.TODO_LLM_URL || undefined;
+const createTodoModelProvider = () => {
+  if (!model) return undefined;
+  if (modelProvider === 'anthropic')
+    return createAnthropicModelProvider({
+      model,
+      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+      baseUrl: modelBaseUrl,
+    });
+  if (modelProvider === 'deepseek')
+    return createDeepSeekModelProvider({
+      model,
+      apiKey: process.env.DEEPSEEK_API_KEY ?? '',
+      baseUrl: modelBaseUrl,
+    });
+  if (modelProvider === 'openai')
+    return createOpenAIModelProvider({
+      model,
+      apiKey: process.env.OPENAI_API_KEY ?? '',
+      baseUrl: modelBaseUrl,
+    });
+  if (modelProvider === 'ollama')
+    return createOllamaModelProvider({
+      model,
+      baseUrl: modelBaseUrl,
+    });
   throw new Error(`Unsupported TODO_LLM_PROVIDER: ${modelProvider}`);
-export const todoCommandProvider = model
-  ? modelProvider === 'deepseek'
-    ? createDeepSeekModelProvider({
-        model,
-        apiKey: process.env.DEEPSEEK_API_KEY ?? '',
-        baseUrl: process.env.TODO_LLM_URL,
-      })
-    : createOllamaModelProvider({
-        model,
-        baseUrl: process.env.TODO_LLM_URL,
-      })
-  : undefined;
+};
+
+export const todoCommandProvider = createTodoModelProvider();
 
 export const todoTaskRuntime =
   process.env.TODO_TASK_RUNTIME === 'langgraph' ? 'langgraph' : 'in-process';
