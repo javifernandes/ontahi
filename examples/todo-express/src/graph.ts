@@ -23,6 +23,48 @@ import {
 const model = process.env.TODO_LLM_MODEL;
 const modelProvider = process.env.TODO_LLM_PROVIDER ?? 'ollama';
 const modelBaseUrl = process.env.TODO_LLM_URL || undefined;
+const loggedModelFetch: typeof fetch = async (input, init) => {
+  try {
+    const response = await fetch(input, init);
+    if (!response.ok) {
+      const payload: unknown = await response
+        .clone()
+        .json()
+        .catch(() => undefined);
+      const providerError =
+        payload && typeof payload === 'object' && 'error' in payload
+          ? (payload as { error?: unknown }).error
+          : undefined;
+      const details =
+        providerError && typeof providerError === 'object'
+          ? {
+              type:
+                'type' in providerError && typeof providerError.type === 'string'
+                  ? providerError.type
+                  : undefined,
+              message:
+                'message' in providerError && typeof providerError.message === 'string'
+                  ? providerError.message
+                  : undefined,
+            }
+          : undefined;
+      console.error(
+        '[todo:model-provider]',
+        JSON.stringify({ provider: modelProvider, status: response.status, ...details }),
+      );
+    }
+    return response;
+  } catch (error) {
+    console.error(
+      '[todo:model-provider]',
+      JSON.stringify({
+        provider: modelProvider,
+        message: error instanceof Error ? error.message : 'Unknown transport error.',
+      }),
+    );
+    throw error;
+  }
+};
 const createTodoModelProvider = () => {
   if (!model) return undefined;
   if (modelProvider === 'anthropic')
@@ -30,23 +72,27 @@ const createTodoModelProvider = () => {
       model,
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
       baseUrl: modelBaseUrl,
+      fetchRequest: loggedModelFetch,
     });
   if (modelProvider === 'deepseek')
     return createDeepSeekModelProvider({
       model,
       apiKey: process.env.DEEPSEEK_API_KEY ?? '',
       baseUrl: modelBaseUrl,
+      fetchRequest: loggedModelFetch,
     });
   if (modelProvider === 'openai')
     return createOpenAIModelProvider({
       model,
       apiKey: process.env.OPENAI_API_KEY ?? '',
       baseUrl: modelBaseUrl,
+      fetchRequest: loggedModelFetch,
     });
   if (modelProvider === 'ollama')
     return createOllamaModelProvider({
       model,
       baseUrl: modelBaseUrl,
+      fetchRequest: loggedModelFetch,
     });
   throw new Error(`Unsupported TODO_LLM_PROVIDER: ${modelProvider}`);
 };

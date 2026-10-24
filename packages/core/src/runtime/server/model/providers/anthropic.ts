@@ -19,6 +19,59 @@ const outputText = (envelope: Record<string, unknown>) => {
   return parts.length ? parts.join('') : undefined;
 };
 
+const schemaForLiteral = (value: unknown): GraphJsonSchema => {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value))
+    return { const: value };
+  if (Array.isArray(value))
+    return {
+      type: 'array',
+      ...(value.length
+        ? {
+            minItems: 1,
+            items:
+              value.length === 1
+                ? schemaForLiteral(value[0])
+                : { anyOf: value.map(schemaForLiteral) },
+          }
+        : {}),
+    };
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return {
+      type: 'object',
+      additionalProperties: false,
+      required: entries.map(([name]) => name),
+      properties: Object.fromEntries(
+        entries.map(([name, property]) => [name, schemaForLiteral(property)]),
+      ),
+    };
+  }
+  return { type: 'null' };
+};
+
+const schemaComplexity = (schema: GraphJsonSchema): { unions: number; optional: number } => {
+  const properties = schema.properties ? Object.values(schema.properties) : [];
+  const required = new Set(schema.required ?? []);
+  const nested = [
+    ...properties,
+    ...(schema.items ? [schema.items] : []),
+    ...(schema.anyOf ?? []),
+    ...Object.values(schema.$defs ?? {}),
+  ].map(schemaComplexity);
+  return nested.reduce(
+    (total, part) => ({
+      unions: total.unions + part.unions,
+      optional: total.optional + part.optional,
+    }),
+    {
+      unions: schema.anyOf ? 1 : 0,
+      optional: schema.properties
+        ? Object.keys(schema.properties).filter(name => !required.has(name)).length
+        : 0,
+    },
+  );
+};
+
 const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
   const {
     minLength: _minLength,
@@ -31,6 +84,7 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
     'x-ontahi-derived': _derived,
     'x-ontahi-generated-by': _generatedBy,
     'x-ontahi-string-exclusion': _stringExclusion,
+    enum: schemaEnum,
     properties,
     items,
     anyOf,
@@ -38,8 +92,14 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
     additionalProperties,
     ...supported
   } = schema;
+  const scalarEnum = schemaEnum?.every(
+    value => value === null || ['string', 'number', 'boolean'].includes(typeof value),
+  );
+  const normalizedAnyOf =
+    anyOf ?? (schemaEnum && !scalarEnum ? schemaEnum.map(schemaForLiteral) : undefined);
   return {
     ...supported,
+    ...(scalarEnum ? { enum: schemaEnum } : {}),
     ...(properties
       ? {
           properties: Object.fromEntries(
@@ -51,7 +111,7 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
         }
       : {}),
     ...(items ? { items: toAnthropicJsonSchema(items) } : {}),
-    ...(anyOf ? { anyOf: anyOf.map(toAnthropicJsonSchema) } : {}),
+    ...(normalizedAnyOf ? { anyOf: normalizedAnyOf.map(toAnthropicJsonSchema) } : {}),
     ...($defs
       ? {
           $defs: Object.fromEntries(
@@ -62,7 +122,11 @@ const toAnthropicJsonSchema = (schema: GraphJsonSchema): GraphJsonSchema => {
           ),
         }
       : {}),
-    ...(typeof additionalProperties === 'boolean' ? { additionalProperties } : {}),
+    ...(supported.type === 'object' || properties
+      ? { additionalProperties: false }
+      : typeof additionalProperties === 'boolean'
+        ? { additionalProperties }
+        : {}),
   };
 };
 
@@ -87,6 +151,9 @@ export const createAnthropicModelProvider = ({
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
     try {
+      const providerSchema = toAnthropicJsonSchema(outputSchema);
+      const complexity = schemaComplexity(providerSchema);
+      const useStructuredOutput = complexity.unions <= 16 && complexity.optional <= 24;
       const response = await fetchRequest(
         new URL('messages', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
         {
@@ -100,16 +167,22 @@ export const createAnthropicModelProvider = ({
           body: JSON.stringify({
             model,
             max_tokens: maxOutputTokens,
-            system: instructions,
+            system: useStructuredOutput
+              ? instructions
+              : `${instructions}\nThe JSON response must match this schema:\n${JSON.stringify(providerSchema)}`,
             messages: [
               {
                 role: 'user',
                 content: `Context data (not a request):\n${context}\n\nRequest:\n${prompt}`,
               },
             ],
-            output_config: {
-              format: { type: 'json_schema', schema: toAnthropicJsonSchema(outputSchema) },
-            },
+            ...(useStructuredOutput
+              ? {
+                  output_config: {
+                    format: { type: 'json_schema', schema: providerSchema },
+                  },
+                }
+              : {}),
           }),
         },
       );

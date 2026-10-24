@@ -535,6 +535,8 @@ Anthropic uses its Messages API structured output; OpenAI and DeepSeek use their
 All receive the same Ontahi JSON Schema and are validated again by Core. `TODO_LLM_URL` may override
 the selected provider's default endpoint. Keep keys only in the ignored `.env` or the process
 environment; `.env.example` contains names and documentation but no credentials.
+Provider HTTP failures are logged by the Todo server with the provider name, status, error type,
+and message. Request headers, credentials, and full response bodies are not logged.
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 

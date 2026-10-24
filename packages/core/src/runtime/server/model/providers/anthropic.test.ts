@@ -10,7 +10,10 @@ const request = () => ({
     type: 'object',
     additionalProperties: false,
     required: ['title'],
-    properties: { title: { type: 'string', minLength: 1 } },
+    properties: {
+      title: { type: 'string', minLength: 1 },
+      target: { enum: [{ kind: 'entity-ref', id: 'todo-1' }] },
+    },
   },
   signal: new AbortController().signal,
 });
@@ -56,7 +59,22 @@ describe('Anthropic model provider', () => {
             type: 'object',
             additionalProperties: false,
             required: ['title'],
-            properties: { title: { type: 'string' } },
+            properties: {
+              title: { type: 'string' },
+              target: {
+                anyOf: [
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['kind', 'id'],
+                    properties: {
+                      kind: { const: 'entity-ref' },
+                      id: { const: 'todo-1' },
+                    },
+                  },
+                ],
+              },
+            },
           },
         },
       },
@@ -77,6 +95,31 @@ describe('Anthropic model provider', () => {
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
       max_tokens: 512,
     });
+  });
+
+  it('uses prompt-level JSON guidance when the schema exceeds Anthropic union limits', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(completed());
+    const outputSchema = {
+      type: 'object' as const,
+      additionalProperties: false,
+      required: Array.from({ length: 17 }, (_, index) => `value${index}`),
+      properties: Object.fromEntries(
+        Array.from({ length: 17 }, (_, index) => [
+          `value${index}`,
+          { anyOf: [{ const: `variant-${index}` }, { const: null }] },
+        ]),
+      ),
+    };
+    await createAnthropicModelProvider({
+      model: 'claude-test',
+      apiKey: 'secret',
+      fetchRequest,
+    }).generate({ ...request(), outputSchema });
+
+    const body = JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body));
+    expect(body).not.toHaveProperty('output_config');
+    expect(body.system).toContain('The JSON response must match this schema:');
+    expect(body.system).toContain('variant-16');
   });
 
   it('rejects missing credentials before making a request', async () => {
