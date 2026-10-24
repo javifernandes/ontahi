@@ -104,6 +104,15 @@ export const createModelOperationExecutor = ({
   instructions,
   reportUsage,
 }: CreateModelOperationExecutorOptions): ModelOperationExecutor => {
+  const safeReportUsage = reportUsage
+    ? (usage: ModelResourceUsage) => {
+        try {
+          reportUsage(usage);
+        } catch {
+          // Resource telemetry must not turn a valid model result into an Operation failure.
+        }
+      }
+    : undefined;
   const execute = (
     request: ModelOperationExecutionRequest<unknown, GraphSchemaDefinition>,
   ): Effect.Effect<unknown, ModelOperationExecutionFailure> =>
@@ -115,7 +124,7 @@ export const createModelOperationExecutor = ({
           prompt: JSON.stringify(request.input),
           outputSchema: toGraphJsonSchema(request.operation.output),
           signal,
-          reportUsage,
+          reportUsage: safeReportUsage,
         }),
       catch: failureFromProvider,
     }).pipe(

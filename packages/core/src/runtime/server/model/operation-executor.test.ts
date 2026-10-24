@@ -112,6 +112,25 @@ describe('model-backed Operation executor', () => {
     );
   });
 
+  it('does not fail a valid Operation when usage reporting throws', async () => {
+    const usage = { provider: 'openai', model: 'gpt-test', totalTokens: 12 };
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: async providerRequest => {
+          providerRequest.reportUsage?.(usage);
+          return { title: 'Set the table' };
+        },
+      },
+      reportUsage: () => {
+        throw new Error('Telemetry unavailable.');
+      },
+    });
+
+    await expect(Effect.runPromise(executor.execute(request))).resolves.toEqual({
+      title: 'Set the table',
+    });
+  });
+
   it('rejects provider output that does not satisfy the Operation output contract', async () => {
     const executor = createModelOperationExecutor({
       provider: { generate: vi.fn().mockResolvedValue({ title: '' }) },

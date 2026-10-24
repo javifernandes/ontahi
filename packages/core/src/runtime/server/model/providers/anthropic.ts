@@ -166,7 +166,7 @@ export const createAnthropicModelProvider = ({
       timeoutMs,
       unavailableMessage: 'Cannot reach Anthropic. Check the network and provider configuration.',
       request: async providerSignal => {
-        const startedAt = Date.now();
+        const startedAt = performance.now();
         const providerSchema = toAnthropicJsonSchema(outputSchema);
         const complexity = schemaComplexity(providerSchema);
         const useStructuredOutput =
@@ -217,7 +217,7 @@ export const createAnthropicModelProvider = ({
               provider: 'anthropic',
               model,
               usage: envelope.usage,
-              durationMs: Date.now() - startedAt,
+              durationMs: performance.now() - startedAt,
             }),
           );
         if (

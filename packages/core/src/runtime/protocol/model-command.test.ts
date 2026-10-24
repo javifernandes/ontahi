@@ -87,7 +87,14 @@ describe('Runtime Protocol model.command family', () => {
     expect(parseModelCommandProtocolResponse(error)).toEqual({ success: true, response: error });
   });
 
-  it('rejects malformed model resource usage', () => {
+  it.each<[unknown]>([
+    [[]],
+    [[null]],
+    [[{}]],
+    [[{ provider: 'openai', model: '' }]],
+    [[{ provider: 'openai', model: 'gpt-test', unknown: 1 }]],
+    [[{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }]],
+  ])('rejects malformed model resource usage: %j', resourceUsage => {
     expect(
       parseModelCommandProtocolResponse({
         version: 1,
@@ -95,7 +102,7 @@ describe('Runtime Protocol model.command family', () => {
         result: {
           status: 'answered',
           message: 'Done.',
-          resourceUsage: [{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }],
+          resourceUsage,
         },
       }),
     ).toMatchObject({ success: false });

@@ -134,8 +134,13 @@ describe('SemanticPayload', () => {
                 inputTokens: 120,
                 outputTokens: 18,
                 totalTokens: 138,
+                cachedInputTokens: 40,
+                cacheWriteInputTokens: 3,
+                reasoningTokens: 6,
                 durationMs: 250,
               },
+              {},
+              'redacted',
             ],
           },
         }}
@@ -145,11 +150,15 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('executed')).toBeTruthy();
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
-    expect(screen.getByText('Resource usage')).toBeTruthy();
+    expect(screen.getAllByText('Resource usage')).toHaveLength(2);
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
     expect(screen.getByText('Input · 120 tokens')).toBeTruthy();
     expect(screen.getByText('Total · 138 tokens')).toBeTruthy();
+    expect(screen.getByText('Cached input · 40 tokens')).toBeTruthy();
+    expect(screen.getByText('Cache write · 3 tokens')).toBeTruthy();
+    expect(screen.getByText('Reasoning · 6 tokens')).toBeTruthy();
     expect(screen.getByText('Duration · 250 ms')).toBeTruthy();
+    expect(screen.getByText('model · unknown')).toBeTruthy();
 
     ui.rerender(
       <SemanticPayload

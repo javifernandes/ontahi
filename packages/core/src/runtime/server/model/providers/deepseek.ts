@@ -45,7 +45,7 @@ export const createDeepSeekModelProvider = ({
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     try {
       const response = await fetchRequest(
         new URL('responses', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
@@ -89,7 +89,7 @@ export const createDeepSeekModelProvider = ({
             provider: 'deepseek',
             model,
             usage: envelope.usage,
-            durationMs: Date.now() - startedAt,
+            durationMs: performance.now() - startedAt,
           }),
         );
       if (!isRecord(envelope) || envelope.status !== 'completed')

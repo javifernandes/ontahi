@@ -27,7 +27,7 @@ export const createOllamaModelProvider = ({
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     try {
       const response = await fetchRequest(
         new URL('api/chat', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
@@ -60,7 +60,9 @@ export const createOllamaModelProvider = ({
         );
       const envelope = await response.json();
       if (isRecord(envelope))
-        reportUsage?.(ollamaModelUsage({ model, envelope, durationMs: Date.now() - startedAt }));
+        reportUsage?.(
+          ollamaModelUsage({ model, envelope, durationMs: performance.now() - startedAt }),
+        );
       if (
         !isRecord(envelope) ||
         envelope.done !== true ||

@@ -119,7 +119,7 @@ export const createOpenAIModelProvider = ({
       timeoutMs,
       unavailableMessage: 'Cannot reach OpenAI. Check the network and provider configuration.',
       request: async providerSignal => {
-        const startedAt = Date.now();
+        const startedAt = performance.now();
         const providerSchema = toOpenAIJsonSchema(outputSchema);
         const useStructuredOutput = providerSchema.type === 'object' && !providerSchema.anyOf;
         const response = await fetchRequest(
@@ -169,7 +169,7 @@ export const createOpenAIModelProvider = ({
               provider: 'openai',
               model,
               usage: envelope.usage,
-              durationMs: Date.now() - startedAt,
+              durationMs: performance.now() - startedAt,
             }),
           );
         if (!isRecord(envelope) || envelope.status !== 'completed')
