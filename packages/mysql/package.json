@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/mysql",
-  "version": "1.0.0-alpha.13",
+  "version": "1.0.0-alpha.14",
   "description": "MySQL-backed runtime capabilities for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/mysql",
   "license": "Apache-2.0",

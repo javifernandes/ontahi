@@ -1,5 +1,18 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.14
+
+### Minor Changes
+
+- d1fab2d: Add `createSupabaseDataGraphStorage` to assemble conventional mappings, graph execution, and
+  reflected Entity readers around one host-owned Supabase client.
+
+### Patch Changes
+
+- Updated dependencies [d1fab2d]
+- Updated dependencies [fa7968e]
+  - @ontahi/core@1.0.0-alpha.14
+
 ## 1.0.0-alpha.13
 
 ### Minor Changes
