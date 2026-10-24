@@ -49,6 +49,32 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
   },
 });
 
+const modelUsageActivity = (resourceUsage: unknown): ExchangeActivity => ({
+  ...exchangeActivity({ version: 1, kind: 'model-command', text: 'help' }, 'model.command'),
+  settled: {
+    kind: 'exchange.settled',
+    exchangeId: 'model-usage',
+    requestId: 'request-usage',
+    at: 1,
+    family: 'model.command',
+    transportId: 'http',
+    transportKind: 'fetch',
+    startedAt: 0,
+    durationMs: 5623,
+    outcome: 'success',
+    response: {
+      protocol: 'ontahi.runtime',
+      version: 1,
+      kind: 'response',
+      family: 'model.command',
+      body: {
+        kind: 'model-command-result',
+        result: { status: 'answered', message: 'Done.', resourceUsage },
+      },
+    },
+  },
+});
+
 describe('Devtools activity model', () => {
   it('names pending Operation interactions instead of generic progress', () => {
     const activity = (interaction: unknown): OperationProgressActivity => ({
@@ -514,43 +540,25 @@ describe('Devtools activity model', () => {
 
   it('summarizes model resource usage for the Activity list and detail header', () => {
     expect(
-      modelResourceUsageSummary({
-        id: 'model-usage',
-        at: 1,
-        settled: {
-          kind: 'exchange.settled',
-          exchangeId: 'model-usage',
-          requestId: 'request-usage',
-          at: 1,
-          family: 'model.command',
-          transportId: 'http',
-          transportKind: 'fetch',
-          startedAt: 0,
-          durationMs: 5623,
-          outcome: 'success',
-          response: {
-            protocol: 'ontahi.runtime',
-            version: 1,
-            kind: 'response',
-            family: 'model.command',
-            body: {
-              kind: 'model-command-result',
-              result: {
-                status: 'answered',
-                message: 'Done.',
-                resourceUsage: [
-                  {
-                    provider: 'openai',
-                    model: 'gpt-6-luna',
-                    totalTokens: 138,
-                  },
-                ],
-              },
-            },
-          },
-        },
-      }),
+      modelResourceUsageSummary(
+        modelUsageActivity([
+          { provider: 'openai', model: 'gpt-6-luna', totalTokens: 138 },
+        ]),
+      ),
     ).toBe('openai · gpt-6-luna · 138 tokens');
+
+    expect(modelResourceUsageSummary(exchangeActivity({}, 'model.command'))).toBeUndefined();
+    expect(modelResourceUsageSummary(modelUsageActivity(undefined))).toBeUndefined();
+    expect(modelResourceUsageSummary(modelUsageActivity([null, 'redacted']))).toBeUndefined();
+    expect(
+      modelResourceUsageSummary(
+        modelUsageActivity([
+          { provider: 'openai', model: 'gpt-6-luna', totalTokens: 100 },
+          { provider: 'anthropic', model: 'claude-test' },
+          { totalTokens: 20 },
+        ]),
+      ),
+    ).toBe('openai · gpt-6-luna, anthropic · claude-test · 3 calls');
   });
 
   it('summarizes every ordered destination and composite identities', () => {
