@@ -80,6 +80,20 @@ it('shows an unresolved result without claiming an effect', async () => {
   expect(container.textContent).toContain('Which item?');
 });
 
+it('logs a model command response that could not be applied', async () => {
+  const error = new Error('Model command response is invalid.');
+  const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  execute.mockRejectedValue(error);
+  await write();
+  await submit();
+  expect(container.textContent).toContain('The server response was lost.');
+  expect(log).toHaveBeenCalledWith(
+    '[todo:model-command] Model command response could not be applied.',
+    error,
+  );
+  log.mockRestore();
+});
+
 it('shows and resolves a durable model approval in the conversation', async () => {
   respond.mockResolvedValue({
     ok: true,
