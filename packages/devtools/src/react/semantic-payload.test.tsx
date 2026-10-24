@@ -147,7 +147,9 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
     expect(screen.getByText('Resource usage')).toBeTruthy();
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
-    expect(screen.getByText('138')).toBeTruthy();
+    expect(screen.getByText('Input · 120 tokens')).toBeTruthy();
+    expect(screen.getByText('Total · 138 tokens')).toBeTruthy();
+    expect(screen.getByText('Duration · 250 ms')).toBeTruthy();
 
     ui.rerender(
       <SemanticPayload

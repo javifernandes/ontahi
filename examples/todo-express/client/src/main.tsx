@@ -19,6 +19,7 @@ import {
   type AuthenticationSession,
   type BootstrapState,
 } from './todo-app/bootstrap.js';
+import { redactTodoDiagnosticValue } from './todo-app/diagnostic-redaction.js';
 import {
   observeTodoEventActivity,
   TodoListCompletedEventIdentity,
@@ -27,17 +28,6 @@ import './styles.css';
 
 const queryClient = new QueryClient();
 const diagnosticsHostnames = new Set(['localhost', '127.0.0.1', '[::1]']);
-const sensitiveDiagnosticKey = /authorization|cookie|credential|password|secret|token/i;
-const redactTodoDiagnosticValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(redactTodoDiagnosticValue);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      sensitiveDiagnosticKey.test(key) ? '[redacted]' : redactTodoDiagnosticValue(item),
-    ]),
-  );
-};
 const runtimeTransport = createDiagnosticRuntimeTransportRouter({
   diagnostics:
     import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)

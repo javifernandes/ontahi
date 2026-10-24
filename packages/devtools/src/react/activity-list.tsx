@@ -5,6 +5,7 @@ import {
   activityEntryOutcome,
   activityEntryTitle,
   formatClock,
+  modelResourceUsageSummary,
   operationProgressState,
   outcomeColor,
   type ActivityEntry,
@@ -42,6 +43,7 @@ export const ActivityList = ({
         const graphObservation =
           activity.kind === 'graph-observation' ? activity.graphObservation : undefined;
         const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
+        const modelUsage = exchange ? modelResourceUsageSummary(exchange) : undefined;
         return (
           <li key={activity.id}>
             <button
@@ -67,6 +69,7 @@ export const ActivityList = ({
                   </span>
                   <span>{event.transportId}</span>
                   <span>{formatClock(activity.at)}</span>
+                  {modelUsage ? <span>{modelUsage}</span> : null}
                   {graphObservation ? (
                     <span>
                       {graphObservation.settled ? graphObservation.settled.outcome : 'observing'} ·{' '}
