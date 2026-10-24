@@ -70,19 +70,19 @@ Register each classified root on its **base** `GraphReadPolicy`:
 ```ts
 const reads = createGraphReadDispatcher({
   policies: [
-    {
+    defineGraphReadPolicy({
       entity: ContentNode,
       variants: [Chapter],
       modes: ['get', 'run', 'count'],
       cardinalities: ['one', 'many'],
       maxLimit: 25,
-      fields: {
-        id: { select: true },
-        type: { select: true },
-        title: { select: true, filter: ['eq'], order: true },
+      allow: {
+        select: ['id', 'type', 'title'],
+        filter: { title: ['eq'] },
+        order: ['title'],
       },
       scope: 'all', // replace with the host's ordinary authority-dependent scope
-    },
+    }),
   ],
   execute, // existing host executor receives a ContentNode Query
 });
