@@ -21,6 +21,10 @@ import {
   type TaskFailure,
   type TaskStartOptions,
 } from '../../tasks.js';
+import {
+  commitMutationSetToCurrentUnitOfWork,
+  getCurrentUnitOfWork,
+} from '../../unit-of-work.js';
 import type {
   ModelOperationApplicationChoice,
   ModelOperationApplicationInput,
@@ -410,6 +414,8 @@ export const createTaskBackedModelCommandRuntime = ({
         };
       }
       if (snapshot.status === 'completed' && snapshot.result !== undefined) {
+        if (snapshot.executionMetadata?.committedMutations && getCurrentUnitOfWork())
+          commitMutationSetToCurrentUnitOfWork(snapshot.executionMetadata.committedMutations);
         return snapshot.result as ModelCommandTaskResult;
       }
       if (snapshot.error) {

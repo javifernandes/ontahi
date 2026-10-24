@@ -84,7 +84,7 @@ export type ApplicationRuntimeProtocolOptions<TContext extends InvocationContext
     mutations: CommittedMutationSet,
     details: {
       readonly context: TContext;
-      readonly family: 'operation' | 'graph.command' | 'durable.operation';
+      readonly family: 'operation' | 'graph.command' | 'durable.operation' | 'model.command';
     },
   ) => CommittedMutationSet | undefined | PromiseLike<CommittedMutationSet | undefined>;
   /** Explicit authority-scoped projection. Event subscription is unavailable when omitted. */
@@ -389,7 +389,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
       ...(modelCommand
         ? {
             'model.command': (request, context, { signal }) =>
-              withContext(context, () =>
+              withMutationJournal('runtime.protocol.model.command', context, () =>
                 submitModelCommandProtocol(modelCommand.runtime, request, signal),
               ),
           }
@@ -402,7 +402,8 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             if (
               request.family !== 'operation' &&
               request.family !== 'graph.command' &&
-              request.family !== 'durable.operation'
+              request.family !== 'durable.operation' &&
+              request.family !== 'model.command'
             )
               return undefined;
             const committedMutations = await projectCommittedMutations(

@@ -1,6 +1,7 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serverContext } from '../../context.js';
 import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
 import {
   createInMemoryTaskStorage,
@@ -9,6 +10,7 @@ import {
   respondToTaskInteraction,
   startTask,
 } from '../../tasks.js';
+import { getCurrentUnitOfWork } from '../../unit-of-work.js';
 import { ModelInterpretationError } from '../interpretation.js';
 
 import type { PreparedModelCommandRuntime } from './runtime.js';
@@ -692,6 +694,56 @@ describe('Model Command Task', () => {
 
     await expect(runtime.submit(input, new AbortController().signal)).resolves.toEqual(
       terminal.result,
+    );
+  });
+
+  it('restores terminal Task mutation metadata into the calling UnitOfWork', async () => {
+    const committedMutations = {
+      precision: 'intensional' as const,
+      mutations: [
+        {
+          provenance: 'captured' as const,
+          effect: {
+            kind: 'selection-change' as const,
+            selection: {
+              kind: 'selection' as const,
+              entityName: 'TodoList',
+              expression: { kind: 'all' as const },
+            },
+          },
+        },
+      ],
+    };
+    const terminal = {
+      taskId: 'ontahi.model-command',
+      runId: 'completed-with-mutations',
+      status: 'completed' as const,
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      result: { status: 'executed' as const, message: 'List created.', request: proposal },
+      executionMetadata: { committedMutations, mutationCommitId: 'commit-list-created' },
+    };
+    const tasks = {
+      register: vi.fn(),
+      start: () => Effect.succeed({ ...terminal, status: 'queued' as const }),
+      observe: () => Stream.make(terminal),
+    } as unknown as ModelCommandTaskHost;
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: {} as PreparedModelCommandRuntime,
+      tasks,
+    });
+
+    await serverContext.run(
+      {
+        scope: 'model-command-test',
+        telemetrySpanName: 'model-command-test',
+        resources: new Map(),
+      },
+      async () => {
+        await expect(runtime.submit(input, new AbortController().signal)).resolves.toEqual(
+          terminal.result,
+        );
+        expect(getCurrentUnitOfWork()?.mutations.snapshot()).toEqual(committedMutations);
+      },
     );
   });
 

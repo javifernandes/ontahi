@@ -258,6 +258,71 @@ describe('application Runtime Protocol', () => {
     expect(projectCommittedMutations).toHaveBeenCalledTimes(2);
   });
 
+  it('projects mutations committed by an immediate Model Command', async () => {
+    const { application } = createApplication();
+    const projectCommittedMutations = vi.fn(mutations => mutations);
+    const submit = vi.fn(async () => {
+      declareSelectionChange({
+        kind: 'selection',
+        entityName: 'TodoList',
+        expression: { kind: 'all' },
+      });
+      return {
+        status: 'executed' as const,
+        message: 'List created.',
+        request: {
+          kind: 'invoke' as const,
+          operationId: 'TodoList.create',
+          input: { name: 'Supermarket' },
+        },
+      };
+    });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      modelCommand: { runtime: { submit } },
+      projectCommittedMutations,
+    });
+    const accepted = createRuntimeProtocolRequest({
+      id: 'model-command-mutations',
+      family: 'model.command',
+      body: {
+        version: 1,
+        kind: 'model-command',
+        text: 'Create new list supermarket',
+      },
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    await expect(
+      protocol.dispatcher(accepted, {
+        principal: { kind: 'user', subject: 'user-1' },
+      }),
+    ).resolves.toMatchObject({
+      kind: 'response',
+      body: {
+        kind: 'model-command-result',
+        result: { status: 'executed' },
+      },
+      metadata: {
+        committedMutations: {
+          mutations: [
+            {
+              effect: {
+                kind: 'selection-change',
+                selection: { entityName: 'TodoList' },
+              },
+            },
+          ],
+        },
+      },
+    });
+    expect(projectCommittedMutations).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ family: 'model.command' }),
+    );
+  });
+
   it('reports delivery failures without changing an already committed response', async () => {
     const { application } = createApplication();
     const reportError = vi.fn();
