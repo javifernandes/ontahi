@@ -72,10 +72,11 @@ promise that capacity remains available.
 
 ## Ordering
 
-Do not implement this Plan before one model-backed Domain Operation exists. Intent Resolution
-already exposes useful model calls, but designing the shared abstraction from that path alone would
-risk coupling all model usage to `model.command`. The executor proof should reveal the common
-invocation, lifecycle, cancellation, outcome, and telemetry seams first.
+The prerequisite now exists: Plan 156 delivered one model-backed Domain Operation, while Intent
+Resolution already exposes a second independent model consumer. Provider adapters for Ollama,
+DeepSeek, Anthropic, and OpenAI give the spike several real evidence formats rather than one
+provider-shaped guess. The next implementation should derive the common invocation, lifecycle,
+cancellation, outcome, usage, and telemetry ports from those two semantic paths.
 
 This Plan does not require code-backed and model-backed implementations to run simultaneously.
 Feature flags, rollout, shadow execution, fallback, and binding migration are adjacent routing

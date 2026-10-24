@@ -1,6 +1,6 @@
 # 156. Model-Backed Domain Operation Executor
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/156-model-backed-domain-operation-executor`
 
@@ -159,24 +159,24 @@ or public builder before the Todo proof exposes the necessary seam.
 
 ## Acceptance And Verification
 
-- [ ] `TodoList.suggestNextItem` is one Domain Operation declaration with one stable identity,
+- [x] `TodoList.suggestNextItem` is one Domain Operation declaration with one stable identity,
       input schema, output schema, invocation, and caller.
-- [ ] Model-backed and code-backed application compositions can each implement that Operation
+- [x] Model-backed and code-backed application compositions can each implement that Operation
       without changing the declaration or caller.
-- [ ] The model executor receives normalized input, the exact expected output schema, bounded
+- [x] The model executor receives normalized input, the exact expected output schema, bounded
       authorized context, cancellation, and no undeclared graph/tool access.
-- [ ] Provider output is parsed and validated before becoming the ordinary Operation result.
-- [ ] Missing or denied context, invalid output, provider failure, timeout, and cancellation are
+- [x] Provider output is parsed and validated before becoming the ordinary Operation result.
+- [x] Missing or denied context, invalid output, provider failure, timeout, and cancellation are
       represented honestly and produce no mutation.
-- [ ] The model-backed invocation passes through existing requirements, conditions, concerns,
+- [x] The model-backed invocation passes through existing requirements, conditions, concerns,
       telemetry, and canonical result handling rather than a parallel AI dispatch path.
-- [ ] Context contains only the selected list and its bounded projected items; limits are explicit
+- [x] Context contains only the selected list and its bounded projected items; limits are explicit
       and tested.
-- [ ] A real local-model evaluation is recorded without treating sample success as a reliability or
+- [x] A real local-model evaluation is recorded without treating sample success as a reliability or
       security proof.
-- [ ] Any UI suggestion is editable and tentative; accepting it uses the existing authoritative
+- [x] Any UI suggestion is editable and tentative; accepting it uses the existing authoritative
       creation path.
-- [ ] A package/public-API decision and deferred work are recorded from implementation evidence.
+- [x] A package/public-API decision and deferred work are recorded from implementation evidence.
 
 ## Effectful Follow-Up: `TodoList.createFromGoal`
 
@@ -230,3 +230,19 @@ both this path and existing Intent Resolution.
 
 The `createFromGoal` effectful proof follows rather than blocking closure. It must preserve the
 separation between generated content, authorized mutation, and verified application facts.
+
+## Closure Evidence — 2026-10-22
+
+PR #255 implemented the provider-neutral Core executor and the contextual
+`TodoList.suggestNextItem` proof. The Operation owns instructions, bounded context assembly, and
+semantic validation through `modelOperation`; application composition supplies either a model
+provider or the deterministic code implementation without changing the public declaration or
+caller. Todo exposes the result as an editable draft and persists nothing until the existing create
+Command is invoked.
+
+The proof exercised a real local Ollama model and deterministic provider doubles. Core owns generic
+provider execution, cancellation, typed failures, and output validation. Provider adapters remain
+replaceable server infrastructure; Todo owns provider selection and credentials. Resource usage,
+budgets, attribution, and audit now proceed in Plan 125a against both this executor and Intent
+Resolution. Effectful generation, declarative context scope, rollout variants, and feature flags
+remain explicit follow-ups rather than requirements for this closed slice.
