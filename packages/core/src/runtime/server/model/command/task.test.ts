@@ -1,6 +1,7 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serverContext } from '../../context.js';
 import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
 import {
   createInMemoryTaskStorage,
@@ -9,6 +10,7 @@ import {
   respondToTaskInteraction,
   startTask,
 } from '../../tasks.js';
+import { declareSelectionChange, getCurrentUnitOfWork } from '../../unit-of-work.js';
 import { ModelInterpretationError } from '../interpretation.js';
 
 import type { PreparedModelCommandRuntime } from './runtime.js';
@@ -604,6 +606,7 @@ describe('Model Command Task', () => {
       tasks: {
         register: task => taskRuntime.register?.(task),
         start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        getSnapshot: run => getTaskSnapshot(taskRuntime, run),
         observe: run => taskRuntime.observe!(run),
       },
       approval: () => ({
@@ -651,6 +654,7 @@ describe('Model Command Task', () => {
       tasks: {
         register: task => f.taskRuntime.register?.(task),
         start: (task, taskInput, options) => startTask(f.taskRuntime, task, taskInput, options),
+        getSnapshot: run => getTaskSnapshot(f.taskRuntime, run),
         observe: run => f.taskRuntime.observe!(run),
       },
       approval: () => ({
@@ -683,6 +687,7 @@ describe('Model Command Task', () => {
     const tasks = {
       register: vi.fn(),
       start: () => Effect.succeed({ ...terminal, status: 'queued' as const }),
+      getSnapshot: () => Effect.succeed(terminal),
       observe: () => Stream.make(terminal),
     } as unknown as ModelCommandTaskHost;
     const runtime = createTaskBackedModelCommandRuntime({
@@ -692,6 +697,115 @@ describe('Model Command Task', () => {
 
     await expect(runtime.submit(input, new AbortController().signal)).resolves.toEqual(
       terminal.result,
+    );
+  });
+
+  it('restores terminal Task mutation metadata into the calling UnitOfWork', async () => {
+    const committedMutations = {
+      precision: 'intensional' as const,
+      mutations: [
+        {
+          provenance: 'captured' as const,
+          effect: {
+            kind: 'selection-change' as const,
+            selection: {
+              kind: 'selection' as const,
+              entityName: 'TodoList',
+              expression: { kind: 'all' as const },
+            },
+          },
+        },
+      ],
+    };
+    const terminal = {
+      taskId: 'ontahi.model-command',
+      runId: 'completed-with-mutations',
+      status: 'completed' as const,
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      result: { status: 'executed' as const, message: 'List created.', request: proposal },
+      executionMetadata: { committedMutations, mutationCommitId: 'commit-list-created' },
+    };
+    const tasks = {
+      register: vi.fn(),
+      start: () => Effect.succeed({ ...terminal, status: 'queued' as const }),
+      getSnapshot: () => Effect.succeed(terminal),
+      observe: () => Stream.make(terminal),
+    } as unknown as ModelCommandTaskHost;
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: {} as PreparedModelCommandRuntime,
+      tasks,
+    });
+
+    await serverContext.run(
+      {
+        scope: 'model-command-test',
+        telemetrySpanName: 'model-command-test',
+        resources: new Map(),
+      },
+      async () => {
+        await expect(runtime.submit(input, new AbortController().signal)).resolves.toEqual(
+          terminal.result,
+        );
+        expect(getCurrentUnitOfWork()?.mutations.snapshot()).toEqual(committedMutations);
+      },
+    );
+  });
+
+  it('captures and restores mutations from an actual in-process Model Command Task', async () => {
+    const prepare = vi.fn(async () => ({ status: 'proposed' as const, request: proposal }));
+    const execute = vi.fn(async () => {
+      declareSelectionChange({
+        kind: 'selection',
+        entityName: 'TodoList',
+        expression: { kind: 'all' },
+      });
+      return { status: 'executed' as const, message: 'List created.', request: proposal };
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    let observedRun: { taskId: string; runId: string } | undefined;
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: { prepare, execute, submit: vi.fn() } as unknown as PreparedModelCommandRuntime,
+      tasks: {
+        register: task => taskRuntime.register?.(task),
+        start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        getSnapshot: run => getTaskSnapshot(taskRuntime, run),
+        observe: run => {
+          observedRun = run;
+          return taskRuntime.observe!(run);
+        },
+      },
+    });
+
+    await serverContext.run(
+      {
+        scope: 'model-command-test',
+        telemetrySpanName: 'model-command-test',
+        resources: new Map(),
+      },
+      async () => {
+        const callingUnitOfWork = getCurrentUnitOfWork();
+        await expect(runtime.submit(input, new AbortController().signal)).resolves.toMatchObject({
+          status: 'executed',
+        });
+        expect(observedRun).toBeDefined();
+        await expect(
+          Effect.runPromise(getTaskSnapshot(taskRuntime, observedRun!)),
+        ).resolves.toMatchObject({
+          executionMetadata: {
+            committedMutations: { mutations: [expect.anything()] },
+          },
+        });
+        expect(callingUnitOfWork?.mutations.snapshot()).toMatchObject({
+          mutations: [
+            {
+              effect: {
+                kind: 'selection-change',
+                selection: { entityName: 'TodoList' },
+              },
+            },
+          ],
+        });
+      },
     );
   });
 
@@ -706,6 +820,14 @@ describe('Model Command Task', () => {
               taskId: 'ontahi.model-command',
               runId: 'failed',
               status: 'queued',
+            }),
+          getSnapshot: () =>
+            Effect.succeed({
+              taskId: 'ontahi.model-command',
+              runId: 'failed',
+              status: 'failed' as const,
+              updatedAt: '2026-09-29T00:00:00.000Z',
+              error: { code: 'model_failed', message: 'Model execution failed.' },
             }),
           observe,
         } as unknown as ModelCommandTaskHost,
@@ -738,6 +860,7 @@ describe('Model Command Task', () => {
       tasks: {
         register: task => taskRuntime.register?.(task),
         start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        getSnapshot: run => getTaskSnapshot(taskRuntime, run),
         observe: run => taskRuntime.observe!(run),
       },
     });

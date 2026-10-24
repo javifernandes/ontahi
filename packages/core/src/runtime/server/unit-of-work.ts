@@ -305,15 +305,20 @@ export const declareSelectionChange = (selection: SelectionAst): void => {
   getRequiredUnitOfWork().mutations.changed(selection);
 };
 
-export const sealCurrentUnitOfWorkMutationJournal = (): CommittedMutationSet => {
-  const unitOfWork = getRequiredUnitOfWork();
+export const sealUnitOfWorkMutationJournal = (unitOfWork: UnitOfWork): CommittedMutationSet => {
   const journal = mutationJournalFor(unitOfWork);
   journal.sealed = true;
   return mutationSetFrom(journal);
 };
 
-export const commitMutationSetToCurrentUnitOfWork = (set: CommittedMutationSet): void => {
-  const journal = mutationJournalFor(getRequiredUnitOfWork());
+export const sealCurrentUnitOfWorkMutationJournal = (): CommittedMutationSet =>
+  sealUnitOfWorkMutationJournal(getRequiredUnitOfWork());
+
+export const commitMutationSetToUnitOfWork = (
+  unitOfWork: UnitOfWork,
+  set: CommittedMutationSet,
+): void => {
+  const journal = mutationJournalFor(unitOfWork);
   if (journal.sealed) throw new Error('UnitOfWork mutation journal is already sealed');
   if (set.precision === 'widened') {
     journal.mutations = widenMutations([...journal.mutations, ...set.mutations], journal.budget);
@@ -322,6 +327,9 @@ export const commitMutationSetToCurrentUnitOfWork = (set: CommittedMutationSet):
   }
   for (const mutation of set.mutations) appendMutation(journal, mutation);
 };
+
+export const commitMutationSetToCurrentUnitOfWork = (set: CommittedMutationSet): void =>
+  commitMutationSetToUnitOfWork(getRequiredUnitOfWork(), set);
 
 const resumeOutsideChildContext = <TValue>(
   parent: OperationRuntimeContext | undefined,

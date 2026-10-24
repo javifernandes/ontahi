@@ -497,7 +497,30 @@ The usual application URL is `http://localhost:3001`; set `PORT=3003` to use ano
 `TODO_LLM_URL` optionally changes the selected provider's base URL.
 Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.
 
-To use DeepSeek instead of a local Ollama model:
+The root `pnpm todo:dev:local` command loads `examples/todo-express/.env` when it exists. Copy the
+committed template and keep the resulting file local:
+
+```bash
+cp examples/todo-express/.env.example examples/todo-express/.env
+```
+
+Choose one provider in that file. For Anthropic:
+
+```dotenv
+TODO_LLM_PROVIDER=anthropic
+TODO_LLM_MODEL=<anthropic-model-id>
+ANTHROPIC_API_KEY=...
+```
+
+For OpenAI:
+
+```dotenv
+TODO_LLM_PROVIDER=openai
+TODO_LLM_MODEL=<openai-model-id>
+OPENAI_API_KEY=...
+```
+
+Or use DeepSeek instead of a local Ollama model:
 
 ```bash
 DEEPSEEK_API_KEY=... \
@@ -508,9 +531,12 @@ TODO_AUTH_MODE=disabled \
 pnpm todo:dev:local
 ```
 
-DeepSeek uses its Responses API with JSON Schema structured output. `TODO_LLM_URL` may override
-its default `https://api.deepseek.com` endpoint as well. Keep `DEEPSEEK_API_KEY` in the environment;
-do not commit it to an example env file.
+Anthropic uses its Messages API structured output; OpenAI and DeepSeek use their Responses APIs.
+All receive the same Ontahi JSON Schema and are validated again by Core. `TODO_LLM_URL` may override
+the selected provider's default endpoint. Keep keys only in the ignored `.env` or the process
+environment; `.env.example` contains names and documentation but no credentials.
+Provider HTTP failures are logged by the Todo server with the provider name, status, error type,
+and message. Request headers, credentials, and full response bodies are not logged.
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 

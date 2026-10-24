@@ -21,6 +21,7 @@ import {
   type TaskFailure,
   type TaskStartOptions,
 } from '../../tasks.js';
+import { commitMutationSetToUnitOfWork, getCurrentUnitOfWork } from '../../unit-of-work.js';
 import type {
   ModelOperationApplicationChoice,
   ModelOperationApplicationInput,
@@ -91,6 +92,7 @@ export type ModelCommandTaskHost = {
     input: TInput,
     options?: TaskStartOptions,
   ): Effect.Effect<TaskRunRef, TaskFailure>;
+  getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   observe(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
 };
 
@@ -389,6 +391,7 @@ export const createTaskBackedModelCommandRuntime = ({
 
   return {
     submit: async (request, signal) => {
+      const callingUnitOfWork = getCurrentUnitOfWork();
       const run = await Effect.runPromise(
         tasks.start(task, request, { trigger: trigger(request) }),
         { signal },
@@ -400,16 +403,22 @@ export const createTaskBackedModelCommandRuntime = ({
       if (Option.isNone(settled)) {
         throw new Error('Model command observation ended before the Task produced a result.');
       }
-      const snapshot = settled.value;
-      if (snapshot.interaction) {
+      const observedSnapshot = settled.value;
+      if (observedSnapshot.interaction) {
         return {
           status: 'pending',
-          message: snapshot.interaction.prompt,
-          run: { taskId: snapshot.taskId, runId: snapshot.runId },
-          interaction: snapshot.interaction,
+          message: observedSnapshot.interaction.prompt,
+          run: { taskId: observedSnapshot.taskId, runId: observedSnapshot.runId },
+          interaction: observedSnapshot.interaction,
         };
       }
+      const snapshot = await Effect.runPromise(tasks.getSnapshot(run), { signal });
       if (snapshot.status === 'completed' && snapshot.result !== undefined) {
+        if (snapshot.executionMetadata?.committedMutations && callingUnitOfWork)
+          commitMutationSetToUnitOfWork(
+            callingUnitOfWork,
+            snapshot.executionMetadata.committedMutations,
+          );
         return snapshot.result as ModelCommandTaskResult;
       }
       if (snapshot.error) {
