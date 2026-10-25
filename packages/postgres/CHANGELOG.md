@@ -1,5 +1,14 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.15
+
+### Patch Changes
+
+- Updated dependencies [471e2e4]
+- Updated dependencies [d87afb3]
+  - @ontahi/core@1.0.0-alpha.15
+  - @ontahi/sql@1.0.0-alpha.15
+
 ## 1.0.0-alpha.14
 
 ### Patch Changes

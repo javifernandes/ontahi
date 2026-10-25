@@ -1,5 +1,22 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.15
+
+### Minor Changes
+
+- d87afb3: Expose provider-neutral model resource usage from OpenAI, Anthropic, DeepSeek, and Ollama, preserve
+  every model attempt on Model Command results, and present token and duration measurements in
+  Devtools. Model-backed Operations can observe the same usage through an optional reporting port.
+
+### Patch Changes
+
+- Updated dependencies [471e2e4]
+- Updated dependencies [d87afb3]
+  - @ontahi/core@1.0.0-alpha.15
+  - @ontahi/language@1.0.0-alpha.15
+  - @ontahi/react@1.0.0-alpha.15
+  - @ontahi/language-codemirror@1.0.0-alpha.15
+
 ## 1.0.0-alpha.14
 
 ### Patch Changes
