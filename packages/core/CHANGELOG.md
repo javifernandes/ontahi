@@ -1,5 +1,15 @@
 # @ontahi/core
 
+## 1.0.0-alpha.15
+
+### Minor Changes
+
+- 471e2e4: Add provider-neutral Anthropic Messages and OpenAI Responses adapters with structured output,
+  cancellation, timeout, and typed model failures.
+- d87afb3: Expose provider-neutral model resource usage from OpenAI, Anthropic, DeepSeek, and Ollama, preserve
+  every model attempt on Model Command results, and present token and duration measurements in
+  Devtools. Model-backed Operations can observe the same usage through an optional reporting port.
+
 ## 1.0.0-alpha.14
 
 ### Minor Changes
