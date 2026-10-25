@@ -49,6 +49,8 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 18. [`Intent Resolution`](./model/intent-resolution.md) (shaping)
 19. [`Operation Interaction`](./model/operation-interaction.md) (shaping)
 20. [`Semantic Program Kernel`](./model/semantic-program-kernel.md) (shaping)
+21. [`Semantic Subjects And Runtime Concerns`](./model/semantic-subjects-and-runtime-concerns.md)
+    (shaping)
 
 ## Adjacent Runtime Shapes
 

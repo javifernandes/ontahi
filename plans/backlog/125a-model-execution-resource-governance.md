@@ -6,6 +6,9 @@ Canonical ID: `ontahi://plans/125a-model-execution-resource-governance`
 
 Parent research: [125. Ontahi AI Operations](../research/125-ontahi-ai-operations.md)
 
+Broader research:
+[158. Semantic Execution Context, Governance And Evidence](../research/158-semantic-execution-context-governance-and-evidence.md).
+
 Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-operation-execution.md),
 [Runtime Capability Model](../../atlas/items/application-architecture-surface/runtime-capabilities.md).
 
