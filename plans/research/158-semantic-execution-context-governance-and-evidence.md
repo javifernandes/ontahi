@@ -110,6 +110,9 @@ type SemanticExecutionContext = {
 
 This is explanatory pseudocode, not an accepted public API. The research must determine which
 identities already exist, which can be composed, and which require new stable contracts.
+The final design may expose these identities through separate trusted projections instead of
+carrying every identity directly on one public context object. A policy evaluator, evidence sink,
+transport, and developer tool may each require a different safe subset of the same causal context.
 
 The following must remain distinct:
 
