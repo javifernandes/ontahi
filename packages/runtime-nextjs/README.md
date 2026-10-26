@@ -50,6 +50,22 @@ export const POST = createNextRuntimeProtocolRouteHandler({
 });
 ```
 
+When application composition is lazy or storage-backed, provide its already composed Runtime
+Protocol receiver as a factory. The adapter validates the portable request before initializing the
+application or deriving trusted context:
+
+```ts
+export const POST = createNextRuntimeProtocolRouteHandler({
+  receiver: async () => (await getServerApplication()).runtimeProtocol,
+  context: async request => ({
+    principal: await resolvePrincipal(request),
+  }),
+});
+```
+
+The application composition owns `createApplicationRuntimeProtocol(...)`, including Graph policies
+and bridge-exposed Operations. The route does not rebuild family dispatch.
+
 The adapter validates JSON, the common envelope, and the canonical family body before calling the
 context factory. It installs no handlers, policies, authorization, or capabilities; the host owns
 the dispatcher and derives trusted context only from the received server request. All registered

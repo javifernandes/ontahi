@@ -139,41 +139,26 @@ ingress, and lower-level dispatcher composition.
 
 ## Mount Next.js
 
-Next.js projects the same common dispatcher and trusted receiver context from one App Router Route
-Handler:
+Next.js projects the composed application Runtime Protocol and trusted receiver context from one
+App Router Route Handler. A storage-backed host may resolve that receiver lazily:
 
 ```ts
-import { createRuntimeProtocolDispatcher } from '@ontahi/core/runtime/protocol';
 import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
 
-type RuntimeAuthority = {
-  principal: Awaited<ReturnType<typeof authenticate>>;
-};
-
-const dispatcher = createRuntimeProtocolDispatcher<RuntimeAuthority>({
-  handlers: {
-    operation: (request, authority) =>
-      TodoApplication.app.runtime.withInvocationContext(authority, () =>
-        operationDispatcher(request),
-      ),
-    'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
-    'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
-    'durable.operation': durableObservationHandler,
-  },
-});
-
 export const POST = createNextRuntimeProtocolRouteHandler({
-  dispatcher,
+  receiver: async () => (await getTodoServerApplication()).runtimeProtocol,
   context: async request => ({
     principal: await authenticate(request),
   }),
 });
 ```
 
-The host chooses the route file and therefore its URL. Family-specific Next.js Operation and Graph
-Read handlers remain available only as explicit compatibility surfaces; they derive authority on
-the receiver just like the common route. Configure the React Fetch client once when the common URL
-differs from `/runtime`.
+The application composition creates `runtimeProtocol` with `createApplicationRuntimeProtocol(...)`
+and owns its Graph policies and exposed Operations. The adapter validates the request before
+resolving either the lazy receiver or its trusted context. The host chooses the route file and
+therefore its URL. Family-specific Next.js Operation and Graph Read handlers remain available only
+as explicit compatibility surfaces; they derive authority on the receiver just like the common
+route. Configure the React Fetch client once when the common URL differs from `/runtime`.
 
 ## Generate the browser Entity facade
 

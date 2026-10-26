@@ -815,6 +815,39 @@ describe('application Runtime Protocol', () => {
     });
   });
 
+  it('does not expose server-only Operations through the application Runtime Protocol', async () => {
+    const { application } = createApplication();
+    const operation = {
+      kind: 'domain-operation' as const,
+      id: 'Todo.rebuildIndex',
+      entityName: 'Todo',
+      name: 'rebuildIndex',
+      authority: 'server' as const,
+      exposure: 'server-only' as const,
+      input: value('RebuildIndexInput', {}),
+      layer: 'todos',
+      run: vi.fn(),
+    };
+    application.resolveOperation = () => operation as never;
+    const protocol = createApplicationRuntimeProtocol({ application, policies: [] });
+
+    await expect(
+      protocol.dispatcher(
+        request(
+          'operation',
+          toOperationProtocolRequest({ kind: 'invoke', operationId: operation.id, input: {} }),
+        ),
+        { principal: { kind: 'user', subject: 'user-1' } },
+      ),
+    ).resolves.toMatchObject({
+      body: {
+        kind: 'invocation-result',
+        result: { ok: false, kind: 'rejected', reason: 'unknown_operation' },
+      },
+    });
+    expect(application.invokeOperation).not.toHaveBeenCalled();
+  });
+
   it('projects persisted mutations from a terminal durable snapshot outside its body', async () => {
     const { application } = createApplication();
     const terminalSnapshot = {

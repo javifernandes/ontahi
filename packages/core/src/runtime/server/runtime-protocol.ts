@@ -175,7 +175,13 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     (policy): policy is ApplicationRuntimeGraphCommandPolicy<TContext> =>
       !isGraphReadPolicy(policy),
   );
-  const operation = createOperationInvocationDispatcher(application);
+  const operation = createOperationInvocationDispatcher({
+    ...application,
+    resolveOperation: operationId => {
+      const resolved = application.resolveOperation(operationId);
+      return resolved?.exposure === 'bridge' ? resolved : undefined;
+    },
+  });
   const read = application.createGraphReadDispatcher<TContext>(graphReadPolicies);
   const observeNativeGraph = application.createGraphReadObserver<TContext>(graphReadPolicies);
   const activeGraphObservations = createActiveGraphObservationRegistry();

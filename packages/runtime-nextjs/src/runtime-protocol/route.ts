@@ -11,9 +11,13 @@ export type NextRuntimeProtocolContextFactory<TContext> = (
   request: Request,
 ) => TContext | Promise<TContext>;
 
+export type NextRuntimeProtocolReceiverFactory<TContext> = (
+  request: Request,
+) => ApplicationRuntimeProtocol<TContext> | Promise<ApplicationRuntimeProtocol<TContext>>;
+
 export type CreateNextRuntimeProtocolRouteHandlerOptions<TContext> = {
   dispatcher?: RuntimeProtocolDispatcher<TContext>;
-  receiver?: ApplicationRuntimeProtocol<TContext>;
+  receiver?: ApplicationRuntimeProtocol<TContext> | NextRuntimeProtocolReceiverFactory<TContext>;
   context: NextRuntimeProtocolContextFactory<TContext>;
   reportError?: (error: unknown, request: Request) => void;
 };
@@ -44,8 +48,8 @@ export const createNextRuntimeProtocolRouteHandler = <TContext>({
   context,
   reportError,
 }: CreateNextRuntimeProtocolRouteHandlerOptions<TContext>) => {
-  const dispatch = receiver?.dispatcher ?? dispatcher;
-  if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+  if (!receiver && !dispatcher)
+    throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
 
   return async (request: Request): Promise<Response> => {
     const parsed = registry.parseRequest(await request.json().catch(() => null));
@@ -54,6 +58,8 @@ export const createNextRuntimeProtocolRouteHandler = <TContext>({
     }
 
     try {
+      const resolvedReceiver = typeof receiver === 'function' ? await receiver(request) : receiver;
+      const dispatch = resolvedReceiver?.dispatcher ?? dispatcher!;
       const result = await dispatch(parsed.request, await context(request), {
         signal: request.signal,
       });

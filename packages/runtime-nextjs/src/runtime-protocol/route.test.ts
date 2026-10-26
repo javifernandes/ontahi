@@ -89,6 +89,58 @@ describe('Next.js Runtime Protocol adapter', () => {
     );
   });
 
+  it('resolves a lazy application receiver only after request validation', async () => {
+    const dispatcher = vi.fn(async () =>
+      createRuntimeProtocolResponse(operationRequest, {
+        kind: 'invocation-result',
+        result: { ok: true, kind: 'success', value: { renamed: true } },
+      }),
+    );
+    const receiver = vi.fn(async () => ({ dispatcher }) as never);
+    const context = vi.fn(() => ({ source: 'lazy-next-route' }));
+    const handler = createNextRuntimeProtocolRouteHandler({ receiver, context });
+
+    const invalidResponse = await handler(jsonRequest({ family: 'operation' }));
+    expect(invalidResponse.status).toBe(400);
+    expect(receiver).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
+
+    const response = await handler(jsonRequest(operationRequest));
+
+    expect(response.status).toBe(200);
+    expect(receiver).toHaveBeenCalledTimes(1);
+    expect(context).toHaveBeenCalledTimes(1);
+    expect(dispatcher).toHaveBeenCalledWith(
+      operationRequest,
+      { source: 'lazy-next-route' },
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('maps lazy receiver initialization failures to correlated dispatch errors', async () => {
+    const receiver = vi.fn(async () => {
+      throw new Error('application unavailable');
+    });
+    const reportError = vi.fn();
+    const handler = createNextRuntimeProtocolRouteHandler({
+      receiver,
+      context: () => undefined,
+      reportError,
+    });
+
+    const response = await handler(jsonRequest(operationRequest));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual(
+      runtimeProtocolError(
+        'dispatch_unavailable',
+        'Runtime Protocol dispatch is temporarily unavailable.',
+        { id: 'operation-1', family: 'operation' },
+      ),
+    );
+    expect(reportError).toHaveBeenCalledWith(expect.any(Error), expect.any(Request));
+  });
+
   it.each([
     ['invalid JSON', rawRequest('{')],
     ['invalid envelope', jsonRequest({ family: 'operation' })],
