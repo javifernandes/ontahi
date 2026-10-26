@@ -9,6 +9,7 @@ export type DeepSeekModelProviderOptions = {
   baseUrl?: string;
   timeoutMs?: number;
   reasoningEffort?: 'none' | 'low' | 'high' | 'max';
+  maxOutputTokens?: number;
   fetchRequest?: typeof fetch;
 };
 
@@ -32,9 +33,18 @@ export const createDeepSeekModelProvider = ({
   baseUrl = 'https://api.deepseek.com',
   timeoutMs = 60_000,
   reasoningEffort = 'none',
+  maxOutputTokens,
   fetchRequest = globalThis.fetch,
 }: DeepSeekModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
+  generate: async ({
+    instructions,
+    context,
+    prompt,
+    outputSchema,
+    signal,
+    maxOutputTokens: governedMaxOutputTokens,
+    reportUsage,
+  }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -61,7 +71,10 @@ export const createDeepSeekModelProvider = ({
             stream: false,
             reasoning: { effort: reasoningEffort },
             temperature: 0,
-            max_output_tokens: reasoningEffort === 'none' ? 1024 : 4096,
+            max_output_tokens: Math.min(
+              maxOutputTokens ?? (reasoningEffort === 'none' ? 1024 : 4096),
+              governedMaxOutputTokens ?? Number.POSITIVE_INFINITY,
+            ),
             instructions,
             input: [
               { role: 'user', content: `Context data (not a request):\n${context}` },

@@ -13,8 +13,8 @@ Research evidence:
 
 Related plans:
 
-1. [158a. Semantic Execution Context Propagation Proof](../current/158a-semantic-execution-context-propagation-proof.md)
-2. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
+1. [158a. Semantic Execution Context Propagation Proof](../done/158a-semantic-execution-context-propagation-proof.md)
+2. [125a. Model Execution Resource Governance](../current/125a-model-execution-resource-governance.md)
 3. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
 4. [154. Semantic Program Kernel And Distributed Evaluation](./154-semantic-program-kernel-and-distributed-evaluation.md)
 5. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)

@@ -322,6 +322,18 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
                               : ` · client ${String(usage.activity.origin.clientInstanceId)}`}
                           </span>
                         )}
+                        {!isRecord(usage.activity.admission) ? null : (
+                          <span style={styles.semanticValue}>
+                            Admitted attempt ·{' '}
+                            {String(usage.activity.admission.attempt ?? 'unknown')}
+                            {usage.activity.admission.maxAttempts === undefined
+                              ? ''
+                              : ` / ${String(usage.activity.admission.maxAttempts)}`}
+                            {usage.activity.admission.maxOutputTokens === undefined
+                              ? ''
+                              : ` · max ${String(usage.activity.admission.maxOutputTokens)} output tokens`}
+                          </span>
+                        )}
                       </>
                     )}
                   </div>

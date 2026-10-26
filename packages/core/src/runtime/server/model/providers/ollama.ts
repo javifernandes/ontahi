@@ -9,6 +9,7 @@ export type OllamaModelProviderOptions = {
   timeoutMs?: number;
   think?: boolean;
   contextWindowTokens?: number;
+  maxOutputTokens?: number;
   fetchRequest?: typeof fetch;
 };
 
@@ -19,9 +20,18 @@ export const createOllamaModelProvider = ({
   timeoutMs = 60_000,
   think = false,
   contextWindowTokens = 32_768,
+  maxOutputTokens,
   fetchRequest = globalThis.fetch,
 }: OllamaModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
+  generate: async ({
+    instructions,
+    context,
+    prompt,
+    outputSchema,
+    signal,
+    maxOutputTokens: governedMaxOutputTokens,
+    reportUsage,
+  }) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener('abort', abort, { once: true });
@@ -41,7 +51,10 @@ export const createOllamaModelProvider = ({
             think,
             options: {
               temperature: 0,
-              num_predict: think ? 4096 : 512,
+              num_predict: Math.min(
+                maxOutputTokens ?? (think ? 4096 : 512),
+                governedMaxOutputTokens ?? Number.POSITIVE_INFINITY,
+              ),
               num_ctx: contextWindowTokens,
             },
             format: outputSchema,

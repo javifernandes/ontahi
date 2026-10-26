@@ -31,7 +31,7 @@ The model must not mint principal identity, expand graph scope, or act with ambi
    behavior, fabricated refs, permission changes, and misleading model claims of success.
 5. Define bounded resources, redacted telemetry, retention, cancellation, and duplicate/retry behavior
    in coordination with plan 132 and
-   [125a](./125a-model-execution-resource-governance.md). Authorization selects the eligible
+   [125a](../current/125a-model-execution-resource-governance.md). Authorization selects the eligible
    resource/accounting scope without conflating permission denial with capacity exhaustion. Record
    residual risks and deployment requirements.
 

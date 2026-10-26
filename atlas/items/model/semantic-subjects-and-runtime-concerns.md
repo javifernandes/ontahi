@@ -165,3 +165,8 @@ separate Operation or Intent Resolution ownership and one identity per model Res
 Normalized usage projects that safe lineage to Devtools, including receiver-admitted channel,
 surface and client-instance provenance. The proof deliberately has no durable audit store and does
 not yet preserve lineage across process restart or remote Task continuation.
+
+Plan 125a builds the first governance envelope on that identity. A trusted invocation may bound
+model attempts and requested output tokens; nested scopes only narrow the effective envelope. The
+attempt counter is deliberately ephemeral and shared only inside the current causal execution, so
+this proves preflight admission without pretending to provide durable quota or billing storage.

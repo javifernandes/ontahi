@@ -108,7 +108,15 @@ export const createOpenAIModelProvider = ({
   maxOutputTokens = 2_048,
   fetchRequest = globalThis.fetch,
 }: OpenAIModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
+  generate: async ({
+    instructions,
+    context,
+    prompt,
+    outputSchema,
+    signal,
+    maxOutputTokens: governedMaxOutputTokens,
+    reportUsage,
+  }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -134,7 +142,10 @@ export const createOpenAIModelProvider = ({
             body: JSON.stringify({
               model,
               stream: false,
-              max_output_tokens: maxOutputTokens,
+              max_output_tokens: Math.min(
+                maxOutputTokens,
+                governedMaxOutputTokens ?? maxOutputTokens,
+              ),
               instructions: useStructuredOutput
                 ? instructions
                 : `${instructions}\nReturn a json object matching this schema:\n${JSON.stringify(providerSchema)}`,

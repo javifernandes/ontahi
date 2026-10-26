@@ -58,12 +58,15 @@ describe('Ollama model provider', () => {
         message: { content: '{"status":"help"}' },
       }),
     );
-    await createOllamaModelProvider({ model: 'local', think: true, fetchRequest }).generate(
-      request(),
-    );
+    await createOllamaModelProvider({
+      model: 'local',
+      think: true,
+      maxOutputTokens: 2_048,
+      fetchRequest,
+    }).generate({ ...request(), maxOutputTokens: 256 });
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
       think: true,
-      options: { num_predict: 4096, num_ctx: 32_768 },
+      options: { num_predict: 256, num_ctx: 32_768 },
     });
   });
 

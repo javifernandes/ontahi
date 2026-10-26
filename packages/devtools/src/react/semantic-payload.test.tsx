@@ -143,6 +143,7 @@ describe('SemanticPayload', () => {
                   correlationId: 'execution-1',
                   owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
                   origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
+                  admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
                 },
               },
               {
@@ -184,6 +185,7 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('Correlation · execution-1')).toBeTruthy();
     expect(screen.getByText('Owner · intent-resolution: ontahi.model-command')).toBeTruthy();
     expect(screen.getByText('Origin · web · command-chat · client tab-1')).toBeTruthy();
+    expect(screen.getByText('Admitted attempt · 1 / 3 · max 1024 output tokens')).toBeTruthy();
     expect(screen.getByText('Attempt · attempt-2')).toBeTruthy();
     expect(screen.getByText('Correlation · execution-2')).toBeTruthy();
     expect(screen.getByText('Attempt · unknown')).toBeTruthy();

@@ -94,11 +94,11 @@ describe('OpenAI model provider', () => {
       baseUrl: 'https://gateway.test/openai/',
       maxOutputTokens: 512,
       fetchRequest,
-    }).generate(request());
+    }).generate({ ...request(), maxOutputTokens: 128 });
 
     expect(String(fetchRequest.mock.calls[0]![0])).toBe('https://gateway.test/openai/responses');
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
-      max_output_tokens: 512,
+      max_output_tokens: 128,
     });
   });
 

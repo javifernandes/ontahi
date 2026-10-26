@@ -1,6 +1,6 @@
 # 158a. Semantic Execution Context Propagation Proof
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/158a-semantic-execution-context-propagation-proof`
 

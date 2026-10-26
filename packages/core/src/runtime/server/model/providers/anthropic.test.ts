@@ -108,11 +108,11 @@ describe('Anthropic model provider', () => {
       baseUrl: 'https://gateway.test/anthropic/',
       maxOutputTokens: 512,
       fetchRequest,
-    }).generate(request());
+    }).generate({ ...request(), maxOutputTokens: 128 });
 
     expect(String(fetchRequest.mock.calls[0]![0])).toBe('https://gateway.test/anthropic/messages');
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
-      max_tokens: 512,
+      max_tokens: 128,
     });
   });
 

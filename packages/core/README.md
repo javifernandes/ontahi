@@ -546,6 +546,7 @@ await application.app.runtime.withInvocationContext(
   {
     principal,
     origin: { channel: 'web', surface: 'command-chat', clientInstanceId: admittedTabId },
+    modelResourceLimits: { maxAttempts: 3, maxOutputTokens: 1024 },
   },
   () => TodoItem.complete({ todos: ['todo-123'] }),
 );
@@ -557,6 +558,13 @@ the current safe projection to trusted server composition. Origin is diagnostic 
 it does not grant authority or select cache, policy or accounting scope. Model usage may include an
 `activity` projection with its attempt, correlation, semantic owner and origin; Devtools renders
 that projection without retaining prompts or model results.
+
+`modelResourceLimits` is a host-owned, invocation-local governance envelope. Every admitted model
+provider call reserves one attempt before receiving prompt or context data, and the output-token
+limit narrows the provider adapter's configured ceiling. Nested trusted invocation scopes compose
+limits by minimum and share the attempt counter, so they can restrict but never widen the host
+envelope. Exhaustion produces `model_resource_exhausted`; it is not an authorization denial or a
+provider availability failure. The counter is intentionally not durable across process restart.
 
 ## In-Memory Graph
 

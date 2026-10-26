@@ -81,6 +81,7 @@ describe('Runtime Protocol model.command family', () => {
             causationId: 'intent-1',
             owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
             origin: { channel: 'web', clientInstanceId: 'tab-1' },
+            admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
           },
         },
       ],
@@ -102,6 +103,28 @@ describe('Runtime Protocol model.command family', () => {
     [[{ provider: 'openai', model: 'gpt-test', unknown: 1 }]],
     [[{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }]],
     [[{ provider: 'openai', model: 'gpt-test', activity: {} }]],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: { attemptId: 'a', correlationId: 'c', admission: { attempt: 0 } },
+        },
+      ],
+    ],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: {
+            attemptId: 'a',
+            correlationId: 'c',
+            admission: { attempt: 2, maxAttempts: 1 },
+          },
+        },
+      ],
+    ],
     [
       [
         {

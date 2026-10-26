@@ -26,6 +26,7 @@ import {
 } from './command/application.js';
 import { validateModelGraphCommand, type ModelGraphCommandExposure } from './command/graph.js';
 import { createModelContextSchema } from './context-schema.js';
+import { ModelInterpretationError } from './errors.js';
 import {
   openModelEntityReferenceSchema,
   parseModelGraphReadApplication,
@@ -34,12 +35,16 @@ import {
 import { validateModelGraphRead, type ModelGraphReadExposure } from './read/graph.js';
 import { withModelResourceAttempt } from './resource-attempt.js';
 
+export { ModelInterpretationError } from './errors.js';
+
 export type ModelRequest = {
   instructions: string;
   context: string;
   prompt: string;
   outputSchema: GraphJsonSchema;
   signal: AbortSignal;
+  /** Runtime-governed provider generation ceiling for this attempt. */
+  maxOutputTokens?: number;
   /** Reports provider metering separately from the generated semantic value. */
   reportUsage?: (usage: ModelResourceUsage) => void;
 };
@@ -86,15 +91,6 @@ const modelOperationHoleBindingSchema: GraphJsonSchema = {
     },
   ],
 };
-export class ModelInterpretationError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ModelInterpretationError';
-  }
-}
 /** The executable payload is the existing protocol, not an LLM-specific command language. */
 export type ModelInterpretationValue =
   | {
@@ -451,13 +447,16 @@ export const interpretModelRequest = async ({
   ].join('\n');
   let currentPrompt = prompt;
   for (let attempt = 0; ; attempt += 1) {
-    const raw = await withModelResourceAttempt(reportUsage, reportAttemptUsage =>
+    const raw = await withModelResourceAttempt(reportUsage, (reportAttemptUsage, admission) =>
       provider.generate({
         instructions: modelInstructions,
         context: serialized,
         prompt: currentPrompt,
         outputSchema,
         signal,
+        ...(admission?.maxOutputTokens === undefined
+          ? {}
+          : { maxOutputTokens: admission.maxOutputTokens }),
         reportUsage: reportAttemptUsage,
       }),
     );

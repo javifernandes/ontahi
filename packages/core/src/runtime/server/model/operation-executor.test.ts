@@ -139,24 +139,28 @@ describe('model-backed Operation executor', () => {
 
   it('attributes each provider attempt to its causal Operation without exposing domain input', async () => {
     const reportUsage = vi.fn();
+    const generate = vi.fn<ModelProvider['generate']>(async providerRequest => {
+      providerRequest.reportUsage?.({ provider: 'openai', model: 'gpt-test', totalTokens: 12 });
+      return { title: 'Set the table' };
+    });
     const executor = createModelOperationExecutor({
-      provider: {
-        generate: async providerRequest => {
-          providerRequest.reportUsage?.({ provider: 'openai', model: 'gpt-test', totalTokens: 12 });
-          return { title: 'Set the table' };
-        },
-      },
+      provider: { generate },
       reportUsage,
     });
 
     await withInvocationContext(
-      { origin: { channel: 'web', surface: 'todo-autocomplete', clientInstanceId: 'tab-1' } },
+      {
+        origin: { channel: 'web', surface: 'todo-autocomplete', clientInstanceId: 'tab-1' },
+        modelResourceLimits: { maxAttempts: 2, maxOutputTokens: 256 },
+      },
       () =>
         withSemanticExecutionActivity(
           { kind: 'operation', id: request.operation.id, runId: 'operation-run-1' },
           () => Effect.runPromise(executor.execute(request)),
         ),
     );
+
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 256 }));
 
     expect(reportUsage).toHaveBeenCalledWith({
       provider: 'openai',
@@ -172,6 +176,7 @@ describe('model-backed Operation executor', () => {
           surface: 'todo-autocomplete',
           clientInstanceId: 'tab-1',
         },
+        admission: { attempt: 1, maxAttempts: 2, maxOutputTokens: 256 },
       },
     });
   });
@@ -199,6 +204,30 @@ describe('model-backed Operation executor', () => {
         causationId: expect.any(String),
       },
     });
+  });
+
+  it('rejects an exhausted attempt before calling or disclosing context to the provider', async () => {
+    const generate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
+      title: 'Set the table',
+    });
+    const executor = createModelOperationExecutor({ provider: { generate } });
+
+    await withInvocationContext({ modelResourceLimits: { maxAttempts: 1 } }, async () => {
+      await expect(Effect.runPromise(executor.execute(request))).resolves.toEqual({
+        title: 'Set the table',
+      });
+      await expect(
+        Effect.runPromise(Effect.either(executor.execute(request))),
+      ).resolves.toMatchObject({
+        left: {
+          reason: 'model_resource_exhausted',
+          code: 'model_resource_exhausted',
+          message: 'Model generation attempt limit exhausted (1).',
+        },
+      });
+    });
+
+    expect(generate).toHaveBeenCalledOnce();
   });
 
   it('rejects provider output that does not satisfy the Operation output contract', async () => {
