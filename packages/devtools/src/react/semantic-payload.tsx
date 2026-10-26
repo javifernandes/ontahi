@@ -45,7 +45,7 @@ const formatLeaf = (value: unknown): string => {
 };
 
 const ResourceMetric = ({ label, value }: { readonly label: string; readonly value: string }) => (
-  <span aria-label={`${label} · ${value}`} style={styles.resourceUsageMetric}>
+  <span role='group' aria-label={`${label} · ${value}`} style={styles.resourceUsageMetric}>
     <span style={styles.resourceUsageMetricLabel}>{label}</span>
     <span style={styles.resourceUsageMetricValue}>{value}</span>
   </span>
