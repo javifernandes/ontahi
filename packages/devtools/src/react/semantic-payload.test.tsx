@@ -145,6 +145,22 @@ describe('SemanticPayload', () => {
                   origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
                 },
               },
+              {
+                provider: 'ollama',
+                model: 'local-test',
+                activity: {
+                  attemptId: 'attempt-2',
+                  correlationId: 'execution-2',
+                },
+              },
+              {
+                provider: 'deepseek',
+                model: 'deepseek-test',
+                activity: {
+                  owner: {},
+                  origin: { channel: 'cli' },
+                },
+              },
               {},
               'redacted',
             ],
@@ -156,7 +172,7 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('executed')).toBeTruthy();
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
-    expect(screen.getAllByText('Resource usage')).toHaveLength(2);
+    expect(screen.getAllByText('Resource usage')).toHaveLength(4);
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
     expect(screen.getByText('Input · 120 tokens')).toBeTruthy();
     expect(screen.getByText('Total · 138 tokens')).toBeTruthy();
@@ -168,6 +184,12 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('Correlation · execution-1')).toBeTruthy();
     expect(screen.getByText('Owner · intent-resolution: ontahi.model-command')).toBeTruthy();
     expect(screen.getByText('Origin · web · command-chat · client tab-1')).toBeTruthy();
+    expect(screen.getByText('Attempt · attempt-2')).toBeTruthy();
+    expect(screen.getByText('Correlation · execution-2')).toBeTruthy();
+    expect(screen.getByText('Attempt · unknown')).toBeTruthy();
+    expect(screen.getByText('Correlation · unknown')).toBeTruthy();
+    expect(screen.getByText('Owner · activity: unknown')).toBeTruthy();
+    expect(screen.getByText('Origin · cli')).toBeTruthy();
     expect(screen.getByText('model · unknown')).toBeTruthy();
 
     ui.rerender(

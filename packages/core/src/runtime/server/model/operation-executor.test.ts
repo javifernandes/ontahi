@@ -148,8 +148,9 @@ describe('model-backed Operation executor', () => {
     await withInvocationContext(
       { origin: { channel: 'web', surface: 'todo-autocomplete', clientInstanceId: 'tab-1' } },
       () =>
-        withSemanticExecutionActivity({ kind: 'operation', id: request.operation.id }, () =>
-          Effect.runPromise(executor.execute(request)),
+        withSemanticExecutionActivity(
+          { kind: 'operation', id: request.operation.id, runId: 'operation-run-1' },
+          () => Effect.runPromise(executor.execute(request)),
         ),
     );
 
@@ -161,12 +162,37 @@ describe('model-backed Operation executor', () => {
         attemptId: expect.any(String),
         correlationId: expect.any(String),
         causationId: expect.any(String),
-        owner: { kind: 'operation', id: request.operation.id },
+        owner: { kind: 'operation', id: request.operation.id, runId: 'operation-run-1' },
         origin: {
           channel: 'web',
           surface: 'todo-autocomplete',
           clientInstanceId: 'tab-1',
         },
+      },
+    });
+  });
+
+  it('reports a correlated attempt without inventing an owner or origin at the root', async () => {
+    const reportUsage = vi.fn();
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: async providerRequest => {
+          providerRequest.reportUsage?.({ provider: 'ollama', model: 'local-test' });
+          return { title: 'Set the table' };
+        },
+      },
+      reportUsage,
+    });
+
+    await withInvocationContext({}, () => Effect.runPromise(executor.execute(request)));
+
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'ollama',
+      model: 'local-test',
+      activity: {
+        attemptId: expect.any(String),
+        correlationId: expect.any(String),
+        causationId: expect.any(String),
       },
     });
   });
