@@ -136,16 +136,25 @@ and arbitrary labels are diagnostics rather than semantic surface identity.
 
 The trust rules differ per field:
 
-| Field              | Meaning                                               | Trust and authority rule                                                             |
-| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `channel`          | broad ingress/presentation class                      | receiver normalizes it from the bound transport or trusted adapter where possible    |
-| `interactionKind`  | stable kind of request or response                    | application declaration or trusted Interaction runtime owns it                       |
-| `surface`          | stable application affordance or presentation surface | client may claim it; receiver treats it as provenance, not authority                 |
-| `clientInstanceId` | tab/process/agent instance                            | client-generated and bounded; never grants authority or chooses accounting ownership |
+| Field              | Meaning                                               | Trust and authority rule                                                                                              |
+| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `channel`          | broad ingress/presentation class                      | receiver normalizes it from the bound transport or trusted adapter where possible                                     |
+| `interactionKind`  | stable kind of request or response                    | application declaration or trusted Interaction runtime owns it                                                        |
+| `surface`          | stable application affordance or presentation surface | client may claim it; receiver treats it as provenance, not authority                                                  |
+| `clientInstanceId` | tab/process/agent instance                            | client-generated claim admitted into a receiver-scoped handle; never grants authority or chooses accounting ownership |
 
 Client origin can be absent, falsified, stale, or high-cardinality. It is useful for traceability and
 interaction correctness only when its evidentiary quality remains explicit. A host may replace or
 augment it with trusted gateway/connection evidence.
+
+Unique execution and attempt IDs distinguish concurrent work, but they cannot prove that two
+executions came from different tabs. When a use case requires that attribution, the receiver must
+admit a scoped client-instance handle at ingress from a bounded client claim, authenticated host
+session metadata, or server-owned connection identity. The propagation proof must supply different
+admitted handles for its two-tab scenario. Applications that do not need cross-execution client
+attribution may omit the handle; their executions remain distinguishable while client instance is
+truthfully unknown. The handle is provenance only and must not survive reconnection or cross a
+surface unless a trusted host explicitly defines that lifecycle.
 
 ## Trust classes
 
@@ -251,7 +260,8 @@ model-backed Operation:
 5. report model usage with `owner`, `attemptId`, and correlation while preserving the existing
    provider-neutral measurements;
 6. render the relationship in Devtools as bounded diagnostic evidence;
-7. verify that two tabs sharing one Principal remain distinguishable and that spoofing a tab/surface
+7. verify that two tabs sharing one Principal carry different receiver-admitted, scoped
+   client-instance handles, while work without a handle remains valid and spoofing a tab/surface
    cannot alter permission, cache ownership, or Resource accounting scope;
 8. verify that retry produces two attempts correlated to one semantic run rather than one merged
    uncharged usage record.
@@ -284,5 +294,5 @@ The proof still needs to resolve:
    linked technical trace;
 5. whether an Operation Run identity should exist for every immediate Operation or only when a
    consumer requires it;
-6. where bounded client-origin declarations live and how generated clients expose them without UI
-   framework coupling.
+6. where bounded client-origin declarations live, how ingress admits their receiver-scoped handles,
+   and how generated clients expose them without UI framework coupling.
