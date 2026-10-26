@@ -171,6 +171,11 @@ export {
   type SemanticExecutionOrigin,
   type SemanticExecutionSubject,
 } from './semantic-execution.js';
+export {
+  withModelResourceLimits,
+  type ModelResourceAdmission,
+  type ModelResourceLimits,
+} from './model/resource-governance.js';
 export type {
   RateLimitResult,
   ServerRuntimeConfig,

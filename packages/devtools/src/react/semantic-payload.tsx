@@ -44,6 +44,13 @@ const formatLeaf = (value: unknown): string => {
   return String(value ?? '—');
 };
 
+const ResourceMetric = ({ label, value }: { readonly label: string; readonly value: string }) => (
+  <span role='group' aria-label={`${label} · ${value}`} style={styles.resourceUsageMetric}>
+    <span style={styles.resourceUsageMetricLabel}>{label}</span>
+    <span style={styles.resourceUsageMetricValue}>{value}</span>
+  </span>
+);
+
 export type ResultTableOrdering = {
   readonly fields: readonly string[];
   readonly order?: GraphReadOrder;
@@ -268,61 +275,85 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
             : body.result.resourceUsage.map((usage, index) =>
                 !isRecord(usage) ? null : (
                   <div key={index} style={styles.semanticCard}>
-                    <span style={styles.semanticLabel}>Resource usage</span>
-                    <span style={styles.semanticValue}>
-                      {String(usage.provider ?? 'model')} · {String(usage.model ?? 'unknown')}
-                    </span>
-                    {[
-                      ['Input', usage.inputTokens],
-                      ['Output', usage.outputTokens],
-                      ['Total', usage.totalTokens],
-                      ['Cached input', usage.cachedInputTokens],
-                      ['Cache write', usage.cacheWriteInputTokens],
-                      ['Reasoning', usage.reasoningTokens],
-                    ].map(([label, value]) =>
-                      value === undefined ? null : (
-                        <span key={String(label)} style={styles.semanticValue}>
-                          {String(label)} ·{' '}
-                          {typeof value === 'number' ? value.toLocaleString() : String(value)}{' '}
-                          tokens
-                        </span>
-                      ),
-                    )}
-                    {usage.durationMs === undefined ? null : (
-                      <span style={styles.semanticValue}>
-                        Duration ·{' '}
-                        {typeof usage.durationMs === 'number'
-                          ? usage.durationMs.toLocaleString()
-                          : String(usage.durationMs)}{' '}
-                        ms
+                    <div style={styles.resourceUsageHeader}>
+                      <span style={{ ...styles.semanticLabel, marginBottom: 0 }}>
+                        Resource usage
                       </span>
-                    )}
+                      <span style={styles.semanticValue}>
+                        {String(usage.provider ?? 'model')} · {String(usage.model ?? 'unknown')}
+                      </span>
+                    </div>
+                    <div style={styles.resourceUsageMetrics}>
+                      {[
+                        ['Input', usage.inputTokens, 'tokens'],
+                        ['Output', usage.outputTokens, 'tokens'],
+                        ['Total', usage.totalTokens, 'tokens'],
+                        ['Cached input', usage.cachedInputTokens, 'tokens'],
+                        ['Cache write', usage.cacheWriteInputTokens, 'tokens'],
+                        ['Reasoning', usage.reasoningTokens, 'tokens'],
+                        ['Duration', usage.durationMs, 'ms'],
+                      ].map(([label, value, unit]) =>
+                        value === undefined ? null : (
+                          <ResourceMetric
+                            key={String(label)}
+                            label={String(label)}
+                            value={`${typeof value === 'number' ? value.toLocaleString() : String(value)} ${String(unit)}`}
+                          />
+                        ),
+                      )}
+                    </div>
                     {!isRecord(usage.activity) ? null : (
-                      <>
-                        <span style={styles.semanticValue}>
-                          Attempt · {String(usage.activity.attemptId ?? 'unknown')}
-                        </span>
-                        <span style={styles.semanticValue}>
-                          Correlation · {String(usage.activity.correlationId ?? 'unknown')}
-                        </span>
-                        {!isRecord(usage.activity.owner) ? null : (
-                          <span style={styles.semanticValue}>
-                            Owner · {String(usage.activity.owner.kind ?? 'activity')}:{' '}
-                            {String(usage.activity.owner.id ?? 'unknown')}
-                          </span>
+                      <div style={{ ...styles.resourceUsageSection, marginTop: 9 }}>
+                        <span style={styles.resourceUsageSectionLabel}>Trace</span>
+                        <div style={styles.resourceUsageMetrics}>
+                          <ResourceMetric
+                            label='Attempt'
+                            value={String(usage.activity.attemptId ?? 'unknown')}
+                          />
+                          <ResourceMetric
+                            label='Correlation'
+                            value={String(usage.activity.correlationId ?? 'unknown')}
+                          />
+                          {!isRecord(usage.activity.owner) ? null : (
+                            <ResourceMetric
+                              label='Owner'
+                              value={`${String(usage.activity.owner.kind ?? 'activity')}: ${String(usage.activity.owner.id ?? 'unknown')}`}
+                            />
+                          )}
+                          {!isRecord(usage.activity.origin) ? null : (
+                            <ResourceMetric
+                              label='Origin'
+                              value={`${String(usage.activity.origin.channel ?? 'unknown')}${
+                                usage.activity.origin.surface === undefined
+                                  ? ''
+                                  : ` · ${String(usage.activity.origin.surface)}`
+                              }${
+                                usage.activity.origin.clientInstanceId === undefined
+                                  ? ''
+                                  : ` · client ${String(usage.activity.origin.clientInstanceId)}`
+                              }`}
+                            />
+                          )}
+                        </div>
+                        {!isRecord(usage.activity.admission) ? null : (
+                          <div style={styles.resourceAdmission}>
+                            <ResourceMetric
+                              label='Admission'
+                              value={`Attempt ${String(usage.activity.admission.attempt ?? 'unknown')}${
+                                usage.activity.admission.maxAttempts === undefined
+                                  ? ''
+                                  : ` of ${String(usage.activity.admission.maxAttempts)}`
+                              }`}
+                            />
+                            {usage.activity.admission.maxOutputTokens === undefined ? null : (
+                              <ResourceMetric
+                                label='Generation ceiling'
+                                value={`${String(usage.activity.admission.maxOutputTokens)} output tokens`}
+                              />
+                            )}
+                          </div>
                         )}
-                        {!isRecord(usage.activity.origin) ? null : (
-                          <span style={styles.semanticValue}>
-                            Origin · {String(usage.activity.origin.channel ?? 'unknown')}
-                            {usage.activity.origin.surface === undefined
-                              ? ''
-                              : ` · ${String(usage.activity.origin.surface)}`}
-                            {usage.activity.origin.clientInstanceId === undefined
-                              ? ''
-                              : ` · client ${String(usage.activity.origin.clientInstanceId)}`}
-                          </span>
-                        )}
-                      </>
+                      </div>
                     )}
                   </div>
                 ),

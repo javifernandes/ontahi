@@ -155,7 +155,15 @@ export const createAnthropicModelProvider = ({
   maxOutputTokens = 2_048,
   fetchRequest = globalThis.fetch,
 }: AnthropicModelProviderOptions): ModelProvider => ({
-  generate: async ({ instructions, context, prompt, outputSchema, signal, reportUsage }) => {
+  generate: async ({
+    instructions,
+    context,
+    prompt,
+    outputSchema,
+    signal,
+    maxOutputTokens: governedMaxOutputTokens,
+    reportUsage,
+  }) => {
     if (!apiKey.trim())
       throw new ModelInterpretationError(
         'model_unavailable',
@@ -185,7 +193,7 @@ export const createAnthropicModelProvider = ({
             signal: providerSignal,
             body: JSON.stringify({
               model,
-              max_tokens: maxOutputTokens,
+              max_tokens: Math.min(maxOutputTokens, governedMaxOutputTokens ?? maxOutputTokens),
               system: useStructuredOutput
                 ? instructions
                 : `${instructions}\nThe JSON response must match this schema:\n${JSON.stringify(providerSchema)}`,

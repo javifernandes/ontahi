@@ -10,7 +10,7 @@ Shapes:
 Related plans:
 
 1. [125. Ontahi AI Operations](../research/125-ontahi-ai-operations.md)
-2. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
+2. [125a. Model Execution Resource Governance](../current/125a-model-execution-resource-governance.md)
 3. [153. Model-Backed Todo Command Spike](../done/153-model-backed-todo-command-spike.md)
 4. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
 5. [153b. Declarative Operation Context Scope](../backlog/153b-declarative-operation-context-scope.md)

@@ -13,6 +13,7 @@ import {
 } from '../../tasks.js';
 import { declareSelectionChange, getCurrentUnitOfWork } from '../../unit-of-work.js';
 import { ModelInterpretationError } from '../interpretation.js';
+import { admitModelResourceAttempt } from '../resource-governance.js';
 
 import type { PreparedModelCommandRuntime } from './runtime.js';
 import {
@@ -663,8 +664,10 @@ describe('Model Command Task', () => {
 
   it('preserves the initiating semantic execution lineage while the Task runs in process', async () => {
     const observed: unknown[] = [];
+    const admissions: unknown[] = [];
     const prepare = vi.fn(async () => {
       observed.push(getCurrentSemanticExecutionContext());
+      admissions.push(admitModelResourceAttempt());
       return {
         status: 'answered' as const,
         message: 'You can rename documents.',
@@ -689,6 +692,7 @@ describe('Model Command Task', () => {
       {
         principal: { kind: 'user', subject: 'owner' },
         origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-a' },
+        modelResourceLimits: { maxAttempts: 2, maxOutputTokens: 128 },
       },
       () => runtime.submit(input, new AbortController().signal),
     );
@@ -698,6 +702,7 @@ describe('Model Command Task', () => {
       correlationId: expect.any(String),
       origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-a' },
     });
+    expect(admissions).toEqual([{ attempt: 1, maxAttempts: 2, maxOutputTokens: 128 }]);
   });
 
   it('adapts the first durable interaction into a pending model result', async () => {

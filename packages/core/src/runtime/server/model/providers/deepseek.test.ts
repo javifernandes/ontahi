@@ -88,13 +88,14 @@ describe('DeepSeek model provider', () => {
       apiKey: 'secret',
       baseUrl: 'https://gateway.test/deepseek/',
       reasoningEffort: 'high',
+      maxOutputTokens: 2_048,
       fetchRequest,
-    }).generate(request());
+    }).generate({ ...request(), maxOutputTokens: 256 });
 
     expect(String(fetchRequest.mock.calls[0]![0])).toBe('https://gateway.test/deepseek/responses');
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
       reasoning: { effort: 'high' },
-      max_output_tokens: 4096,
+      max_output_tokens: 256,
     });
   });
 

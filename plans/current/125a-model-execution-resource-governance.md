@@ -1,6 +1,6 @@
 # 125a. Model Execution Resource Governance
 
-Status: backlog
+Status: current
 
 Canonical ID: `ontahi://plans/125a-model-execution-resource-governance`
 
@@ -75,11 +75,11 @@ promise that capacity remains available.
 
 ## Ordering
 
-The prerequisite now exists: Plan 156 delivered one model-backed Domain Operation, while Intent
-Resolution already exposes a second independent model consumer. Provider adapters for Ollama,
-DeepSeek, Anthropic, and OpenAI give the spike several real evidence formats rather than one
-provider-shaped guess. The next implementation should derive the common invocation, lifecycle,
-cancellation, outcome, usage, and telemetry ports from those two semantic paths.
+The prerequisites now exist. Plan 156 delivered one model-backed Domain Operation, Intent
+Resolution exposes a second independent model consumer, and Plan 158a gave both paths runtime-owned
+semantic owner and Resource-attempt identities. Provider adapters for Ollama, DeepSeek, Anthropic,
+and OpenAI provide several real evidence and enforcement formats rather than one provider-shaped
+guess.
 
 This Plan does not require code-backed and model-backed implementations to run simultaneously.
 Feature flags, rollout, shadow execution, fallback, and binding migration are adjacent routing
@@ -132,10 +132,23 @@ duration measurements. Intent Resolution preserves every reported attempt on the
 Command result and Devtools renders the evidence without exposing prompts, output, credentials, or
 graph context. Model-backed Operations receive the same record through an optional reporting port.
 
-This slice deliberately does not calculate monetary cost or persist accounting totals. Missing
-provider fields remain absent, retries remain separate records, and provider pricing is not part of
-the protocol. The next experiment must add semantic activity identity and explicit evidence quality
-before using these observations for budgets or enforcement.
+Plan 158a then added the semantic identity prerequisite: every model call is a distinct
+runtime-owned Resource attempt correlated with either an Operation or Intent Resolution owner.
+Receiver-admitted origin remains provenance rather than authority, and model output or provider
+usage cannot mint attribution.
+
+The first governance slice adds an invocation-scoped `ModelResourceLimits` envelope. `maxAttempts`
+is reserved synchronously before provider disclosure or cost, and `maxOutputTokens` narrows the
+adapter's configured generation ceiling for Ollama, DeepSeek, Anthropic, and OpenAI. Nested trusted
+scopes compose limits by minimum and share one attempt counter, so a local scope cannot widen the
+host envelope. Successful usage exposes the admitted ordinal and effective limits in Devtools;
+exhaustion is a typed `model_resource_exhausted` outcome.
+
+This slice deliberately does not calculate monetary cost, persist accounting totals, or claim that
+an invocation-local counter survives process restart or remote durable continuation. Missing
+provider fields remain absent, retries remain separate charged attempts, and provider pricing is
+not part of the protocol. Evidence quality and durable aggregate accounting remain subsequent
+experiments.
 
 ## Non-Goals
 
@@ -153,18 +166,18 @@ before using these observations for budgets or enforcement.
 
 ## Acceptance And Verification
 
-- [ ] Intent Resolution and one model-backed Operation emit the same minimal provider-neutral usage
+- [x] Intent Resolution and one model-backed Operation emit the same minimal provider-neutral usage
       evidence while retaining distinct semantic activity identities.
 - [ ] Exact, estimated, and unavailable measurements remain distinguishable.
-- [ ] Policy scopes and precedence are explicit, and a narrower scope cannot widen a host ceiling.
+- [x] Policy scopes and precedence are explicit, and a narrower scope cannot widen a host ceiling.
 - [ ] Authenticated authority selects the accounting/resource scope; request or model output cannot
       enlarge the budget, change its owner, or convert capacity into data/Operation permission.
 - [ ] Authorization denial, resource exhaustion, provider capacity failure, and budget cancellation
       remain distinct typed outcomes with explicit enforcement owners.
-- [ ] One limit rejects work before provider disclosure or cost, and one supported generation limit
+- [x] One limit rejects work before provider disclosure or cost, and one supported generation limit
       propagates cancellation or a precise bounded outcome.
 - [ ] Retry and multiple-attempt usage are additive and never presented as one uncharged execution.
-- [ ] Telemetry and Devtools can display redacted usage, limit, and outcome evidence without raw
+- [x] Telemetry and Devtools can display redacted usage, limit, and outcome evidence without raw
       prompts, results, credentials, or graph context by default.
 - [ ] Provider-specific token and cost fields remain adapter evidence unless two independent
       providers justify a shared semantic contract.

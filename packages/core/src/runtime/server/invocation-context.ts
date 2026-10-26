@@ -10,6 +10,7 @@ import {
   createServerRuntimeResources,
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
+import { withModelResourceLimits, type ModelResourceLimits } from './model/resource-governance.js';
 import {
   createSemanticExecutionContext,
   getCurrentSemanticExecutionContext,
@@ -27,6 +28,8 @@ export type InvocationContextInput = {
   resources?: ServerRuntimeResourceMap;
   /** Receiver-admitted provenance. It never grants authority or selects cache/accounting scope. */
   origin?: SemanticExecutionOrigin;
+  /** Host-owned model limits. Nested invocation scopes may only narrow them. */
+  modelResourceLimits?: ModelResourceLimits;
 };
 
 const invocationContextStorage = new AsyncLocalStorage<InvocationContext>();
@@ -55,6 +58,8 @@ export const withInvocationContext = <TValue>(
   const execution =
     getCurrentSemanticExecutionContext() ?? createSemanticExecutionContext(context.origin);
   return runWithSemanticExecutionContext(execution, () =>
-    invocationContextStorage.run(resolveInvocationContext(context), run),
+    withModelResourceLimits(context.modelResourceLimits, () =>
+      invocationContextStorage.run(resolveInvocationContext(context), run),
+    ),
   );
 };

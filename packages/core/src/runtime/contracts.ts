@@ -392,6 +392,11 @@ export type ModelResourceActivity = {
     readonly surface?: string;
     readonly clientInstanceId?: string;
   };
+  readonly admission?: {
+    readonly attempt: number;
+    readonly maxAttempts?: number;
+    readonly maxOutputTokens?: number;
+  };
 };
 /** Provider-reported metering for one model invocation. Monetary cost is deliberately excluded. */
 export type ModelResourceUsage = {

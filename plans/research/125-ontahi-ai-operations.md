@@ -294,7 +294,7 @@ evaluation, fallback, or migration and should not enter the minimum executor con
 bindings preserve one invocation contract. It also records `TodoList.createFromGoal` as the later
 effectful proof joining generated content to authoritative Commands and observable postconditions.
 
-[Plan 125a](../backlog/125a-model-execution-resource-governance.md) records the following spike:
+[Plan 125a](../current/125a-model-execution-resource-governance.md) records the following spike:
 provider-neutral usage evidence, budgets, limits, attribution, and operational visibility shared by
 Intent Resolution and model-backed Operations. It deliberately follows the executor proof so the
 governance boundary is not designed around `model.command` alone.

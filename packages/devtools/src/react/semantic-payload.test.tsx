@@ -143,6 +143,7 @@ describe('SemanticPayload', () => {
                   correlationId: 'execution-1',
                   owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
                   origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
+                  admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
                 },
               },
               {
@@ -174,22 +175,30 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
     expect(screen.getAllByText('Resource usage')).toHaveLength(4);
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
-    expect(screen.getByText('Input · 120 tokens')).toBeTruthy();
-    expect(screen.getByText('Total · 138 tokens')).toBeTruthy();
-    expect(screen.getByText('Cached input · 40 tokens')).toBeTruthy();
-    expect(screen.getByText('Cache write · 3 tokens')).toBeTruthy();
-    expect(screen.getByText('Reasoning · 6 tokens')).toBeTruthy();
-    expect(screen.getByText('Duration · 250 ms')).toBeTruthy();
-    expect(screen.getByText('Attempt · attempt-1')).toBeTruthy();
-    expect(screen.getByText('Correlation · execution-1')).toBeTruthy();
-    expect(screen.getByText('Owner · intent-resolution: ontahi.model-command')).toBeTruthy();
-    expect(screen.getByText('Origin · web · command-chat · client tab-1')).toBeTruthy();
-    expect(screen.getByText('Attempt · attempt-2')).toBeTruthy();
-    expect(screen.getByText('Correlation · execution-2')).toBeTruthy();
-    expect(screen.getByText('Attempt · unknown')).toBeTruthy();
-    expect(screen.getByText('Correlation · unknown')).toBeTruthy();
-    expect(screen.getByText('Owner · activity: unknown')).toBeTruthy();
-    expect(screen.getByText('Origin · cli')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Input · 120 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Total · 138 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Cached input · 40 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Cache write · 3 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Reasoning · 6 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Duration · 250 ms' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempt · attempt-1' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Correlation · execution-1' })).toBeTruthy();
+    expect(
+      screen.getByRole('group', { name: 'Owner · intent-resolution: ontahi.model-command' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('group', { name: 'Origin · web · command-chat · client tab-1' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Admission · Attempt 1 of 3' })).toBeTruthy();
+    expect(
+      screen.getByRole('group', { name: 'Generation ceiling · 1024 output tokens' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempt · attempt-2' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Correlation · execution-2' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempt · unknown' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Correlation · unknown' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Owner · activity: unknown' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Origin · cli' })).toBeTruthy();
     expect(screen.getByText('model · unknown')).toBeTruthy();
 
     ui.rerender(

@@ -92,9 +92,15 @@ Resource Governance evidence. The four adapters now report a small normalized re
 record containing provider/model identity and whichever token, cache, reasoning, and duration
 measurements the response makes available. Intent Resolution keeps multiple calls as distinct usage
 records on its canonical result and Devtools presents them beside the semantic outcome;
-model-backed Operations expose the same record through an optional reporting port. Monetary cost,
-durable accounting, evidence quality, attribution, budgets, and enforcement remain outside this
-observational contract.
+model-backed Operations expose the same record through an optional reporting port.
+
+Plan 158a added runtime-owned correlation, semantic owner, Resource-attempt identity and admitted
+origin provenance. Plan 125a now supplies the first enforcement proof: a host-owned invocation
+envelope reserves a bounded number of attempts before provider disclosure and narrows the output
+generation ceiling across all four adapters. Nested scopes compose by minimum and successful usage
+shows its admitted ordinal and effective limits. Monetary cost, durable accounting, aggregate
+Principal or tenant quotas, and explicit evidence quality remain outside this invocation-local
+contract.
 
 ## First Bounded Proof
 

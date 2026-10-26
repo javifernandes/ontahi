@@ -83,13 +83,17 @@ const resourceActivityKeys = new Set([
   'causationId',
   'owner',
   'origin',
+  'admission',
 ]);
 const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
+const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
 const isBoundedIdentity = (value: unknown, maximumLength = 256): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= maximumLength;
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0;
 
 const parseModelResourceActivity = (value: unknown) => {
   if (value === undefined) return true;
@@ -99,6 +103,18 @@ const parseModelResourceActivity = (value: unknown) => {
     !isBoundedIdentity(value.attemptId) ||
     !isBoundedIdentity(value.correlationId) ||
     (value.causationId !== undefined && !isBoundedIdentity(value.causationId))
+  )
+    return false;
+  if (
+    value.admission !== undefined &&
+    (!isRecord(value.admission) ||
+      !hasOnlyKeys(value.admission, resourceAdmissionKeys) ||
+      !isPositiveInteger(value.admission.attempt) ||
+      (value.admission.maxAttempts !== undefined &&
+        (!isPositiveInteger(value.admission.maxAttempts) ||
+          value.admission.attempt > value.admission.maxAttempts)) ||
+      (value.admission.maxOutputTokens !== undefined &&
+        !isPositiveInteger(value.admission.maxOutputTokens)))
   )
     return false;
   if (

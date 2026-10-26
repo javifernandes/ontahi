@@ -120,6 +120,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
         context: request => ({
           principal: authentication.principal(request),
           origin: clientInstanceOrigin(request),
+          modelResourceLimits: { maxAttempts: 3, maxOutputTokens: 1_024 },
         }),
       },
     }),
@@ -157,6 +158,7 @@ export const createTodoExpressServer = (
     context: async request => ({
       principal: await runtime.authentication.webSocketPrincipal(request),
       origin: { channel: 'web', clientInstanceId: crypto.randomUUID() },
+      modelResourceLimits: { maxAttempts: 3, maxOutputTokens: 1_024 },
     }),
   });
 };

@@ -29,7 +29,10 @@ export type ModelOperationExecutionRequest<TInput, TOutput extends GraphSchemaDe
 };
 
 export type ModelOperationExecutionFailure = OperationFailure<
-  'model_execution_cancelled' | 'model_execution_failed' | 'model_output_invalid',
+  | 'model_execution_cancelled'
+  | 'model_execution_failed'
+  | 'model_output_invalid'
+  | 'model_resource_exhausted',
   { readonly code: string; readonly issues?: unknown }
 >;
 
@@ -75,9 +78,11 @@ const failureFromProvider = (cause: unknown): ModelOperationExecutionFailure => 
   const reason =
     code === 'model_cancelled'
       ? 'model_execution_cancelled'
-      : code === 'model_output_invalid'
-        ? 'model_output_invalid'
-        : 'model_execution_failed';
+      : code === 'model_resource_exhausted'
+        ? 'model_resource_exhausted'
+        : code === 'model_output_invalid'
+          ? 'model_output_invalid'
+          : 'model_execution_failed';
   return createOperationFailure(
     reason,
     cause instanceof Error ? cause.message : 'Model execution failed.',
@@ -119,13 +124,16 @@ export const createModelOperationExecutor = ({
   ): Effect.Effect<unknown, ModelOperationExecutionFailure> =>
     Effect.tryPromise({
       try: signal =>
-        withModelResourceAttempt(safeReportUsage, reportAttemptUsage =>
+        withModelResourceAttempt(safeReportUsage, (reportAttemptUsage, admission) =>
           provider.generate({
             instructions: contractInstructions(request, instructions),
             context: JSON.stringify(request.context),
             prompt: JSON.stringify(request.input),
             outputSchema: toGraphJsonSchema(request.operation.output),
             signal,
+            ...(admission?.maxOutputTokens === undefined
+              ? {}
+              : { maxOutputTokens: admission.maxOutputTokens }),
             reportUsage: reportAttemptUsage,
           }),
         ),
