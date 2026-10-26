@@ -151,3 +151,10 @@ Plan 158 owns the first research and context-propagation proof. Plan 125a remain
 Resource-governance pressure test through model usage. Plan 153a owns model-mediated authority and
 disclosure hardening. Plan 154 owns the broader relationship among Sessions, participants, Program
 Runs, evaluation, and distributed runtimes.
+
+The current implemented identity inventory is recorded in
+[`Semantic execution identity and context map`](../../../docs/research/semantic-execution-identity-and-context-map.md).
+It establishes that causal execution context has uses beyond governance: debugging, Interaction
+correctness, telemetry, audit projection, Event causation, and distributed continuation all need to
+relate existing local identities. Client surface and instance identity remain provenance with
+explicit trust, never authority by themselves.

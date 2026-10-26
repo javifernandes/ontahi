@@ -8,6 +8,9 @@ Shapes: [Semantic Subjects And Runtime Concerns](../../atlas/items/model/semanti
 [Unit Of Work](../../atlas/items/model/unit-of-work.md),
 [Authority And Policies](../../atlas/items/authority-and-policies.md).
 
+Research evidence:
+[Semantic Execution Identity And Context Map](../../docs/research/semantic-execution-identity-and-context-map.md).
+
 Related plans:
 
 1. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
@@ -253,6 +256,13 @@ Do not begin with an audit store or universal policy DSL. Implement one bounded 
 
 This slice should establish naming, propagation, trust, and lifecycle boundaries. Durable audit
 storage, aggregate quotas, pricing, and a general governance API remain follow-ups.
+
+The initial identity inventory is now captured in the linked research evidence. It finds strong
+local identities for Principal, Runtime Protocol exchange, Task Run, Interaction, mutation commit,
+Event occurrence/delivery, and telemetry, but no common runtime-owned causal link or stable
+UI/CLI-origin projection. The propagation proof should therefore compose those identities and add
+only the missing execution/correlation and Resource-attempt identities. It must not replace them
+with aliases or promote caller-authored transport, tab, or surface IDs into authority.
 
 ## Execution Slices
 
