@@ -8,6 +8,9 @@ Shapes: [Semantic Subjects And Runtime Concerns](../../atlas/items/model/semanti
 [Unit Of Work](../../atlas/items/model/unit-of-work.md),
 [Authority And Policies](../../atlas/items/authority-and-policies.md).
 
+Research evidence:
+[Semantic Execution Identity And Context Map](../../docs/research/semantic-execution-identity-and-context-map.md).
+
 Related plans:
 
 1. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
@@ -254,6 +257,14 @@ Do not begin with an audit store or universal policy DSL. Implement one bounded 
 This slice should establish naming, propagation, trust, and lifecycle boundaries. Durable audit
 storage, aggregate quotas, pricing, and a general governance API remain follow-ups.
 
+The initial identity inventory is now captured in the linked research evidence. It finds strong
+local identities for Principal, Runtime Protocol exchange, Task Run, Interaction, mutation commit,
+Event occurrence/delivery, and telemetry, but no common runtime-owned causal link or stable
+UI/CLI-origin projection. The propagation proof should therefore compose those identities and add
+the missing execution/correlation link, the runtime-owned causal link from an initiating Interaction
+or surface to its Operation, and Resource-attempt identity. It must not replace existing identities
+with aliases or promote caller-authored transport, tab, or surface IDs into authority.
+
 ## Execution Slices
 
 1. **Inventory existing identities and scopes**
@@ -363,8 +374,9 @@ storage, aggregate quotas, pricing, and a general governance API remain follow-u
    injection system?
 7. Which decisions belong to semantic declarations, host policy, environment bindings, or runtime
    state?
-8. When may a client-instance identity cross surfaces, and who authorizes an Interaction response
-   from another surface?
+8. When client attribution is required, which ingress admits a client claim or connection as a
+   receiver-scoped provenance handle? When may that handle cross reconnection or surfaces, and who
+   authorizes an Interaction response from another surface?
 9. Which evidence is safe for users, operators, developers, models, and external sinks?
 10. What syntax could eventually make the four subjects and their concerns clear without coupling
     the language to one runtime implementation?
