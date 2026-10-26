@@ -10,6 +10,12 @@ import {
   createServerRuntimeResources,
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
+import {
+  createSemanticExecutionContext,
+  getCurrentSemanticExecutionContext,
+  runWithSemanticExecutionContext,
+  type SemanticExecutionOrigin,
+} from './semantic-execution.js';
 
 export type InvocationContext = ExecutionIdentity & {
   resources: ServerRuntimeResourceMap;
@@ -19,6 +25,8 @@ export type InvocationContextInput = {
   principal?: ExecutionIdentity['principal'];
   cacheScope?: JsonValue;
   resources?: ServerRuntimeResourceMap;
+  /** Receiver-admitted provenance. It never grants authority or selects cache/accounting scope. */
+  origin?: SemanticExecutionOrigin;
 };
 
 const invocationContextStorage = new AsyncLocalStorage<InvocationContext>();
@@ -43,4 +51,10 @@ const resolveInvocationContext = (input: InvocationContextInput): InvocationCont
 export const withInvocationContext = <TValue>(
   context: InvocationContextInput,
   run: () => TValue,
-): TValue => invocationContextStorage.run(resolveInvocationContext(context), run);
+): TValue => {
+  const execution =
+    getCurrentSemanticExecutionContext() ?? createSemanticExecutionContext(context.origin);
+  return runWithSemanticExecutionContext(execution, () =>
+    invocationContextStorage.run(resolveInvocationContext(context), run),
+  );
+};

@@ -12,6 +12,7 @@ import { createOperationFailure } from '../failures.js';
 import type { OperationFailure } from '../operation/types.js';
 
 import { ModelInterpretationError, type ModelProvider } from './interpretation.js';
+import { withModelResourceAttempt } from './resource-attempt.js';
 
 export type ModelOperationContract<TOutput extends GraphSchemaDefinition> = {
   readonly id: string;
@@ -118,14 +119,16 @@ export const createModelOperationExecutor = ({
   ): Effect.Effect<unknown, ModelOperationExecutionFailure> =>
     Effect.tryPromise({
       try: signal =>
-        provider.generate({
-          instructions: contractInstructions(request, instructions),
-          context: JSON.stringify(request.context),
-          prompt: JSON.stringify(request.input),
-          outputSchema: toGraphJsonSchema(request.operation.output),
-          signal,
-          reportUsage: safeReportUsage,
-        }),
+        withModelResourceAttempt(safeReportUsage, reportAttemptUsage =>
+          provider.generate({
+            instructions: contractInstructions(request, instructions),
+            context: JSON.stringify(request.context),
+            prompt: JSON.stringify(request.input),
+            outputSchema: toGraphJsonSchema(request.operation.output),
+            signal,
+            reportUsage: reportAttemptUsage,
+          }),
+        ),
       catch: failureFromProvider,
     }).pipe(
       Effect.flatMap(value => {

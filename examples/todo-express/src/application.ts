@@ -26,6 +26,16 @@ export type CreateTodoExpressAppOptions = {
   publicOrigin?: string;
 };
 
+const clientInstanceOrigin = (request: { get(name: string): string | undefined }) => {
+  const claimed = request.get('x-ontahi-client-instance');
+  const admitted =
+    claimed !== undefined && claimed.length <= 256 && /^[A-Za-z0-9._:-]+$/.test(claimed);
+  return {
+    channel: 'web' as const,
+    ...(admitted ? { clientInstanceId: claimed } : {}),
+  };
+};
+
 const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
@@ -109,6 +119,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
         receiver: runtimeProtocol,
         context: request => ({
           principal: authentication.principal(request),
+          origin: clientInstanceOrigin(request),
         }),
       },
     }),
@@ -145,6 +156,7 @@ export const createTodoExpressServer = (
     ...(options.publicOrigin === undefined ? {} : { publicOrigin: options.publicOrigin }),
     context: async request => ({
       principal: await runtime.authentication.webSocketPrincipal(request),
+      origin: { channel: 'web', clientInstanceId: crypto.randomUUID() },
     }),
   });
 };

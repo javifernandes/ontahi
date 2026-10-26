@@ -2,6 +2,8 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { field, graphSchema, type InferGraphSchemaValue } from '../../../data-graph/index.js';
+import { withInvocationContext } from '../invocation-context.js';
+import { withSemanticExecutionActivity } from '../semantic-execution.js';
 
 import { ModelInterpretationError, type ModelProvider } from './interpretation.js';
 import {
@@ -34,6 +36,10 @@ describe('model-backed Operation executor', () => {
         provider: 'anthropic',
         model: 'claude-test',
         totalTokens: 42,
+        activity: {
+          attemptId: 'provider-forged-attempt',
+          correlationId: 'provider-forged-correlation',
+        },
       });
       return { title: 'Set the table' };
     });
@@ -128,6 +134,70 @@ describe('model-backed Operation executor', () => {
 
     await expect(Effect.runPromise(executor.execute(request))).resolves.toEqual({
       title: 'Set the table',
+    });
+  });
+
+  it('attributes each provider attempt to its causal Operation without exposing domain input', async () => {
+    const reportUsage = vi.fn();
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: async providerRequest => {
+          providerRequest.reportUsage?.({ provider: 'openai', model: 'gpt-test', totalTokens: 12 });
+          return { title: 'Set the table' };
+        },
+      },
+      reportUsage,
+    });
+
+    await withInvocationContext(
+      { origin: { channel: 'web', surface: 'todo-autocomplete', clientInstanceId: 'tab-1' } },
+      () =>
+        withSemanticExecutionActivity(
+          { kind: 'operation', id: request.operation.id, runId: 'operation-run-1' },
+          () => Effect.runPromise(executor.execute(request)),
+        ),
+    );
+
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'openai',
+      model: 'gpt-test',
+      totalTokens: 12,
+      activity: {
+        attemptId: expect.any(String),
+        correlationId: expect.any(String),
+        causationId: expect.any(String),
+        owner: { kind: 'operation', id: request.operation.id, runId: 'operation-run-1' },
+        origin: {
+          channel: 'web',
+          surface: 'todo-autocomplete',
+          clientInstanceId: 'tab-1',
+        },
+      },
+    });
+  });
+
+  it('reports a correlated attempt without inventing an owner or origin at the root', async () => {
+    const reportUsage = vi.fn();
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: async providerRequest => {
+          providerRequest.reportUsage?.({ provider: 'ollama', model: 'local-test' });
+          return { title: 'Set the table' };
+        },
+      },
+      reportUsage,
+    });
+
+    await withInvocationContext({}, () => Effect.runPromise(executor.execute(request)));
+
+    expect(reportUsage).toHaveBeenCalledWith({
+      provider: 'ollama',
+      model: 'local-test',
+      activity: {
+        attemptId: expect.any(String),
+        correlationId: expect.any(String),
+        causationId: expect.any(String),
+      },
     });
   });
 

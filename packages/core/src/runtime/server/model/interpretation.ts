@@ -32,6 +32,7 @@ import {
   type ModelGraphReadApplicationProposal,
 } from './read/application.js';
 import { validateModelGraphRead, type ModelGraphReadExposure } from './read/graph.js';
+import { withModelResourceAttempt } from './resource-attempt.js';
 
 export type ModelRequest = {
   instructions: string;
@@ -450,14 +451,16 @@ export const interpretModelRequest = async ({
   ].join('\n');
   let currentPrompt = prompt;
   for (let attempt = 0; ; attempt += 1) {
-    const raw = await provider.generate({
-      instructions: modelInstructions,
-      context: serialized,
-      prompt: currentPrompt,
-      outputSchema,
-      signal,
-      reportUsage,
-    });
+    const raw = await withModelResourceAttempt(reportUsage, reportAttemptUsage =>
+      provider.generate({
+        instructions: modelInstructions,
+        context: serialized,
+        prompt: currentPrompt,
+        outputSchema,
+        signal,
+        reportUsage: reportAttemptUsage,
+      }),
+    );
     signal.throwIfAborted();
     const proposal = parseModelInterpretation(raw);
     if (

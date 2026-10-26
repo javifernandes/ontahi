@@ -13,14 +13,15 @@ Research evidence:
 
 Related plans:
 
-1. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
-2. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
-3. [154. Semantic Program Kernel And Distributed Evaluation](./154-semantic-program-kernel-and-distributed-evaluation.md)
-4. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
-5. [130. Authentication, Principal And Invocation Context](../done/130-ontahi-authentication-principal-and-invocation-context.md)
-6. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
-7. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
-8. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
+1. [158a. Semantic Execution Context Propagation Proof](../current/158a-semantic-execution-context-propagation-proof.md)
+2. [125a. Model Execution Resource Governance](../backlog/125a-model-execution-resource-governance.md)
+3. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
+4. [154. Semantic Program Kernel And Distributed Evaluation](./154-semantic-program-kernel-and-distributed-evaluation.md)
+5. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
+6. [130. Authentication, Principal And Invocation Context](../done/130-ontahi-authentication-principal-and-invocation-context.md)
+7. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
+8. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
+9. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 
 ## Summary
 
@@ -286,7 +287,7 @@ with aliases or promote caller-authored transport, tab, or surface IDs into auth
    - apply ordered-pipeline and combined-envelope models to authorization, approval, disclosure,
      Resource limits, routing, and audit requirements;
    - require deterministic narrowing, typed outcomes, and inspectable explanations.
-6. **Implement the bounded propagation proof**
+6. **Implement the bounded propagation proof** — tracked concretely by Plan 158a
    - correlate one model-backed Operation and Intent Resolution attempt through existing runtime
      boundaries;
    - display safe semantic ownership and context in Devtools with bounded local retention.

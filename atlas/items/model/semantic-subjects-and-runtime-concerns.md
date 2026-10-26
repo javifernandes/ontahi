@@ -13,6 +13,7 @@ supports:
   - ontahi.authority-policies
 relatedPlans:
   - ontahi://plans/158-semantic-execution-context-governance-and-evidence
+  - ontahi://plans/158a-semantic-execution-context-propagation-proof
   - ontahi://plans/125a-model-execution-resource-governance
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
@@ -158,3 +159,9 @@ It establishes that causal execution context has uses beyond governance: debuggi
 correctness, telemetry, audit projection, Event causation, and distributed continuation all need to
 relate existing local identities. Client surface and instance identity remain provenance with
 explicit trust, never authority by themselves.
+
+Plan 158a implements the first bounded causal-lineage proof. A runtime-owned root execution derives
+separate Operation or Intent Resolution ownership and one identity per model Resource attempt.
+Normalized usage projects that safe lineage to Devtools, including receiver-admitted channel,
+surface and client-instance provenance. The proof deliberately has no durable audit store and does
+not yet preserve lineage across process restart or remote Task continuation.

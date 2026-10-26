@@ -27,6 +27,7 @@ import {
 import './styles.css';
 
 const queryClient = new QueryClient();
+const clientInstanceId = globalThis.crypto.randomUUID();
 const diagnosticsHostnames = new Set(['localhost', '127.0.0.1', '[::1]']);
 const runtimeTransport = createDiagnosticRuntimeTransportRouter({
   diagnostics:
@@ -38,7 +39,9 @@ const runtimeTransport = createDiagnosticRuntimeTransportRouter({
         }
       : false,
   transports: {
-    http: createFetchRuntimeTransport<never>(),
+    http: createFetchRuntimeTransport<never>({
+      requestInit: () => ({ headers: { 'x-ontahi-client-instance': clientInstanceId } }),
+    }),
     websocket: createWebSocketRuntimeTransport(),
   },
   routing: {

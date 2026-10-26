@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { serverContext } from '../../context.js';
 import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
+import { getCurrentSemanticExecutionContext } from '../../semantic-execution.js';
 import {
   createInMemoryTaskStorage,
   createInProcessTaskRuntime,
@@ -658,6 +659,45 @@ describe('Model Command Task', () => {
       { kind: 'user', subject: 'owner', issuer: 'test-issuer' },
       { kind: 'user', subject: 'owner', issuer: 'test-issuer' },
     ]);
+  });
+
+  it('preserves the initiating semantic execution lineage while the Task runs in process', async () => {
+    const observed: unknown[] = [];
+    const prepare = vi.fn(async () => {
+      observed.push(getCurrentSemanticExecutionContext());
+      return {
+        status: 'answered' as const,
+        message: 'You can rename documents.',
+      };
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: {
+        prepare,
+        execute: vi.fn(),
+        submit: vi.fn(),
+      } as unknown as PreparedModelCommandRuntime,
+      tasks: {
+        register: task => taskRuntime.register?.(task),
+        start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        getSnapshot: run => getTaskSnapshot(taskRuntime, run),
+        observe: run => taskRuntime.observe!(run),
+      },
+    });
+
+    await withInvocationContext(
+      {
+        principal: { kind: 'user', subject: 'owner' },
+        origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-a' },
+      },
+      () => runtime.submit(input, new AbortController().signal),
+    );
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toMatchObject({
+      correlationId: expect.any(String),
+      origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-a' },
+    });
   });
 
   it('adapts the first durable interaction into a pending model result', async () => {

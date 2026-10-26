@@ -378,6 +378,21 @@ export type TaskRunListItem = TaskSnapshot & {
 
 /** Context is optional host-defined interaction context, never an authority credential. */
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
+export type ModelResourceActivity = {
+  readonly attemptId: string;
+  readonly correlationId: string;
+  readonly causationId?: string;
+  readonly owner?: {
+    readonly kind: 'operation' | 'intent-resolution';
+    readonly id: string;
+    readonly runId?: string;
+  };
+  readonly origin?: {
+    readonly channel: 'web' | 'cli' | 'agent' | 'api' | 'system';
+    readonly surface?: string;
+    readonly clientInstanceId?: string;
+  };
+};
 /** Provider-reported metering for one model invocation. Monetary cost is deliberately excluded. */
 export type ModelResourceUsage = {
   readonly provider: string;
@@ -389,6 +404,8 @@ export type ModelResourceUsage = {
   readonly cacheWriteInputTokens?: number;
   readonly reasoningTokens?: number;
   readonly durationMs?: number;
+  /** Runtime-owned causal attribution for this provider attempt. */
+  readonly activity?: ModelResourceActivity;
 };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {

@@ -135,9 +135,12 @@ it('preserves provider resource usage beside the executed semantic result', asyn
     scope: f.scope,
   });
 
-  await expect(
-    runtime.submit({ text: 'Rename to Notes' }, new AbortController().signal),
-  ).resolves.toMatchObject({
+  const result = await withInvocationContext(
+    { origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' } },
+    () => runtime.submit({ text: 'Rename to Notes' }, new AbortController().signal),
+  );
+
+  expect(result).toMatchObject({
     status: 'executed',
     resourceUsage: [
       {
@@ -147,6 +150,13 @@ it('preserves provider resource usage beside the executed semantic result', asyn
         outputTokens: 10,
         totalTokens: 60,
         durationMs: 100,
+        activity: {
+          attemptId: expect.any(String),
+          correlationId: expect.any(String),
+          causationId: expect.any(String),
+          owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
+          origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
+        },
       },
     ],
   });
