@@ -31,7 +31,10 @@ export const withModelResourceAttempt = <TValue>(
   return withSemanticExecutionActivity({ kind: 'resource-attempt', id: 'model' }, () => {
     const activity = projectActivity(owner);
     const report = reportUsage
-      ? (usage: ModelResourceUsage) => reportUsage(activity ? { ...usage, activity } : usage)
+      ? (usage: ModelResourceUsage) => {
+          const { activity: _providerActivity, ...providerUsage } = usage;
+          reportUsage(activity ? { ...providerUsage, activity } : providerUsage);
+        }
       : undefined;
     return run(report);
   });

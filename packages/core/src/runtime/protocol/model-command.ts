@@ -114,7 +114,8 @@ const parseModelResourceActivity = (value: unknown) => {
     value.origin === undefined ||
     (isRecord(value.origin) &&
       hasOnlyKeys(value.origin, resourceOriginKeys) &&
-      ['web', 'cli', 'agent', 'api', 'system'].includes(String(value.origin.channel)) &&
+      typeof value.origin.channel === 'string' &&
+      ['web', 'cli', 'agent', 'api', 'system'].includes(value.origin.channel) &&
       (value.origin.surface === undefined || isBoundedIdentity(value.origin.surface, 128)) &&
       (value.origin.clientInstanceId === undefined ||
         isBoundedIdentity(value.origin.clientInstanceId)))

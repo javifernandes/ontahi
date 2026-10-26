@@ -36,6 +36,10 @@ describe('model-backed Operation executor', () => {
         provider: 'anthropic',
         model: 'claude-test',
         totalTokens: 42,
+        activity: {
+          attemptId: 'provider-forged-attempt',
+          correlationId: 'provider-forged-correlation',
+        },
       });
       return { title: 'Set the table' };
     });

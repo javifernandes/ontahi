@@ -119,6 +119,19 @@ describe('Runtime Protocol model.command family', () => {
           activity: {
             attemptId: 'a',
             correlationId: 'c',
+            origin: { channel: ['web'] },
+          },
+        },
+      ],
+    ],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: {
+            attemptId: 'a',
+            correlationId: 'c',
             origin: { channel: 'web', surface: '' },
           },
         },
