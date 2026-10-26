@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { JsonValue } from '../../value/json.js';
 import { hasOwn } from '../../value/object.js';
+import type { ResourceEvidenceDisclosure } from '../contracts.js';
 import type { ExecutionIdentity } from '../identity.js';
 
 export type { ExecutionIdentity, Principal } from '../identity.js';
@@ -11,6 +12,7 @@ import {
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
 import { withModelResourceLimits, type ModelResourceLimits } from './model/resource-governance.js';
+import { withResourceEvidence } from './resource-evidence.js';
 import {
   createSemanticExecutionContext,
   getCurrentSemanticExecutionContext,
@@ -30,6 +32,8 @@ export type InvocationContextInput = {
   origin?: SemanticExecutionOrigin;
   /** Host-owned model limits. Nested invocation scopes may only narrow them. */
   modelResourceLimits?: ModelResourceLimits;
+  /** Host-owned projection policy. Nested invocation scopes may only reduce disclosure. */
+  resourceEvidenceDisclosure?: ResourceEvidenceDisclosure;
 };
 
 const invocationContextStorage = new AsyncLocalStorage<InvocationContext>();
@@ -59,7 +63,9 @@ export const withInvocationContext = <TValue>(
     getCurrentSemanticExecutionContext() ?? createSemanticExecutionContext(context.origin);
   return runWithSemanticExecutionContext(execution, () =>
     withModelResourceLimits(context.modelResourceLimits, () =>
-      invocationContextStorage.run(resolveInvocationContext(context), run),
+      withResourceEvidence(context.resourceEvidenceDisclosure, () =>
+        invocationContextStorage.run(resolveInvocationContext(context), run),
+      ),
     ),
   );
 };

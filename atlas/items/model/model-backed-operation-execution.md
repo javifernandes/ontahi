@@ -102,6 +102,14 @@ shows its admitted ordinal and effective limits. Monetary cost, durable accounti
 Principal or tenant quotas, and explicit evidence quality remain outside this invocation-local
 contract.
 
+Resource evidence is now an adjunct of the Runtime Protocol response rather than part of an
+Operation's semantic output. Model-backed Operations and Intent Resolution feed the same
+invocation-local capture path, while a receiver-owned `none | summary | debug` policy controls what
+crosses the client boundary. `none` is the default; `summary` omits provider/model binding, causal
+identity, and admission details; `debug` is intended for trusted development surfaces. Nested
+scopes may narrow but not widen disclosure, and this observational capture does not imply durable
+storage or accounting.
+
 ## First Bounded Proof
 
 Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a

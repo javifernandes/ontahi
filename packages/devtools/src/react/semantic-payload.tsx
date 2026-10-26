@@ -51,6 +51,120 @@ const ResourceMetric = ({ label, value }: { readonly label: string; readonly val
   </span>
 );
 
+const ResourceUsageAttempt = ({
+  usage,
+  index,
+}: {
+  readonly usage: unknown;
+  readonly index: number;
+}) => {
+  if (!isRecord(usage)) return null;
+  return (
+    <div key={index} style={styles.semanticCard}>
+      <div style={styles.resourceUsageHeader}>
+        <span style={{ ...styles.semanticLabel, marginBottom: 0 }}>Resource usage</span>
+        <span style={styles.semanticValue}>
+          {String(usage.provider ?? 'model')} · {String(usage.model ?? 'unknown')}
+        </span>
+      </div>
+      <div style={styles.resourceUsageMetrics}>
+        {[
+          ['Input', usage.inputTokens, 'tokens'],
+          ['Output', usage.outputTokens, 'tokens'],
+          ['Total', usage.totalTokens, 'tokens'],
+          ['Cached input', usage.cachedInputTokens, 'tokens'],
+          ['Cache write', usage.cacheWriteInputTokens, 'tokens'],
+          ['Reasoning', usage.reasoningTokens, 'tokens'],
+          ['Duration', usage.durationMs, 'ms'],
+        ].map(([label, value, unit]) =>
+          value === undefined ? null : (
+            <ResourceMetric
+              key={String(label)}
+              label={String(label)}
+              value={`${typeof value === 'number' ? value.toLocaleString() : String(value)} ${String(unit)}`}
+            />
+          ),
+        )}
+      </div>
+      {!isRecord(usage.activity) ? null : (
+        <div style={{ ...styles.resourceUsageSection, marginTop: 9 }}>
+          <span style={styles.resourceUsageSectionLabel}>Trace</span>
+          <div style={styles.resourceUsageMetrics}>
+            <ResourceMetric label='Attempt' value={String(usage.activity.attemptId ?? 'unknown')} />
+            <ResourceMetric
+              label='Correlation'
+              value={String(usage.activity.correlationId ?? 'unknown')}
+            />
+            {!isRecord(usage.activity.owner) ? null : (
+              <ResourceMetric
+                label='Owner'
+                value={`${String(usage.activity.owner.kind ?? 'activity')}: ${String(usage.activity.owner.id ?? 'unknown')}`}
+              />
+            )}
+            {!isRecord(usage.activity.origin) ? null : (
+              <ResourceMetric
+                label='Origin'
+                value={`${String(usage.activity.origin.channel ?? 'unknown')}${
+                  usage.activity.origin.surface === undefined
+                    ? ''
+                    : ` · ${String(usage.activity.origin.surface)}`
+                }${
+                  usage.activity.origin.clientInstanceId === undefined
+                    ? ''
+                    : ` · client ${String(usage.activity.origin.clientInstanceId)}`
+                }`}
+              />
+            )}
+          </div>
+          {!isRecord(usage.activity.admission) ? null : (
+            <div style={styles.resourceAdmission}>
+              <ResourceMetric
+                label='Admission'
+                value={`Attempt ${String(usage.activity.admission.attempt ?? 'unknown')}${
+                  usage.activity.admission.maxAttempts === undefined
+                    ? ''
+                    : ` of ${String(usage.activity.admission.maxAttempts)}`
+                }`}
+              />
+              {usage.activity.admission.maxOutputTokens === undefined ? null : (
+                <ResourceMetric
+                  label='Generation ceiling'
+                  value={`${String(usage.activity.admission.maxOutputTokens)} output tokens`}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) => {
+  if (!isRecord(evidence) || !isRecord(evidence.model)) return null;
+  if (evidence.visibility === 'summary') {
+    return (
+      <div style={styles.semanticCard}>
+        <span style={styles.semanticLabel}>Resource usage summary</span>
+        <div style={styles.resourceUsageMetrics}>
+          <ResourceMetric label='Attempts' value={String(evidence.model.attempts ?? 'unknown')} />
+          {evidence.model.totalTokens === undefined ? null : (
+            <ResourceMetric label='Total' value={`${String(evidence.model.totalTokens)} tokens`} />
+          )}
+          {evidence.model.durationMs === undefined ? null : (
+            <ResourceMetric label='Duration' value={`${String(evidence.model.durationMs)} ms`} />
+          )}
+        </div>
+      </div>
+    );
+  }
+  return evidence.visibility === 'debug' && Array.isArray(evidence.model.attempts)
+    ? evidence.model.attempts.map((usage, index) => (
+        <ResourceUsageAttempt key={index} usage={usage} index={index} />
+      ))
+    : null;
+};
+
 export type ResultTableOrdering = {
   readonly fields: readonly string[];
   readonly order?: GraphReadOrder;
@@ -206,18 +320,23 @@ const OperationPayloadVisual = ({ body }: { readonly body: RecordValue }) => {
     return <DomainProjection label='Input' value={body.input} empty='No input.' />;
   }
   if (body.kind === 'invocation-result' && isRecord(body.result)) {
-    return body.result.ok === true ? (
-      <DomainProjection
-        label='Returned value'
-        value={body.result.value}
-        empty='No value returned.'
-      />
-    ) : (
-      <DomainProjection
-        label='Failure'
-        value={operationFailureValue(body.result)}
-        empty='Failed.'
-      />
+    return (
+      <>
+        {body.result.ok === true ? (
+          <DomainProjection
+            label='Returned value'
+            value={body.result.value}
+            empty='No value returned.'
+          />
+        ) : (
+          <DomainProjection
+            label='Failure'
+            value={operationFailureValue(body.result)}
+            empty='Failed.'
+          />
+        )}
+        <ResourceEvidenceVisual evidence={body.resourceEvidence} />
+      </>
     );
   }
   if (body.kind === 'permission-result') {
@@ -270,94 +389,7 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
               />
             </div>
           )}
-          {!Array.isArray(body.result.resourceUsage)
-            ? null
-            : body.result.resourceUsage.map((usage, index) =>
-                !isRecord(usage) ? null : (
-                  <div key={index} style={styles.semanticCard}>
-                    <div style={styles.resourceUsageHeader}>
-                      <span style={{ ...styles.semanticLabel, marginBottom: 0 }}>
-                        Resource usage
-                      </span>
-                      <span style={styles.semanticValue}>
-                        {String(usage.provider ?? 'model')} · {String(usage.model ?? 'unknown')}
-                      </span>
-                    </div>
-                    <div style={styles.resourceUsageMetrics}>
-                      {[
-                        ['Input', usage.inputTokens, 'tokens'],
-                        ['Output', usage.outputTokens, 'tokens'],
-                        ['Total', usage.totalTokens, 'tokens'],
-                        ['Cached input', usage.cachedInputTokens, 'tokens'],
-                        ['Cache write', usage.cacheWriteInputTokens, 'tokens'],
-                        ['Reasoning', usage.reasoningTokens, 'tokens'],
-                        ['Duration', usage.durationMs, 'ms'],
-                      ].map(([label, value, unit]) =>
-                        value === undefined ? null : (
-                          <ResourceMetric
-                            key={String(label)}
-                            label={String(label)}
-                            value={`${typeof value === 'number' ? value.toLocaleString() : String(value)} ${String(unit)}`}
-                          />
-                        ),
-                      )}
-                    </div>
-                    {!isRecord(usage.activity) ? null : (
-                      <div style={{ ...styles.resourceUsageSection, marginTop: 9 }}>
-                        <span style={styles.resourceUsageSectionLabel}>Trace</span>
-                        <div style={styles.resourceUsageMetrics}>
-                          <ResourceMetric
-                            label='Attempt'
-                            value={String(usage.activity.attemptId ?? 'unknown')}
-                          />
-                          <ResourceMetric
-                            label='Correlation'
-                            value={String(usage.activity.correlationId ?? 'unknown')}
-                          />
-                          {!isRecord(usage.activity.owner) ? null : (
-                            <ResourceMetric
-                              label='Owner'
-                              value={`${String(usage.activity.owner.kind ?? 'activity')}: ${String(usage.activity.owner.id ?? 'unknown')}`}
-                            />
-                          )}
-                          {!isRecord(usage.activity.origin) ? null : (
-                            <ResourceMetric
-                              label='Origin'
-                              value={`${String(usage.activity.origin.channel ?? 'unknown')}${
-                                usage.activity.origin.surface === undefined
-                                  ? ''
-                                  : ` · ${String(usage.activity.origin.surface)}`
-                              }${
-                                usage.activity.origin.clientInstanceId === undefined
-                                  ? ''
-                                  : ` · client ${String(usage.activity.origin.clientInstanceId)}`
-                              }`}
-                            />
-                          )}
-                        </div>
-                        {!isRecord(usage.activity.admission) ? null : (
-                          <div style={styles.resourceAdmission}>
-                            <ResourceMetric
-                              label='Admission'
-                              value={`Attempt ${String(usage.activity.admission.attempt ?? 'unknown')}${
-                                usage.activity.admission.maxAttempts === undefined
-                                  ? ''
-                                  : ` of ${String(usage.activity.admission.maxAttempts)}`
-                              }`}
-                            />
-                            {usage.activity.admission.maxOutputTokens === undefined ? null : (
-                              <ResourceMetric
-                                label='Generation ceiling'
-                                value={`${String(usage.activity.admission.maxOutputTokens)} output tokens`}
-                              />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ),
-              )}
+          <ResourceEvidenceVisual evidence={body.resourceEvidence} />
         </div>
       </>
     );

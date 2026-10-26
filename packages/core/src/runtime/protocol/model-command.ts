@@ -8,7 +8,12 @@ import {
 } from '../../data-graph/index.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
-import type { ModelCommandRequest, ModelCommandResult, ModelResourceUsage } from '../contracts.js';
+import type {
+  ModelCommandRequest,
+  ModelCommandResult,
+  ModelResourceUsage,
+  ResourceEvidence,
+} from '../contracts.js';
 import {
   parseOperationInvocationRequest,
   type OperationInvokeRequest,
@@ -41,6 +46,7 @@ export type ModelCommandProtocolResponse =
       readonly version: 1;
       readonly kind: 'model-command-result';
       readonly result: ModelCommandResult<ModelCommandCanonicalRequest, ModelCommandReadResponse>;
+      readonly resourceEvidence?: ResourceEvidence;
     }
   | {
       readonly version: 1;
@@ -53,7 +59,7 @@ export type ModelCommandProtocolResponseParseResult =
   | { readonly success: false; readonly error: ModelCommandProtocolRequestError };
 
 const requestKeys = new Set(['version', 'kind', 'text', 'language', 'context']);
-const responseKeys = new Set(['version', 'kind', 'result', 'error']);
+const responseKeys = new Set(['version', 'kind', 'result', 'error', 'resourceEvidence']);
 const resultKeys = new Set([
   'status',
   'message',
@@ -88,6 +94,8 @@ const resourceActivityKeys = new Set([
 const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
+const resourceEvidenceKeys = new Set(['visibility', 'model']);
+const resourceEvidenceModelKeys = new Set(['attempts', 'totalTokens', 'durationMs']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
 const isBoundedIdentity = (value: unknown, maximumLength = 256): value is string =>
@@ -163,6 +171,31 @@ const parseModelResourceUsageList = (value: unknown): readonly ModelResourceUsag
   if (!Array.isArray(value) || value.length === 0) return undefined;
   const parsed = value.map(parseModelResourceUsage);
   return parsed.every(item => item !== undefined) ? parsed : undefined;
+};
+
+const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => {
+  if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys) || !isRecord(value.model))
+    return undefined;
+  if (value.visibility === 'debug') {
+    if (!hasOnlyKeys(value.model, new Set(['attempts']))) return undefined;
+    const attempts = parseModelResourceUsageList(value.model.attempts);
+    return attempts?.length ? { visibility: 'debug', model: { attempts } } : undefined;
+  }
+  if (
+    value.visibility !== 'summary' ||
+    !hasOnlyKeys(value.model, resourceEvidenceModelKeys) ||
+    !isPositiveInteger(value.model.attempts)
+  )
+    return undefined;
+  for (const key of ['totalTokens', 'durationMs'] as const) {
+    const metric = value.model[key];
+    if (
+      metric !== undefined &&
+      (typeof metric !== 'number' || !Number.isFinite(metric) || metric < 0)
+    )
+      return undefined;
+  }
+  return cloneJson(value) as ResourceEvidence;
 };
 
 export type ModelCommandCanonicalRequest =
@@ -291,6 +324,16 @@ export const parseModelCommandProtocolResponse = (
     typeof value.result.message === 'string' &&
     isJsonValue(value)
   ) {
+    const resourceEvidence =
+      value.resourceEvidence === undefined
+        ? undefined
+        : parseResourceEvidence(value.resourceEvidence);
+    if (value.resourceEvidence !== undefined && !resourceEvidence)
+      return {
+        success: false,
+        error: requestError('invalid_request', 'Model command response is invalid.'),
+      };
+    const evidence = resourceEvidence === undefined ? {} : { resourceEvidence };
     const resourceUsage = parseModelResourceUsageList(value.result.resourceUsage);
     if (!resourceUsage)
       return {
@@ -311,6 +354,7 @@ export const parseModelCommandProtocolResponse = (
           version: 1,
           kind: 'model-command-result',
           result: { status: value.result.status, message: value.result.message, ...usage },
+          ...evidence,
         },
       };
     if (
@@ -340,6 +384,7 @@ export const parseModelCommandProtocolResponse = (
               ...(response === undefined ? {} : { response }),
               ...usage,
             },
+            ...evidence,
           },
         };
     }
@@ -362,6 +407,7 @@ export const parseModelCommandProtocolResponse = (
               run: { taskId: value.result.run.taskId, runId: value.result.run.runId },
               ...usage,
             },
+            ...evidence,
           },
         };
     }
@@ -385,6 +431,7 @@ export const parseModelCommandProtocolResponse = (
               interaction,
               ...usage,
             },
+            ...evidence,
           },
         };
     }

@@ -95,6 +95,48 @@ describe('Runtime Protocol model.command family', () => {
     expect(parseModelCommandProtocolResponse(error)).toEqual({ success: true, response: error });
   });
 
+  it('parses host-projected resource evidence outside the semantic result', () => {
+    const response = {
+      version: 1,
+      kind: 'model-command-result',
+      result: { status: 'answered', message: 'Done.' },
+      resourceEvidence: {
+        visibility: 'summary',
+        model: { attempts: 2, totalTokens: 120, durationMs: 450 },
+      },
+    } as const;
+
+    expect(parseModelCommandProtocolResponse(response)).toEqual({ success: true, response });
+    expect(
+      parseModelCommandProtocolResponse({
+        ...response,
+        resourceEvidence: {
+          visibility: 'debug',
+          model: { attempts: [{ provider: 'openai', model: 'gpt-test' }] },
+        },
+      }),
+    ).toMatchObject({ success: true });
+    expect(
+      parseModelCommandProtocolResponse({
+        ...response,
+        resourceEvidence: {
+          visibility: 'summary',
+          model: { attempts: 1, provider: 'openai' },
+        },
+      }),
+    ).toMatchObject({ success: false });
+    for (const resourceEvidence of [
+      null,
+      { visibility: 'debug', model: { attempts: [] } },
+      { visibility: 'debug', model: { attempts: [], provider: 'openai' } },
+      { visibility: 'summary', model: { attempts: 1, totalTokens: -1 } },
+    ]) {
+      expect(parseModelCommandProtocolResponse({ ...response, resourceEvidence })).toMatchObject({
+        success: false,
+      });
+    }
+  });
+
   it.each<[unknown]>([
     [[]],
     [[null]],

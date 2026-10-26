@@ -49,7 +49,7 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
   },
 });
 
-const modelUsageActivity = (resourceUsage: unknown): ExchangeActivity => ({
+const modelUsageActivity = (attempts: unknown): ExchangeActivity => ({
   ...exchangeActivity({ version: 1, kind: 'model-command', text: 'help' }, 'model.command'),
   settled: {
     kind: 'exchange.settled',
@@ -69,7 +69,8 @@ const modelUsageActivity = (resourceUsage: unknown): ExchangeActivity => ({
       family: 'model.command',
       body: {
         kind: 'model-command-result',
-        result: { status: 'answered', message: 'Done.', resourceUsage },
+        result: { status: 'answered', message: 'Done.' },
+        resourceEvidence: { visibility: 'debug', model: { attempts } },
       },
     },
   },
@@ -557,6 +558,14 @@ describe('Devtools activity model', () => {
         ]),
       ),
     ).toBe('openai · gpt-6-luna, anthropic · claude-test · 3 calls');
+
+    const summary = modelUsageActivity([]);
+    const summaryBody = summary.settled!.response!.body as Record<string, unknown>;
+    summaryBody.resourceEvidence = {
+      visibility: 'summary',
+      model: { attempts: 2, totalTokens: 240 },
+    };
+    expect(modelResourceUsageSummary(summary)).toBe('2 calls · 240 tokens');
   });
 
   it('summarizes every ordered destination and composite identities', () => {

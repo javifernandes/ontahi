@@ -144,6 +144,15 @@ scopes compose limits by minimum and share one attempt counter, so a local scope
 host envelope. Successful usage exposes the admitted ordinal and effective limits in Devtools;
 exhaustion is a typed `model_resource_exhausted` outcome.
 
+The next evidence slice separates server-side capture from client disclosure. Model-backed
+Operations and Intent Resolution now project the same adjunct `resourceEvidence` beside their
+semantic protocol result. The host selects `none`, aggregate `summary`, or sensitive `debug`
+visibility at the invocation boundary; absence defaults to `none`, and nested scopes can only
+narrow visibility. Todo opts into `debug` for its local Devtools proof, while ordinary applications
+do not expose provider/model identity, causal trace, admission policy, or usage metrics by default.
+This evidence remains ephemeral and observational rather than an implicit storage or accounting
+feature.
+
 This slice deliberately does not calculate monetary cost, persist accounting totals, or claim that
 an invocation-local counter survives process restart or remote durable continuation. Missing
 provider fields remain absent, retries remain separate charged attempts, and provider pricing is
@@ -179,6 +188,8 @@ experiments.
 - [ ] Retry and multiple-attempt usage are additive and never presented as one uncharged execution.
 - [x] Telemetry and Devtools can display redacted usage, limit, and outcome evidence without raw
       prompts, results, credentials, or graph context by default.
+- [x] Resource evidence is independent from semantic results, defaults to no client disclosure,
+      and supports a provider-neutral aggregate projection without trace or binding identity.
 - [ ] Provider-specific token and cost fields remain adapter evidence unless two independent
       providers justify a shared semantic contract.
 - [ ] The experiment records what requires durable accounting and what may remain observational.

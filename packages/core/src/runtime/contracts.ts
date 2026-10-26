@@ -412,6 +412,26 @@ export type ModelResourceUsage = {
   /** Runtime-owned causal attribution for this provider attempt. */
   readonly activity?: ModelResourceActivity;
 };
+
+/** Host-owned projection policy for resource evidence returned across a protocol boundary. */
+export type ResourceEvidenceDisclosure = 'none' | 'summary' | 'debug';
+
+export type ModelResourceEvidenceSummary = {
+  readonly attempts: number;
+  readonly totalTokens?: number;
+  readonly durationMs?: number;
+};
+
+/** Portable resource evidence. Debug evidence may expose sensitive runtime topology and identity. */
+export type ResourceEvidence =
+  | {
+      readonly visibility: 'summary';
+      readonly model: ModelResourceEvidenceSummary;
+    }
+  | {
+      readonly visibility: 'debug';
+      readonly model: { readonly attempts: readonly ModelResourceUsage[] };
+    };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {
       status: 'pending';

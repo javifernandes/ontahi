@@ -10,6 +10,7 @@ import type { JsonValue } from '../../../value/json.js';
 import type { ModelResourceUsage } from '../../contracts.js';
 import { createOperationFailure } from '../failures.js';
 import type { OperationFailure } from '../operation/types.js';
+import { recordModelResourceUsage } from '../resource-evidence.js';
 
 import { ModelInterpretationError, type ModelProvider } from './interpretation.js';
 import { withModelResourceAttempt } from './resource-attempt.js';
@@ -110,15 +111,16 @@ export const createModelOperationExecutor = ({
   instructions,
   reportUsage,
 }: CreateModelOperationExecutorOptions): ModelOperationExecutor => {
-  const safeReportUsage = reportUsage
-    ? (usage: ModelResourceUsage) => {
-        try {
-          reportUsage(usage);
-        } catch {
-          // Resource telemetry must not turn a valid model result into an Operation failure.
-        }
+  const safeReportUsage = (usage: ModelResourceUsage) => {
+    recordModelResourceUsage(usage);
+    if (reportUsage) {
+      try {
+        reportUsage(usage);
+      } catch {
+        // Resource telemetry must not turn a valid model result into an Operation failure.
       }
-    : undefined;
+    }
+  };
   const execute = (
     request: ModelOperationExecutionRequest<unknown, GraphSchemaDefinition>,
   ): Effect.Effect<unknown, ModelOperationExecutionFailure> =>

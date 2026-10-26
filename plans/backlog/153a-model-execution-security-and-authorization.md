@@ -22,6 +22,21 @@ The model must not mint principal identity, expand graph scope, or act with ambi
 
 ## Execution Slices
 
+### Research gate
+
+Do not begin a general authorization implementation from the current examples alone. First record
+a reviewed threat model and architecture decision that compares at least capability/object-capability
+models, relationship-based access control (including Zanzibar-style systems), Cedar, OPA/policy as
+code, and delegated or attenuable credentials such as Macaroons where relevant. Evaluate their
+fit with Ontahi's Entity, Operation, Resource, Interaction, relationship, federation, and
+multi-runtime boundaries rather than selecting a fashionable policy syntax.
+
+The decision must explicitly separate authorization from authentication, resource admission,
+evidence disclosure, effect approval, and audit retention; identify the trusted policy-decision and
+enforcement points; cover revocation and time-of-check/time-of-use behavior; and include adversarial
+negative tests. Only then should this plan choose a canonical semantic policy model or adapters to
+existing engines.
+
 1. Map trust boundaries from UI and authorized context through provider, proposal, and dispatcher.
 2. Specify enforceable field/row scope, capability limits, provider egress policy, and authority
    propagation. Recheck authorization and target validity at execution time.
@@ -38,6 +53,8 @@ The model must not mint principal identity, expand graph scope, or act with ambi
 ## Acceptance And Verification
 
 - [ ] Trust boundaries and enforcement owners are documented and exercised with negative tests.
+- [ ] The research gate records the state-of-the-art comparison, threat model, and reviewed
+      architecture decision before general authorization implementation begins.
 - [ ] Unauthorized reads, disclosure, and mutations are rejected independently of model compliance.
 - [ ] Model-provided identity or instructions cannot override authenticated runtime authority.
 - [ ] Review policy identifies which effects may run automatically and what acceptance authorizes.

@@ -44,6 +44,11 @@ import type {
 } from './ontahi.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
 import {
+  getCurrentResourceEvidenceDisclosure,
+  projectCurrentResourceEvidence,
+  projectResourceEvidence,
+} from './resource-evidence.js';
+import {
   COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
   createCommittedMutationCommit,
   getRequiredUnitOfWork,
@@ -249,6 +254,32 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
         : undefined,
     );
 
+  const invokeOperation = async (request: Parameters<typeof operation>[0]) => {
+    const response = await operation(request);
+    if (response.kind !== 'invocation-result') return response;
+    const resourceEvidence = projectCurrentResourceEvidence();
+    return resourceEvidence === undefined ? response : { ...response, resourceEvidence };
+  };
+
+  const submitModelCommand = async (
+    runtime: ModelCommandRuntime,
+    request: Parameters<typeof submitModelCommandProtocol>[1],
+    signal: AbortSignal | undefined,
+  ) => {
+    const response = await submitModelCommandProtocol(runtime, request, signal);
+    if (response.kind !== 'model-command-result') return response;
+    const { resourceUsage, ...result } = response.result;
+    const resourceEvidence = projectResourceEvidence(
+      resourceUsage ?? [],
+      getCurrentResourceEvidenceDisclosure(),
+    );
+    return {
+      ...response,
+      result,
+      ...(resourceEvidence === undefined ? {} : { resourceEvidence }),
+    };
+  };
+
   const toGraphObservationResponse = (
     response: GraphReadDispatchResponse,
     causedBy?: GraphObservationRefreshCause,
@@ -358,7 +389,9 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     handlers: {
       operation: (request, context) =>
         request.kind === 'invoke'
-          ? withMutationJournal('runtime.protocol.operation', context, () => operation(request))
+          ? withMutationJournal('runtime.protocol.operation', context, () =>
+              invokeOperation(request),
+            )
           : withContext(context, () => operation(request)),
       'graph.read': (request, context) =>
         withContext(context, () => read(request, { authority: context })),
@@ -397,7 +430,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
         ? {
             'model.command': (request, context, { signal }) =>
               withMutationJournal('runtime.protocol.model.command', context, () =>
-                submitModelCommandProtocol(modelCommand.runtime, request, signal),
+                submitModelCommand(modelCommand.runtime, request, signal),
               ),
           }
         : {}),

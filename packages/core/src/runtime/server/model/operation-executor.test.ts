@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { field, graphSchema, type InferGraphSchemaValue } from '../../../data-graph/index.js';
 import { withInvocationContext } from '../invocation-context.js';
+import { projectCurrentResourceEvidence } from '../resource-evidence.js';
 import { withSemanticExecutionActivity } from '../semantic-execution.js';
 
 import { ModelInterpretationError, type ModelProvider } from './interpretation.js';
@@ -134,6 +135,29 @@ describe('model-backed Operation executor', () => {
 
     await expect(Effect.runPromise(executor.execute(request))).resolves.toEqual({
       title: 'Set the table',
+    });
+  });
+
+  it('captures provider usage for host projection without an application reporter', async () => {
+    const executor = createModelOperationExecutor({
+      provider: {
+        generate: async providerRequest => {
+          providerRequest.reportUsage?.({
+            provider: 'openai',
+            model: 'gpt-test',
+            totalTokens: 12,
+          });
+          return { title: 'Set the table' };
+        },
+      },
+    });
+
+    await withInvocationContext({ resourceEvidenceDisclosure: 'debug' }, async () => {
+      await Effect.runPromise(executor.execute(request));
+      expect(projectCurrentResourceEvidence()).toMatchObject({
+        visibility: 'debug',
+        model: { attempts: [{ provider: 'openai', model: 'gpt-test', totalTokens: 12 }] },
+      });
     });
   });
 
