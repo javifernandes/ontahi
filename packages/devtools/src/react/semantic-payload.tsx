@@ -297,6 +297,33 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
                         ms
                       </span>
                     )}
+                    {!isRecord(usage.activity) ? null : (
+                      <>
+                        <span style={styles.semanticValue}>
+                          Attempt · {String(usage.activity.attemptId ?? 'unknown')}
+                        </span>
+                        <span style={styles.semanticValue}>
+                          Correlation · {String(usage.activity.correlationId ?? 'unknown')}
+                        </span>
+                        {!isRecord(usage.activity.owner) ? null : (
+                          <span style={styles.semanticValue}>
+                            Owner · {String(usage.activity.owner.kind ?? 'activity')}:{' '}
+                            {String(usage.activity.owner.id ?? 'unknown')}
+                          </span>
+                        )}
+                        {!isRecord(usage.activity.origin) ? null : (
+                          <span style={styles.semanticValue}>
+                            Origin · {String(usage.activity.origin.channel ?? 'unknown')}
+                            {usage.activity.origin.surface === undefined
+                              ? ''
+                              : ` · ${String(usage.activity.origin.surface)}`}
+                            {usage.activity.origin.clientInstanceId === undefined
+                              ? ''
+                              : ` · client ${String(usage.activity.origin.clientInstanceId)}`}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
                 ),
               )}

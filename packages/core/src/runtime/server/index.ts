@@ -165,6 +165,12 @@ export {
   type InvocationContextInput,
   type Principal,
 } from './invocation-context.js';
+export {
+  getCurrentSemanticExecutionContext,
+  type SemanticExecutionContext,
+  type SemanticExecutionOrigin,
+  type SemanticExecutionSubject,
+} from './semantic-execution.js';
 export type {
   RateLimitResult,
   ServerRuntimeConfig,

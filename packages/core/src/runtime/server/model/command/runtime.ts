@@ -18,6 +18,7 @@ import type {
 import type { OperationInvokeRequest } from '../../../operation-invocation.js';
 import type { OntahiApplication } from '../../application.js';
 import { createOperationInvocationDispatcher } from '../../operation-invocation.js';
+import { withSemanticExecutionActivity } from '../../semantic-execution.js';
 import {
   continueModelOperationApplication,
   modelOperationApplicationEntityChoices,
@@ -440,7 +441,10 @@ export const createModelCommandRuntime = ({
 
   const prepare: PreparedModelCommandRuntime['prepare'] = async (request, signal) => {
     const resourceUsage: ModelResourceUsage[] = [];
-    const prepared = await prepareValue(request, signal, usage => resourceUsage.push(usage));
+    const prepared = await withSemanticExecutionActivity(
+      { kind: 'intent-resolution', id: 'ontahi.model-command' },
+      () => prepareValue(request, signal, usage => resourceUsage.push(usage)),
+    );
     return resourceUsage.length === 0 ? prepared : { ...prepared, resourceUsage };
   };
 

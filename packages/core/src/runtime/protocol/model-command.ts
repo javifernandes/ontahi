@@ -75,9 +75,51 @@ const resourceUsageKeys = new Set([
   'cacheWriteInputTokens',
   'reasoningTokens',
   'durationMs',
+  'activity',
 ]);
+const resourceActivityKeys = new Set([
+  'attemptId',
+  'correlationId',
+  'causationId',
+  'owner',
+  'origin',
+]);
+const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
+const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
+const isBoundedIdentity = (value: unknown, maximumLength = 256): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= maximumLength;
+
+const parseModelResourceActivity = (value: unknown) => {
+  if (value === undefined) return true;
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, resourceActivityKeys) ||
+    !isBoundedIdentity(value.attemptId) ||
+    !isBoundedIdentity(value.correlationId) ||
+    (value.causationId !== undefined && !isBoundedIdentity(value.causationId))
+  )
+    return false;
+  if (
+    value.owner !== undefined &&
+    (!isRecord(value.owner) ||
+      !hasOnlyKeys(value.owner, resourceOwnerKeys) ||
+      (value.owner.kind !== 'operation' && value.owner.kind !== 'intent-resolution') ||
+      !isBoundedIdentity(value.owner.id) ||
+      (value.owner.runId !== undefined && !isBoundedIdentity(value.owner.runId)))
+  )
+    return false;
+  return (
+    value.origin === undefined ||
+    (isRecord(value.origin) &&
+      hasOnlyKeys(value.origin, resourceOriginKeys) &&
+      ['web', 'cli', 'agent', 'api', 'system'].includes(String(value.origin.channel)) &&
+      (value.origin.surface === undefined || isBoundedIdentity(value.origin.surface, 128)) &&
+      (value.origin.clientInstanceId === undefined ||
+        isBoundedIdentity(value.origin.clientInstanceId)))
+  );
+};
 
 const parseModelResourceUsage = (value: unknown): ModelResourceUsage | undefined => {
   if (
@@ -90,10 +132,12 @@ const parseModelResourceUsage = (value: unknown): ModelResourceUsage | undefined
   )
     return undefined;
   for (const key of resourceUsageKeys) {
-    if (key === 'provider' || key === 'model' || value[key] === undefined) continue;
+    if (key === 'provider' || key === 'model' || key === 'activity' || value[key] === undefined)
+      continue;
     if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0)
       return undefined;
   }
+  if (!parseModelResourceActivity(value.activity)) return undefined;
   return cloneJson(value) as ModelResourceUsage;
 };
 

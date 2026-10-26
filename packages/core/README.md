@@ -539,6 +539,25 @@ Operations can declare `requires: [app.require.authenticated()]`; their implemen
 Provider sessions, OAuth tokens, claims, and user profiles remain host resources rather than part
 of the canonical Principal.
 
+An invocation may also carry receiver-admitted origin provenance:
+
+```ts
+await application.app.runtime.withInvocationContext(
+  {
+    principal,
+    origin: { channel: 'web', surface: 'command-chat', clientInstanceId: admittedTabId },
+  },
+  () => TodoItem.complete({ todos: ['todo-123'] }),
+);
+```
+
+The runtime creates its own execution and correlation identities, then derives Operation, Intent
+Resolution and model Resource-attempt activities. `getCurrentSemanticExecutionContext()` exposes
+the current safe projection to trusted server composition. Origin is diagnostic provenance only:
+it does not grant authority or select cache, policy or accounting scope. Model usage may include an
+`activity` projection with its attempt, correlation, semantic owner and origin; Devtools renders
+that projection without retaining prompts or model results.
+
 ## In-Memory Graph
 
 `createInMemoryDataGraphStorage` is the recommended application binding. It supplies both the full

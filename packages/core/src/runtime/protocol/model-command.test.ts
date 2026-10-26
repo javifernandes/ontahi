@@ -75,6 +75,13 @@ describe('Runtime Protocol model.command family', () => {
           outputTokens: 18,
           totalTokens: 138,
           durationMs: 250,
+          activity: {
+            attemptId: 'attempt-1',
+            correlationId: 'execution-1',
+            causationId: 'intent-1',
+            owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
+            origin: { channel: 'web', clientInstanceId: 'tab-1' },
+          },
         },
       ],
     });
@@ -94,6 +101,42 @@ describe('Runtime Protocol model.command family', () => {
     [[{ provider: 'openai', model: '' }]],
     [[{ provider: 'openai', model: 'gpt-test', unknown: 1 }]],
     [[{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }]],
+    [[{ provider: 'openai', model: 'gpt-test', activity: {} }]],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: { attemptId: 'a'.repeat(257), correlationId: 'c' },
+        },
+      ],
+    ],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: {
+            attemptId: 'a',
+            correlationId: 'c',
+            origin: { channel: 'web', surface: '' },
+          },
+        },
+      ],
+    ],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: {
+            attemptId: 'a',
+            correlationId: 'c',
+            owner: { kind: 'resource-attempt', id: 'x' },
+          },
+        },
+      ],
+    ],
   ])('rejects malformed model resource usage: %j', resourceUsage => {
     expect(
       parseModelCommandProtocolResponse({

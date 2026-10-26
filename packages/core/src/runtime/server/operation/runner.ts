@@ -14,6 +14,7 @@ import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
 import { createOperationFailure } from '../failures.js';
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
+import { withSemanticExecutionActivity } from '../semantic-execution.js';
 
 import {
   buildOperationCacheEntryKey,
@@ -151,67 +152,73 @@ export const createOperationRunner = <
           );
         })();
 
-    return operationRuntimeContextStorage.run(context, async () => {
-      const runCurrentOperation = () =>
-        runOperationEffect(guardedEffect, {
-          scope: metadata.scope,
-          telemetrySpanName: metadata.telemetrySpanName,
-          defectLogMessage: metadata.defectLogMessage,
-          defectPublicMessage: metadata.defectPublicMessage,
-          extra,
-        });
+    return withSemanticExecutionActivity({ kind: 'operation', id: metadata.scope }, () =>
+      operationRuntimeContextStorage.run(context, async () => {
+        const runCurrentOperation = () =>
+          runOperationEffect(guardedEffect, {
+            scope: metadata.scope,
+            telemetrySpanName: metadata.telemetrySpanName,
+            defectLogMessage: metadata.defectLogMessage,
+            defectPublicMessage: metadata.defectPublicMessage,
+            extra,
+          });
 
-      const cacheRefs = [
-        ...(metadata.cache?.value ? [metadata.cache.value(input)] : []),
-        ...(metadata.cache?.dependsOn ? metadata.cache.dependsOn(input) : []),
-      ];
-      const hasCacheRefs = cacheRefs.length > 0;
-      const cacheStore = getRuntimeOperationCacheStore(context.resources);
+        const cacheRefs = [
+          ...(metadata.cache?.value ? [metadata.cache.value(input)] : []),
+          ...(metadata.cache?.dependsOn ? metadata.cache.dependsOn(input) : []),
+        ];
+        const hasCacheRefs = cacheRefs.length > 0;
+        const cacheStore = getRuntimeOperationCacheStore(context.resources);
 
-      const result = hasCacheRefs
-        ? await (() => {
-            const entryKey = buildOperationCacheEntryKey(metadata.scope, inputRecord);
-            const cached = cacheStore.entries.get(entryKey);
+        const result = hasCacheRefs
+          ? await (() => {
+              const entryKey = buildOperationCacheEntryKey(metadata.scope, inputRecord);
+              const cached = cacheStore.entries.get(entryKey);
 
-            if (cached) {
-              return cached as Promise<OperationResult<UnwrapEffectSuccess<TRawSuccess>, TFailure>>;
-            }
+              if (cached) {
+                return cached as Promise<
+                  OperationResult<UnwrapEffectSuccess<TRawSuccess>, TFailure>
+                >;
+              }
 
-            const created = runCurrentOperation()
-              .then(result => {
-                if (!result.success) {
+              const created = runCurrentOperation()
+                .then(result => {
+                  if (!result.success) {
+                    deleteOperationCacheEntry(cacheStore, entryKey);
+                  }
+
+                  return result;
+                })
+                .catch(error => {
                   deleteOperationCacheEntry(cacheStore, entryKey);
-                }
+                  throw error;
+                });
 
-                return result;
-              })
-              .catch(error => {
-                deleteOperationCacheEntry(cacheStore, entryKey);
-                throw error;
-              });
+              cacheStore.entries.set(
+                entryKey,
+                created as Promise<
+                  OperationResult<Record<string, unknown> | void, OperationFailure>
+                >,
+              );
+              registerOperationCacheEntry(cacheStore, entryKey, cacheRefs);
 
-            cacheStore.entries.set(
-              entryKey,
-              created as Promise<OperationResult<Record<string, unknown> | void, OperationFailure>>,
-            );
-            registerOperationCacheEntry(cacheStore, entryKey, cacheRefs);
+              return created;
+            })()
+          : await runCurrentOperation();
 
-            return created;
-          })()
-        : await runCurrentOperation();
+        if (result.success && metadata.effects?.affects) {
+          invalidateOperationCacheRefs(
+            cacheStore,
+            metadata.effects.affects({
+              input,
+              result: result as SuccessResult<UnwrapEffectSuccess<TRawSuccess>>,
+            }),
+          );
+        }
 
-      if (result.success && metadata.effects?.affects) {
-        invalidateOperationCacheRefs(
-          cacheStore,
-          metadata.effects.affects({
-            input,
-            result: result as SuccessResult<UnwrapEffectSuccess<TRawSuccess>>,
-          }),
-        );
-      }
-
-      return result;
-    });
+        return result;
+      }),
+    );
   };
 
   return Object.assign(runner, {

@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createOperationRunner } from './operation/runner.js';
 import type { OperationResult } from './operation/types.js';
+import { getCurrentSemanticExecutionContext } from './semantic-execution.js';
 
 import {
   runServerEffect,
+  withInvocationContext,
   type LayerConcern,
   type LayerConcernRuntime,
   type runServerOperation,
@@ -52,6 +54,34 @@ const createRunOperationEffect = () =>
   ) as unknown as RunOperationEffect & ReturnType<typeof vi.fn>;
 
 describe('createOperationRunner', () => {
+  it('derives a causal Operation activity from the receiver-owned invocation', async () => {
+    let observedExecution = getCurrentSemanticExecutionContext();
+    const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
+      input =>
+        Effect.sync(() => {
+          observedExecution = getCurrentSemanticExecutionContext();
+          return { title: input.bookSlug };
+        }),
+      { scope: 'Book.fetch' },
+      createRunOperationEffect(),
+    );
+
+    await withInvocationContext(
+      { origin: { channel: 'web', surface: 'book-search', clientInstanceId: 'tab-1' } },
+      async () => {
+        const root = getCurrentSemanticExecutionContext();
+        await runner({ bookSlug: 'progbook' });
+        expect(observedExecution).toMatchObject({
+          correlationId: root?.correlationId,
+          causationId: root?.executionId,
+          parentExecutionId: root?.executionId,
+          subject: { kind: 'operation', id: 'Book.fetch' },
+          origin: { channel: 'web', surface: 'book-search', clientInstanceId: 'tab-1' },
+        });
+      },
+    );
+  });
+
   it('stores metadata and runs requirements, concerns, and effects in order', async () => {
     const calls: string[] = [];
     const requirement = {
