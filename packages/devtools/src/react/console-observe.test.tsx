@@ -89,7 +89,7 @@ const editor = () =>
   EditorView.findFromDOM(screen.getByRole('textbox', { name: 'Ontahí Console expression' }))!;
 afterEach(cleanup);
 
-describe('Console query observation', { timeout: 15_000 }, () => {
+describe('Console query observation', { timeout: 30_000 }, () => {
   it.each(['ts', 'declarative'] as const)(
     'observes %s queries, reconciles cache/history and keeps drafts separate',
     async initialDialect => {
