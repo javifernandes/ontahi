@@ -11,6 +11,8 @@ supports:
   - ontahi.runtime-capability-model
 relatedPlans:
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
+  - ontahi://plans/146l-event-brokers-egress-and-processing
+  - ontahi://plans/142h-distributed-execution-topologies
 ---
 
 An [[ontahi.model.event|Event]] declaration gives one application fact a stable id, an explicit
@@ -85,3 +87,11 @@ normalizes the original request, after which the explicit default-deny route and
 declaration validate provider, channel, version, payload, correlation, and JSON safety. Rejected or
 ignored deliveries do not become occurrences. Express and Next.js are host projections of this
 same boundary.
+
+Event ingress, external Event egress, and cross-runtime Event delivery are separate bindings.
+Ingress turns an external delivery into a canonical occurrence. External egress matches that
+occurrence against application-admitted subscriptions and projects it into webhook, queue, broker,
+or provider attempts for systems that do not share Ontahí semantics. Federated delivery preserves
+the canonical Event and subscription identities between identified Ontahí runtimes or graph
+segments. A shared transport technology does not make those authority and lifecycle boundaries the
+same.

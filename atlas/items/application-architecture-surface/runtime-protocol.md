@@ -9,6 +9,7 @@ supports:
   - ontahi.data-graph-execution-routing
   - ontahi.model.operation-invocation
   - ontahi.model.durable-operation
+  - ontahi.model.event
   - ontahi.durable-workflows
   - ontahi.runtime-capability-model
 relatedPlans:
@@ -29,6 +30,8 @@ relatedPlans:
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/155-declarative-basic-entity-mutations
   - ontahi://plans/159-nextjs-application-runtime-mount
+  - ontahi://plans/142h-distributed-execution-topologies
+  - ontahi://plans/146l-event-brokers-egress-and-processing
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
