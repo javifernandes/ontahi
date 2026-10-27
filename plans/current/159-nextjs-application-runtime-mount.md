@@ -2,6 +2,10 @@
 
 Status: current
 
+Related research:
+
+1. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
+
 ## Summary
 
 Let a Next.js host mount an asynchronously composed Ontahí application Runtime Protocol without
@@ -83,3 +87,5 @@ version and Atlas verification against that exact registry release.
 
 Open. The expected follow-up is to move Atlas Workspace membership from route guards into Runtime
 Protocol Graph policies and Operation requirements once its Workspace queries and mutations exist.
+The current `server-only`/`bridge` correction is intentionally the fail-closed baseline for Plan
+142h; it does not settle future execution placement or portable implementation semantics.

@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/147-application-bound-headless-graph-reads
   - ontahi://plans/142c-reflected-atomic-operation-execution
+  - ontahi://plans/142h-distributed-execution-topologies
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - bookops://plans/57-client-runtime-bridge-and-server-dispatch
   - bookops://plans/68j-graph-execution-authority-api
@@ -43,6 +44,13 @@ provide equivalent enforcement at its authoritative data boundary, such as Postg
 
 Runtime binding must preserve one call-site language, result model, cache identity, observability
 surface, and provider-capability diagnostics across direct and remote execution.
+
+Future distributed routing must name what any claim of “local” is relative to. Invocation
+admission, Operation implementation availability, execution placement, and graph placement are
+independent concerns: portable Operation code may execute in one identified runtime while its
+Reads, Commands, and effects route to authorities owning different Entity populations. Current
+`server-only` and `bridge` exposure remain the fail-closed implemented vocabulary; Plan 142h owns
+research into richer placement rather than treating a third exposure value as sufficient.
 
 At a headless host boundary, the composed application owns that binding explicitly.
 `application.graph.read(...)` interprets a plain Query or View as many rows and the semantic
