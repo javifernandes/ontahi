@@ -42,8 +42,9 @@ afterAll(() => {
 });
 afterEach(cleanup);
 
-// Match the mounted Devtools integration budget under parallel CI coverage.
-const uiTestOptions = { timeout: 15_000 };
+// Mounted CodeMirror integration tests can share a constrained runner with every package's
+// coverage workers. Keep a bounded budget without treating scheduler contention as a failure.
+const uiTestOptions = { timeout: 30_000 };
 
 describe('Console actions', uiTestOptions, () => {
   const ListSchema = entity('List', { id: field.id(), name: field.string() });
