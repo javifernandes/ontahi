@@ -1,5 +1,27 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.16
+
+### Minor Changes
+
+- 7eac013: Add invocation-scoped model Resource limits, preflight attempt admission, provider generation
+  ceilings, typed exhaustion, usage evidence, and Devtools visibility.
+- 35f8e2d: Add host-controlled Resource evidence disclosure for model commands and model-backed Operations,
+  with safe defaults plus shared summary and debug Devtools projections.
+- 1ad6d42: Add runtime-owned semantic execution correlation, receiver-admitted origin provenance, model
+  Resource-attempt attribution, and Devtools rendering for model usage.
+
+### Patch Changes
+
+- Updated dependencies [ec78c01]
+- Updated dependencies [7eac013]
+- Updated dependencies [35f8e2d]
+- Updated dependencies [1ad6d42]
+  - @ontahi/core@1.0.0-alpha.16
+  - @ontahi/language@1.0.0-alpha.16
+  - @ontahi/react@1.0.0-alpha.16
+  - @ontahi/language-codemirror@1.0.0-alpha.16
+
 ## 1.0.0-alpha.15
 
 ### Minor Changes

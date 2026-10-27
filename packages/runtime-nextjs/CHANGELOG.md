@@ -1,5 +1,17 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.16
+
+### Patch Changes
+
+- ec78c01: Allow Next.js hosts to mount lazily composed application Runtime Protocol receivers without
+  rebuilding family dispatch, and keep server-only Operations unreachable through that bridge.
+- Updated dependencies [ec78c01]
+- Updated dependencies [7eac013]
+- Updated dependencies [35f8e2d]
+- Updated dependencies [1ad6d42]
+  - @ontahi/core@1.0.0-alpha.16
+
 ## 1.0.0-alpha.15
 
 ### Patch Changes

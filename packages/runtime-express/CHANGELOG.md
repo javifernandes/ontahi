@@ -1,5 +1,21 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.16
+
+### Minor Changes
+
+- 35f8e2d: Add host-controlled Resource evidence disclosure for model commands and model-backed Operations,
+  with safe defaults plus shared summary and debug Devtools projections.
+
+### Patch Changes
+
+- Updated dependencies [ec78c01]
+- Updated dependencies [7eac013]
+- Updated dependencies [35f8e2d]
+- Updated dependencies [1ad6d42]
+  - @ontahi/core@1.0.0-alpha.16
+  - @ontahi/explorer-react@1.0.0-alpha.16
+
 ## 1.0.0-alpha.15
 
 ### Patch Changes
