@@ -28,6 +28,7 @@ relatedPlans:
   - ontahi://plans/150-ontahi-devtools-semantic-console
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/155-declarative-basic-entity-mutations
+  - ontahi://plans/159-nextjs-application-runtime-mount
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -93,6 +94,12 @@ body before deriving context from the received request, preserves the Express HT
 semantics, and contains no family-specific switch. It likewise installs no handlers, policies,
 authorization, or capabilities. Hosts choose the App Router path; family-specific Next.js adapters
 remain compatibility surfaces during client migration.
+
+Storage-backed Next.js hosts may supply the application Runtime Protocol through a lazy receiver
+factory. The adapter resolves it only after validating the portable request, so application startup
+does not force a host to rebuild family dispatch or keep a legacy Operation route. The composed
+application receiver exposes only Operations declared for the bridge; server-only Operations stay
+unreachable regardless of transport projection.
 
 The canonical Fetch client composes one Runtime Transport for `operation`, `durable.operation`,
 `graph.read`, and `graph.command` at `/runtime`. A shared Core exchange helper creates a fresh
