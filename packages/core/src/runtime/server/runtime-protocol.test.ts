@@ -206,18 +206,26 @@ describe('application Runtime Protocol', () => {
       policies: [],
       modelCommand: {
         runtime: {
-          submit: vi.fn(async () => ({
-            status: 'answered' as const,
-            message: 'Try buying milk.',
-            resourceUsage: [
-              {
-                provider: 'openai',
-                model: 'gpt-test',
-                totalTokens: 24,
-                durationMs: 180,
-              },
-            ],
-          })),
+          submit: vi.fn(async () => {
+            recordModelResourceUsage({
+              provider: 'anthropic',
+              model: 'claude-test',
+              totalTokens: 6,
+              durationMs: 20,
+            });
+            return {
+              status: 'answered' as const,
+              message: 'Try buying milk.',
+              resourceUsage: [
+                {
+                  provider: 'openai',
+                  model: 'gpt-test',
+                  totalTokens: 24,
+                  durationMs: 180,
+                },
+              ],
+            };
+          }),
         },
       },
     });
@@ -234,7 +242,7 @@ describe('application Runtime Protocol', () => {
         result: { status: 'answered', message: 'Try buying milk.' },
         resourceEvidence: {
           visibility: 'summary',
-          model: { attempts: 1, totalTokens: 24, durationMs: 180 },
+          model: { attempts: 2, totalTokens: 30, durationMs: 200 },
         },
       },
     });

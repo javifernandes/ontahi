@@ -76,9 +76,13 @@ export const projectResourceEvidence = (
   };
 };
 
-export const projectCurrentResourceEvidence = (): ResourceEvidence | undefined => {
+export const projectCurrentResourceEvidence = (
+  additionalUsage: readonly ModelResourceUsage[] = [],
+): ResourceEvidence | undefined => {
   const state = storage.getStore();
-  return state ? projectResourceEvidence(state.modelUsage, state.disclosure) : undefined;
+  return state
+    ? projectResourceEvidence([...additionalUsage, ...state.modelUsage], state.disclosure)
+    : undefined;
 };
 
 export const getCurrentResourceEvidenceDisclosure = (): ResourceEvidenceDisclosure =>

@@ -43,11 +43,7 @@ import type {
   GraphReadableOntahiApplication,
 } from './ontahi.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
-import {
-  getCurrentResourceEvidenceDisclosure,
-  projectCurrentResourceEvidence,
-  projectResourceEvidence,
-} from './resource-evidence.js';
+import { projectCurrentResourceEvidence } from './resource-evidence.js';
 import {
   COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
   createCommittedMutationCommit,
@@ -269,10 +265,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     const response = await submitModelCommandProtocol(runtime, request, signal);
     if (response.kind !== 'model-command-result') return response;
     const { resourceUsage, ...result } = response.result;
-    const resourceEvidence = projectResourceEvidence(
-      resourceUsage ?? [],
-      getCurrentResourceEvidenceDisclosure(),
-    );
+    const resourceEvidence = projectCurrentResourceEvidence(resourceUsage);
     return {
       ...response,
       result,

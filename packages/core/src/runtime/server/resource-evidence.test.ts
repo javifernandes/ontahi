@@ -72,4 +72,29 @@ describe('resource evidence', () => {
       ),
     );
   });
+
+  it('keeps the parent disclosure when a nested scope requests wider disclosure', () => {
+    withResourceEvidence('summary', () =>
+      withResourceEvidence('debug', () => {
+        expect(getCurrentResourceEvidenceDisclosure()).toBe('summary');
+        recordModelResourceUsage(usage);
+        expect(projectCurrentResourceEvidence()).toEqual({
+          visibility: 'summary',
+          model: { attempts: 1, totalTokens: 12, durationMs: 25 },
+        });
+      }),
+    );
+  });
+
+  it('combines supplied and invocation-captured usage in one projection', () => {
+    withResourceEvidence('debug', () => {
+      recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test' });
+      expect(projectCurrentResourceEvidence([usage])).toEqual({
+        visibility: 'debug',
+        model: {
+          attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
+        },
+      });
+    });
+  });
 });
