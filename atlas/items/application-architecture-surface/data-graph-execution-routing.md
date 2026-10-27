@@ -52,6 +52,13 @@ Reads, Commands, and effects route to authorities owning different Entity popula
 `server-only` and `bridge` exposure remain the fail-closed implemented vocabulary; Plan 142h owns
 research into richer placement rather than treating a third exposure value as sufficient.
 
+Distributed Ontahí communication includes more than Event propagation. Reads, Commands, and
+Operation Invocations use request/result routes; Event subscriptions use delivery lifecycles. Both
+may be local or cross-runtime and may share Runtime Protocol transports, correlation, capability
+negotiation, and placement policy without becoming one semantic family. External ingress and
+outbound webhook/broker subscriptions sit at a different adapter boundary because their peer does
+not participate in the shared Ontahí semantic graph.
+
 At a headless host boundary, the composed application owns that binding explicitly.
 `application.graph.read(...)` interprets a plain Query or View as many rows and the semantic
 `first`, `one`, `count`, and `exists` terminals as their corresponding result, while opening the

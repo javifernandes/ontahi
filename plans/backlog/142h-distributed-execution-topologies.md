@@ -6,6 +6,14 @@ Canonical ID: `ontahi://plans/142h-distributed-execution-topologies`
 
 Source plan: [142. Declarative Model Semantics And Execution Planning](../done/142-declarative-model-semantics-and-execution-planning.md)
 
+Shapes: [Data Graph Execution Routing](../../atlas/items/application-architecture-surface/data-graph-execution-routing.md),
+[Runtime Protocol](../../atlas/items/application-architecture-surface/runtime-protocol.md),
+[Runtime Capability Model](../../atlas/items/application-architecture-surface/runtime-capabilities.md),
+[Authority And Policies](../../atlas/items/authority-and-policies.md),
+[Semantic Program Kernel](../../atlas/items/model/semantic-program-kernel.md),
+[Operation Invocation](../../atlas/items/model/operation-invocation.md),
+[Event](../../atlas/items/model/event.md), and [Reaction](../../atlas/items/model/reaction.md).
+
 ## Summary
 
 Investigate how one Ontahí semantic graph maps onto identified runtimes, execution authorities,
@@ -23,6 +31,7 @@ Related plans:
 2. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 3. [159. Next.js Application Runtime Mount](../current/159-nextjs-application-runtime-mount.md)
 4. [77. Domain Topology And Ontahí Explorer Layers](../next/77-domain-topology-and-graphos-layers.md)
+5. [146l. Event Brokers, Egress, And Durable Processing](146l-event-brokers-egress-and-processing.md)
 
 ## Working thesis
 
@@ -45,6 +54,31 @@ questions:
 These axes must not be collapsed into a future three-value exposure enum. A remotely invocable
 Operation may execute at one authoritative runtime, while a portable Operation may execute in the
 current evaluator and still route individual graph effects to several Entity authorities.
+
+## Integration map: boundary × direction
+
+Earlier integration designs can mix transport, semantic primitive, authority, and deployment into
+one idea of “remote”. Two independent dimensions make the space clearer: whether the peer is an
+external system or another participant in the same Ontahí semantic graph, and whether information
+is entering or leaving the runtime or segment under consideration.
+
+| Boundary                     | Into this runtime or graph segment                                                                                                           | Out of this runtime or graph segment                                                                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **External system**          | An ingress adapter authenticates and normalizes an external delivery into a canonical Event occurrence or Operation Invocation.              | A managed egress subscription projects a canonical Event occurrence into an HTTP, queue, broker, or provider delivery.                                            |
+| **Federated Ontahí runtime** | Runtime Protocol receives a semantic Read, Command, Operation Invocation, or remote Event delivery and re-enters local policy and authority. | An Evaluation Route dispatches Reads, Commands, or Operations synchronously, or routes Event deliveries asynchronously, to another identified runtime or segment. |
+
+Direction is relative to one runtime or graph segment; it is not an intrinsic property of the
+semantic program. “External” means the peer does not participate in the shared Ontahí model and
+therefore needs a technology/provider adapter. “Federated” means both sides share canonical
+semantic identities and protocol families even when their implementations, languages, storage,
+and deployment technologies differ.
+
+Events are therefore not the universal communication mechanism of a distributed Ontahí graph.
+Reads, Commands, and Operation Invocations provide request/result communication; Event
+subscriptions and deliveries provide asynchronous fact propagation. Both require routing,
+capability negotiation, authority, correlation, and observability, but preserve their different
+semantics. Plan 146l owns reusable outbound delivery to external systems; this plan owns placement
+and communication among Ontahí graph segments.
 
 ## Provisional topology elements
 
@@ -112,6 +146,8 @@ authorization or caller-selected authority.
 6. Model partitioning by Entity population or domain identity, including tenant-specific placement,
    without turning deployment coordinates into portable caller authority.
 7. Let reflection and observability explain the selected route and its required guarantees.
+8. Prove both synchronous semantic RPC and asynchronous Event delivery across identified runtimes
+   without collapsing them into one transport or lifecycle.
 
 ## Non-Goals
 
@@ -123,6 +159,8 @@ authorization or caller-selected authority.
 5. Do not treat Kubernetes, regions, pods, framework names, or pricing tiers as intrinsic domain
    semantics.
 6. Do not infer distributed transactions across graph segments.
+7. Do not treat external webhook or broker subscription management as graph federation; Plan 146l
+   owns that adapter-facing boundary.
 
 ## Research slices
 
@@ -133,7 +171,9 @@ authorization or caller-selected authority.
 4. Add one partitioned population proof, such as two tenants with distinct placement, and show that
    the same Entity and Operation identities survive routing.
 5. Make selected route, rejected guarantees, correlation, and cross-runtime causality observable.
-6. Only then propose a minimal reflected vocabulary and migration from current exposure metadata.
+6. Add one remote Event subscription whose declaration remains semantic while delivery placement
+   resolves to another identified runtime.
+7. Only then propose a minimal reflected vocabulary and migration from current exposure metadata.
 
 ## Open questions
 
@@ -151,6 +191,8 @@ authorization or caller-selected authority.
 7. Can tenant-specific placement remain entirely application configuration, or must reflected
    topology expose a semantic partition identity for diagnostics and policy?
 8. What is the equivalent of capability negotiation between independently versioned runtimes?
+9. Which routing envelope is genuinely shared by synchronous invocation and asynchronous Event
+   delivery, and which lifecycle fields must remain family-specific?
 
 ## Acceptance Checklist
 
@@ -165,3 +207,5 @@ authorization or caller-selected authority.
 - [ ] One domain-derived partition routes different Entity populations to different placements
       while retaining common semantic identities.
 - [ ] Reflection can explain why an Operation executes here, dispatches elsewhere, or is unavailable.
+- [ ] Cross-runtime Reads, Commands, Operations, and Event deliveries preserve one semantic
+      identity space without pretending their execution and delivery lifecycles are equivalent.
