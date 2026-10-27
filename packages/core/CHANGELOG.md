@@ -1,5 +1,21 @@
 # @ontahi/core
 
+## 1.0.0-alpha.16
+
+### Minor Changes
+
+- 7eac013: Add invocation-scoped model Resource limits, preflight attempt admission, provider generation
+  ceilings, typed exhaustion, usage evidence, and Devtools visibility.
+- 35f8e2d: Add host-controlled Resource evidence disclosure for model commands and model-backed Operations,
+  with safe defaults plus shared summary and debug Devtools projections.
+- 1ad6d42: Add runtime-owned semantic execution correlation, receiver-admitted origin provenance, model
+  Resource-attempt attribution, and Devtools rendering for model usage.
+
+### Patch Changes
+
+- ec78c01: Allow Next.js hosts to mount lazily composed application Runtime Protocol receivers without
+  rebuilding family dispatch, and keep server-only Operations unreachable through that bridge.
+
 ## 1.0.0-alpha.15
 
 ### Minor Changes
