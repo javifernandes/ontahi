@@ -176,6 +176,13 @@ export {
   type ModelResourceAdmission,
   type ModelResourceLimits,
 } from './model/resource-governance.js';
+export {
+  getCurrentResourceEvidenceDisclosure,
+  projectCurrentResourceEvidence,
+  projectResourceEvidence,
+  recordModelResourceUsage,
+  withResourceEvidence,
+} from './resource-evidence.js';
 export type {
   RateLimitResult,
   ServerRuntimeConfig,

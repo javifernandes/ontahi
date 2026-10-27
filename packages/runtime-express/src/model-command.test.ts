@@ -23,13 +23,28 @@ it('mounts the runtime entry with request authority and no domain wrapper', asyn
     expect(getCurrentInvocationContext()?.principal?.subject).toBe('reader');
     if (request.text === 'deny')
       throw new ModelInterpretationError('command_unauthorized', 'Denied');
-    return { status: 'unresolved' as const, message: 'Which document?' };
+    return {
+      status: 'unresolved' as const,
+      message: 'Which document?',
+      resourceUsage: [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          totalTokens: 24,
+          durationMs: 180,
+        },
+      ],
+    };
   });
   const app = express();
+  let discloseResourceEvidence = true;
   app.use(
     ontahiExpress(application, {
       modelCommands: { runtime: { submit } },
-      invocationContext: () => ({ principal: { subject: 'reader', kind: 'user' } }),
+      invocationContext: () => ({
+        principal: { subject: 'reader', kind: 'user' },
+        ...(discloseResourceEvidence ? { resourceEvidenceDisclosure: 'summary' as const } : {}),
+      }),
     }),
   );
   const server = app.listen(0, '127.0.0.1');
@@ -43,9 +58,26 @@ it('mounts the runtime entry with request authority and no domain wrapper', asyn
     });
     expect(await response.json()).toEqual({
       ok: true,
-      value: { status: 'unresolved', message: 'Which document?' },
+      value: {
+        status: 'unresolved',
+        message: 'Which document?',
+        resourceEvidence: {
+          visibility: 'summary',
+          model: { attempts: 1, totalTokens: 24, durationMs: 180 },
+        },
+      },
     });
     expect(submit.mock.calls[0]![0]).toEqual({ text: 'rename' });
+    discloseResourceEvidence = false;
+    const hidden = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'rename' }),
+    });
+    expect(await hidden.json()).toEqual({
+      ok: true,
+      value: { status: 'unresolved', message: 'Which document?' },
+    });
     const denied = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

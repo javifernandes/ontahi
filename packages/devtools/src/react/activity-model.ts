@@ -473,11 +473,25 @@ export const semanticSummary = (
 
 export const modelResourceUsageSummary = (activity: ExchangeActivity): string | undefined => {
   const body = activity.settled?.response?.body;
-  if (!isRecord(body) || body.kind !== 'model-command-result' || !isRecord(body.result))
-    return undefined;
-  const usage = Array.isArray(body.result.resourceUsage)
-    ? body.result.resourceUsage.filter(isRecord)
-    : [];
+  if (!isRecord(body) || !isRecord(body.resourceEvidence)) return undefined;
+  const evidence = body.resourceEvidence;
+  if (!isRecord(evidence.model)) return undefined;
+  if (evidence.visibility === 'summary') {
+    const attempts = evidence.model.attempts;
+    if (typeof attempts !== 'number') return undefined;
+    return [
+      attempts === 1 ? '1 call' : `${attempts} calls`,
+      typeof evidence.model.totalTokens === 'number'
+        ? `${evidence.model.totalTokens.toLocaleString()} tokens`
+        : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  const usage =
+    evidence.visibility === 'debug' && Array.isArray(evidence.model.attempts)
+      ? evidence.model.attempts.filter(isRecord)
+      : [];
   if (usage.length === 0) return undefined;
   const providers = [
     ...new Set(

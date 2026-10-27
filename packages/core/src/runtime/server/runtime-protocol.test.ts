@@ -20,6 +20,7 @@ import {
   getCurrentInvocationContext,
   withInvocationContext as runWithInvocationContext,
 } from './invocation-context.js';
+import { recordModelResourceUsage } from './resource-evidence.js';
 import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
@@ -196,6 +197,64 @@ describe('application Runtime Protocol', () => {
     expect(respondToTaskInteraction).toHaveBeenCalledWith(run, body.response, {
       actor: { kind: 'user', id: 'user-1' },
     });
+  });
+
+  it('projects model usage according to host disclosure without returning raw accounting data', async () => {
+    const { application } = createApplication();
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      modelCommand: {
+        runtime: {
+          submit: vi.fn(async () => {
+            recordModelResourceUsage({
+              provider: 'anthropic',
+              model: 'claude-test',
+              totalTokens: 6,
+              durationMs: 20,
+            });
+            return {
+              status: 'answered' as const,
+              message: 'Try buying milk.',
+              resourceUsage: [
+                {
+                  provider: 'openai',
+                  model: 'gpt-test',
+                  totalTokens: 24,
+                  durationMs: 180,
+                },
+              ],
+            };
+          }),
+        },
+      },
+    });
+
+    const response = await protocol.dispatcher(
+      request('model.command', { version: 1, kind: 'model-command', text: 'suggest an item' }),
+      { principal: null, resourceEvidenceDisclosure: 'summary' } as Context,
+    );
+
+    expect(response).toMatchObject({
+      kind: 'response',
+      body: {
+        kind: 'model-command-result',
+        result: { status: 'answered', message: 'Try buying milk.' },
+        resourceEvidence: {
+          visibility: 'summary',
+          model: { attempts: 2, totalTokens: 30, durationMs: 200 },
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain('gpt-test');
+    expect(JSON.stringify(response)).not.toContain('resourceUsage');
+
+    const undisclosed = await protocol.dispatcher(
+      request('model.command', { version: 1, kind: 'model-command', text: 'suggest another item' }),
+      { principal: null },
+    );
+    expect(JSON.stringify(undisclosed)).not.toContain('resourceEvidence');
+    expect(JSON.stringify(undisclosed)).not.toContain('resourceUsage');
   });
 
   it('captures direct Graph Commands and applies an explicit authority projection', async () => {
@@ -760,6 +819,7 @@ describe('application Runtime Protocol', () => {
     };
     application.resolveOperation = () => operation as never;
     application.invokeOperation = vi.fn(async () => {
+      recordModelResourceUsage({ provider: 'openai', model: 'gpt-test', totalTokens: 18 });
       declareSelectionChange({
         kind: 'selection',
         entityName: 'Todo',
@@ -791,11 +851,18 @@ describe('application Runtime Protocol', () => {
     await expect(
       protocol.dispatcher(accepted, {
         principal: { kind: 'user', subject: 'user-1' },
+        resourceEvidenceDisclosure: 'debug',
       }),
     ).resolves.toMatchObject({
       body: {
         kind: 'invocation-result',
         result: { ok: true, kind: 'success', value: { completed: 3 } },
+        resourceEvidence: {
+          visibility: 'debug',
+          model: {
+            attempts: [{ provider: 'openai', model: 'gpt-test', totalTokens: 18 }],
+          },
+        },
       },
       metadata: {
         committedMutations: {

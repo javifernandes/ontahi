@@ -1,7 +1,11 @@
 import type { EntityViewAst } from '../data-graph/view.js';
 import { isRecord } from '../value/object.js';
 
-import type { OperationInvocationResult, OperationValidationIssue } from './contracts.js';
+import type {
+  OperationInvocationResult,
+  OperationValidationIssue,
+  ResourceEvidence,
+} from './contracts.js';
 
 export type OperationInvokeRequest = {
   kind: 'invoke';
@@ -32,6 +36,8 @@ export type OperationPermissionResult =
 export type OperationInvocationResponse = {
   kind: 'invocation-result';
   result: OperationInvocationResult;
+  /** Host-projected execution evidence, independent from the Operation's semantic result. */
+  resourceEvidence?: ResourceEvidence;
 };
 
 export type OperationPermissionResponse = {

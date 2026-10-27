@@ -547,6 +547,7 @@ await application.app.runtime.withInvocationContext(
     principal,
     origin: { channel: 'web', surface: 'command-chat', clientInstanceId: admittedTabId },
     modelResourceLimits: { maxAttempts: 3, maxOutputTokens: 1024 },
+    resourceEvidenceDisclosure: 'summary',
   },
   () => TodoItem.complete({ todos: ['todo-123'] }),
 );
@@ -565,6 +566,14 @@ limit narrows the provider adapter's configured ceiling. Nested trusted invocati
 limits by minimum and share the attempt counter, so they can restrict but never widen the host
 envelope. Exhaustion produces `model_resource_exhausted`; it is not an authorization denial or a
 provider availability failure. The counter is intentionally not durable across process restart.
+
+`resourceEvidenceDisclosure` is a separate host-owned projection decision. Its safe default is
+`none`; `summary` returns only aggregate attempt, token, and duration evidence when those metrics
+are complete; `debug` may return provider/model identities, per-attempt metrics, causal trace, and
+admission details. Nested invocation scopes can reduce disclosure but cannot widen it. Evidence is
+attached to the Runtime Protocol response beside the semantic result, so changing visibility does
+not change an Operation's output contract. Capture is invocation-local and ephemeral: enabling it
+does not create a persistent accounting store.
 
 ## In-Memory Graph
 

@@ -69,6 +69,23 @@ describe('SemanticPayload', () => {
       <SemanticPayload
         value={{
           kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: { title: 'Buy milk' } },
+          resourceEvidence: {
+            visibility: 'summary',
+            model: { attempts: 1, totalTokens: 24, durationMs: 180 },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Resource usage summary')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempts · 1' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Total · 24 tokens' })).toBeTruthy();
+    expect(screen.queryByText(/openai/)).toBeNull();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          kind: 'invocation-result',
           result: {
             ok: false,
             kind: 'rejected',
@@ -127,44 +144,49 @@ describe('SemanticPayload', () => {
               operationId: 'TodoList.rename',
               input: { name: 'Today' },
             },
-            resourceUsage: [
-              {
-                provider: 'openai',
-                model: 'gpt-test',
-                inputTokens: 120,
-                outputTokens: 18,
-                totalTokens: 138,
-                cachedInputTokens: 40,
-                cacheWriteInputTokens: 3,
-                reasoningTokens: 6,
-                durationMs: 250,
-                activity: {
-                  attemptId: 'attempt-1',
-                  correlationId: 'execution-1',
-                  owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
-                  origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
-                  admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
+          },
+          resourceEvidence: {
+            visibility: 'debug',
+            model: {
+              attempts: [
+                {
+                  provider: 'openai',
+                  model: 'gpt-test',
+                  inputTokens: 120,
+                  outputTokens: 18,
+                  totalTokens: 138,
+                  cachedInputTokens: 40,
+                  cacheWriteInputTokens: 3,
+                  reasoningTokens: 6,
+                  durationMs: 250,
+                  activity: {
+                    attemptId: 'attempt-1',
+                    correlationId: 'execution-1',
+                    owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
+                    origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
+                    admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
+                  },
                 },
-              },
-              {
-                provider: 'ollama',
-                model: 'local-test',
-                activity: {
-                  attemptId: 'attempt-2',
-                  correlationId: 'execution-2',
+                {
+                  provider: 'ollama',
+                  model: 'local-test',
+                  activity: {
+                    attemptId: 'attempt-2',
+                    correlationId: 'execution-2',
+                  },
                 },
-              },
-              {
-                provider: 'deepseek',
-                model: 'deepseek-test',
-                activity: {
-                  owner: {},
-                  origin: { channel: 'cli' },
+                {
+                  provider: 'deepseek',
+                  model: 'deepseek-test',
+                  activity: {
+                    owner: {},
+                    origin: { channel: 'cli' },
+                  },
                 },
-              },
-              {},
-              'redacted',
-            ],
+                {},
+                'redacted',
+              ],
+            },
           },
         }}
       />,
