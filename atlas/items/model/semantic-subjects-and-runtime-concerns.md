@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/125a-model-execution-resource-governance
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
+  - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
 ---
 
 Ontahí's emerging metamodel contains several first-level semantic subjects with different enduring
@@ -37,6 +38,11 @@ runtime concerns such as governance, audit evidence, policy, reflection, localiz
 observability. The shared concern does not erase the subject's meaning: an Entity change, Operation
 attempt, Resource consumption, and Interaction response require different evidence payloads even
 when one causal execution relates all four.
+
+A [[ontahi.model.semantic-module|Semantic Module]] is not another subject in this list. It is a
+composition and ownership boundary that may contribute several subject kinds and relate them to
+contributions from other Modules. Shared Module membership therefore does not erase the distinct
+semantics of Entity, Operation, Resource, Interaction, or Event.
 
 ## Subject And Concern
 

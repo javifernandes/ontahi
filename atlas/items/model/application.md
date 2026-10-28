@@ -10,6 +10,7 @@ supports:
   - ontahi.independently-usable
 relatedPlans:
   - ontahi://plans/71c-ontahi-application-module-composition
+  - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
   - ontahi://plans/100h-ontahi-portability-example-and-developer-guide
   - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/application
@@ -35,3 +36,9 @@ execute in that environment.
 Application composition prepares the complete Entity catalog before binding operations. That makes
 nominal/cyclic references, conventional storage mappings, reflection, codegen, and operation
 discovery consequences of one model instead of independently assembled registries.
+
+The current root composes Entity declarations and runtime bindings; it does not yet expose a
+first-class [[ontahi.model.semantic-module|Semantic Module]] model. The shaping Module concept adds
+semantic ownership, grouped contributions, cross-Module dependencies, and attributed extensions
+without equating an Application Module with a code package or deployment. The Application remains
+the complete composed graph; Modules are named contributions to it.

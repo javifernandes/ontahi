@@ -14,6 +14,7 @@ Related plan:
 
 1. [146j. First-Class Events Runtime Protocol Gate](../done/146j-first-class-events-runtime-protocol-gate.md)
 2. [142h. Distributed Execution Topologies](142h-distributed-execution-topologies.md)
+3. [160. Semantic Modules, Composition, And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
 
 ## Summary
 
@@ -34,6 +35,11 @@ canonical occurrences into deliveries understood by systems that do not share On
 model. Communication between two Ontahí graph segments is different: it preserves canonical
 Operation/Event identities through Runtime Protocol and belongs to Plan 142h even when a queue or
 broker is used underneath.
+
+Plan 160 places ingress and egress inside the broader System Boundary of an Application. That
+authoring surface may group Operation and Event bindings for affordance, but this plan retains the
+external Event subscription and delivery lifecycle. It does not generalize every outbound
+Operation, RPC, or direct Module dependency into an Event delivery.
 
 ## External subscription boundary
 
