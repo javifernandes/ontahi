@@ -9,6 +9,7 @@ supports:
   - ontahi.model
   - ontahi.application-architecture-surface.data-graph-execution-routing
 relatedPlans:
+  - ontahi://plans/161-authority-scoped-nested-view-materialization
   - ontahi://plans/128a-recursive-views-and-projectable-operation-results
   - ontahi://plans/133-nominal-model-registry-and-codegen-reuse
 ---
@@ -31,3 +32,8 @@ Browser code authors Views against the generated client Entity facade and sends 
 AST through `.as(view)`. The server rebuilds and validates that AST against the Entity declared by
 the Operation's Selection output, then composes one final Query. A future persisted or approved View
 catalog would be an optional client/deployment artifact rather than part of the Entity schema.
+
+A View's nested Relation shape is not itself an authority predicate. Current Graph Read policy
+scopes apply to roots; nested relation policy nodes authorize fields without filtering the related
+population. Plan 161 will define a receiver-owned execution contract for nested scopes without
+placing private authority expressions in the caller-owned portable View AST.

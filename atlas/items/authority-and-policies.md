@@ -9,6 +9,7 @@ supports:
   - ontahi
   - bookops
 relatedPlans:
+  - ontahi://plans/161-authority-scoped-nested-view-materialization
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/157-bartlett-consumer-ergonomics
   - bookops://plans/78-first-class-authorization-and-relationship-policies
@@ -42,6 +43,12 @@ Policy authoring may express these independent capabilities as typed select, fil
 allowlists through `defineGraphReadPolicy`. That constructor lowers to the same canonical Field
 policy consumed by the dispatcher; it does not infer permissions from application Queries or
 weaken the default-deny boundary.
+
+Graph Read authority currently scopes the root population only. Relation policy nodes authorize
+nested projection shape but do not intersect the registered target Entity scope while a View is
+materialized. Plan 161 owns the security contract and provider execution work required for every
+nested Entity population to enforce receiver-owned authority. Until that lands, consumers must use
+separate authorized roots instead of assuming a nested relation policy filters related rows.
 
 Model-mediated invocation is an emerging consumer of this authority boundary. A resolved proposal
 cannot grant permissions, replace the authenticated Principal, or turn model-visible graph scope
