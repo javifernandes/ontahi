@@ -12,6 +12,7 @@ supports:
 relatedPlans:
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/146l-event-brokers-egress-and-processing
+  - ontahi://plans/146m-managed-http-event-egress
   - ontahi://plans/142h-distributed-execution-topologies
   - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
 ---
@@ -102,3 +103,8 @@ integration mechanism. Cross-Module Relations preserve domain structure and dire
 invocation preserves request/result semantics. A System Boundary may present these bindings in one
 cohesive application interface while retaining their different identities, lifecycles, authority,
 and failure behavior.
+
+Plan 146m is the first executable external-egress vertical. It reuses retained Event Deliveries and
+their claim lifecycle, then adds an application-admitted destination, external payload projection,
+transport attempt, outcome classification, and HTTP adapter. Destination credentials and signing
+secrets remain environment Resources; the Event declaration remains transport-neutral.
