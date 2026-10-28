@@ -15,6 +15,7 @@ relatedPlans:
   - bookops://plans/68a-architecture-factory-and-app-facade
   - bookops://plans/architecture-facade-completion
   - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
 migratedFrom: bookops://atlas/application-architecture-surface
 sourceCommit: 67713696
 ---
@@ -22,6 +23,13 @@ sourceCommit: 67713696
 Application Architecture Surface covers how an Ontahi graph becomes a configured application: host composition, capability ports, technology adapters, policies, runtime setup, and the app-facing API.
 
 The current `architecture()`, `layer`, and `concern` vocabulary predates the graph-native language and remains provisional. The durable distinction is clearer than the final names: graph declarations express application meaning; host composition binds that meaning to runtime capabilities and adapters; a configured app surface exposes execution to server, clients, ingress, tasks, and Explorer.
+
+The shaping System Boundary concept groups the ways a composed Application participates in a
+larger system without making HTTP routes or framework handlers the semantic source of truth.
+Operation ingress, Event ingress, external Event egress, and remote capability invocation may share
+one authoring surface and host adapter family while retaining distinct admission, execution,
+delivery, retry, and result contracts. Semantic Module composition remains separate from this
+external boundary and from execution topology.
 
 ## Child Shapes
 

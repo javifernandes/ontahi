@@ -15,13 +15,14 @@ Related plans:
 
 1. [158a. Semantic Execution Context Propagation Proof](../done/158a-semantic-execution-context-propagation-proof.md)
 2. [125a. Model Execution Resource Governance](../current/125a-model-execution-resource-governance.md)
-3. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
-4. [154. Semantic Program Kernel And Distributed Evaluation](./154-semantic-program-kernel-and-distributed-evaluation.md)
-5. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
-6. [130. Authentication, Principal And Invocation Context](../done/130-ontahi-authentication-principal-and-invocation-context.md)
-7. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
-8. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
-9. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
+3. [160. Semantic Modules, Composition, And System Boundaries](160-semantic-modules-composition-and-system-boundaries.md)
+4. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
+5. [154. Semantic Program Kernel And Distributed Evaluation](./154-semantic-program-kernel-and-distributed-evaluation.md)
+6. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
+7. [130. Authentication, Principal And Invocation Context](../done/130-ontahi-authentication-principal-and-invocation-context.md)
+8. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
+9. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
+10. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 
 ## Summary
 

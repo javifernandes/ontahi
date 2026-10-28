@@ -18,6 +18,7 @@ Related plans:
 10. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
 11. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
 12. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
+13. [160. Semantic Modules, Composition, And System Boundaries](160-semantic-modules-composition-and-system-boundaries.md)
 
 ## Summary
 
@@ -123,6 +124,10 @@ Ontahí should test a semantic kernel in which:
 
 The kernel should be smaller than the current API surface. Its usefulness must be demonstrated by
 projecting existing Ontahí concepts into it, not by renaming all existing concepts prematurely.
+
+Plan 160 investigates the Semantic Module as an authorship and composition boundary over these
+program forms. Module is not another evaluator term: it groups owned contributions and explicit
+dependencies before an Environment or execution topology chooses where they are interpreted.
 
 ## Provisional Semantic Vocabulary
 

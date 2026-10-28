@@ -32,6 +32,7 @@ Related plans:
 3. [159. Next.js Application Runtime Mount](../current/159-nextjs-application-runtime-mount.md)
 4. [77. Domain Topology And Ontahí Explorer Layers](../next/77-domain-topology-and-graphos-layers.md)
 5. [146l. Event Brokers, Egress, And Durable Processing](146l-event-brokers-egress-and-processing.md)
+6. [160. Semantic Modules, Composition, And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
 
 ## Working thesis
 
@@ -79,6 +80,11 @@ subscriptions and deliveries provide asynchronous fact propagation. Both require
 capability negotiation, authority, correlation, and observability, but preserve their different
 semantics. Plan 146l owns reusable outbound delivery to external systems; this plan owns placement
 and communication among Ontahí graph segments.
+
+Plan 160 owns semantic Module identity, cross-Module Relations, direct Operation use, Event
+subscriptions, and attributed extensions before distribution. A Module may influence placement,
+but it is not a `GraphSegment` or deployment unit. This plan may distribute a proven composition;
+it must not invent Module boundaries from infrastructure topology.
 
 ## Provisional topology elements
 

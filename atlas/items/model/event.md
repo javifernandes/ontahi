@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/146l-event-brokers-egress-and-processing
   - ontahi://plans/142h-distributed-execution-topologies
+  - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
 ---
 
 An [[ontahi.model.event|Event]] declaration gives one application fact a stable id, an explicit
@@ -95,3 +96,9 @@ or provider attempts for systems that do not share Ontahí semantics. Federated 
 the canonical Event and subscription identities between identified Ontahí runtimes or graph
 segments. A shared transport technology does not make those authority and lifecycle boundaries the
 same.
+
+Semantic Modules may publish and subscribe to Events, but Events are not the universal Module
+integration mechanism. Cross-Module Relations preserve domain structure and direct Operation
+invocation preserves request/result semantics. A System Boundary may present these bindings in one
+cohesive application interface while retaining their different identities, lifecycles, authority,
+and failure behavior.

@@ -51,6 +51,7 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 20. [`Semantic Program Kernel`](./model/semantic-program-kernel.md) (shaping)
 21. [`Semantic Subjects And Runtime Concerns`](./model/semantic-subjects-and-runtime-concerns.md)
     (shaping)
+22. [`Semantic Module`](./model/semantic-module.md) (shaping)
 
 ## Adjacent Runtime Shapes
 
