@@ -23,6 +23,7 @@ Related plans:
 8. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
 9. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
 10. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
+11. [146m. Managed HTTP Event Egress](../next/146m-managed-http-event-egress.md)
 
 ## Summary
 

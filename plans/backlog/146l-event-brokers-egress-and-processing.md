@@ -10,11 +10,15 @@ Shapes: [Event](../../atlas/items/model/event.md),
 [Authority And Policies](../../atlas/items/authority-and-policies.md), and
 [Durable Workflows](../../atlas/items/durable-workflows.md).
 
-Related plan:
+Related plans:
 
 1. [146j. First-Class Events Runtime Protocol Gate](../done/146j-first-class-events-runtime-protocol-gate.md)
 2. [142h. Distributed Execution Topologies](142h-distributed-execution-topologies.md)
 3. [160. Semantic Modules, Composition, And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
+
+Executable child plan:
+
+1. [146m. Managed HTTP Event Egress](../next/146m-managed-http-event-egress.md)
 
 ## Summary
 
@@ -69,6 +73,12 @@ transport retry handles never belong in Event declarations.
    arbitrary graph query authority?
 8. Which payload projection, version negotiation, signing, secret rotation, and endpoint ownership
    decisions belong to the application versus the adapter?
+
+Plan 146m now owns the first answerable vertical: one static application-admitted subscription,
+one named Resource-backed HTTP destination, one transport-neutral attempt boundary, and reuse of
+the existing durable Event Delivery claim lifecycle. Dynamic subscription CRUD, durable attempt
+history, terminal dead letters, brokers, and the final System Boundary facade remain here or in
+follow-ups extracted from that proof.
 
 ## Scope
 

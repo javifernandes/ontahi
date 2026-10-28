@@ -16,6 +16,7 @@ relatedPlans:
   - bookops://plans/architecture-facade-completion
   - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
   - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
+  - ontahi://plans/146m-managed-http-event-egress
 migratedFrom: bookops://atlas/application-architecture-surface
 sourceCommit: 67713696
 ---
