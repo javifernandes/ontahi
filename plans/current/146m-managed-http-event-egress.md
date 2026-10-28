@@ -1,6 +1,6 @@
 # 146m. Managed HTTP Event Egress
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/146m-managed-http-event-egress`
 
@@ -13,7 +13,7 @@ Related plans:
 1. [146j. First-Class Events Runtime Protocol Gate](../done/146j-first-class-events-runtime-protocol-gate.md)
 2. [158. Semantic Execution Context, Governance, And Evidence](../research/158-semantic-execution-context-governance-and-evidence.md)
 3. [160. Semantic Modules, Composition, And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
-4. [120. Environment Resources And Semantic Bindings](120-ontahi-environment-resources-and-semantic-bindings.md)
+4. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
 
 Shapes: [Event](../../atlas/items/model/event.md),
 [Runtime Capability Model](../../atlas/items/application-architecture-surface/runtime-capabilities.md),
@@ -328,3 +328,27 @@ roll back the domain Unit Of Work that caused it.
 - [ ] Domain commit and Event acceptance remain complete even when external delivery later fails.
 - [ ] The HTTP adapter can be replaced by a fake transport without changing subscription or
       delivery lifecycle semantics.
+
+## Implementation Checkpoint: Transport-Neutral Kernel
+
+The first execution slice is implemented in `@ontahi/core`:
+
+1. `eventEgressSubscription(...)` preserves declaration-specific payload typing while naming one
+   stable subscription and destination identity;
+2. `registerEventEgressSubscription(...)` registers the static selector through the existing
+   durable Event Delivery capability and fails early for an incapable runtime;
+3. `processNextEventEgressDelivery(...)` claims at most one delivery, validates Event identity,
+   resolves the destination, projects a JSON-safe body, invokes an injected transport, and then
+   acknowledges or releases the claim;
+4. accepted and retryable results expose bounded evidence without returning the destination value
+   or projected body;
+5. resolution, projection, and transport failures release the claim before propagating, while a
+   simultaneous release failure preserves both causes;
+6. focused coverage proves stable delivery identity, incremented attempt after release, idle
+   polling, invalid projection, mismatched Event identity, unsupported runtimes, and typed payload
+   projection.
+
+This checkpoint deliberately provides no worker loop, delayed scheduling, terminal rejection,
+dead-letter state, HTTP implementation, signing, or SQL-backed example integration. Those remain
+the next execution slices; `retryAfterMs` is evidence for the host scheduler and is not yet an
+enforced delay.

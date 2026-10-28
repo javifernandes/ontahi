@@ -177,6 +177,63 @@ Express and Next.js project the same HTTP-neutral ingress contract. Provider del
 retained as ingress causation, not treated as application correlation or as proof of deduplication.
 Rejected, ignored, unauthorized, malformed, or stale-version deliveries create no occurrence.
 
+## Project durable deliveries through an external egress transport
+
+Managed egress begins with an application-owned subscription. It selects one declared Event
+version, one named destination, and a projection of the canonical occurrence into an external
+payload:
+
+```ts
+import {
+  eventEgressSubscription,
+  processNextEventEgressDelivery,
+  registerEventEgressSubscription,
+} from '@ontahi/core/runtime/server';
+
+const customerExportWebhook = eventEgressSubscription({
+  id: 'customer-export-webhook',
+  event: TodoListExportReady,
+  destinationId: 'customer-webhook',
+  project: occurrence => ({
+    id: occurrence.occurrenceId,
+    type: occurrence.eventId,
+    occurredAt: occurrence.occurredAt,
+    data: occurrence.payload,
+  }),
+});
+
+await registerEventEgressSubscription(eventRuntime, customerExportWebhook);
+```
+
+Registration uses the existing durable Event Runtime. It does not store a URL, secret, callback,
+or transport in the Event declaration or durable subscription selector.
+
+One processor call claims at most one pending delivery and resolves the destination through trusted
+host configuration:
+
+```ts
+const result = await processNextEventEgressDelivery({
+  runtime: eventRuntime,
+  subscription: customerExportWebhook,
+  consumerId: 'webhook-worker-1',
+  leaseMs: 30_000,
+  resolveDestination: async destinationId => destinations.require(destinationId),
+  transport: webhookTransport,
+});
+```
+
+An `accepted` transport outcome acknowledges the durable claim. A `retryable` outcome releases it;
+the next claim preserves `deliveryId` and increments `attempt`. Thrown destination, projection, or
+transport failures also release the claim before propagating the failure. The returned result is
+safe attempt evidence: it contains semantic and destination identities, but neither projected body
+nor resolved destination credentials.
+
+Core deliberately does not run an immortal worker loop or schedule retries. The host controls
+polling, concurrency, backoff, lifecycle, and shutdown around this one-claim primitive. The current
+kernel also has no terminal rejection or dead-letter outcome. HTTP transport, signing, delayed
+retry, and retained attempt history require their own explicit guarantees rather than being implied
+by this API.
+
 ## Wait for an Event durably
 
 An explicit durable Task execution can return a serializable Event wait:
@@ -222,6 +279,8 @@ available as detail.
 - Event Runtime owns acceptance and delivery guarantees.
 - Runtime Protocol transports the supported live browser projection.
 - Event ingress authenticates and normalizes an external delivery before acceptance.
+- Event egress projects a durable delivery through an application-admitted destination and
+  transport; it does not change the Event declaration.
 - Task Storage arbitrates one continuation; it is not an Event store.
 - Reactions schedule follow-up intents; their delivery policy is separate from Event delivery.
 - Data Graph transactions do not automatically include Event acceptance.
