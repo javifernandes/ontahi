@@ -108,3 +108,16 @@ Plan 146m is the first executable external-egress vertical. It reuses retained E
 their claim lifecycle, then adds an application-admitted destination, external payload projection,
 transport attempt, outcome classification, and HTTP adapter. Destination credentials and signing
 secrets remain environment Resources; the Event declaration remains transport-neutral.
+
+The first transport-neutral kernel is now executable. A static typed egress subscription registers
+through the durable Event Delivery capability. A bounded processor invocation claims at most one
+delivery, validates its Event identity, resolves a named destination through host configuration,
+projects a JSON-safe external body, and invokes an injected transport. Accepted outcomes
+acknowledge; retryable outcomes and thrown attempt failures release the claim. The result exposes
+safe occurrence, delivery, attempt, subscription, Event, and destination identities without the
+projected body or resolved destination value.
+
+Core does not own a polling loop, concurrency, backoff, shutdown, or HTTP mechanics. The host
+schedules the one-claim processor; `retryAfterMs` remains advisory evidence until delayed retry has
+durable semantics. Terminal rejection, dead letters, HTTP signing, retained attempt history, and a
+real SQL-backed external receiver remain open Plan 146m slices.

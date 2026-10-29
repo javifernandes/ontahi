@@ -15,6 +15,18 @@ export {
   createInMemoryEventRuntime,
   type InMemoryEventRuntimeOptions,
 } from './in-memory-runtime.js';
+export {
+  eventEgressSubscription,
+  processNextEventEgressDelivery,
+  registerEventEgressSubscription,
+  type EventEgressAttempt,
+  type EventEgressAttemptEvidence,
+  type EventEgressAttemptOutcome,
+  type EventEgressProcessResult,
+  type EventEgressSubscription,
+  type EventEgressTransport,
+  type ProcessNextEventEgressDeliveryOptions,
+} from './egress.js';
 export type {
   AnyEventDeclaration,
   EventApplication,

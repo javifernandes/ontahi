@@ -17,7 +17,7 @@ Related plans:
 1. [71c. Ontahi Application Module Composition](../done/71c-ontahi-application-module-composition.md)
 2. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
 3. [146l. Event Brokers, Egress, And Durable Processing](../backlog/146l-event-brokers-egress-and-processing.md)
-4. [146m. Managed HTTP Event Egress](../next/146m-managed-http-event-egress.md)
+4. [146m. Managed HTTP Event Egress](../current/146m-managed-http-event-egress.md)
 5. [154. Semantic Program Kernel And Distributed Evaluation](154-semantic-program-kernel-and-distributed-evaluation.md)
 6. [158. Semantic Execution Context, Governance, And Evidence](158-semantic-execution-context-governance-and-evidence.md)
 7. [159. Next.js Application Runtime Mount](../current/159-nextjs-application-runtime-mount.md)
