@@ -23,6 +23,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./event-egress": {
+      "types": "./dist/event-egress.d.ts",
+      "import": "./dist/event-egress.js",
+      "require": "./dist/event-egress.js"
+    },
+    "./ingress": {
+      "types": "./dist/ingress.d.ts",
+      "import": "./dist/ingress.js",
+      "require": "./dist/ingress.js"
+    },
+    "./node": {
+      "types": "./dist/node-server.d.ts",
+      "import": "./dist/node-server.js",
+      "require": "./dist/node-server.js"
     }
   },
   "publishConfig": {

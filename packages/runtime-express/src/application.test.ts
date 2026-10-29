@@ -1029,6 +1029,6 @@ describe('Ontahi Express application middleware', () => {
           ],
         },
       }),
-    ).toThrow('cannot mount Operation and Event ingress on the same path /webhooks/shared');
+    ).toThrow('cannot bind Operation and Event routes to the same path /webhooks/shared');
   });
 });

@@ -15,6 +15,32 @@ Ontahí currently has six relevant execution and ingress shapes:
 - **Event ingress and live observation** accept authenticated external facts and project declared
   live subscriptions without turning Events into Operations.
 
+## The generic HTTP runtime
+
+Operation and Event ingress converge behind `@ontahi/runtime-http/ingress`. Its handler accepts a
+provider registry plus explicit route groups and exposes one Web `Request → Response` boundary:
+
+```ts
+import { createHttpIngressHandler } from '@ontahi/runtime-http/ingress';
+
+const ingress = createHttpIngressHandler({
+  providers,
+  operations: { routes: operationRoutes, dispatcher },
+  events: { routes: eventRoutes, events: application.events },
+});
+```
+
+Express and Next.js adapt their request lifecycle to this same handler. The semantic application is
+therefore not implemented _in_ either framework. A small Node application can instead use
+`createNodeHttpIngressServer(...)` from `@ontahi/runtime-http/node` and host the same declarations,
+provider authentication, Operation dispatch, and Event ingestion directly on `node:http`.
+
+The Node host is intentionally not another web framework. It buffers a configured maximum body,
+projects Node requests and responses to the Web types, and sanitizes unexpected failures. TLS,
+trusted proxies, general-purpose routing, middleware, static files, graceful shutdown, and process
+topology remain host concerns. Framework adapters continue to be useful when those ecosystems own
+the surrounding application lifecycle.
+
 ## The Runtime Protocol foundation
 
 Those execution shapes share a transport-independent Ontahí Runtime Protocol. Core

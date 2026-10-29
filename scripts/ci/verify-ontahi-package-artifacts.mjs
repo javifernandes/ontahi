@@ -284,7 +284,10 @@ const verifyArtifacts = () => {
     const tarballs = packPackages(artifactsDirectory);
     verifyReproducibleTarballs(tarballs, path.join(temporaryRoot, 'repeated-artifacts'));
     const minimalTarballs = Object.fromEntries(
-      ['@ontahi/core', '@ontahi/runtime-express'].map(name => [name, tarballs[name]]),
+      ['@ontahi/core', '@ontahi/runtime-http', '@ontahi/runtime-express'].map(name => [
+        name,
+        tarballs[name],
+      ]),
     );
     const minimalConsumer = installConsumer({
       root: temporaryRoot,

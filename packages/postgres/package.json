@@ -64,6 +64,7 @@
   },
   "devDependencies": {
     "@ontahi/runtime-express": "workspace:*",
+    "@ontahi/runtime-http": "workspace:*",
     "@testcontainers/postgresql": "^11.7.2",
     "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",

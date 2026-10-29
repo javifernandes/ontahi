@@ -1,6 +1,47 @@
 # `@ontahi/runtime-http`
 
-HTTP transport adapters for Ontahí runtimes.
+HTTP transport adapters and a minimal Node host for Ontahí runtimes.
+
+## HTTP ingress
+
+`createHttpIngressHandler(...)` composes Operation and Event ingress behind one standard Web
+`Request → Response` boundary. Express and Next.js delegate to this handler; applications that do
+not need their framework facilities can host the same contract directly with `node:http`:
+
+```ts
+import { createNodeHttpIngressServer } from '@ontahi/runtime-http/node';
+
+const server = createNodeHttpIngressServer({
+  ingress: {
+    providers,
+    operations: {
+      routes: application.graph.listHttpIngress(),
+      dispatcher,
+    },
+    events: {
+      routes: eventRoutes,
+      events: application.events,
+    },
+  },
+  bodyLimitBytes: 1024 * 1024,
+});
+
+server.listen(3000, '127.0.0.1');
+```
+
+The minimal server buffers only a bounded request body, preserves the raw provider request, returns
+Web responses without an Express-shaped contract, and sanitizes unexpected failures. Applications
+still own listening topology, TLS, shutdown, trusted proxy handling, authorization, and provider
+registration. `createNodeHttpServer(...)` can host any other standard Ontahí HTTP handler.
+
+The supported entrypoints are:
+
+1. `@ontahi/runtime-http/ingress`: framework-neutral ingress composition;
+2. `@ontahi/runtime-http/node`: the minimal `node:http` bridge;
+3. `@ontahi/runtime-http/event-egress`: managed Event egress over Fetch;
+4. `@ontahi/runtime-http`: the complete server-side surface.
+
+## Managed Event egress
 
 The first adapter lowers Core's transport-neutral managed Event egress attempt to one HTTP `POST`.
 It sends stable Event, occurrence, subscription, delivery, attempt, and idempotency headers; signs
@@ -9,7 +50,7 @@ Core processor.
 
 ```ts
 import { processNextEventEgressDelivery } from '@ontahi/core/runtime/server';
-import { createHttpEventEgressTransport } from '@ontahi/runtime-http';
+import { createHttpEventEgressTransport } from '@ontahi/runtime-http/event-egress';
 
 const transport = createHttpEventEgressTransport({ defaultTimeoutMs: 10_000 });
 

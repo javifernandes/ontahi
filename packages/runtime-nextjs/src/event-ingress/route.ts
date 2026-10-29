@@ -1,10 +1,9 @@
 import type { AnyEventDeclaration, EventApplication } from '@ontahi/core/runtime/server';
-import {
-  createGraphHttpEventIngressDispatcher,
-  createGraphHttpEventIngressRouter,
-  type GraphHttpEventIngressRoute,
-  type GraphHttpIngressProviderRegistry,
+import type {
+  GraphHttpEventIngressRoute,
+  GraphHttpIngressProviderRegistry,
 } from '@ontahi/core/runtime/server/ingress';
+import { createHttpIngressHandler } from '@ontahi/runtime-http/ingress';
 
 export type CreateNextEventIngressRouteHandlerOptions = {
   events: EventApplication<readonly AnyEventDeclaration[]>;
@@ -29,15 +28,14 @@ export const createNextEventIngressRouteHandler = (
     ((error: unknown) => {
       globalThis.console.error('Ontahi Next.js Event ingress failed.', error);
     });
-  const router = createGraphHttpEventIngressRouter({
-    routes: [options.route],
+  const handler = createHttpIngressHandler({
     providers: options.providers,
-    dispatch: createGraphHttpEventIngressDispatcher({ events: options.events }),
+    events: { routes: [options.route], events: options.events },
   });
 
   return async (request: Request): Promise<Response> => {
     try {
-      const response = await router.handle(request);
+      const response = await handler.handle(request);
       if (response.status !== 500) return response;
 
       reportError(await responseError(response), request);

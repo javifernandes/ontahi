@@ -71,6 +71,7 @@
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",
+    "@ontahi/runtime-http": "workspace:*",
     "effect": "^3.21.0",
     "next-safe-action": "^8.3.0",
     "server-only": "^0.0.1",
