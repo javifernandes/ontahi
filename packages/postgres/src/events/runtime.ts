@@ -1,11 +1,13 @@
-import type {
-  DurableEventSubscription,
-  EventDelivery,
-  EventDeliveryClaim,
-  EventEmission,
-  EventOccurrence,
-  EventRuntime,
-  EventSubscriber,
+import {
+  normalizeDurableEventDeliverySettlement,
+  type DurableEventSubscription,
+  type DurableEventDeliverySettlement,
+  type EventDelivery,
+  type EventDeliveryClaim,
+  type EventEmission,
+  type EventOccurrence,
+  type EventRuntime,
+  type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
 import type { Pool, PoolClient } from 'pg';
@@ -36,12 +38,6 @@ const requireIdentity = (value: string, label: string) => {
 const isoDate = (value: unknown) => {
   const date = value instanceof Date ? value : new Date(String(value));
   if (Number.isNaN(date.valueOf())) throw new TypeError('PostgreSQL Event timestamp is invalid.');
-  return date.toISOString();
-};
-
-const requireTimestamp = (value: string, label: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) throw new TypeError(`${label} must be a valid timestamp.`);
   return date.toISOString();
 };
 
@@ -279,18 +275,13 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
 
   const settle = async (
     claimValue: EventDeliveryClaim,
-    outcome:
-      | { readonly kind: 'acknowledged' }
-      | { readonly kind: 'pending'; readonly availableAt?: string }
-      | { readonly kind: 'failed'; readonly reason: string },
+    outcome: DurableEventDeliverySettlement,
   ) => {
-    const state = outcome.kind;
-    const availableAt =
-      outcome.kind === 'pending' && outcome.availableAt !== undefined
-        ? requireTimestamp(outcome.availableAt, 'Retry availability')
-        : undefined;
-    const reason =
-      outcome.kind === 'failed' ? requireIdentity(outcome.reason, 'Failure reason') : null;
+    const {
+      state,
+      availableAt,
+      failureReason = null,
+    } = normalizeDurableEventDeliverySettlement(outcome);
     const result = await options.pool.query(
       `UPDATE ${tables.deliveries}
        SET state = $1,
@@ -312,7 +303,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
         claimValue.claimId,
         claimValue.consumerId,
         availableAt,
-        reason,
+        failureReason,
       ],
     );
     if (result.rowCount !== 1) {

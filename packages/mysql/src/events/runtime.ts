@@ -1,11 +1,13 @@
-import type {
-  DurableEventSubscription,
-  EventDelivery,
-  EventDeliveryClaim,
-  EventEmission,
-  EventOccurrence,
-  EventRuntime,
-  EventSubscriber,
+import {
+  normalizeDurableEventDeliverySettlement,
+  type DurableEventSubscription,
+  type DurableEventDeliverySettlement,
+  type EventDelivery,
+  type EventDeliveryClaim,
+  type EventEmission,
+  type EventOccurrence,
+  type EventRuntime,
+  type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
@@ -43,12 +45,6 @@ const mysqlTimestampToIso = (value: unknown) => {
   const normalized = value instanceof Date ? value : new Date(String(value));
   if (!Number.isNaN(normalized.valueOf())) return normalized.toISOString();
   throw new TypeError('MySQL Event timestamp is invalid.');
-};
-
-const requireTimestamp = (value: string, label: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) throw new TypeError(`${label} must be a valid timestamp.`);
-  return date;
 };
 
 const jsonValue = (value: unknown) => {
@@ -360,18 +356,9 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
 
   const settle = async (
     claimValue: EventDeliveryClaim,
-    outcome:
-      | { readonly kind: 'acknowledged' }
-      | { readonly kind: 'pending'; readonly availableAt?: string }
-      | { readonly kind: 'failed'; readonly reason: string },
+    outcome: DurableEventDeliverySettlement,
   ) => {
-    const state = outcome.kind;
-    const availableAt =
-      outcome.kind === 'pending' && outcome.availableAt !== undefined
-        ? requireTimestamp(outcome.availableAt, 'Retry availability')
-        : undefined;
-    const reason =
-      outcome.kind === 'failed' ? requireIdentity(outcome.reason, 'Failure reason') : null;
+    const { state, availableAt, failureReason } = normalizeDurableEventDeliverySettlement(outcome);
     const [result] = await options.pool.query<ResultSetHeader>(
       `UPDATE ${tables.deliveries}
        SET state = ?,
@@ -388,8 +375,8 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
          AND lease_expires_at > CURRENT_TIMESTAMP(3)`,
       [
         state,
-        ...(availableAt === undefined ? [] : [availableAt]),
-        ...(state === 'failed' ? [reason] : []),
+        ...(availableAt === undefined ? [] : [new Date(availableAt)]),
+        ...(failureReason === undefined ? [] : [failureReason]),
         claimValue.delivery.deliveryId,
         claimValue.delivery.subscriptionId,
         claimValue.claimId,

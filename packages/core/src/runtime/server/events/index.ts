@@ -27,6 +27,11 @@ export {
   type EventEgressTransport,
   type ProcessNextEventEgressDeliveryOptions,
 } from './egress.js';
+export {
+  normalizeDurableEventDeliverySettlement,
+  type DurableEventDeliverySettlement,
+  type NormalizedDurableEventDeliverySettlement,
+} from './settlement.js';
 export type {
   AnyEventDeclaration,
   EventApplication,
