@@ -10,12 +10,7 @@ import {
   type RelationKind,
 } from './definitions.js';
 import type { AnyEntityVariant, EntityVariantDescriptor } from './entity-variant-contract.js';
-import {
-  RelationQueryBuilder,
-  type AnyRelationQueryBuilder,
-  type QuerySpec,
-  type SelectionValue,
-} from './query.js';
+import { RelationQueryBuilder, type AnyRelationQueryBuilder, type QuerySpec } from './query.js';
 import {
   graphReadProtocolError,
   parseGraphReadRequest,
@@ -449,7 +444,6 @@ const scopeRelationBuilder = <TAuthority>(
   context: GraphReadDispatchContext<TAuthority>,
 ): AnyRelationQueryBuilder => {
   const node = relation.toNodeSpec();
-  const scopedSelect = node.select ? scopeSelectionShape(node.select, policy, context) : undefined;
   const scopedIncludes = node.includes
     ? Object.fromEntries(
         Object.entries(node.includes).map(([name, nested]) => {
@@ -471,7 +465,7 @@ const scopeRelationBuilder = <TAuthority>(
     node.relationName,
     node.relationKind,
     node.entity,
-    scopedSelect,
+    node.select,
     scopedIncludes,
     node.orderBy,
     node.limit,
@@ -480,37 +474,12 @@ const scopeRelationBuilder = <TAuthority>(
   );
 };
 
-const scopeSelectionShape = <TAuthority>(
-  shape: Record<string, SelectionValue>,
-  policy: GraphReadPolicyNode<any, TAuthority>,
-  context: GraphReadDispatchContext<TAuthority>,
-): Record<string, SelectionValue> =>
-  Object.fromEntries(
-    Object.entries(shape).map(([name, value]) => {
-      if (value instanceof RelationQueryBuilder) {
-        const relationPolicy = policy.relations?.[value.relationName];
-        return [
-          name,
-          relationPolicy ? scopeRelationBuilder(value, relationPolicy, context) : value,
-        ];
-      }
-      if (isRecord(value) && value.kind !== 'field-ref') {
-        return [
-          name,
-          scopeSelectionShape(value as Record<string, SelectionValue>, policy, context),
-        ];
-      }
-      return [name, value];
-    }),
-  );
-
 const scopeNestedRelations = <TAuthority>(
   query: QuerySpec,
   policy: GraphReadPolicy<any, TAuthority>,
   context: GraphReadDispatchContext<TAuthority>,
 ): QuerySpec => ({
   ...query,
-  ...(query.select ? { select: scopeSelectionShape(query.select, policy, context) } : {}),
   ...(query.includes
     ? {
         includes: Object.fromEntries(

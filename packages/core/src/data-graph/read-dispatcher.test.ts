@@ -62,10 +62,15 @@ const createTripPolicy = (
 
 describe('graph read dispatcher', () => {
   it('intersects nested View relations with receiver-owned authority scope', async () => {
+    const User = entity('WorkspaceUser', {
+      id: field.id(),
+      name: field.string(),
+    });
     const Membership = entity('Membership', {
       id: field.id(),
       workspaceId: field.string(),
       status: field.enum(['active', 'suspended']),
+      user: field.ref(User),
     });
     const Workspace = entity('Workspace', {
       id: field.id(),
@@ -76,8 +81,22 @@ describe('graph read dispatcher', () => {
       dataset: {
         Workspace: [{ id: 'workspace-1', name: 'Atlas' }],
         Membership: [
-          { id: 'membership-active', workspaceId: 'workspace-1', status: 'active' },
-          { id: 'membership-suspended', workspaceId: 'workspace-1', status: 'suspended' },
+          {
+            id: 'membership-active',
+            workspaceId: 'workspace-1',
+            status: 'active',
+            user: 'user-1',
+          },
+          {
+            id: 'membership-suspended',
+            workspaceId: 'workspace-1',
+            status: 'suspended',
+            user: 'user-2',
+          },
+        ],
+        WorkspaceUser: [
+          { id: 'user-1', name: 'Ada' },
+          { id: 'user-2', name: 'Grace' },
         ],
       },
     });
@@ -85,34 +104,39 @@ describe('graph read dispatcher', () => {
       if (mode !== 'run') throw new Error(`Unexpected mode ${mode}`);
       return Effect.runPromise(runtime.run(authorizedQuery, undefined));
     });
-    const dispatch = createGraphReadDispatcher({
-      policies: [
-        {
-          entity: Workspace,
-          modes: ['run'],
-          cardinalities: ['many'],
-          maxLimit: 10,
-          fields: { id: { select: true }, name: { select: true } },
+    const policy = {
+      entity: Workspace,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 10,
+      fields: { id: { select: true }, name: { select: true } },
+      relations: {
+        memberships: {
+          fields: {
+            id: { select: true },
+            status: { select: true },
+          },
           relations: {
-            memberships: {
-              fields: {
-                id: { select: true },
-                status: { select: true },
-              },
-              scope: ({ authority }: { authority: Authority }) =>
-                Selection.where(Membership, membership =>
-                  membership.status.eq(authority.ownerId === 'owner-1' ? 'active' : 'suspended'),
-                ),
+            user: {
+              fields: { id: { select: true }, name: { select: true } },
+              scope: 'all',
             },
           },
-          scope: 'all',
-        } satisfies GraphReadPolicy<typeof Workspace, Authority>,
-      ],
+          scope: ({ authority }: { authority: Authority }) =>
+            Selection.where(Membership, membership =>
+              membership.status.eq(authority.ownerId === 'owner-1' ? 'active' : 'suspended'),
+            ).expression,
+        },
+      },
+      scope: 'all',
+    } satisfies GraphReadPolicy<typeof Workspace, Authority>;
+    const dispatch = createGraphReadDispatcher({
+      policies: [policy],
       execute,
     });
     const view = Workspace.view('WorkspaceSettings', {
       id: true,
-      memberships: { id: true, status: true },
+      memberships: { id: true, status: true, user: { id: true, name: true } },
     });
 
     await expect(
@@ -124,7 +148,13 @@ describe('graph read dispatcher', () => {
       value: [
         {
           id: 'workspace-1',
-          memberships: [{ id: 'membership-active', status: 'active' }],
+          memberships: [
+            {
+              id: 'membership-active',
+              status: 'active',
+              user: { id: 'user-1', name: 'Ada' },
+            },
+          ],
         },
       ],
     });
@@ -136,6 +166,28 @@ describe('graph read dispatcher', () => {
       operator: 'eq',
       value: 'active',
     });
+
+    const invalidExecute = vi.fn();
+    const invalidDispatch = createGraphReadDispatcher({
+      policies: [
+        {
+          ...policy,
+          relations: {
+            memberships: {
+              ...policy.relations.memberships,
+              scope: () => Selection.all(User),
+            },
+          },
+        },
+      ],
+      execute: invalidExecute,
+    });
+    await expect(
+      invalidDispatch(toGraphReadRequest(query(Workspace).as(view), 'run'), {
+        authority: { ownerId: 'owner-1' },
+      }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'execution_unavailable' } });
+    expect(invalidExecute).not.toHaveBeenCalled();
   });
 
   it('discovers ordering policy without executing data or requiring a select-all projection', async () => {
