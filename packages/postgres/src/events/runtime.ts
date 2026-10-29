@@ -279,14 +279,14 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
   ) => {
     const {
       state,
-      availableAt,
+      retryAfterMs,
       failureReason = null,
     } = normalizeDurableEventDeliverySettlement(outcome);
     const result = await options.pool.query(
       `UPDATE ${tables.deliveries}
        SET state = $1,
            acknowledged_at = CASE WHEN $1 = 'acknowledged' THEN now() ELSE NULL END,
-           available_at = COALESCE($6::timestamptz, now()),
+           available_at = now() + (COALESCE($6::bigint, 0) * interval '1 millisecond'),
            failed_at = CASE WHEN $1 = 'failed' THEN now() ELSE NULL END,
            failure_reason = CASE WHEN $1 = 'failed' THEN $7::text ELSE NULL END,
            claim_id = NULL, claimed_by = NULL, lease_expires_at = NULL
@@ -302,7 +302,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
         claimValue.delivery.subscriptionId,
         claimValue.claimId,
         claimValue.consumerId,
-        availableAt,
+        retryAfterMs,
         failureReason,
       ],
     );
@@ -344,7 +344,8 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       claim,
       acknowledge: claimValue => settle(claimValue, { kind: 'acknowledged' }),
       release: claimValue => settle(claimValue, { kind: 'pending' }),
-      retryAt: (claimValue, availableAt) => settle(claimValue, { kind: 'pending', availableAt }),
+      retryAfter: (claimValue, retryAfterMs) =>
+        settle(claimValue, { kind: 'pending', retryAfterMs }),
       fail: (claimValue, failure) => settle(claimValue, { kind: 'failed', reason: failure.reason }),
       cancel: async subscriptionId => {
         requireIdentity(subscriptionId, 'Durable Event subscription id');

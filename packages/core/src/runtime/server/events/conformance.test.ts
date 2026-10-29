@@ -119,11 +119,11 @@ const createConformanceRuntimeFactory = () => {
         entry.state = 'pending';
         entry.availableAt = Date.now();
       },
-      retryAt: async (claim, availableAt) => {
+      retryAfter: async (claim, delayMs) => {
         const entry = deliveries.get(claim.delivery.deliveryId)!;
         if (entry.claimId !== claim.claimId) throw new Error('stale claim');
         entry.state = 'pending';
-        entry.availableAt = Date.parse(availableAt);
+        entry.availableAt = Date.now() + delayMs;
       },
       fail: async (claim, _failure) => {
         const entry = deliveries.get(claim.delivery.deliveryId)!;

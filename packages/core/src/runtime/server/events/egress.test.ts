@@ -54,7 +54,7 @@ const runtimeHarness = () => {
   const release = vi.fn<DurableEventDeliveryCapability['release']>(async () => {
     nextAttempt += 1;
   });
-  const retryAt = vi.fn<DurableEventDeliveryCapability['retryAt']>(async () => {
+  const retryAfter = vi.fn<DurableEventDeliveryCapability['retryAfter']>(async () => {
     nextAttempt += 1;
   });
   const fail = vi.fn<DurableEventDeliveryCapability['fail']>(async () => {
@@ -74,7 +74,7 @@ const runtimeHarness = () => {
     claim,
     acknowledge,
     release,
-    retryAt,
+    retryAfter,
     fail,
     cancel: vi.fn(),
   };
@@ -95,7 +95,7 @@ const runtimeHarness = () => {
     subscribe: vi.fn(),
     durableDelivery,
   };
-  return { runtime, register, claim, acknowledge, release, retryAt, fail };
+  return { runtime, register, claim, acknowledge, release, retryAfter, fail };
 };
 
 describe('managed Event egress kernel', () => {
@@ -157,13 +157,12 @@ describe('managed Event egress kernel', () => {
   });
 
   it('persists the availability time for a retryable attempt', async () => {
-    const { runtime, acknowledge, release, retryAt } = runtimeHarness();
+    const { runtime, acknowledge, release, retryAfter } = runtimeHarness();
     const result = await processNextEventEgressDelivery({
       runtime,
       subscription,
       consumerId: 'worker-1',
       leaseMs: 60_000,
-      now: () => new Date('2026-10-28T00:00:00.000Z'),
       resolveDestination: async () => ({ url: 'https://customer.example' }),
       transport: {
         deliver: async () => ({ kind: 'retryable', reason: 'unavailable', retryAfterMs: 1_000 }),
@@ -180,15 +179,15 @@ describe('managed Event egress kernel', () => {
       attempt: 1,
       destinationId: 'customer-webhook',
       reason: 'unavailable',
-      retryAt: '2026-10-28T00:00:01.000Z',
+      retryAfterMs: 1_000,
     });
-    expect(retryAt).toHaveBeenCalledWith(expect.anything(), '2026-10-28T00:00:01.000Z');
+    expect(retryAfter).toHaveBeenCalledWith(expect.anything(), 1_000);
     expect(release).not.toHaveBeenCalled();
     expect(acknowledge).not.toHaveBeenCalled();
   });
 
   it('applies the explicit default retry policy when the transport has no retry hint', async () => {
-    const { runtime, retryAt } = runtimeHarness();
+    const { runtime, retryAfter } = runtimeHarness();
 
     const result = await processNextEventEgressDelivery({
       runtime,
@@ -196,7 +195,6 @@ describe('managed Event egress kernel', () => {
       consumerId: 'worker-1',
       leaseMs: 60_000,
       retryDelayMs: 2_000,
-      now: () => new Date('2026-10-28T00:00:00.000Z'),
       resolveDestination: async () => ({ url: 'https://customer.example' }),
       transport: {
         deliver: async () => ({ kind: 'retryable', reason: 'connection-reset' }),
@@ -207,13 +205,13 @@ describe('managed Event egress kernel', () => {
       kind: 'retryable',
       deliveryId: 'delivery-1',
       reason: 'connection-reset',
-      retryAt: '2026-10-28T00:00:02.000Z',
+      retryAfterMs: 2_000,
     });
-    expect(retryAt).toHaveBeenCalledOnce();
+    expect(retryAfter).toHaveBeenCalledOnce();
   });
 
   it('persists a rejected attempt as a terminal failure', async () => {
-    const { runtime, fail, retryAt } = runtimeHarness();
+    const { runtime, fail, retryAfter } = runtimeHarness();
 
     const result = await processNextEventEgressDelivery({
       runtime,
@@ -230,11 +228,27 @@ describe('managed Event egress kernel', () => {
       reason: 'http-status-400',
     });
     expect(fail).toHaveBeenCalledWith(expect.anything(), { reason: 'http-status-400' });
-    expect(retryAt).not.toHaveBeenCalled();
+    expect(retryAfter).not.toHaveBeenCalled();
+  });
+
+  it('normalizes a blank rejection reason before terminal settlement', async () => {
+    const { runtime, fail } = runtimeHarness();
+
+    const result = await processNextEventEgressDelivery({
+      runtime,
+      subscription,
+      consumerId: 'worker-1',
+      leaseMs: 60_000,
+      resolveDestination: async () => ({ url: 'https://customer.example' }),
+      transport: { deliver: async () => ({ kind: 'rejected', reason: ' ' }) },
+    });
+
+    expect(result).toMatchObject({ kind: 'failed', reason: 'rejected' });
+    expect(fail).toHaveBeenCalledWith(expect.anything(), { reason: 'rejected' });
   });
 
   it('rejects a zero-delay retry policy and safely releases the claim', async () => {
-    const { runtime, release, retryAt } = runtimeHarness();
+    const { runtime, release, retryAfter } = runtimeHarness();
 
     await expect(
       processNextEventEgressDelivery({
@@ -248,7 +262,30 @@ describe('managed Event egress kernel', () => {
       }),
     ).rejects.toThrow('retry delay must be a positive safe integer');
     expect(release).toHaveBeenCalledOnce();
-    expect(retryAt).not.toHaveBeenCalled();
+    expect(retryAfter).not.toHaveBeenCalled();
+  });
+
+  it('releases the claim when a transport retry hint exceeds the supported delay', async () => {
+    const { runtime, release, retryAfter } = runtimeHarness();
+
+    await expect(
+      processNextEventEgressDelivery({
+        runtime,
+        subscription,
+        consumerId: 'worker-1',
+        leaseMs: 60_000,
+        resolveDestination: async () => ({ url: 'https://customer.example' }),
+        transport: {
+          deliver: async () => ({
+            kind: 'retryable',
+            reason: 'unavailable',
+            retryAfterMs: Number.MAX_SAFE_INTEGER,
+          }),
+        },
+      }),
+    ).rejects.toThrow('retry delay must be a positive safe integer');
+    expect(release).toHaveBeenCalledOnce();
+    expect(retryAfter).not.toHaveBeenCalled();
   });
 
   it('returns idle without resolving a destination when no delivery is available', async () => {

@@ -91,7 +91,7 @@ describe('Vercel Workflow Todo Event-wait integration', () => {
             claim: () => Promise.resolve(claim),
             acknowledge,
             release: () => Promise.resolve(),
-            retryAt: () => Promise.resolve(),
+            retryAfter: () => Promise.resolve(),
             fail: () => Promise.resolve(),
             cancel: () => Promise.resolve(),
           },

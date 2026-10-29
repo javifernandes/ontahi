@@ -64,6 +64,7 @@ const requireHeaderName = (value: string) => {
 
 const parseRetryAfterMs = (value: string | null, now = Date.now()) => {
   if (value === null) return undefined;
+  if (value.trim().length === 0) return undefined;
 
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) return Math.max(1, Math.ceil(seconds * 1_000));

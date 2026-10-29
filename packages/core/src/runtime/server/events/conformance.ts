@@ -96,8 +96,8 @@ export const verifyDurableEventRuntimeConformance = async (
     leaseMs: 10_000,
   });
   invariant(delayed, 'a delivery to retry later must be claimable');
-  const retryDelayMs = 30;
-  await durableDelivery.retryAt(delayed, new Date(Date.now() + retryDelayMs).toISOString());
+  const retryDelayMs = 250;
+  await durableDelivery.retryAfter(delayed, retryDelayMs);
   invariant(
     (await durableDelivery.claim(`${prefix}.delayed-retry`, {
       consumerId: 'consumer-too-early',
@@ -105,7 +105,7 @@ export const verifyDurableEventRuntimeConformance = async (
     })) === undefined,
     'a delayed retry must not be claimable before its availability time',
   );
-  await new Promise(resolve => setTimeout(resolve, retryDelayMs + 30));
+  await new Promise(resolve => setTimeout(resolve, retryDelayMs + 50));
   const afterDelay = await durableDelivery.claim(`${prefix}.delayed-retry`, {
     consumerId: 'consumer-after-delay',
     leaseMs: 10_000,

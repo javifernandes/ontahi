@@ -108,7 +108,7 @@ const createHarness = ({
       claim: claimDelivery,
       acknowledge,
       release,
-      retryAt: vi.fn(),
+      retryAfter: vi.fn(),
       fail: vi.fn(),
       cancel,
     },

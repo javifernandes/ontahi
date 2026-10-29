@@ -323,7 +323,7 @@ describe('PostgreSQL Event Runtime', () => {
       });
 
       expect(first).toMatchObject({ kind: 'retryable', attempt: 1 });
-      expect(first).toHaveProperty('retryAt');
+      expect(first).toHaveProperty('retryAfterMs', 10);
       if (first.kind !== 'retryable')
         throw new Error('Expected the first attempt to be retryable.');
       expect(second).toMatchObject({

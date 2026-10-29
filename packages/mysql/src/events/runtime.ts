@@ -358,12 +358,12 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     claimValue: EventDeliveryClaim,
     outcome: DurableEventDeliverySettlement,
   ) => {
-    const { state, availableAt, failureReason } = normalizeDurableEventDeliverySettlement(outcome);
+    const { state, retryAfterMs, failureReason } = normalizeDurableEventDeliverySettlement(outcome);
     const [result] = await options.pool.query<ResultSetHeader>(
       `UPDATE ${tables.deliveries}
        SET state = ?,
            acknowledged_at = ${state === 'acknowledged' ? 'CURRENT_TIMESTAMP(3)' : 'NULL'},
-           available_at = ${availableAt === undefined ? 'CURRENT_TIMESTAMP(3)' : '?'},
+           available_at = TIMESTAMPADD(MICROSECOND, ? * 1000, CURRENT_TIMESTAMP(3)),
            failed_at = ${state === 'failed' ? 'CURRENT_TIMESTAMP(3)' : 'NULL'},
            failure_reason = ${state === 'failed' ? '?' : 'NULL'},
            claim_id = NULL, claimed_by = NULL, lease_expires_at = NULL
@@ -375,7 +375,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
          AND lease_expires_at > CURRENT_TIMESTAMP(3)`,
       [
         state,
-        ...(availableAt === undefined ? [] : [new Date(availableAt)]),
+        retryAfterMs ?? 0,
         ...(failureReason === undefined ? [] : [failureReason]),
         claimValue.delivery.deliveryId,
         claimValue.delivery.subscriptionId,
@@ -433,7 +433,8 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
       claim,
       acknowledge: claimValue => settle(claimValue, { kind: 'acknowledged' }),
       release: claimValue => settle(claimValue, { kind: 'pending' }),
-      retryAt: (claimValue, availableAt) => settle(claimValue, { kind: 'pending', availableAt }),
+      retryAfter: (claimValue, retryAfterMs) =>
+        settle(claimValue, { kind: 'pending', retryAfterMs }),
       fail: (claimValue, failure) => settle(claimValue, { kind: 'failed', reason: failure.reason }),
       cancel: cancelDurableSubscription,
     },

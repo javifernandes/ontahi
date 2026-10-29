@@ -392,7 +392,7 @@ The durable proof and the complementary ingress boundary are now implemented tog
 6. `@ontahi/runtime-http/node` hosts that same handler directly on a bounded `node:http` server,
    proving that a framework adapter is optional rather than part of the application model.
 
-The durable lifecycle follow-up now adds provider-neutral `retryAt` and `fail` settlements, proves
+The durable lifecycle follow-up now adds provider-neutral `retryAfter` and `fail` settlements, proves
 them through the shared conformance suite and the PostgreSQL/MySQL providers, and lets the HTTP
 adapter classify terminal rejection without owning persistence policy. A retryable attempt is not
 claimable before its persisted availability time, preventing tight host polling loops.

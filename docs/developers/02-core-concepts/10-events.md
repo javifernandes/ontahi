@@ -223,12 +223,14 @@ const result = await processNextEventEgressDelivery({
 ```
 
 An `accepted` transport outcome acknowledges the durable claim. A `retryable` outcome records an
-availability timestamp using `retryAfterMs` or the processor's `retryDelayMs` policy; the delivery
-cannot be claimed before that instant, then preserves `deliveryId` and increments `attempt`. A
+relative delay using `retryAfterMs` or the processor's `retryDelayMs` policy; the durable provider
+computes availability from its own clock. The delivery cannot be claimed before that instant, then
+preserves `deliveryId` and increments `attempt`. A
 `rejected` outcome records terminal failure and cannot be claimed again. Thrown destination,
 projection, or transport failures still release the claim before propagating the failure. The
 returned result is safe attempt evidence: it contains semantic and destination identities and the
-computed `retryAt` when relevant, but neither projected body nor resolved destination credentials.
+computed `retryAfterMs` when relevant, but neither projected body nor resolved destination
+credentials.
 
 Core deliberately does not run an immortal worker loop. The host controls polling, concurrency,
 the default retry delay, lifecycle, and shutdown around this one-claim primitive; the durable

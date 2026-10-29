@@ -138,7 +138,7 @@ const createDurableRuntime = (
         const entry = deliveries.get(claim.delivery.deliveryId);
         if (entry?.claim === claim.claimId) entry.claim = undefined;
       },
-      retryAt: async (claim: EventDeliveryClaim) => {
+      retryAfter: async (claim: EventDeliveryClaim) => {
         const entry = deliveries.get(claim.delivery.deliveryId);
         if (entry?.claim === claim.claimId) entry.claim = undefined;
       },

@@ -101,7 +101,7 @@ export type DurableEventDeliveryCapability = {
   ) => Promise<EventDeliveryClaim | undefined>;
   acknowledge: (claim: EventDeliveryClaim) => Promise<void>;
   release: (claim: EventDeliveryClaim) => Promise<void>;
-  retryAt: (claim: EventDeliveryClaim, availableAt: string) => Promise<void>;
+  retryAfter: (claim: EventDeliveryClaim, delayMs: number) => Promise<void>;
   fail: (claim: EventDeliveryClaim, failure: { readonly reason: string }) => Promise<void>;
   cancel: (subscriptionId: string) => Promise<void>;
 };

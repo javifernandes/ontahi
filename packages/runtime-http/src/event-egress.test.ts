@@ -136,6 +136,18 @@ describe('HTTP Event egress transport', () => {
     ).resolves.toEqual({ kind: 'retryable', reason: 'http-status-429', retryAfterMs: 1 });
   });
 
+  it('ignores an empty Retry-After hint', async () => {
+    const fetchImplementation = vi.fn(async () =>
+      Promise.resolve(new Response(null, { status: 503, headers: { 'retry-after': ' ' } })),
+    );
+
+    await expect(
+      createHttpEventEgressTransport({ fetch: fetchImplementation }).deliver(
+        attempt({ url: 'https://receiver.example/events' }),
+      ),
+    ).resolves.toEqual({ kind: 'retryable', reason: 'http-status-503' });
+  });
+
   it('normalizes network and timeout failures without exposing their messages', async () => {
     const networkFetch = vi.fn(async () => Promise.reject(new Error('private DNS details')));
     const timeoutFetch = vi.fn<typeof globalThis.fetch>(async () => {
