@@ -35,7 +35,8 @@ export type EventEgressAttemptOutcome =
       readonly kind: 'retryable';
       readonly reason: string;
       readonly retryAfterMs?: number;
-    };
+    }
+  | { readonly kind: 'rejected'; readonly reason: string };
 
 export type EventEgressTransport<TDestination> = {
   deliver: (attempt: EventEgressAttempt<TDestination>) => Promise<EventEgressAttemptOutcome>;
@@ -57,8 +58,9 @@ export type EventEgressProcessResult =
   | ({
       readonly kind: 'retryable';
       readonly reason: string;
-      readonly retryAfterMs?: number;
-    } & EventEgressAttemptEvidence);
+      readonly retryAt: string;
+    } & EventEgressAttemptEvidence)
+  | ({ readonly kind: 'failed'; readonly reason: string } & EventEgressAttemptEvidence);
 
 export type ProcessNextEventEgressDeliveryOptions<
   TEvent extends AnyEventDeclaration,
@@ -68,6 +70,8 @@ export type ProcessNextEventEgressDeliveryOptions<
   readonly subscription: EventEgressSubscription<TEvent>;
   readonly consumerId: string;
   readonly leaseMs: number;
+  readonly retryDelayMs?: number;
+  readonly now?: () => Date;
   readonly resolveDestination: (destinationId: string) => Promise<TDestination>;
   readonly transport: EventEgressTransport<TDestination>;
 };
@@ -120,6 +124,8 @@ export const processNextEventEgressDelivery = async <
   subscription,
   consumerId,
   leaseMs,
+  retryDelayMs = 1_000,
+  now = () => new Date(),
   resolveDestination,
   transport,
 }: ProcessNextEventEgressDeliveryOptions<
@@ -167,11 +173,25 @@ export const processNextEventEgressDelivery = async <
     return { kind: 'accepted', ...evidence };
   }
 
-  await durableDelivery.release(claim);
+  if (outcome.kind === 'rejected') {
+    await durableDelivery.fail(claim, { reason: outcome.reason });
+    return { kind: 'failed', ...evidence, reason: outcome.reason };
+  }
+
+  const delayMs = outcome.retryAfterMs ?? retryDelayMs;
+  if (!Number.isSafeInteger(delayMs) || delayMs <= 0) {
+    return releaseAfterFailure(
+      durableDelivery,
+      claim,
+      new TypeError('Event egress retry delay must be a positive safe integer.'),
+    );
+  }
+  const retryAt = new Date(now().getTime() + delayMs).toISOString();
+  await durableDelivery.retryAt(claim, retryAt);
   return {
     kind: 'retryable',
     ...evidence,
     reason: outcome.reason,
-    ...(outcome.retryAfterMs === undefined ? {} : { retryAfterMs: outcome.retryAfterMs }),
+    retryAt,
   };
 };

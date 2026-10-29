@@ -35,7 +35,7 @@ const createMysqlEventIdentity = () => {
 };
 
 const requireIdentity = (value: string, label: string) => {
-  if (value.trim()) return;
+  if (value.trim()) return value;
   throw new TypeError(`${label} must be a non-empty string.`);
 };
 
@@ -43,6 +43,12 @@ const mysqlTimestampToIso = (value: unknown) => {
   const normalized = value instanceof Date ? value : new Date(String(value));
   if (!Number.isNaN(normalized.valueOf())) return normalized.toISOString();
   throw new TypeError('MySQL Event timestamp is invalid.');
+};
+
+const requireTimestamp = (value: string, label: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) throw new TypeError(`${label} must be a valid timestamp.`);
+  return date;
 };
 
 const jsonValue = (value: unknown) => {
@@ -316,7 +322,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
          FROM ${tables.deliveries} AS delivery
          JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
          WHERE delivery.subscription_id = ?
-           AND (delivery.state = 'pending'
+           AND ((delivery.state = 'pending' AND delivery.available_at <= CURRENT_TIMESTAMP(3))
              OR (delivery.state = 'claimed' AND delivery.lease_expires_at <= CURRENT_TIMESTAMP(3)))
          ORDER BY occurrence.acceptance_order
          LIMIT 1
@@ -352,11 +358,27 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     });
   };
 
-  const settle = async (claimValue: EventDeliveryClaim, state: 'acknowledged' | 'pending') => {
-    const acknowledged = state === 'acknowledged';
+  const settle = async (
+    claimValue: EventDeliveryClaim,
+    outcome:
+      | { readonly kind: 'acknowledged' }
+      | { readonly kind: 'pending'; readonly availableAt?: string }
+      | { readonly kind: 'failed'; readonly reason: string },
+  ) => {
+    const state = outcome.kind;
+    const availableAt =
+      outcome.kind === 'pending' && outcome.availableAt !== undefined
+        ? requireTimestamp(outcome.availableAt, 'Retry availability')
+        : undefined;
+    const reason =
+      outcome.kind === 'failed' ? requireIdentity(outcome.reason, 'Failure reason') : null;
     const [result] = await options.pool.query<ResultSetHeader>(
       `UPDATE ${tables.deliveries}
-       SET state = ?, acknowledged_at = ${acknowledged ? 'CURRENT_TIMESTAMP(3)' : 'NULL'},
+       SET state = ?,
+           acknowledged_at = ${state === 'acknowledged' ? 'CURRENT_TIMESTAMP(3)' : 'NULL'},
+           available_at = ${availableAt === undefined ? 'CURRENT_TIMESTAMP(3)' : '?'},
+           failed_at = ${state === 'failed' ? 'CURRENT_TIMESTAMP(3)' : 'NULL'},
+           failure_reason = ${state === 'failed' ? '?' : 'NULL'},
            claim_id = NULL, claimed_by = NULL, lease_expires_at = NULL
        WHERE delivery_id = ?
          AND subscription_id = ?
@@ -366,6 +388,8 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
          AND lease_expires_at > CURRENT_TIMESTAMP(3)`,
       [
         state,
+        ...(availableAt === undefined ? [] : [availableAt]),
+        ...(state === 'failed' ? [reason] : []),
         claimValue.delivery.deliveryId,
         claimValue.delivery.subscriptionId,
         claimValue.claimId,
@@ -420,8 +444,10 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     durableDelivery: {
       register,
       claim,
-      acknowledge: claimValue => settle(claimValue, 'acknowledged'),
-      release: claimValue => settle(claimValue, 'pending'),
+      acknowledge: claimValue => settle(claimValue, { kind: 'acknowledged' }),
+      release: claimValue => settle(claimValue, { kind: 'pending' }),
+      retryAt: (claimValue, availableAt) => settle(claimValue, { kind: 'pending', availableAt }),
+      fail: (claimValue, failure) => settle(claimValue, { kind: 'failed', reason: failure.reason }),
       cancel: cancelDurableSubscription,
     },
   };

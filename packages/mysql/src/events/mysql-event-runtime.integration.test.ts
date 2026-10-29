@@ -89,6 +89,13 @@ describe('MySQL Event Runtime', () => {
       createRuntime: runtime,
       identityPrefix: 'mysql-conformance',
     });
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT state, failure_reason
+       FROM ontahi_event_deliveries
+       WHERE subscription_id = ?`,
+      ['mysql-conformance.terminal-failure'],
+    );
+    expect(rows).toEqual([{ state: 'failed', failure_reason: 'destination-rejected' }]);
   });
 
   it('delivers retained occurrences registered before or after acceptance', async () => {

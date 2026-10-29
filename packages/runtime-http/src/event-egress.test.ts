@@ -4,11 +4,7 @@ import { createServer, type RequestListener } from 'node:http';
 import type { EventEgressAttempt } from '@ontahi/core/runtime/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  HttpEventEgressRejectedError,
-  createHttpEventEgressTransport,
-  type HttpEventEgressDestination,
-} from './event-egress.js';
+import { createHttpEventEgressTransport, type HttpEventEgressDestination } from './event-egress.js';
 
 const attempt = (
   destination: HttpEventEgressDestination,
@@ -128,6 +124,18 @@ describe('HTTP Event egress transport', () => {
     expect(result.retryAfterMs).toBeLessThanOrEqual(10_000);
   });
 
+  it('keeps an immediate Retry-After from becoming a zero-delay claim loop', async () => {
+    const fetchImplementation = vi.fn(async () =>
+      Promise.resolve(new Response(null, { status: 429, headers: { 'retry-after': '0' } })),
+    );
+
+    await expect(
+      createHttpEventEgressTransport({ fetch: fetchImplementation }).deliver(
+        attempt({ url: 'https://receiver.example/events' }),
+      ),
+    ).resolves.toEqual({ kind: 'retryable', reason: 'http-status-429', retryAfterMs: 1 });
+  });
+
   it('normalizes network and timeout failures without exposing their messages', async () => {
     const networkFetch = vi.fn(async () => Promise.reject(new Error('private DNS details')));
     const timeoutFetch = vi.fn<typeof globalThis.fetch>(async () => {
@@ -147,14 +155,14 @@ describe('HTTP Event egress transport', () => {
     ).resolves.toEqual({ kind: 'retryable', reason: 'http-timeout' });
   });
 
-  it.each([300, 400, 401, 404])('fails closed for terminal HTTP %s', async status => {
+  it.each([300, 400, 401, 404])('classifies terminal HTTP %s as rejected', async status => {
     const fetchImplementation = vi.fn(async () => Promise.resolve(new Response(null, { status })));
 
     await expect(
       createHttpEventEgressTransport({ fetch: fetchImplementation }).deliver(
         attempt({ url: 'https://receiver.example/events' }),
       ),
-    ).rejects.toEqual(new HttpEventEgressRejectedError(status));
+    ).resolves.toEqual({ kind: 'rejected', reason: `http-status-${status}` });
   });
 
   it('uses manual redirects and protects transport-owned headers from overrides', async () => {

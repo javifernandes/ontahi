@@ -68,17 +68,20 @@ export const createMysqlEventSchemaSql = (tables?: MysqlEventTableNames): readon
       subscription_id ${exactText(255)} NOT NULL,
       occurrence_id ${exactText(255)} NOT NULL,
       attempt integer NOT NULL DEFAULT 0,
-      state enum('pending', 'claimed', 'acknowledged') NOT NULL DEFAULT 'pending',
+      state enum('pending', 'claimed', 'acknowledged', 'failed') NOT NULL DEFAULT 'pending',
       claim_id ${exactText(255)},
       claimed_by ${exactText(255)},
       lease_expires_at datetime(3),
+      available_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       created_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       acknowledged_at datetime(3),
+      failed_at datetime(3),
+      failure_reason text,
       CONSTRAINT ${identifier(`${resolved.deliveries}_attempt_chk`)} CHECK (attempt >= 0),
       UNIQUE KEY ${identifier(`${resolved.deliveries}_subscription_occurrence_key`)}
         (subscription_id, occurrence_id),
       INDEX ${identifier(`${resolved.deliveries}_claim_idx`)}
-        (subscription_id, state, created_at, delivery_id),
+        (subscription_id, state, available_at, created_at, delivery_id),
       CONSTRAINT ${identifier(`${resolved.deliveries}_subscription_fk`)}
         FOREIGN KEY (subscription_id) REFERENCES ${names.subscriptions} (subscription_id),
       CONSTRAINT ${identifier(`${resolved.deliveries}_occurrence_fk`)}

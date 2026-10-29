@@ -646,6 +646,8 @@ describe('vercel workflow task executor', () => {
           claim: claimDelivery,
           acknowledge,
           release: vi.fn(() => Promise.resolve()),
+          retryAt: vi.fn(() => Promise.resolve()),
+          fail: vi.fn(() => Promise.resolve()),
           cancel,
         },
       },

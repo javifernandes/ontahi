@@ -85,6 +85,57 @@ export const verifyDurableEventRuntimeConformance = async (
   );
 
   await durableDelivery.register({
+    id: `${prefix}.delayed-retry`,
+    eventId,
+    eventVersion: 1,
+    correlation: { requestId: 'delayed-retry' },
+  });
+  await runtime.accept(emission('delayed-retry'));
+  const delayed = await durableDelivery.claim(`${prefix}.delayed-retry`, {
+    consumerId: 'consumer-delayed',
+    leaseMs: 10_000,
+  });
+  invariant(delayed, 'a delivery to retry later must be claimable');
+  const retryDelayMs = 30;
+  await durableDelivery.retryAt(delayed, new Date(Date.now() + retryDelayMs).toISOString());
+  invariant(
+    (await durableDelivery.claim(`${prefix}.delayed-retry`, {
+      consumerId: 'consumer-too-early',
+      leaseMs: 10_000,
+    })) === undefined,
+    'a delayed retry must not be claimable before its availability time',
+  );
+  await new Promise(resolve => setTimeout(resolve, retryDelayMs + 30));
+  const afterDelay = await durableDelivery.claim(`${prefix}.delayed-retry`, {
+    consumerId: 'consumer-after-delay',
+    leaseMs: 10_000,
+  });
+  invariant(afterDelay, 'a delayed retry must become claimable after its availability time');
+  invariant(afterDelay.delivery.attempt === 2, 'a delayed retry must increment the attempt');
+  await durableDelivery.acknowledge(afterDelay);
+
+  await durableDelivery.register({
+    id: `${prefix}.terminal-failure`,
+    eventId,
+    eventVersion: 1,
+    correlation: { requestId: 'terminal-failure' },
+  });
+  await runtime.accept(emission('terminal-failure'));
+  const terminal = await durableDelivery.claim(`${prefix}.terminal-failure`, {
+    consumerId: 'consumer-terminal',
+    leaseMs: 10_000,
+  });
+  invariant(terminal, 'a delivery to fail terminally must be claimable');
+  await durableDelivery.fail(terminal, { reason: 'destination-rejected' });
+  invariant(
+    (await durableDelivery.claim(`${prefix}.terminal-failure`, {
+      consumerId: 'consumer-after-failure',
+      leaseMs: 10_000,
+    })) === undefined,
+    'a terminally failed delivery must not be claimed again',
+  );
+
+  await durableDelivery.register({
     id: `${prefix}.lease-expiry`,
     eventId,
     eventVersion: 1,

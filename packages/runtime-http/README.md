@@ -59,6 +59,7 @@ await processNextEventEgressDelivery({
   subscription,
   consumerId: 'webhook-worker-1',
   leaseMs: 30_000,
+  retryDelayMs: 5_000,
   resolveDestination: async destinationId => destinations.require(destinationId),
   transport,
 });
@@ -81,5 +82,5 @@ const customerWebhook = {
 Destinations are trusted host configuration. The package does not register subscriptions, resolve
 secrets, admit caller-provided URLs, schedule workers, retry internally, or persist attempt history.
 It does not follow redirects. A `2xx` response is accepted; `408`, `429`, `5xx`, network failures,
-and timeouts are retryable. Other statuses throw `HttpEventEgressRejectedError`, so Core releases
-the claim without pretending the terminal policy has been decided.
+and timeouts are retryable. Other statuses are classified as rejected so Core can persist a
+terminal failure through the configured durable Event Runtime.

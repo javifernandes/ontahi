@@ -16,7 +16,8 @@ const createConformanceRuntimeFactory = () => {
     string,
     {
       delivery: EventDelivery;
-      state: 'pending' | 'claimed' | 'acknowledged';
+      state: 'pending' | 'claimed' | 'acknowledged' | 'failed';
+      availableAt: number;
       claimId?: string;
       consumerId?: string;
       leaseExpiresAt?: number;
@@ -35,6 +36,7 @@ const createConformanceRuntimeFactory = () => {
     if (deliveries.has(id)) return;
     deliveries.set(id, {
       state: 'pending',
+      availableAt: Date.now(),
       delivery: {
         kind: 'event-delivery',
         deliveryId: id,
@@ -82,7 +84,7 @@ const createConformanceRuntimeFactory = () => {
         const entry = [...deliveries.values()].find(
           candidate =>
             candidate.delivery.subscriptionId === subscriptionId &&
-            (candidate.state === 'pending' ||
+            ((candidate.state === 'pending' && candidate.availableAt <= Date.now()) ||
               (candidate.state === 'claimed' && candidate.leaseExpiresAt! <= Date.now())),
         );
         if (!entry) return undefined;
@@ -115,6 +117,18 @@ const createConformanceRuntimeFactory = () => {
         const entry = deliveries.get(claim.delivery.deliveryId)!;
         if (entry.claimId !== claim.claimId) throw new Error('stale claim');
         entry.state = 'pending';
+        entry.availableAt = Date.now();
+      },
+      retryAt: async (claim, availableAt) => {
+        const entry = deliveries.get(claim.delivery.deliveryId)!;
+        if (entry.claimId !== claim.claimId) throw new Error('stale claim');
+        entry.state = 'pending';
+        entry.availableAt = Date.parse(availableAt);
+      },
+      fail: async (claim, _failure) => {
+        const entry = deliveries.get(claim.delivery.deliveryId)!;
+        if (entry.claimId !== claim.claimId) throw new Error('stale claim');
+        entry.state = 'failed';
       },
       cancel: async subscriptionId => {
         subscriptions.delete(subscriptionId);
