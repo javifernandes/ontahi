@@ -1,7 +1,17 @@
+import { createHmac } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { graphSchema } from '@ontahi/core/data-graph';
 import {
+  eventDeclaration,
+  eventEgressSubscription,
+  processNextEventEgressDelivery,
+  registerEventEgressSubscription,
   verifyDurableEventRuntimeConformance,
   type EventEmission,
 } from '@ontahi/core/runtime/server';
+import { createHttpEventEgressTransport } from '@ontahi/runtime-http/event-egress';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +32,16 @@ const subscription = (id: string, requestId?: string) => ({
   eventId: 'TodoListExportReady',
   eventVersion: 1,
   ...(requestId ? { correlation: { requestId } } : {}),
+});
+
+const TodoListExportReady = eventDeclaration.define({
+  id: 'TodoListExportReady',
+  version: 1,
+  description: 'A requested Todo export is ready.',
+  payload: graphSchema.object({
+    requestId: graphSchema.string(),
+    url: graphSchema.string(),
+  }),
 });
 
 describe('PostgreSQL Event Runtime', () => {
@@ -231,6 +251,89 @@ describe('PostgreSQL Event Runtime', () => {
     await expect(
       recreated.durableDelivery!.register(subscription('stable-wait', 'different')),
     ).rejects.toThrow('already registered differently');
+  });
+
+  it('recovers a retained delivery and acknowledges signed HTTP egress exactly once', async () => {
+    const egress = eventEgressSubscription({
+      id: 'todo-export-webhook',
+      event: TodoListExportReady,
+      destinationId: 'local-receiver',
+      project: occurrence => ({
+        occurrenceId: occurrence.occurrenceId,
+        data: occurrence.payload,
+      }),
+    });
+    const firstRuntime = runtime();
+    await registerEventEgressSubscription(firstRuntime, egress);
+    await firstRuntime.accept(emission('request-1'));
+
+    const received: { body: string; attempt: string | undefined; signature: string | undefined }[] =
+      [];
+    const receiver = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer | string) => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => {
+        const attemptHeader = request.headers['x-ontahi-attempt'];
+        const signatureHeader = request.headers['x-ontahi-signature'];
+        received.push({
+          body: Buffer.concat(chunks).toString('utf8'),
+          attempt: Array.isArray(attemptHeader) ? attemptHeader[0] : attemptHeader,
+          signature: Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader,
+        });
+        response.writeHead(received.length === 1 ? 503 : 204, { 'retry-after': '1' }).end();
+      });
+    });
+    await new Promise<void>(resolve => receiver.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const url = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
+      const secret = 'sql-egress-secret';
+      const options = {
+        runtime: runtime(),
+        subscription: egress,
+        leaseMs: 5_000,
+        resolveDestination: async () => ({
+          url,
+          signing: { kind: 'hmac-sha256' as const, secret },
+        }),
+        transport: createHttpEventEgressTransport(),
+      };
+
+      const first = await processNextEventEgressDelivery({
+        ...options,
+        consumerId: 'worker-before-restart',
+      });
+      const second = await processNextEventEgressDelivery({
+        ...options,
+        runtime: runtime(),
+        consumerId: 'worker-after-restart',
+      });
+      const idle = await processNextEventEgressDelivery({
+        ...options,
+        runtime: runtime(),
+        consumerId: 'worker-after-acknowledgement',
+      });
+
+      expect(first).toMatchObject({ kind: 'retryable', attempt: 1, retryAfterMs: 1_000 });
+      if (first.kind !== 'retryable')
+        throw new Error('Expected the first attempt to be retryable.');
+      expect(second).toMatchObject({
+        kind: 'accepted',
+        attempt: 2,
+        deliveryId: first.deliveryId,
+      });
+      expect(idle).toEqual({ kind: 'idle', subscriptionId: egress.id });
+      expect(received).toHaveLength(2);
+      expect(received.map(request => request.attempt)).toEqual(['1', '2']);
+      expect(received[0]?.body).toBe(received[1]?.body);
+      expect(received[1]?.signature).toBe(
+        `sha256=${createHmac('sha256', secret).update(received[1]!.body).digest('hex')}`,
+      );
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        receiver.close(error => (error ? reject(error) : resolve())),
+      );
+    }
   });
 
   it('cancels future matching deliveries without erasing retained occurrences', async () => {

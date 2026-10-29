@@ -1,14 +1,11 @@
 import type { OperationInvocationDispatcher } from '@ontahi/core/runtime/operation-invocation';
 import type { AnyEventDeclaration, EventApplication } from '@ontahi/core/runtime/server';
 import {
-  createGraphHttpEventIngressDispatcher,
-  createGraphHttpEventIngressRouter,
-  createGraphHttpIngressOperationDispatcher,
-  createGraphHttpIngressRouter,
   type GraphHttpEventIngressRoute,
   type GraphHttpIngressProviderRegistry,
   type GraphHttpIngressRoute,
 } from '@ontahi/core/runtime/server/ingress';
+import { createHttpIngressHandler } from '@ontahi/runtime-http/ingress';
 import express, {
   type NextFunction,
   type Request,
@@ -103,46 +100,27 @@ export const mountExpressHttpIngress = ({
   const eventRoutes = ingress.eventRoutes ?? [];
   if (routes.length === 0 && eventRoutes.length === 0) return;
 
-  const operationPaths = new Set(routes.map(route => route.route));
-  const sharedPath = eventRoutes.find(route => operationPaths.has(route.route))?.route;
-  if (sharedPath) {
-    throw new Error(
-      `Ontahi Express cannot mount Operation and Event ingress on the same path ${sharedPath}.`,
-    );
-  }
   if (eventRoutes.length > 0 && !events) {
     throw new Error(
       'Ontahi Express Event ingress requires an application created with ontahi() and registered Events.',
     );
   }
 
-  const graphIngress = createGraphHttpIngressRouter({
-    routes,
+  const ingressHandlerAdapter = createHttpIngressHandler({
     providers: ingress.providers,
-    dispatch: createGraphHttpIngressOperationDispatcher({ dispatcher }),
+    operations: { routes, dispatcher },
+    ...(events ? { events: { routes: eventRoutes, events } } : {}),
   });
-  const operationHandle = ingressHandler({ handle: graphIngress.handle, reportError });
-  const eventIngress = events
-    ? createGraphHttpEventIngressRouter({
-        routes: eventRoutes,
-        providers: ingress.providers,
-        dispatch: createGraphHttpEventIngressDispatcher({ events }),
-      })
-    : undefined;
-  const eventHandle = eventIngress
-    ? ingressHandler({ handle: eventIngress.handle, reportError })
-    : undefined;
+  const handle = ingressHandler({ handle: ingressHandlerAdapter.handle, reportError });
   const rawBody = express.raw({
     type: '*/*',
     ...(ingress.bodyLimit === undefined ? {} : { limit: ingress.bodyLimit }),
   });
 
   Array.from(new Set(routes.map(route => route.route))).forEach(path =>
-    router.all(path, rawBody, operationHandle),
+    router.all(path, rawBody, handle),
   );
-  if (eventHandle) {
-    Array.from(new Set(eventRoutes.map(route => route.route))).forEach(path =>
-      router.all(path, rawBody, eventHandle),
-    );
-  }
+  Array.from(new Set(eventRoutes.map(route => route.route))).forEach(path =>
+    router.all(path, rawBody, handle),
+  );
 };

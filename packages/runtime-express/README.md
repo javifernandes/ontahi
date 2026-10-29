@@ -258,9 +258,10 @@ The adapter reads the reflected routes, uses the canonical operation dispatcher,
 raw body for provider verification. Mount this middleware before host-wide body parsers when ingress
 providers verify signatures. `ingress.bodyLimit` customizes the raw-body limit.
 
-Provider registries and ingress routing remain transport-neutral core contracts. A future Koa or
-other HTTP adapter can consume the same providers while owning its framework-specific request and
-response conversion.
+Provider registries and ingress routing remain transport-neutral contracts. Express delegates the
+common `Request → Response` composition to `@ontahi/runtime-http/ingress` and owns only its raw-body
+middleware plus framework request/response conversion. A host that does not need Express can use
+the minimal `@ontahi/runtime-http/node` bridge directly.
 
 The lower-level Operation invocation, Graph Read, Graph Command, legacy Task snapshot, and Runtime
 Protocol handlers remain available for explicit compatibility or custom transport composition.

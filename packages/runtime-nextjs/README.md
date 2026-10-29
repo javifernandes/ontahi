@@ -174,4 +174,6 @@ export const POST = createNextEventIngressRouteHandler({
 The provider owns authentication and normalization. Ontahi matches the accepted provider identity
 and channel against the explicit route, validates the payload against the registered declaration,
 and only then creates the Event occurrence. Rejected or ignored deliveries never materialize an
-occurrence.
+occurrence. The App Router adapter delegates this semantic routing to
+`@ontahi/runtime-http/ingress`; Next.js owns the route lifecycle and safe framework-facing failure
+projection rather than a second ingress implementation.

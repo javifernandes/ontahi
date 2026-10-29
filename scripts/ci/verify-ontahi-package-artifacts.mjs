@@ -18,6 +18,7 @@ import {
   internalDependencies,
   lockstepVersion,
   packageByName,
+  packageRuntimeDependencyClosure,
   prereleaseChannel,
   publicPackages as packages,
   releaseOrder,
@@ -284,7 +285,10 @@ const verifyArtifacts = () => {
     const tarballs = packPackages(artifactsDirectory);
     verifyReproducibleTarballs(tarballs, path.join(temporaryRoot, 'repeated-artifacts'));
     const minimalTarballs = Object.fromEntries(
-      ['@ontahi/core', '@ontahi/runtime-express'].map(name => [name, tarballs[name]]),
+      packageRuntimeDependencyClosure(['@ontahi/runtime-express']).map(name => [
+        name,
+        tarballs[name],
+      ]),
     );
     const minimalConsumer = installConsumer({
       root: temporaryRoot,

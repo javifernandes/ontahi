@@ -376,3 +376,25 @@ The next vertical is the SQL-backed application proof: register one real subscri
 occurrence, recreate the processor, deliver through this adapter, prove release/reclaim identity,
 and acknowledge exactly once. That proof should also decide whether the Todo example is the right
 permanent executable surface or whether a smaller integration fixture better preserves its focus.
+
+## Implementation Checkpoint: SQL Recovery And Symmetric HTTP Boundary
+
+The durable proof and the complementary ingress boundary are now implemented together:
+
+1. PostgreSQL retains a declared Event occurrence and static egress subscription before the worker
+   exists, then a recreated runtime processes the pending delivery;
+2. a local HTTP receiver first returns `503` with `Retry-After`, causing release, and then accepts
+   the reclaimed delivery with the same delivery/body identity and incremented attempt;
+3. the accepted attempt acknowledges the delivery, and another recreated processor observes the
+   subscription as idle;
+4. the receiver verifies the HMAC signature over the exact stable body, proving that durable
+   recovery and real HTTP lowering compose without an application-owned retry loop;
+5. `@ontahi/runtime-http/ingress` now composes Operation and Event routes behind one Web
+   `Request → Response` handler used by Express and Next.js;
+6. `@ontahi/runtime-http/node` hosts that same handler directly on a bounded `node:http` server,
+   proving that a framework adapter is optional rather than part of the application model.
+
+The next egress concern is no longer basic transport or recovery. It is explicit terminal outcome
+and delayed retry policy: durable rejection/dead-letter state, scheduler-enforced retry time, and
+safe retained attempt evidence. The generic HTTP ingress direction can separately grow Runtime
+Protocol endpoints when that reuse is proven, without turning this package into a web framework.
