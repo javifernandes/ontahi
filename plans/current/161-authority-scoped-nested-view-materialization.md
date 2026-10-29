@@ -1,6 +1,6 @@
 # 161. Authority-Scoped Nested View Materialization
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/161-authority-scoped-nested-view-materialization`
 
@@ -70,22 +70,22 @@ membership predicate, so providers receive no nested authority constraint to exe
 
 ## Proposed Execution Slices
 
-1. [ ] Add the smallest realistic Core regression reproducing the Atlas Workspace / active
+1. [x] Add the smallest realistic Core regression reproducing the Atlas Workspace / active
        Membership leak through a recursive View.
-2. [ ] Specify nested materialization authority in the Query/View execution contract, including
+2. [x] Specify nested materialization authority in the Query/View execution contract, including
        required and nullable to-one semantics.
-3. [ ] Implement receiver authorization rewriting without adding authority predicates to the
+3. [x] Implement receiver authorization rewriting without adding authority predicates to the
        caller-owned portable View AST.
-4. [ ] Implement in-memory execution and semantic tests for to-many, nullable to-one, required
+4. [x] Implement in-memory execution and semantic tests for to-many, nullable to-one, required
        to-one, nested hops, and fail-closed unsupported scope.
-5. [ ] Implement PostgreSQL lowering with authority filtering before relation-local order/limit.
-6. [ ] Reconcile MySQL, Supabase, and other advertised recursive-View providers; either implement
+5. [x] Implement PostgreSQL lowering with authority filtering before relation-local order/limit.
+6. [x] Reconcile MySQL, Supabase, and other advertised recursive-View providers; either implement
        equivalent lowering or reject the capability explicitly.
 7. [ ] Add Runtime Protocol and remote React consumer coverage proving that foreign and inactive
        related records never reach the client cache.
-8. [ ] Update policy, View, Query, and application-data-access documentation with the distinction
+8. [x] Update policy, View, Query, and application-data-access documentation with the distinction
        between projection permission and nested population scope.
-9. [ ] Add a consumer-visible `@ontahi/core` Changeset and run packed-artifact verification.
+9. [x] Add a consumer-visible `@ontahi/core` Changeset and run packed-artifact verification.
 10. [ ] Validate Atlas against the candidate package, then simplify its two settings root reads
         only after the Ontahí prerelease is published and pinned exactly.
 
@@ -123,5 +123,11 @@ membership predicate, so providers receive no nested authority constraint to exe
 
 ## Closure / Evolution
 
-Open. Atlas retains separate Workspace and Membership root reads until this plan ships in an exact
-Ontahí version and consumer compatibility is proven.
+Implementation checkpoint: nested Relation nodes now carry receiver-owned membership in the
+execution Query, with in-memory, shared PostgreSQL/MySQL, and Supabase lowering. Required to-one
+targets fail closed when scope removes an existing target; nullable to-one becomes `null`, and
+to-many populations filter before ordering and limits. Core Runtime Protocol dispatch proves the
+scope is applied before execution. Public docs, durable items, and a package Changeset are updated.
+
+Open. Remote React cache coverage, publication, and exact-version Atlas compatibility remain. Atlas
+retains separate Workspace and Membership root reads until those final slices are complete.

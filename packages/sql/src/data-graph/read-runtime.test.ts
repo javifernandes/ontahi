@@ -121,6 +121,22 @@ describe('exact-one membership before SQL shaping', () => {
     },
   );
 });
+
+describe('nested relation authority', () => {
+  it('fails a required belongsTo when receiver scope removes an existing target', async () => {
+    const h = harness([[child], [], [parent]], undefined, true);
+    const read = query(h.Child).include(childEntity => ({
+      parent: childEntity.parent.withSelection(
+        Selection.where(h.Parent, parentEntity => parentEntity.id.eq('missing')).expression,
+      ),
+    }));
+
+    await expect(Effect.runPromise(h.runtime.run(read, undefined))).rejects.toThrow(
+      'Required Relation ReadChild.parent was inaccessible under nested Graph Read scope.',
+    );
+    expect(h.calls).toHaveLength(3);
+  });
+});
 const related = (
   graph: ReturnType<typeof model>,
   mode: RelatedRootReadMode,

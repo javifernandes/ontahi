@@ -1,9 +1,11 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   createGraphReadDispatcher,
   createGraphReadObserver,
   createEntityRef,
+  createInMemoryDataGraphRuntime,
   entity,
   field,
   modelExpression,
@@ -59,6 +61,135 @@ const createTripPolicy = (
 });
 
 describe('graph read dispatcher', () => {
+  it('intersects nested View relations with receiver-owned authority scope', async () => {
+    const User = entity('WorkspaceUser', {
+      id: field.id(),
+      name: field.string(),
+    });
+    const Membership = entity('Membership', {
+      id: field.id(),
+      workspaceId: field.string(),
+      status: field.enum(['active', 'suspended']),
+      user: field.ref(User),
+    });
+    const Workspace = entity('Workspace', {
+      id: field.id(),
+      name: field.string(),
+    }).hasMany('memberships', Membership, { via: 'workspaceId' });
+    const runtime = createInMemoryDataGraphRuntime({
+      entities: [Workspace],
+      dataset: {
+        Workspace: [{ id: 'workspace-1', name: 'Atlas' }],
+        Membership: [
+          {
+            id: 'membership-active',
+            workspaceId: 'workspace-1',
+            status: 'active',
+            user: 'user-1',
+          },
+          {
+            id: 'membership-suspended',
+            workspaceId: 'workspace-1',
+            status: 'suspended',
+            user: 'user-2',
+          },
+        ],
+        WorkspaceUser: [
+          { id: 'user-1', name: 'Ada' },
+          { id: 'user-2', name: 'Grace' },
+        ],
+      },
+    });
+    const execute = vi.fn((authorizedQuery, mode) => {
+      if (mode !== 'run') throw new Error(`Unexpected mode ${mode}`);
+      return Effect.runPromise(runtime.run(authorizedQuery, undefined));
+    });
+    const policy = {
+      entity: Workspace,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 10,
+      fields: { id: { select: true }, name: { select: true } },
+      relations: {
+        memberships: {
+          fields: {
+            id: { select: true },
+            status: { select: true },
+          },
+          relations: {
+            user: {
+              fields: { id: { select: true }, name: { select: true } },
+              scope: 'all',
+            },
+          },
+          scope: ({ authority }: { authority: Authority }) =>
+            Selection.where(Membership, membership =>
+              membership.status.eq(authority.ownerId === 'owner-1' ? 'active' : 'suspended'),
+            ).expression,
+        },
+      },
+      scope: 'all',
+    } satisfies GraphReadPolicy<typeof Workspace, Authority>;
+    const dispatch = createGraphReadDispatcher({
+      policies: [policy],
+      execute,
+    });
+    const view = Workspace.view('WorkspaceSettings', {
+      id: true,
+      memberships: { id: true, status: true, user: { id: true, name: true } },
+    });
+
+    await expect(
+      dispatch(toGraphReadRequest(query(Workspace).as(view), 'run'), {
+        authority: { ownerId: 'owner-1' },
+      }),
+    ).resolves.toEqual({
+      kind: 'graph-read-result',
+      value: [
+        {
+          id: 'workspace-1',
+          memberships: [
+            {
+              id: 'membership-active',
+              status: 'active',
+              user: { id: 'user-1', name: 'Ada' },
+            },
+          ],
+        },
+      ],
+    });
+
+    const authorizedQuery = execute.mock.calls[0]![0];
+    expect(authorizedQuery.includes?.memberships.toNodeSpec().selection).toEqual({
+      kind: 'predicate',
+      fieldName: 'status',
+      operator: 'eq',
+      value: 'active',
+    });
+
+    const invalidExecute = vi.fn();
+    const invalidDispatch = createGraphReadDispatcher({
+      policies: [
+        {
+          ...policy,
+          relations: {
+            memberships: {
+              ...policy.relations.memberships,
+              scope: () => Selection.all(User),
+            },
+          },
+        },
+      ],
+      execute: invalidExecute,
+    });
+    await expect(
+      invalidDispatch(toGraphReadRequest(query(Workspace).as(view), 'run'), {
+        authority: { ownerId: 'owner-1' },
+      }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'execution_unavailable' } });
+    expect(invalidExecute).not.toHaveBeenCalled();
+  });
+
   it('discovers ordering policy without executing data or requiring a select-all projection', async () => {
     const graph = defineTripGraph();
     const execute = vi.fn();

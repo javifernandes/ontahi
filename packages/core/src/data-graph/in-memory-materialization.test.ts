@@ -12,7 +12,15 @@ import {
   type InMemoryDataset,
 } from './in-memory/materialization.js';
 
-import { entity, field, mapEntity, mapRelation, modelExpression, query } from './index.js';
+import {
+  entity,
+  field,
+  mapEntity,
+  mapRelation,
+  modelExpression,
+  query,
+  Selection,
+} from './index.js';
 
 describe('data-graph in-memory materialization', () => {
   it('evaluates virtual derived Fields from stored Fields and complete Relation aggregates', () => {
@@ -213,5 +221,110 @@ describe('data-graph in-memory materialization', () => {
     );
 
     expect(result).toEqual({ id: 'user-1', displayName: 'Ada' });
+
+    const inaccessible = query(CollaboratorWithProfile)
+      .include(collaborator => ({
+        profile: collaborator.profile.withSelection(
+          Selection.where(Profile, profile => profile.displayName.eq('Grace')).expression,
+        ),
+      }))
+      .build()
+      .includes!.profile.toNodeSpec();
+
+    expect(() =>
+      materializeRelation(
+        dataset.BookCollaborator[0]!,
+        CollaboratorWithProfile,
+        inaccessible,
+        dataset,
+      ),
+    ).toThrow(
+      'Required Relation BookCollaborator.profile was inaccessible under nested Graph Read scope.',
+    );
+
+    expect(
+      materializeRelation(
+        dataset.BookCollaborator[0]!,
+        CollaboratorWithProfile,
+        { ...inaccessible, nullable: true },
+        dataset,
+      ),
+    ).toBeNull();
+  });
+
+  it('evaluates relation-image and Boolean scopes inside nested materialization', () => {
+    const Target = entity('ScopedTarget', {
+      id: field.id(),
+      containerId: field.id(),
+      ownerId: field.id(),
+      active: field.boolean(),
+    });
+    const Owner = entity('ScopedOwner', {
+      id: field.id(),
+      containerId: field.id(),
+    }).hasMany('targets', Target, { via: 'ownerId' });
+    const Container = entity('ScopedContainer', { id: field.id() })
+      .hasMany('targets', Target, { via: 'containerId' })
+      .hasMany('owners', Owner, { via: 'containerId' });
+    const ownerTargets = Selection.where(Owner, owner => owner.id.eq('owner-1')).through('targets');
+    const ownerTargetsImage = ownerTargets.expression;
+    if (ownerTargetsImage.kind !== 'relation-image') throw new Error('Expected relation image');
+    const scoped = query(Container)
+      .include(container => ({
+        targets: container.targets.withSelection({
+          kind: 'and',
+          operands: [
+            { kind: 'or', operands: [{ kind: 'none' }, ownerTargetsImage] },
+            {
+              kind: 'not',
+              operand: { kind: 'predicate', fieldName: 'active', operator: 'eq', value: false },
+            },
+          ],
+        }),
+      }))
+      .build()
+      .includes!.targets.toNodeSpec();
+    const dataset: InMemoryDataset = {
+      ScopedContainer: [{ id: 'container-1' }],
+      ScopedOwner: [
+        { id: 'owner-1', containerId: 'container-1' },
+        { id: 'owner-2', containerId: 'container-1' },
+      ],
+      ScopedTarget: [
+        { id: 'target-1', containerId: 'container-1', ownerId: 'owner-1', active: true },
+        { id: 'target-2', containerId: 'container-1', ownerId: 'owner-2', active: true },
+        { id: 'target-3', containerId: 'container-1', ownerId: 'owner-1', active: false },
+      ],
+    };
+
+    expect(materializeRelation(dataset.ScopedContainer[0]!, Container, scoped, dataset)).toEqual([
+      { id: 'target-1', containerId: 'container-1', ownerId: 'owner-1', active: true },
+    ]);
+
+    expect(() =>
+      materializeRelation(
+        dataset.ScopedContainer[0]!,
+        Container,
+        {
+          ...scoped,
+          selection: {
+            ...ownerTargetsImage,
+            source: { ...ownerTargetsImage.source, entityName: 'MissingOwner' },
+          },
+        },
+        dataset,
+      ),
+    ).toThrow('cannot resolve source Entity MissingOwner');
+    expect(() =>
+      materializeRelation(
+        dataset.ScopedContainer[0]!,
+        Container,
+        {
+          ...scoped,
+          selection: { ...ownerTargetsImage, relationName: 'missingTargets' },
+        },
+        dataset,
+      ),
+    ).toThrow('cannot resolve ScopedOwner.missingTargets to ScopedTarget');
   });
 });

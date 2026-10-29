@@ -285,6 +285,61 @@ describe('data-graph supabase runtime helpers', () => {
     expect(rows).toEqual([expectedAudienceResult]);
   });
 
+  it('compiles receiver-owned nested membership with the relation join', async () => {
+    const Book = entity('ScopedBook', { id: field.id() });
+    const Chapter = entity('ScopedChapter', {
+      id: field.id(),
+      bookId: field.id(),
+      status: field.enum(['active', 'suspended']),
+    });
+    const BookWithChapters = Book.hasMany('chapters', Chapter, { via: 'bookId' });
+    mapEntity(BookWithChapters).toTable('scoped_books');
+    mapEntity(Chapter).toTable('scoped_chapters', { bookId: 'book_id' });
+    mapRelation(BookWithChapters, 'chapters', {
+      type: 'one-to-many',
+      from: 'scoped_books.id',
+      to: 'scoped_chapters.book_id',
+    });
+    const read = query(BookWithChapters).include(book => ({
+      chapters: book.chapters.withSelection(
+        Selection.where(Chapter, chapter => chapter.status.eq('active')).expression,
+      ),
+    }));
+    const spec = resolveQuerySpec(read, undefined);
+    const plan = compileQueryPlan(read, undefined);
+    const fetchEntityRowsEffectMock = vi
+      .fn()
+      .mockReturnValue(Effect.succeed([{ id: 'chapter-1', bookId: 'book-1', status: 'active' }]));
+
+    await Effect.runPromise(
+      hydrateSupabaseEntityRowsEffect({
+        supabase: {} as TestSupabaseDouble,
+        rows: [{ id: 'book-1' }],
+        includeShape: spec.includes,
+        includePlans: plan.includes,
+        fetchEntityRowsEffect: fetchEntityRowsEffectMock,
+        createError,
+      }),
+    );
+
+    expect(fetchEntityRowsEffectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        compiledSelection: {
+          kind: 'and',
+          operands: [
+            { operator: 'eq', field: 'status', column: 'status', value: 'active' },
+            {
+              operator: 'in',
+              field: 'bookId',
+              column: 'book_id',
+              values: ['book-1'],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
   it('hydrates many-to-many includes through anonymous edge storage', async () => {
     const Tag = entity('Tag', { id: field.id(), label: field.string() });
     const Todo = entity('Todo', { id: field.id(), title: field.string() }).manyToMany('tags', Tag);

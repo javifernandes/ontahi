@@ -9,8 +9,8 @@ import {
 import { isEntityRef, type EntityRef } from './ref/index.js';
 import type { RelatedRootReadSpec } from './relation-root.js';
 import {
-  selectionAll,
   selectionAnd,
+  selectionAll,
   selectionReferences,
   type EntitySelectionSource,
   type SemanticSelection,
@@ -109,11 +109,13 @@ export type SelectionValue = AnyFieldReference | AnyRelationQueryBuilder | Selec
 export type RelationNodeSpec = {
   relationName: string;
   relationKind: RelationKind;
+  nullable: boolean;
   entity: AnyEntityDefinition;
   select?: Record<string, SelectionValue>;
   includes?: Record<string, AnyRelationQueryBuilder>;
   orderBy: OrderSpec[];
   limit?: number;
+  selection: SelectionExpression;
 };
 
 export class RelationQueryBuilder<
@@ -134,6 +136,8 @@ export class RelationQueryBuilder<
     readonly includeShape?: Record<string, AnyRelationQueryBuilder>,
     readonly orderBySpecs: readonly OrderSpec[] = [],
     readonly limitValue?: number,
+    readonly selectionExpression: SelectionExpression = selectionAll(),
+    readonly nullable: boolean = false,
   ) {}
 
   include<TInclude extends Record<string, AnyRelationQueryBuilder>>(
@@ -152,6 +156,8 @@ export class RelationQueryBuilder<
       build(createEntityIncludeProxy(this.entity)),
       this.orderBySpecs,
       this.limitValue,
+      this.selectionExpression,
+      this.nullable,
     );
   }
 
@@ -171,6 +177,8 @@ export class RelationQueryBuilder<
       this.includeShape,
       this.orderBySpecs,
       this.limitValue,
+      this.selectionExpression,
+      this.nullable,
     );
   }
 
@@ -186,6 +194,8 @@ export class RelationQueryBuilder<
       this.includeShape,
       [...this.orderBySpecs, orderSpec],
       this.limitValue,
+      this.selectionExpression,
+      this.nullable,
     );
   }
 
@@ -198,6 +208,23 @@ export class RelationQueryBuilder<
       this.includeShape,
       this.orderBySpecs,
       limitValue,
+      this.selectionExpression,
+      this.nullable,
+    );
+  }
+
+  /** Receiver-owned relation membership; callers normally author root Selections instead. */
+  withSelection(selectionExpression: SelectionExpression) {
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
+      this.relationName,
+      this.relationKind,
+      this.entity,
+      this.selectShape,
+      this.includeShape,
+      this.orderBySpecs,
+      this.limitValue,
+      selectionExpression,
+      this.nullable,
     );
   }
 
@@ -205,11 +232,13 @@ export class RelationQueryBuilder<
     return {
       relationName: this.relationName,
       relationKind: this.relationKind,
+      nullable: this.nullable,
       entity: this.entity,
       select: this.selectShape,
       includes: this.includeShape,
       orderBy: [...this.orderBySpecs],
       limit: this.limitValue,
+      selection: this.selectionExpression,
     };
   }
 }
@@ -275,6 +304,12 @@ const createEntitySelectionProxy = <TEntity extends AnyEntityDefinition>(
       relationName,
       relationDefinition.relationKind,
       relationDefinition.target,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      selectionAll(),
+      relationDefinition.nullable === true,
     );
   }
 
@@ -293,6 +328,12 @@ const createEntityIncludeProxy = <TEntity extends AnyEntityDefinition>(
       relationName,
       relationDefinition.relationKind,
       relationDefinition.target,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      selectionAll(),
+      relationDefinition.nullable === true,
     );
   }
 
