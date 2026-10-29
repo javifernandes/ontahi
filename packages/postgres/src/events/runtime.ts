@@ -1,11 +1,13 @@
-import type {
-  DurableEventSubscription,
-  EventDelivery,
-  EventDeliveryClaim,
-  EventEmission,
-  EventOccurrence,
-  EventRuntime,
-  EventSubscriber,
+import {
+  normalizeDurableEventDeliverySettlement,
+  type DurableEventSubscription,
+  type DurableEventDeliverySettlement,
+  type EventDelivery,
+  type EventDeliveryClaim,
+  type EventEmission,
+  type EventOccurrence,
+  type EventRuntime,
+  type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
 import type { Pool, PoolClient } from 'pg';
@@ -30,6 +32,7 @@ const createDefaultIdentity = () =>
 
 const requireIdentity = (value: string, label: string) => {
   if (value.trim().length === 0) throw new TypeError(`${label} must be a non-empty string.`);
+  return value;
 };
 
 const isoDate = (value: unknown) => {
@@ -240,7 +243,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
          FROM ${tables.deliveries} AS delivery
          JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
          WHERE delivery.subscription_id = $1
-           AND (delivery.state = 'pending'
+           AND ((delivery.state = 'pending' AND delivery.available_at <= now())
              OR (delivery.state = 'claimed' AND delivery.lease_expires_at <= now()))
          ORDER BY occurrence.acceptance_order
          FOR UPDATE OF delivery SKIP LOCKED
@@ -270,12 +273,22 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     };
   };
 
-  const settle = async (claimValue: EventDeliveryClaim, state: 'acknowledged' | 'pending') => {
-    const acknowledged = state === 'acknowledged';
+  const settle = async (
+    claimValue: EventDeliveryClaim,
+    outcome: DurableEventDeliverySettlement,
+  ) => {
+    const {
+      state,
+      retryAfterMs,
+      failureReason = null,
+    } = normalizeDurableEventDeliverySettlement(outcome);
     const result = await options.pool.query(
       `UPDATE ${tables.deliveries}
        SET state = $1,
-           acknowledged_at = ${acknowledged ? 'now()' : 'NULL'},
+           acknowledged_at = CASE WHEN $1 = 'acknowledged' THEN now() ELSE NULL END,
+           available_at = now() + (COALESCE($6::bigint, 0) * interval '1 millisecond'),
+           failed_at = CASE WHEN $1 = 'failed' THEN now() ELSE NULL END,
+           failure_reason = CASE WHEN $1 = 'failed' THEN $7::text ELSE NULL END,
            claim_id = NULL, claimed_by = NULL, lease_expires_at = NULL
        WHERE delivery_id = $2
          AND subscription_id = $3
@@ -289,6 +302,8 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
         claimValue.delivery.subscriptionId,
         claimValue.claimId,
         claimValue.consumerId,
+        retryAfterMs,
+        failureReason,
       ],
     );
     if (result.rowCount !== 1) {
@@ -327,8 +342,11 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     durableDelivery: {
       register,
       claim,
-      acknowledge: claimValue => settle(claimValue, 'acknowledged'),
-      release: claimValue => settle(claimValue, 'pending'),
+      acknowledge: claimValue => settle(claimValue, { kind: 'acknowledged' }),
+      release: claimValue => settle(claimValue, { kind: 'pending' }),
+      retryAfter: (claimValue, retryAfterMs) =>
+        settle(claimValue, { kind: 'pending', retryAfterMs }),
+      fail: (claimValue, failure) => settle(claimValue, { kind: 'failed', reason: failure.reason }),
       cancel: async subscriptionId => {
         requireIdentity(subscriptionId, 'Durable Event subscription id');
         await options.pool.query(

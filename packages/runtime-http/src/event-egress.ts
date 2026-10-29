@@ -27,6 +27,7 @@ export type HttpEventEgressTransportOptions = {
   readonly defaultTimeoutMs?: number;
 };
 
+/** @deprecated Terminal HTTP responses are returned as rejected outcomes. */
 export class HttpEventEgressRejectedError extends Error {
   readonly status: number;
 
@@ -63,13 +64,14 @@ const requireHeaderName = (value: string) => {
 
 const parseRetryAfterMs = (value: string | null, now = Date.now()) => {
   if (value === null) return undefined;
+  if (value.trim().length === 0) return undefined;
 
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.max(1, Math.ceil(seconds * 1_000));
 
   const date = Date.parse(value);
   if (!Number.isFinite(date)) return undefined;
-  return Math.max(0, date - now);
+  return Math.max(1, date - now);
 };
 
 const stableHeaders = (attempt: EventEgressAttempt<HttpEventEgressDestination>) => ({
@@ -95,7 +97,7 @@ const classifyResponse = (response: Response): EventEgressAttemptOutcome => {
     };
   }
 
-  throw new HttpEventEgressRejectedError(response.status);
+  return { kind: 'rejected', reason: `http-status-${response.status}` };
 };
 
 const isTimeoutError = (cause: unknown) =>

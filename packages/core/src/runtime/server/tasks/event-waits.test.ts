@@ -138,6 +138,14 @@ const createDurableRuntime = (
         const entry = deliveries.get(claim.delivery.deliveryId);
         if (entry?.claim === claim.claimId) entry.claim = undefined;
       },
+      retryAfter: async (claim: EventDeliveryClaim) => {
+        const entry = deliveries.get(claim.delivery.deliveryId);
+        if (entry?.claim === claim.claimId) entry.claim = undefined;
+      },
+      fail: async (claim: EventDeliveryClaim) => {
+        const entry = deliveries.get(claim.delivery.deliveryId);
+        if (entry?.claim === claim.claimId) entry.acknowledged = true;
+      },
       cancel: async subscriptionId => {
         subscriptions.delete(subscriptionId);
       },

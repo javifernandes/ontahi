@@ -115,6 +115,13 @@ describe('PostgreSQL Event Runtime', () => {
       createRuntime: runtime,
       identityPrefix: 'postgres-conformance',
     });
+    const result = await pool.query(
+      `SELECT state, failure_reason
+       FROM ontahi_event_deliveries
+       WHERE subscription_id = $1`,
+      ['postgres-conformance.terminal-failure'],
+    );
+    expect(result.rows).toEqual([{ state: 'failed', failure_reason: 'destination-rejected' }]);
   });
 
   it('delivers retained occurrences registered before or after acceptance', async () => {
@@ -280,7 +287,7 @@ describe('PostgreSQL Event Runtime', () => {
           attempt: Array.isArray(attemptHeader) ? attemptHeader[0] : attemptHeader,
           signature: Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader,
         });
-        response.writeHead(received.length === 1 ? 503 : 204, { 'retry-after': '1' }).end();
+        response.writeHead(received.length === 1 ? 503 : 204, { 'retry-after': '0.01' }).end();
       });
     });
     await new Promise<void>(resolve => receiver.listen(0, '127.0.0.1', resolve));
@@ -303,6 +310,7 @@ describe('PostgreSQL Event Runtime', () => {
         ...options,
         consumerId: 'worker-before-restart',
       });
+      await new Promise(resolve => setTimeout(resolve, 30));
       const second = await processNextEventEgressDelivery({
         ...options,
         runtime: runtime(),
@@ -314,7 +322,8 @@ describe('PostgreSQL Event Runtime', () => {
         consumerId: 'worker-after-acknowledgement',
       });
 
-      expect(first).toMatchObject({ kind: 'retryable', attempt: 1, retryAfterMs: 1_000 });
+      expect(first).toMatchObject({ kind: 'retryable', attempt: 1 });
+      expect(first).toHaveProperty('retryAfterMs', 10);
       if (first.kind !== 'retryable')
         throw new Error('Expected the first attempt to be retryable.');
       expect(second).toMatchObject({

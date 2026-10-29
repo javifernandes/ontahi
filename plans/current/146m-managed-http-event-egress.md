@@ -316,9 +316,9 @@ roll back the domain Unit Of Work that caused it.
 - [ ] Event occurrence, subscription, delivery, claim, and transport-attempt identities remain
       distinct and inspectable.
 - [ ] A `2xx` response acknowledges the durable delivery exactly once from Ontahí's perspective.
-- [ ] A retryable failure preserves delivery identity, increments attempt on the next claim, and
+- [x] A retryable failure preserves delivery identity, increments attempt on the next claim, and
       cannot create a tight retry loop.
-- [ ] Terminal rejection behavior is explicit and does not masquerade as successful delivery.
+- [x] Terminal rejection behavior is explicit and does not masquerade as successful delivery.
 - [ ] Process recreation retains pending delivery without retaining a JavaScript callback or stack.
 - [ ] The transmitted envelope carries stable idempotency identifiers and a verifiable signature.
 - [ ] Event declarations contain no URL, credential, signing key, or provider topology.
@@ -348,10 +348,9 @@ The first execution slice is implemented in `@ontahi/core`:
    polling, invalid projection, mismatched Event identity, unsupported runtimes, and typed payload
    projection.
 
-This checkpoint deliberately provides no worker loop, delayed scheduling, terminal rejection,
-dead-letter state, HTTP implementation, signing, or SQL-backed example integration. Those remain
-the next execution slices; `retryAfterMs` is evidence for the host scheduler and is not yet an
-enforced delay.
+At this checkpoint there was deliberately no worker loop, delayed scheduling, terminal rejection,
+dead-letter state, HTTP implementation, signing, or SQL-backed example integration. The later
+durable lifecycle checkpoint below supersedes the delayed-retry and terminal-rejection limits.
 
 ## Implementation Checkpoint: Generic HTTP Adapter
 
@@ -366,9 +365,8 @@ The HTTP execution slice is implemented in the optional `@ontahi/runtime-http` p
 4. bounded timeout, HTTP(S)-only URLs, credential-free URLs, and manual redirect handling fail
    closed at the transport boundary;
 5. `2xx` is accepted, while network failure, timeout, `408`, `429`, and `5xx` become retryable
-   outcomes; `Retry-After` is projected as advisory scheduler evidence;
-6. other statuses throw `HttpEventEgressRejectedError`, causing the Core processor to release the
-   claim rather than acknowledge it before terminal/dead-letter policy exists;
+   outcomes; `Retry-After` is projected into the durable availability timestamp;
+6. other statuses become rejected outcomes, causing the Core processor to persist terminal failure;
 7. an in-process HTTP receiver proves the transmitted body, headers, signature, and accepted
    outcome, while focused tests cover classification and invalid destinations.
 
@@ -394,7 +392,12 @@ The durable proof and the complementary ingress boundary are now implemented tog
 6. `@ontahi/runtime-http/node` hosts that same handler directly on a bounded `node:http` server,
    proving that a framework adapter is optional rather than part of the application model.
 
-The next egress concern is no longer basic transport or recovery. It is explicit terminal outcome
-and delayed retry policy: durable rejection/dead-letter state, scheduler-enforced retry time, and
-safe retained attempt evidence. The generic HTTP ingress direction can separately grow Runtime
-Protocol endpoints when that reuse is proven, without turning this package into a web framework.
+The durable lifecycle follow-up now adds provider-neutral `retryAfter` and `fail` settlements, proves
+them through the shared conformance suite and the PostgreSQL/MySQL providers, and lets the HTTP
+adapter classify terminal rejection without owning persistence policy. A retryable attempt is not
+claimable before its persisted availability time, preventing tight host polling loops.
+
+The next egress concern is safe retained attempt evidence and inspection: define bounded retention,
+redaction, query, and replay/recovery affordances without turning lifecycle state into an unbounded
+audit log. The generic HTTP ingress direction can separately grow Runtime Protocol endpoints when
+that reuse is proven, without turning this package into a web framework.

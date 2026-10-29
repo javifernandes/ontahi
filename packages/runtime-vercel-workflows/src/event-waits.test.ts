@@ -103,7 +103,15 @@ const createHarness = ({
     capabilities,
     accept: vi.fn(),
     subscribe: vi.fn(),
-    durableDelivery: { register, claim: claimDelivery, acknowledge, release, cancel },
+    durableDelivery: {
+      register,
+      claim: claimDelivery,
+      acknowledge,
+      release,
+      retryAfter: vi.fn(),
+      fail: vi.fn(),
+      cancel,
+    },
   };
 
   return {

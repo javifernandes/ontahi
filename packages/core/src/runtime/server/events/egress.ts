@@ -2,6 +2,7 @@ import type { JsonValue } from '../../../value/json.js';
 import { cloneJson } from '../../../value/json.js';
 
 import { requireDurableEventDelivery } from './capabilities.js';
+import { MAX_DURABLE_EVENT_RETRY_DELAY_MS } from './settlement.js';
 import type {
   AnyEventDeclaration,
   DurableEventDeliveryCapability,
@@ -35,7 +36,8 @@ export type EventEgressAttemptOutcome =
       readonly kind: 'retryable';
       readonly reason: string;
       readonly retryAfterMs?: number;
-    };
+    }
+  | { readonly kind: 'rejected'; readonly reason: string };
 
 export type EventEgressTransport<TDestination> = {
   deliver: (attempt: EventEgressAttempt<TDestination>) => Promise<EventEgressAttemptOutcome>;
@@ -57,8 +59,9 @@ export type EventEgressProcessResult =
   | ({
       readonly kind: 'retryable';
       readonly reason: string;
-      readonly retryAfterMs?: number;
-    } & EventEgressAttemptEvidence);
+      readonly retryAfterMs: number;
+    } & EventEgressAttemptEvidence)
+  | ({ readonly kind: 'failed'; readonly reason: string } & EventEgressAttemptEvidence);
 
 export type ProcessNextEventEgressDeliveryOptions<
   TEvent extends AnyEventDeclaration,
@@ -68,6 +71,7 @@ export type ProcessNextEventEgressDeliveryOptions<
   readonly subscription: EventEgressSubscription<TEvent>;
   readonly consumerId: string;
   readonly leaseMs: number;
+  readonly retryDelayMs?: number;
   readonly resolveDestination: (destinationId: string) => Promise<TDestination>;
   readonly transport: EventEgressTransport<TDestination>;
 };
@@ -120,6 +124,7 @@ export const processNextEventEgressDelivery = async <
   subscription,
   consumerId,
   leaseMs,
+  retryDelayMs = 1_000,
   resolveDestination,
   transport,
 }: ProcessNextEventEgressDeliveryOptions<
@@ -167,11 +172,31 @@ export const processNextEventEgressDelivery = async <
     return { kind: 'accepted', ...evidence };
   }
 
-  await durableDelivery.release(claim);
+  if (outcome.kind === 'rejected') {
+    const reason = outcome.reason.trim().length === 0 ? 'rejected' : outcome.reason;
+    await durableDelivery.fail(claim, { reason });
+    return { kind: 'failed', ...evidence, reason };
+  }
+
+  const delayMs = outcome.retryAfterMs ?? retryDelayMs;
+  if (
+    !Number.isSafeInteger(delayMs) ||
+    delayMs <= 0 ||
+    delayMs > MAX_DURABLE_EVENT_RETRY_DELAY_MS
+  ) {
+    return releaseAfterFailure(
+      durableDelivery,
+      claim,
+      new TypeError(
+        `Event egress retry delay must be a positive safe integer no greater than ${MAX_DURABLE_EVENT_RETRY_DELAY_MS}.`,
+      ),
+    );
+  }
+  await durableDelivery.retryAfter(claim, delayMs);
   return {
     kind: 'retryable',
     ...evidence,
     reason: outcome.reason,
-    ...(outcome.retryAfterMs === undefined ? {} : { retryAfterMs: outcome.retryAfterMs }),
+    retryAfterMs: delayMs,
   };
 };

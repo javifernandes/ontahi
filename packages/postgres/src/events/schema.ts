@@ -60,15 +60,19 @@ export const createPostgresEventSchemaSql = (
       subscription_id text NOT NULL REFERENCES ${names.subscriptions} (subscription_id),
       occurrence_id text NOT NULL REFERENCES ${names.occurrences} (occurrence_id),
       attempt integer NOT NULL DEFAULT 0 CHECK (attempt >= 0),
-      state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'claimed', 'acknowledged')),
+      state text NOT NULL DEFAULT 'pending'
+        CHECK (state IN ('pending', 'claimed', 'acknowledged', 'failed')),
       claim_id text,
       claimed_by text,
       lease_expires_at timestamptz,
+      available_at timestamptz NOT NULL DEFAULT now(),
       created_at timestamptz NOT NULL DEFAULT now(),
       acknowledged_at timestamptz,
+      failed_at timestamptz,
+      failure_reason text,
       UNIQUE (subscription_id, occurrence_id)
     )`,
     `CREATE INDEX ${identifier(`${resolvePostgresEventTableNames(tables).deliveries}_claim_idx`)}
-      ON ${names.deliveries} (subscription_id, state, created_at, delivery_id)`,
+      ON ${names.deliveries} (subscription_id, state, available_at, created_at, delivery_id)`,
   ];
 };

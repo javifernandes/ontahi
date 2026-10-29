@@ -31,6 +31,7 @@ it('runs Todo graph mutations and preserves tags and ordering across Express hos
       ['001-create-todos.sql', '$$'],
       ['002-create-event-runtime.sql', ';'],
       ['003-create-task-storage.sql', ';'],
+      ['004-add-event-delivery-outcomes.sql', ';'],
     ] as const) {
       const migration = await readFile(
         new URL(`../migrations-mysql/${file}`, import.meta.url),
