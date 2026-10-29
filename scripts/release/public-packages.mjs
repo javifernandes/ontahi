@@ -32,6 +32,9 @@ export const internalDependencies = manifest =>
     ...manifest.peerDependencies,
   }).filter(([name]) => packageNames.has(name));
 
+export const internalRuntimeDependencies = manifest =>
+  Object.entries(manifest.dependencies ?? {}).filter(([name]) => packageNames.has(name));
+
 export const lockstepVersion = () => {
   assert(
     publicPackages.length === expectedPublicPackageCount,
@@ -78,4 +81,20 @@ export const packageByName = name => {
   const entry = publicPackages.find(candidate => candidate.manifest.name === name);
   assert(entry, `Unknown public Ontahi package: ${name}.`);
   return entry;
+};
+
+export const packageRuntimeDependencyClosure = names => {
+  const closure = new Set(names);
+  const pending = [...names];
+
+  while (pending.length > 0) {
+    const name = pending.pop();
+    internalRuntimeDependencies(packageByName(name).manifest).forEach(([dependencyName]) => {
+      if (closure.has(dependencyName)) return;
+      closure.add(dependencyName);
+      pending.push(dependencyName);
+    });
+  }
+
+  return releaseOrder().filter(name => closure.has(name));
 };
