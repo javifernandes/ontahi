@@ -352,3 +352,27 @@ This checkpoint deliberately provides no worker loop, delayed scheduling, termin
 dead-letter state, HTTP implementation, signing, or SQL-backed example integration. Those remain
 the next execution slices; `retryAfterMs` is evidence for the host scheduler and is not yet an
 enforced delay.
+
+## Implementation Checkpoint: Generic HTTP Adapter
+
+The HTTP execution slice is implemented in the optional `@ontahi/runtime-http` package:
+
+1. `createHttpEventEgressTransport(...)` implements Core's transport-neutral port without owning
+   subscriptions, durable claims, worker scheduling, or destination admission;
+2. every invocation performs exactly one Fetch `POST`, so the canonical durable attempt count is
+   not obscured by adapter-local retries;
+3. exact projected JSON bytes are serialized once, optionally signed with HMAC-SHA256, and sent
+   with stable Event, occurrence, subscription, delivery, attempt, and idempotency headers;
+4. bounded timeout, HTTP(S)-only URLs, credential-free URLs, and manual redirect handling fail
+   closed at the transport boundary;
+5. `2xx` is accepted, while network failure, timeout, `408`, `429`, and `5xx` become retryable
+   outcomes; `Retry-After` is projected as advisory scheduler evidence;
+6. other statuses throw `HttpEventEgressRejectedError`, causing the Core processor to release the
+   claim rather than acknowledge it before terminal/dead-letter policy exists;
+7. an in-process HTTP receiver proves the transmitted body, headers, signature, and accepted
+   outcome, while focused tests cover classification and invalid destinations.
+
+The next vertical is the SQL-backed application proof: register one real subscription before an
+occurrence, recreate the processor, deliver through this adapter, prove release/reclaim identity,
+and acknowledge exactly once. That proof should also decide whether the Todo example is the right
+permanent executable surface or whether a smaller integration fixture better preserves its focus.

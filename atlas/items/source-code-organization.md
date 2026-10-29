@@ -36,9 +36,10 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 2. [`@ontahi/explorer-react`](./source-code-organization/explorer-react.md)
 3. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md)
 4. [`@ontahi/runtime-langgraph`](./source-code-organization/runtime-langgraph.md)
-5. [`Ontahi Application Codegen`](./source-code-organization/codegen.md)
-6. [`Independent Distribution`](./source-code-organization/independent-distribution.md)
-7. [`Ontahí Devtools`](./source-code-organization/devtools.md)
+5. [`@ontahi/runtime-http`](./source-code-organization/runtime-http.md)
+6. [`Ontahi Application Codegen`](./source-code-organization/codegen.md)
+7. [`Independent Distribution`](./source-code-organization/independent-distribution.md)
+8. [`Ontahí Devtools`](./source-code-organization/devtools.md)
 
 ## Package Direction
 
@@ -51,10 +52,11 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 7. [`@ontahi/explorer-react`](./source-code-organization/explorer-react.md): reusable Ontahi Explorer React package.
 8. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md): Vercel Workflow task adapter and durable runtime integration, extracted behind host-supplied registries and stores.
 9. [`@ontahi/runtime-langgraph`](./source-code-organization/runtime-langgraph.md): experimental adapter that runs explicit Task execution machines through private LangGraph checkpoint and interrupt mechanics.
-10. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
-11. [`Ontahí Devtools`](./source-code-organization/devtools.md): browser-resident diagnostics for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection.
-12. [`@ontahi/postgres`](./source-code-organization/postgres.md): independently composable PostgreSQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
-13. [`@ontahi/mysql`](./source-code-organization/mysql.md): independently composable MySQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
+10. [`@ontahi/runtime-http`](./source-code-organization/runtime-http.md): reusable Fetch-based outbound HTTP mechanics, including stable Event delivery headers, response classification, timeout, redirect, and signing policy.
+11. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
+12. [`Ontahí Devtools`](./source-code-organization/devtools.md): browser-resident diagnostics for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection.
+13. [`@ontahi/postgres`](./source-code-organization/postgres.md): independently composable PostgreSQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
+14. [`@ontahi/mysql`](./source-code-organization/mysql.md): independently composable MySQL implementations of Data Graph, Task Storage, and durable Event Runtime concerns.
 
 ## Repository Topology
 
@@ -62,7 +64,7 @@ Ontahi and BookOps now have separate source ownership:
 
 ```text
 ontahi/                    # public framework repository
-  packages/{core,opentelemetry,codegen,supabase,runtime-express,runtime-nextjs,runtime-vercel-workflows,runtime-langgraph,react,explorer-react}
+  packages/{core,opentelemetry,codegen,supabase,runtime-http,runtime-express,runtime-nextjs,runtime-vercel-workflows,runtime-langgraph,react,explorer-react}
   examples/
 
 bookops/                   # private host application repository

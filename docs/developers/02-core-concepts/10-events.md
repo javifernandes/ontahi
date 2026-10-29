@@ -229,10 +229,23 @@ safe attempt evidence: it contains semantic and destination identities, but neit
 nor resolved destination credentials.
 
 Core deliberately does not run an immortal worker loop or schedule retries. The host controls
-polling, concurrency, backoff, lifecycle, and shutdown around this one-claim primitive. The current
-kernel also has no terminal rejection or dead-letter outcome. HTTP transport, signing, delayed
-retry, and retained attempt history require their own explicit guarantees rather than being implied
-by this API.
+polling, concurrency, backoff, lifecycle, and shutdown around this one-claim primitive.
+
+`@ontahi/runtime-http` provides the optional generic HTTP transport:
+
+```ts
+import { createHttpEventEgressTransport } from '@ontahi/runtime-http';
+
+const webhookTransport = createHttpEventEgressTransport({ defaultTimeoutMs: 10_000 });
+```
+
+The resolved destination may provide an admitted URL, fixed headers, a narrower timeout, and an
+HMAC-SHA256 secret. The adapter sends one `POST`, signs the exact transmitted JSON bytes, preserves
+stable Event and delivery identity headers, refuses URL credentials and redirects, and never
+retries internally. `2xx` is accepted; `408`, `429`, `5xx`, network failure, and timeout are
+retryable. Other statuses fail closed because the durable runtime does not yet model terminal
+rejection or dead-letter state. Delayed retry, retained attempt history, destination admission, and
+secret resolution remain explicit host or follow-up concerns.
 
 ## Wait for an Event durably
 
