@@ -207,6 +207,42 @@ const todos = TodoItem.all()
 A `true` leaf preserves the ordinary field value. For a Ref field that means the Ref remains a Ref.
 Use a nested object to traverse a Relation and materialize the related Entity:
 
+The nested shape grants projection only. To constrain which related rows may cross the runtime
+boundary, give the matching Relation policy node its own receiver-owned `scope` (or reuse the full
+target policy there):
+
+```ts
+const MembershipReadPolicy = defineGraphReadPolicy({
+  entity: Membership,
+  allow: { select: ['id', 'status'] },
+  modes: ['run'],
+  cardinalities: ['many'],
+  maxLimit: 100,
+  scope: ({ authority }) =>
+    Selection.where(Membership, membership => membership.workspaceId.eq(authority.workspaceId)).and(
+      membership => membership.status.eq('active'),
+    ),
+});
+
+const WorkspaceReadPolicy = defineGraphReadPolicy({
+  entity: Workspace,
+  allow: { select: ['id', 'name'] },
+  relations: { memberships: MembershipReadPolicy },
+  modes: ['run'],
+  cardinalities: ['many'],
+  maxLimit: 100,
+  scope: ({ authority }) =>
+    Selection.where(Workspace, workspace => workspace.id.eq(authority.workspaceId)),
+});
+```
+
+Ontahi intersects the nested scope outside caller Boolean expressions and executes it before
+Relation-local ordering and limits. Existing Relation policy nodes without `scope` retain their
+previous unscoped population behavior. An inaccessible to-many target is omitted and an
+inaccessible nullable `belongsTo` becomes `null`. If a required `belongsTo` target exists but is
+removed by its nested scope, the read fails closed instead of returning a value that violates the
+declared required Relation.
+
 ```ts
 const TripListItem = Trip.view('TripListItem', {
   id: true,

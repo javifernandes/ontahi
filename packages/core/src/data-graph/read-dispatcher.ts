@@ -10,7 +10,12 @@ import {
   type RelationKind,
 } from './definitions.js';
 import type { AnyEntityVariant, EntityVariantDescriptor } from './entity-variant-contract.js';
-import type { QuerySpec } from './query.js';
+import {
+  RelationQueryBuilder,
+  type AnyRelationQueryBuilder,
+  type QuerySpec,
+  type SelectionValue,
+} from './query.js';
 import {
   graphReadProtocolError,
   parseGraphReadRequest,
@@ -49,15 +54,31 @@ type RelationTarget<TDefinition> =
     ? TTarget
     : never;
 
-export type GraphReadPolicyNode<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
+type GraphReadScopeResolver<TEntity extends AnyEntityDefinition, TAuthority> = {
+  bivarianceHack(
+    context: GraphReadPolicyContext<TEntity, TAuthority>,
+  ): SelectionExpression | EntitySelectionSource<TEntity>;
+}['bivarianceHack'];
+
+type GraphReadScope<TEntity extends AnyEntityDefinition, TAuthority> =
+  | 'all'
+  | GraphReadScopeResolver<TEntity, TAuthority>;
+
+export type GraphReadPolicyNode<
+  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+  TAuthority = unknown,
+> = {
   readonly fields: Partial<{
     readonly [TField in keyof TEntity['fields'] & string]: GraphReadFieldPolicy;
   }>;
   readonly relations?: Partial<{
     readonly [TRelation in keyof TEntity['relations'] & string]: GraphReadPolicyNode<
-      RelationTarget<TEntity['relations'][TRelation]>
+      RelationTarget<TEntity['relations'][TRelation]>,
+      TAuthority
     >;
   }>;
+  /** Optional receiver-owned population scope when this node materializes a nested Relation. */
+  readonly scope?: GraphReadScope<TEntity, TAuthority>;
 };
 
 export type GraphReadPolicyContext<TEntity extends AnyEntityDefinition, TAuthority> = {
@@ -68,7 +89,7 @@ export type GraphReadPolicyContext<TEntity extends AnyEntityDefinition, TAuthori
 export type GraphReadPolicy<
   TEntity extends AnyEntityDefinition = AnyEntityDefinition,
   TAuthority = unknown,
-> = GraphReadPolicyNode<TEntity> & {
+> = Omit<GraphReadPolicyNode<TEntity, TAuthority>, 'scope'> & {
   readonly entity: TEntity;
   /** Classified read roots inherit this policy; registration grants no additional Field permissions. */
   readonly variants?: readonly AnyEntityVariant[];
@@ -77,11 +98,7 @@ export type GraphReadPolicy<
   readonly maxLimit: number;
   /** Outgoing Selection membership hops. View/include grants never imply this permission. */
   readonly selectionRelations?: readonly (keyof TEntity['relations'] & string)[];
-  readonly scope:
-    | 'all'
-    | ((
-        context: GraphReadPolicyContext<TEntity, TAuthority>,
-      ) => SelectionExpression | EntitySelectionSource<TEntity>);
+  readonly scope: GraphReadScope<TEntity, TAuthority>;
 };
 
 export type GraphReadDispatchContext<TAuthority> = {
@@ -177,7 +194,7 @@ const validOperators = new Set<GraphReadOperator>(['eq', 'in', 'isNull', 'lte', 
 
 const validatePolicyNode = (
   entity: AnyEntityDefinition,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
   path = entity.name,
 ): void => {
   for (const [fieldName, fieldPolicy] of Object.entries(policy.fields)) {
@@ -234,7 +251,7 @@ const validatePolicy = (policy: GraphReadPolicy<any, any>): void => {
 };
 
 const readFieldPolicy = (
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
   fieldName: string,
 ): GraphReadFieldPolicy | undefined =>
   (policy.fields as Readonly<Record<string, GraphReadFieldPolicy | undefined>>)[fieldName];
@@ -242,7 +259,7 @@ const readFieldPolicy = (
 const allowsDerivedFieldDependencies = (
   entity: AnyEntityDefinition,
   fieldName: string,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
 ) => {
   const field = entity.fields[fieldName];
   if (!field || !isDerivedFieldDefinition(field)) return true;
@@ -254,7 +271,9 @@ const allowsDerivedFieldDependencies = (
     if (dependency.kind === 'relation-aggregate') {
       return Boolean(
         (
-          policy.relations as Readonly<Record<string, GraphReadPolicyNode | undefined>> | undefined
+          policy.relations as
+            | Readonly<Record<string, GraphReadPolicyNode<any, any> | undefined>>
+            | undefined
         )?.[dependency.relation],
       );
     }
@@ -264,7 +283,7 @@ const allowsDerivedFieldDependencies = (
 
 const allowsSelection = (
   expression: SelectionExpression,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
   entity: AnyEntityDefinition,
   allowsImage?: (
     image: Extract<SelectionExpression, { kind: 'relation-image' }>,
@@ -297,7 +316,7 @@ const allowsSelection = (
 const allowsViewNode = (
   entity: AnyEntityDefinition,
   view: ViewNode,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
 ): boolean =>
   Object.entries(view.fields).every(([name, node]) => {
     if (node.kind === 'field-view') {
@@ -307,7 +326,9 @@ const allowsViewNode = (
 
     const relation = entity.relations[name];
     const relationPolicy = (
-      policy.relations as Readonly<Record<string, GraphReadPolicyNode | undefined>> | undefined
+      policy.relations as
+        | Readonly<Record<string, GraphReadPolicyNode<any, any> | undefined>>
+        | undefined
     )?.[name];
     return Boolean(
       relation && relationPolicy && allowsViewNode(relation.target, node.view, relationPolicy),
@@ -316,7 +337,7 @@ const allowsViewNode = (
 
 const allowsProjection = (
   query: QuerySpec,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
   mode: GraphReadMode,
 ): boolean => {
   if (mode === 'count') return true;
@@ -351,7 +372,7 @@ const allowsProjection = (
 const allowsOrdering = (
   entity: AnyEntityDefinition,
   fieldName: string,
-  policy: GraphReadPolicyNode,
+  policy: GraphReadPolicyNode<any, any>,
 ): boolean =>
   readFieldPolicy(policy, fieldName)?.order === true &&
   allowsDerivedFieldDependencies(entity, fieldName, policy);
@@ -403,6 +424,107 @@ const resolveScope = <TAuthority>(
   }
   return scoped;
 };
+
+const resolveNestedScope = <TAuthority>(
+  entity: AnyEntityDefinition,
+  policy: GraphReadPolicyNode<any, TAuthority>,
+  context: GraphReadDispatchContext<TAuthority>,
+): SelectionExpression | undefined => {
+  if (policy.scope === undefined || policy.scope === 'all') return undefined;
+  const scoped = policy.scope({ authority: context.authority, entity });
+  if ('expression' in scoped) {
+    if (scoped.root !== entity && scoped.root.name !== entity.name) {
+      throw new Error(
+        `Nested graph read policy ${entity.name} returned a ${scoped.root.name} Selection.`,
+      );
+    }
+    return scoped.expression;
+  }
+  return scoped;
+};
+
+const scopeRelationBuilder = <TAuthority>(
+  relation: AnyRelationQueryBuilder,
+  policy: GraphReadPolicyNode<any, TAuthority>,
+  context: GraphReadDispatchContext<TAuthority>,
+): AnyRelationQueryBuilder => {
+  const node = relation.toNodeSpec();
+  const scopedSelect = node.select ? scopeSelectionShape(node.select, policy, context) : undefined;
+  const scopedIncludes = node.includes
+    ? Object.fromEntries(
+        Object.entries(node.includes).map(([name, nested]) => {
+          const nestedPolicy = policy.relations?.[nested.relationName];
+          return [
+            name,
+            nestedPolicy ? scopeRelationBuilder(nested, nestedPolicy, context) : nested,
+          ];
+        }),
+      )
+    : undefined;
+  const scope = resolveNestedScope(node.entity, policy, context);
+  if (scope) {
+    const invalid = validateGraphReadSelection(scope, node.entity);
+    if (invalid) throw new Error(invalid.error.message);
+  }
+
+  return new RelationQueryBuilder(
+    node.relationName,
+    node.relationKind,
+    node.entity,
+    scopedSelect,
+    scopedIncludes,
+    node.orderBy,
+    node.limit,
+    scope ? selectionAnd(node.selection, scope) : node.selection,
+    node.nullable,
+  );
+};
+
+const scopeSelectionShape = <TAuthority>(
+  shape: Record<string, SelectionValue>,
+  policy: GraphReadPolicyNode<any, TAuthority>,
+  context: GraphReadDispatchContext<TAuthority>,
+): Record<string, SelectionValue> =>
+  Object.fromEntries(
+    Object.entries(shape).map(([name, value]) => {
+      if (value instanceof RelationQueryBuilder) {
+        const relationPolicy = policy.relations?.[value.relationName];
+        return [
+          name,
+          relationPolicy ? scopeRelationBuilder(value, relationPolicy, context) : value,
+        ];
+      }
+      if (isRecord(value) && value.kind !== 'field-ref') {
+        return [
+          name,
+          scopeSelectionShape(value as Record<string, SelectionValue>, policy, context),
+        ];
+      }
+      return [name, value];
+    }),
+  );
+
+const scopeNestedRelations = <TAuthority>(
+  query: QuerySpec,
+  policy: GraphReadPolicy<any, TAuthority>,
+  context: GraphReadDispatchContext<TAuthority>,
+): QuerySpec => ({
+  ...query,
+  ...(query.select ? { select: scopeSelectionShape(query.select, policy, context) } : {}),
+  ...(query.includes
+    ? {
+        includes: Object.fromEntries(
+          Object.entries(query.includes).map(([name, relation]) => {
+            const relationPolicy = policy.relations?.[relation.relationName];
+            return [
+              name,
+              relationPolicy ? scopeRelationBuilder(relation, relationPolicy, context) : relation,
+            ];
+          }),
+        ),
+      }
+    : {}),
+});
 
 const createGraphReadPolicyRegistry = <TAuthority>(
   policies: readonly GraphReadPolicy<any, TAuthority>[],
@@ -574,6 +696,7 @@ const authorizeGraphRead = <TAuthority>(
   let query = classified.query;
   try {
     query = { ...query, selection: membershipAuthority.scoped(query.selection, policy) };
+    query = scopeNestedRelations(query, policy, context);
     query = withDefaultReadLimit(query, parsed.request.mode, policy.maxLimit);
   } catch (error) {
     reportError?.(error);

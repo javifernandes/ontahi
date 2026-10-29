@@ -44,11 +44,18 @@ allowlists through `defineGraphReadPolicy`. That constructor lowers to the same 
 policy consumed by the dispatcher; it does not infer permissions from application Queries or
 weaken the default-deny boundary.
 
-Graph Read authority currently scopes the root population only. Relation policy nodes authorize
-nested projection shape but do not intersect the registered target Entity scope while a View is
-materialized. Plan 161 owns the security contract and provider execution work required for every
-nested Entity population to enforce receiver-owned authority. Until that lands, consumers must use
-separate authorized roots instead of assuming a nested relation policy filters related rows.
+Graph Read authority scopes every population that crosses the receiver boundary. The root policy
+scope is intersected with the caller Selection, while a `scope` carried by a nested Relation policy
+node is intersected with that Relation's execution-only membership before ordering, limits, and
+materialization. Projection permission and population authority remain separate: granting a View
+path does not itself filter it, and private receiver scopes never enter the caller-owned portable
+View AST. Reusing a target's full Graph Read policy as the Relation node gives direct roots and
+nested materialization the same scope; omitting nested `scope` preserves an explicitly unscoped
+Relation population for compatibility.
+
+To-many targets outside scope are omitted, and nullable to-one targets become `null`. A required
+to-one target that exists but is removed by nested authority rejects the read, preserving both the
+security boundary and the declared non-null Relation contract.
 
 Model-mediated invocation is an emerging consumer of this authority boundary. A resolved proposal
 cannot grant permissions, replace the authenticated Principal, or turn model-visible graph scope

@@ -91,12 +91,12 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
       return readSpec({
         kind: 'query',
         root: node.entity,
-        selection: {
+        selection: selectionAnd(node.selection, {
           kind: 'predicate',
           operator: 'in',
           fieldName: targetField,
           values: edgeResult.rows.map(edge => edge.target_value),
-        },
+        }),
         select: node.select,
         includes: node.includes,
         orderBy: [...node.orderBy],
@@ -112,12 +112,12 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
       {
         kind: 'query',
         root: node.entity,
-        selection: {
+        selection: selectionAnd(node.selection, {
           kind: 'predicate',
           operator: 'eq',
           fieldName: fields.targetField,
           value: targetValue,
-        },
+        }),
         select: node.select,
         includes: node.includes,
         orderBy: [...node.orderBy],
@@ -132,6 +132,31 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
             : undefined,
       },
     );
+    if (
+      node.relationKind === 'belongsTo' &&
+      !node.nullable &&
+      node.selection.kind !== 'all' &&
+      related.length === 0
+    ) {
+      const unscoped = await readSpec({
+        kind: 'query',
+        root: node.entity,
+        selection: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: fields.targetField,
+          value: targetValue,
+        },
+        orderBy: [],
+        limit: 1,
+      });
+      if (unscoped.length > 0) {
+        throw new input.Error(
+          `Required Relation ${sourceEntity.name}.${node.relationName} was inaccessible under nested Graph Read scope.`,
+          'execution_failed',
+        );
+      }
+    }
     return node.relationKind === 'belongsTo' ? (related[0] ?? null) : related;
   };
 

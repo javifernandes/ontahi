@@ -12,7 +12,15 @@ import {
   type InMemoryDataset,
 } from './in-memory/materialization.js';
 
-import { entity, field, mapEntity, mapRelation, modelExpression, query } from './index.js';
+import {
+  entity,
+  field,
+  mapEntity,
+  mapRelation,
+  modelExpression,
+  query,
+  Selection,
+} from './index.js';
 
 describe('data-graph in-memory materialization', () => {
   it('evaluates virtual derived Fields from stored Fields and complete Relation aggregates', () => {
@@ -213,5 +221,34 @@ describe('data-graph in-memory materialization', () => {
     );
 
     expect(result).toEqual({ id: 'user-1', displayName: 'Ada' });
+
+    const inaccessible = query(CollaboratorWithProfile)
+      .include(collaborator => ({
+        profile: collaborator.profile.withSelection(
+          Selection.where(Profile, profile => profile.displayName.eq('Grace')).expression,
+        ),
+      }))
+      .build()
+      .includes!.profile.toNodeSpec();
+
+    expect(() =>
+      materializeRelation(
+        dataset.BookCollaborator[0]!,
+        CollaboratorWithProfile,
+        inaccessible,
+        dataset,
+      ),
+    ).toThrow(
+      'Required Relation BookCollaborator.profile was inaccessible under nested Graph Read scope.',
+    );
+
+    expect(
+      materializeRelation(
+        dataset.BookCollaborator[0]!,
+        CollaboratorWithProfile,
+        { ...inaccessible, nullable: true },
+        dataset,
+      ),
+    ).toBeNull();
   });
 });

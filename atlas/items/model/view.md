@@ -33,7 +33,10 @@ AST through `.as(view)`. The server rebuilds and validates that AST against the 
 the Operation's Selection output, then composes one final Query. A future persisted or approved View
 catalog would be an optional client/deployment artifact rather than part of the Entity schema.
 
-A View's nested Relation shape is not itself an authority predicate. Current Graph Read policy
-scopes apply to roots; nested relation policy nodes authorize fields without filtering the related
-population. Plan 161 will define a receiver-owned execution contract for nested scopes without
-placing private authority expressions in the caller-owned portable View AST.
+A View's nested Relation shape is not itself an authority predicate. The receiver may attach a
+`scope` to the corresponding nested Graph Read policy node; authorization rewrites the private
+execution Query so that scope constrains Relation membership before ordering, limits, and
+materialization. The caller-owned portable View AST remains unchanged and never discloses the
+authority expression. A Relation node without `scope` remains unscoped for compatibility.
+For scoped materialization, to-many results filter naturally and nullable to-one results may become
+`null`; removing an existing required to-one target fails the read closed.

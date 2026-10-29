@@ -14,8 +14,9 @@ import {
   liftEntityReferenceValue,
 } from '../reference-field.js';
 import type { RelationshipFact } from '../relationship-command.js';
+import type { SelectionExpression } from '../selection-ast.js';
 
-import { applyOrder, applyPredicates } from './query.js';
+import { applyEntitySelectionExpression, applyOrder } from './query.js';
 
 export type InMemoryDataset = Record<string, ReadonlyArray<Record<string, unknown>>>;
 
@@ -110,6 +111,94 @@ const resolveRelatedRows = (
   );
 };
 
+const relatedEntityRegistry = (root: AnyEntityDefinition) => {
+  const entities = new Map<string, AnyEntityDefinition>();
+  const pending = [root];
+  while (pending.length > 0) {
+    const entity = pending.pop()!;
+    if (entities.has(entity.name)) continue;
+    entities.set(entity.name, entity);
+    pending.push(...Object.values(entity.relations).map(relation => relation.target));
+  }
+  return entities;
+};
+
+const matchesNestedSelection = (
+  row: Record<string, unknown>,
+  entity: AnyEntityDefinition,
+  expression: SelectionExpression,
+  dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[],
+  entities: ReadonlyMap<string, AnyEntityDefinition>,
+): boolean => {
+  if (expression.kind === 'relation-image') {
+    const source = entities.get(expression.source.entityName);
+    const relation = source?.relations[expression.relationName];
+    if (!source) {
+      throw new TypeError(
+        `In-memory nested Relation scope cannot resolve source Entity ${expression.source.entityName}.`,
+      );
+    }
+    if (!relation || relation.target.name !== entity.name) {
+      throw new TypeError(
+        `In-memory nested Relation scope cannot resolve ${source.name}.${expression.relationName} to ${entity.name}.`,
+      );
+    }
+    const targetRef = createEntityIdentityRef(entity, row);
+    if (!targetRef) return false;
+    return (dataset[source.name] ?? []).some(sourceRow => {
+      const materializedSource = materializeDerivedFields(
+        sourceRow,
+        source,
+        dataset,
+        relationships,
+      );
+      if (
+        !matchesNestedSelection(
+          materializedSource,
+          source,
+          expression.source.expression,
+          dataset,
+          relationships,
+          entities,
+        )
+      )
+        return false;
+      return resolveRelatedRows(
+        sourceRow,
+        source,
+        expression.relationName,
+        relation,
+        dataset,
+        relationships,
+      ).some(related => {
+        const relatedRef = createEntityIdentityRef(entity, related);
+        return (
+          relatedRef && JSON.stringify(relatedRef.locator) === JSON.stringify(targetRef.locator)
+        );
+      });
+    });
+  }
+  if (expression.kind === 'and')
+    return expression.operands.every(operand =>
+      matchesNestedSelection(row, entity, operand, dataset, relationships, entities),
+    );
+  if (expression.kind === 'or')
+    return expression.operands.some(operand =>
+      matchesNestedSelection(row, entity, operand, dataset, relationships, entities),
+    );
+  if (expression.kind === 'not')
+    return !matchesNestedSelection(
+      row,
+      entity,
+      expression.operand,
+      dataset,
+      relationships,
+      entities,
+    );
+  return applyEntitySelectionExpression(entity, [row], expression).length === 1;
+};
+
 const evaluateDerivedField = (
   row: Record<string, unknown>,
   entity: AnyEntityDefinition,
@@ -190,10 +279,32 @@ export const materializeRelation = (
     materializeDerivedFields(row, relationNode.entity, dataset, relationships),
   );
 
+  const entities = relatedEntityRegistry(sourceEntity);
   const relatedRows = applyOrder(
-    applyPredicates(materializedCandidates, []),
+    materializedCandidates.filter(row =>
+      matchesNestedSelection(
+        row,
+        relationNode.entity,
+        relationNode.selection,
+        dataset,
+        relationships,
+        entities,
+      ),
+    ),
     relationNode.orderBy,
   ).slice(0, relationNode.limit ?? Number.POSITIVE_INFINITY);
+
+  if (
+    relationNode.relationKind === 'belongsTo' &&
+    !relationNode.nullable &&
+    relationNode.selection.kind !== 'all' &&
+    candidateRows.length > 0 &&
+    relatedRows.length === 0
+  ) {
+    throw new TypeError(
+      `Required Relation ${sourceEntity.name}.${relationNode.relationName} was inaccessible under nested Graph Read scope.`,
+    );
+  }
 
   const mappedRows = relatedRows.map(targetRow =>
     materializeRecord(

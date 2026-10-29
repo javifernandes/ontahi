@@ -2,6 +2,7 @@ import {
   createEntityRef,
   createRuntimeBoundDataGraphApi,
   query,
+  Selection,
   selectionNot,
   selectionOr,
   selectionReferences,
@@ -562,6 +563,43 @@ export const dataGraphRuntimeConformance = (
               title: 'Second',
               position: 2,
               blocks: [],
+            },
+          ],
+        });
+      }));
+
+    it('applies receiver-owned membership before nested relation ordering and materialization', async () =>
+      withHarness(async ({ runtime }) => {
+        const { BookWithChapters, ChapterWithBlocks, Block } = conformanceGraph;
+
+        await expect(
+          Effect.runPromise(
+            runtime.get(
+              query(BookWithChapters)
+                .where(book => book.id.eq('book-1'))
+                .include(book => ({
+                  chapters: book.chapters
+                    .withSelection(
+                      Selection.where(ChapterWithBlocks, chapter => chapter.title.eq('First'))
+                        .expression,
+                    )
+                    .orderBy(chapter => chapter.position)
+                    .include(chapter => ({
+                      blocks: chapter.blocks
+                        .withSelection(
+                          Selection.where(Block, block => block.content.eq('hello')).expression,
+                        )
+                        .orderBy(block => block.position),
+                    })),
+                })),
+              undefined,
+            ),
+          ),
+        ).resolves.toMatchObject({
+          chapters: [
+            {
+              id: 'chapter-1',
+              blocks: [{ id: 'block-1', content: 'hello' }],
             },
           ],
         });

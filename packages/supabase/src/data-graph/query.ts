@@ -1,7 +1,13 @@
-import { getEntityMapping, isEntityRef, type CompiledIncludePlan } from '@ontahi/core/data-graph';
+import {
+  getEntityMapping,
+  isEntityRef,
+  compileSelectionExpression,
+  selectionAnd,
+  type CompiledIncludePlan,
+} from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
-import { applyContextualSelection } from './contextual-selection.js';
+import { applyContextualSelection, compileContextualSelection } from './contextual-selection.js';
 import {
   materializeSupabaseEntityRow,
   selectColumnsForQuery,
@@ -108,6 +114,7 @@ type HydrateSupabaseEntityRowsInput<TClient extends SupabaseLikeClient, TError> 
     },
   ) => Effect.Effect<EntityRow[], TError>;
   createError: SupabaseErrorFactory<TError>;
+  entities?: readonly import('@ontahi/core/data-graph').AnyEntityDefinition[];
 };
 
 type RelationNode = ReturnType<IncludeShape[string]['toNodeSpec']>;
@@ -149,8 +156,20 @@ const fetchRelationRowsEffect = <TClient extends SupabaseLikeClient, TError>(
   includePlan: CompiledIncludePlan,
   relationNode: RelationNode,
   sourceValues: RelationSourceValue[],
-) =>
-  input.fetchEntityRowsEffect({
+) => {
+  const selection = selectionAnd(relationNode.selection, {
+    kind: 'predicate',
+    operator: 'in',
+    fieldName: includePlan.targetField,
+    values: sourceValues,
+  });
+  const contextualSelection = compileContextualSelection(
+    relationNode.entity,
+    selection,
+    input.entities,
+  );
+  const scoped = relationNode.selection.kind !== 'all';
+  return input.fetchEntityRowsEffect({
     supabase: input.supabase,
     entityDefinition: relationNode.entity,
     predicates: [{ operator: 'in', fieldName: includePlan.targetField, values: sourceValues }],
@@ -161,16 +180,27 @@ const fetchRelationRowsEffect = <TClient extends SupabaseLikeClient, TError>(
     tableName: includePlan.targetTable,
     message: `Failed to load ${relationNode.entity.name} records`,
     createError: input.createError,
-    compiledWhere: [
-      {
-        operator: 'in',
-        field: includePlan.targetField,
-        column: includePlan.targetColumn,
-        values: sourceValues,
-      },
-    ],
+    ...(scoped
+      ? {
+          compiledSelection: compileSelectionExpression(
+            relationNode.entity,
+            contextualSelection ? { kind: 'all' } : selection,
+          ),
+          contextualSelection,
+        }
+      : {
+          compiledWhere: [
+            {
+              operator: 'in' as const,
+              field: includePlan.targetField,
+              column: includePlan.targetColumn,
+              values: sourceValues,
+            },
+          ],
+        }),
     compiledOrderBy: includePlan.orderBy,
   });
+};
 
 const groupRelationRows = (
   rows: EntityRow[],
@@ -205,6 +235,17 @@ const assignRelationRows = (
     const groupedRows = grouped.get(relationKey(row[includePlan.sourceField])) ?? [];
     const limitedRows =
       relationNode.limit != null ? groupedRows.slice(0, relationNode.limit) : groupedRows;
+
+    if (
+      relationNode.relationKind === 'belongsTo' &&
+      !relationNode.nullable &&
+      relationNode.selection.kind !== 'all' &&
+      limitedRows.length === 0
+    ) {
+      throw new TypeError(
+        `Required Relation ${includePlan.relationName} was inaccessible under nested Graph Read scope.`,
+      );
+    }
 
     row[includePlan.relationName] =
       relationNode.relationKind === 'belongsTo' ? (limitedRows[0] ?? null) : limitedRows;
@@ -252,6 +293,18 @@ const hydrateManyToManyRelationEffect = <TClient extends SupabaseLikeClient, TEr
       assignEmptyRelation(hydratedRows, includePlan.relationName, relationNode.relationKind);
       return;
     }
+    const selection = selectionAnd(relationNode.selection, {
+      kind: 'predicate',
+      operator: 'in',
+      fieldName: includePlan.targetField,
+      values: targetValues,
+    });
+    const contextualSelection = compileContextualSelection(
+      relationNode.entity,
+      selection,
+      input.entities,
+    );
+    const scoped = relationNode.selection.kind !== 'all';
     const relatedRows = yield* input.fetchEntityRowsEffect({
       supabase: input.supabase,
       entityDefinition: relationNode.entity,
@@ -263,14 +316,24 @@ const hydrateManyToManyRelationEffect = <TClient extends SupabaseLikeClient, TEr
       tableName: includePlan.targetTable,
       message: `Failed to load ${relationNode.entity.name} records`,
       createError: input.createError,
-      compiledWhere: [
-        {
-          operator: 'in',
-          field: includePlan.targetField,
-          column: includePlan.targetColumn,
-          values: targetValues,
-        },
-      ],
+      ...(scoped
+        ? {
+            compiledSelection: compileSelectionExpression(
+              relationNode.entity,
+              contextualSelection ? { kind: 'all' } : selection,
+            ),
+            contextualSelection,
+          }
+        : {
+            compiledWhere: [
+              {
+                operator: 'in' as const,
+                field: includePlan.targetField,
+                column: includePlan.targetColumn,
+                values: targetValues,
+              },
+            ],
+          }),
       compiledOrderBy: includePlan.orderBy,
     });
     const nestedRows = yield* hydrateSupabaseEntityRowsEffect({
@@ -280,6 +343,7 @@ const hydrateManyToManyRelationEffect = <TClient extends SupabaseLikeClient, TEr
       includePlans: includePlan.includes,
       fetchEntityRowsEffect: input.fetchEntityRowsEffect,
       createError: input.createError,
+      entities: input.entities,
     });
     const targets = new Map(
       nestedRows.map(row => [
@@ -352,6 +416,7 @@ const hydrateRelationPlanEffect = <TClient extends SupabaseLikeClient, TError>(
       includePlans: includePlan.includes,
       fetchEntityRowsEffect: input.fetchEntityRowsEffect,
       createError: input.createError,
+      entities: input.entities,
     });
 
     assignRelationRows(

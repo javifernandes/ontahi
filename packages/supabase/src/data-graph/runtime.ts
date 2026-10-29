@@ -106,6 +106,7 @@ export const executeSupabaseGraphQueryEffect = <
       includePlans: plan.includes,
       fetchEntityRowsEffect: nestedInput => fetchSupabaseEntityRowsEffect(nestedInput),
       createError: deps.createError,
+      entities: deps.entities,
     });
 
     return hydratedRows.map(row =>

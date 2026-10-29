@@ -5,6 +5,7 @@ import {
   type QuerySpec,
   type SelectionValue,
 } from './query.js';
+import { selectionAll } from './selection-ast.js';
 import type { RecursiveEntityViewDefinition, ViewNode } from './view.js';
 
 type CompiledViewShape = {
@@ -57,6 +58,10 @@ const compileViewNode = (
       relation.target,
       nested.select,
       nested.includes,
+      [],
+      undefined,
+      selectionAll(),
+      relation.nullable === true,
     );
   }
 
