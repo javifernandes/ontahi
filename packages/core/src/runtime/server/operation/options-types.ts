@@ -48,7 +48,7 @@ export type OperationOptions<
   requires?: ReadonlyArray<OperationRequirement<TInput>>;
   concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
   conditions?: PortableOperationConditions;
-  execution?: DomainOperationExecutionMetadata;
+  execution?: DomainOperationExecutionMetadata<TFailure['reason']>;
   cache?: OperationCacheConfig<TInput>;
   effects?: OperationEffectsConfig<TInput, TResult>;
 };

@@ -19,6 +19,7 @@ import {
   getCurrentInvocationContext,
   runServerDomainOperationRaw,
   withInvocationContext,
+  type OperationFailure,
 } from './index.js';
 
 describe('server Domain Operation Ref resolution', () => {
@@ -566,5 +567,177 @@ describe('server Domain Operation Effect generator authoring', () => {
       error: 'Value must not be negative.',
       errorType: 'negative_value',
     });
+  });
+});
+
+describe('server Domain Operation execution resilience', () => {
+  it('retries an explicitly allowed typed failure within one invocation', async () => {
+    let attempts = 0;
+    const analyze = defineDomainOperationsForEntity(
+      'ResilientAnalysis',
+      {
+        analyze: defineDomainOperation({
+          execution: {
+            retry: {
+              maxAttempts: 3,
+              when: ['dependency_unavailable'],
+            },
+          },
+          run: () => {
+            attempts += 1;
+            return attempts < 3
+              ? failOperation('dependency_unavailable', 'Dependency is temporarily unavailable.')
+              : Effect.succeed({ summary: 'ready' });
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.retry' },
+    ).analyze;
+
+    await expect(runServerDomainOperationRaw(analyze, {})).resolves.toEqual({
+      success: true,
+      data: { summary: 'ready' },
+    });
+    expect(attempts).toBe(3);
+  });
+
+  it('does not retry a typed failure outside the allowlist', async () => {
+    let rejectInput = true;
+    const run = vi.fn(
+      (): Effect.Effect<
+        { summary: string },
+        OperationFailure<'input_rejected' | 'dependency_unavailable'>
+      > =>
+        rejectInput
+          ? failOperation('input_rejected', 'Input was rejected.')
+          : failOperation('dependency_unavailable', 'Dependency is temporarily unavailable.'),
+    );
+    const analyze = defineDomainOperationsForEntity(
+      'SelectiveRetryAnalysis',
+      {
+        analyze: defineDomainOperation({
+          execution: {
+            retry: {
+              maxAttempts: 3,
+              when: ['dependency_unavailable'],
+            },
+          },
+          run,
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.retry-selective' },
+    ).analyze;
+
+    await expect(runServerDomainOperationRaw(analyze, {})).resolves.toMatchObject({
+      success: false,
+      reason: 'input_rejected',
+    });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('exhausts the declared total attempt budget and returns the typed failure', async () => {
+    const succeed = false;
+    const run = vi.fn(() =>
+      succeed
+        ? Effect.succeed({ summary: 'unreachable' })
+        : failOperation('dependency_unavailable', 'Dependency is temporarily unavailable.'),
+    );
+    const analyze = defineDomainOperationsForEntity(
+      'ExhaustedRetryAnalysis',
+      {
+        analyze: defineDomainOperation({
+          execution: {
+            retry: {
+              maxAttempts: 2,
+              when: ['dependency_unavailable'],
+            },
+          },
+          run,
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.retry-exhausted' },
+    ).analyze;
+
+    await expect(runServerDomainOperationRaw(analyze, {})).resolves.toMatchObject({
+      success: false,
+      reason: 'dependency_unavailable',
+    });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for a bounded fixed backoff before the next attempt', async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const analyze = defineDomainOperationsForEntity(
+        'BackoffAnalysis',
+        {
+          analyze: defineDomainOperation({
+            execution: {
+              retry: {
+                maxAttempts: 2,
+                when: ['dependency_unavailable'],
+                backoff: { kind: 'fixed', delayMs: 50 },
+              },
+            },
+            run: () => {
+              attempts += 1;
+              return attempts === 1
+                ? failOperation('dependency_unavailable', 'Dependency is temporarily unavailable.')
+                : Effect.succeed({ summary: 'ready' });
+            },
+          }),
+        },
+        { exposure: 'server-only', layer: 'tests.operation.retry-backoff' },
+      ).analyze;
+
+      const result = runServerDomainOperationRaw(analyze, {});
+      await vi.advanceTimersByTimeAsync(49);
+      expect(attempts).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toMatchObject({ success: true });
+      expect(attempts).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('caps exponential backoff while preserving the total attempt budget', async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const analyze = defineDomainOperationsForEntity(
+        'ExponentialBackoffAnalysis',
+        {
+          analyze: defineDomainOperation({
+            execution: {
+              retry: {
+                maxAttempts: 3,
+                when: ['dependency_unavailable'],
+                backoff: { kind: 'exponential', initialMs: 10, multiplier: 2, maxMs: 15 },
+              },
+            },
+            run: () => {
+              attempts += 1;
+              return attempts < 3
+                ? failOperation('dependency_unavailable', 'Dependency is temporarily unavailable.')
+                : Effect.succeed({ summary: 'ready' });
+            },
+          }),
+        },
+        { exposure: 'server-only', layer: 'tests.operation.retry-exponential-backoff' },
+      ).analyze;
+
+      const result = runServerDomainOperationRaw(analyze, {});
+      await vi.advanceTimersByTimeAsync(10);
+      expect(attempts).toBe(2);
+      await vi.advanceTimersByTimeAsync(14);
+      expect(attempts).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(result).resolves.toMatchObject({ success: true });
+      expect(attempts).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

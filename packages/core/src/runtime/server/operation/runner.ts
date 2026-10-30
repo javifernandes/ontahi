@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 
 import { evaluatePortableOperationCondition } from '../../../data-graph/model-expression/index.js';
+import type {
+  OperationRetryBackoff,
+  OperationRetryPolicy,
+} from '../../../data-graph/operation-execution.js';
 import { isOpaqueContractConcern } from '../concerns/contract.js';
 import { applyLayerConcerns } from '../concerns.js';
 import type { OperationRuntimeContext } from '../context-types.js';
@@ -11,7 +15,7 @@ import {
 } from '../context.js';
 import { withAtomicDataGraphExecution } from '../data-graph.js';
 import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
-import { createOperationFailure } from '../failures.js';
+import { createOperationFailure, isOperationFailure } from '../failures.js';
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
 import { withSemanticExecutionActivity } from '../semantic-execution.js';
@@ -32,6 +36,43 @@ import type {
   OperationRuntimeError,
   SuccessResult,
 } from './types.js';
+
+const retryDelayMs = (
+  backoff: OperationRetryBackoff | undefined,
+  failedAttempt: number,
+): number => {
+  if (!backoff) return 0;
+  if (backoff.kind === 'fixed') return backoff.delayMs;
+  const delay = backoff.initialMs * (backoff.multiplier ?? 2) ** (failedAttempt - 1);
+  return Math.min(delay, backoff.maxMs);
+};
+
+const applyOperationRetry = <TValue, TError>(
+  effect: Effect.Effect<TValue, TError>,
+  policy: OperationRetryPolicy | undefined,
+): Effect.Effect<TValue, TError> => {
+  if (!policy || policy.maxAttempts === 1) return effect;
+  const retryableReasons = new Set(policy.when);
+
+  const attempt = (ordinal: number): Effect.Effect<TValue, TError> =>
+    effect.pipe(
+      Effect.catchAll(error => {
+        if (
+          ordinal >= policy.maxAttempts ||
+          !isOperationFailure(error) ||
+          !retryableReasons.has(error.reason)
+        ) {
+          return Effect.fail(error);
+        }
+        const delayMs = retryDelayMs(policy.backoff, ordinal);
+        return (delayMs > 0 ? Effect.sleep(delayMs) : Effect.void).pipe(
+          Effect.flatMap(() => attempt(ordinal + 1)),
+        );
+      }),
+    );
+
+  return attempt(1);
+};
 
 type RunServerOperationFn = typeof runServerOperation;
 
@@ -155,7 +196,7 @@ export const createOperationRunner = <
     return withSemanticExecutionActivity({ kind: 'operation', id: metadata.scope }, () =>
       operationRuntimeContextStorage.run(context, async () => {
         const runCurrentOperation = () =>
-          runOperationEffect(guardedEffect, {
+          runOperationEffect(applyOperationRetry(guardedEffect, metadata.execution?.retry), {
             scope: metadata.scope,
             telemetrySpanName: metadata.telemetrySpanName,
             defectLogMessage: metadata.defectLogMessage,

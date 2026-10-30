@@ -160,6 +160,19 @@ attempt fails without usage, the second produces invalid structured output, and 
 The same policy must work for a non-model typed failure to prove that resilience is Operation
 semantics rather than an LLM helper.
 
+### Implementation progress
+
+The first immediate-runtime increment is implemented through reflected `execution.retry` metadata.
+It validates a total attempt budget, a typed failure-reason allowlist, and optional fixed or
+exponential bounded backoff. The canonical Operation runner retries the complete guarded attempt,
+so requirements, conditions, concerns, and Resource admission remain inside each attempt while
+cache publication, effect-intent execution, and the final serialized result remain
+invocation-scoped.
+
+Attempt identity/evidence projection, composition with atomic authoring, and a consumer
+model-backed proof remain follow-ups before the first slice is complete. Durable runtimes still
+reject this immediate-only capability rather than silently promising persisted retries.
+
 ## Deferred Slices
 
 1. Durable persisted retries and adapter conformance.

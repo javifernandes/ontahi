@@ -1,5 +1,82 @@
-export type DomainOperationExecutionMetadata = {
+export type OperationRetryBackoff =
+  | {
+      kind: 'fixed';
+      delayMs: number;
+    }
+  | {
+      kind: 'exponential';
+      initialMs: number;
+      multiplier?: number;
+      maxMs: number;
+    };
+
+export type OperationRetryPolicy<TFailureReason extends string = string> = {
+  /** Total executions, including the initial attempt. */
+  maxAttempts: number;
+  /** Closed allowlist of typed Operation failure reasons eligible for retry. */
+  when: readonly TFailureReason[];
+  backoff?: OperationRetryBackoff;
+};
+
+export type DomainOperationExecutionMetadata<TFailureReason extends string = string> = {
   atomicity?: 'required';
+  retry?: OperationRetryPolicy<TFailureReason>;
+};
+
+const assertFiniteNonNegative = (value: number, path: string) => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${path} must be a finite non-negative number.`);
+  }
+};
+
+export const assertValidDomainOperationExecution = (
+  operationId: string,
+  execution: DomainOperationExecutionMetadata | undefined,
+): void => {
+  const retry = execution?.retry;
+  if (!retry) return;
+
+  if (!Number.isSafeInteger(retry.maxAttempts) || retry.maxAttempts < 1) {
+    throw new Error(
+      `Domain operation "${operationId}" execution.retry.maxAttempts must be a positive safe integer.`,
+    );
+  }
+  if (retry.when.length === 0 || retry.when.some(reason => reason.length === 0)) {
+    throw new Error(
+      `Domain operation "${operationId}" execution.retry.when must contain non-empty failure reasons.`,
+    );
+  }
+  if (new Set(retry.when).size !== retry.when.length) {
+    throw new Error(
+      `Domain operation "${operationId}" execution.retry.when must not contain duplicate failure reasons.`,
+    );
+  }
+
+  const backoff = retry.backoff;
+  if (!backoff) return;
+  if (backoff.kind === 'fixed') {
+    assertFiniteNonNegative(
+      backoff.delayMs,
+      `Domain operation "${operationId}" execution.retry.backoff.delayMs`,
+    );
+    return;
+  }
+  assertFiniteNonNegative(
+    backoff.initialMs,
+    `Domain operation "${operationId}" execution.retry.backoff.initialMs`,
+  );
+  if (
+    backoff.multiplier !== undefined &&
+    (!Number.isFinite(backoff.multiplier) || backoff.multiplier < 1)
+  ) {
+    throw new Error(
+      `Domain operation "${operationId}" execution.retry.backoff.multiplier must be a finite number greater than or equal to 1.`,
+    );
+  }
+  assertFiniteNonNegative(
+    backoff.maxMs,
+    `Domain operation "${operationId}" execution.retry.backoff.maxMs`,
+  );
 };
 
 export type OperationExecutionCapabilityRequirement = {
