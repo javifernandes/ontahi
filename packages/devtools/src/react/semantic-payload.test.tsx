@@ -76,7 +76,6 @@ describe('SemanticPayload', () => {
               attempts: 2,
               reportedAttempts: 1,
               failedAttempts: 1,
-              durationMs: 180,
             },
           },
         }}
@@ -86,6 +85,7 @@ describe('SemanticPayload', () => {
     expect(screen.getByRole('group', { name: 'Attempts · 2' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Reported attempts · 1' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Failed attempts · 1' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: /Duration/ })).toBeNull();
     expect(screen.queryByText(/openai/)).toBeNull();
 
     ui.rerender(
