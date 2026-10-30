@@ -1,5 +1,21 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.17
+
+### Patch Changes
+
+- a999fe0: Add framework-neutral Operation and Event ingress composition plus a minimal bounded `node:http`
+  host to `@ontahi/runtime-http`. Express and Next.js now reuse the same handler, and PostgreSQL proves
+  durable signed HTTP Event egress across retry, runtime recreation, and final acknowledgement.
+- Updated dependencies [8d9e2b5]
+- Updated dependencies [a999fe0]
+- Updated dependencies [0f5b417]
+- Updated dependencies [59bb878]
+- Updated dependencies [dd8cba4]
+- Updated dependencies [0454782]
+  - @ontahi/runtime-http@1.0.0-alpha.17
+  - @ontahi/core@1.0.0-alpha.17
+
 ## 1.0.0-alpha.16
 
 ### Patch Changes

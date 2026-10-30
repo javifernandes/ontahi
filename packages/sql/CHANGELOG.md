@@ -1,5 +1,22 @@
 # @ontahi/sql
 
+## 1.0.0-alpha.17
+
+### Minor Changes
+
+- dd8cba4: Add an explicitly bounded, payload-free durable Event Delivery inspection capability and implement
+  current-state snapshots for the PostgreSQL and MySQL Event Runtimes.
+
+### Patch Changes
+
+- 59bb878: Apply receiver-owned Graph Read policy scopes to nested Relation populations before ordering,
+  limits, and materialization across the in-memory, PostgreSQL, MySQL, and Supabase runtimes.
+- Updated dependencies [0f5b417]
+- Updated dependencies [59bb878]
+- Updated dependencies [dd8cba4]
+- Updated dependencies [0454782]
+  - @ontahi/core@1.0.0-alpha.17
+
 ## 1.0.0-alpha.16
 
 ### Patch Changes

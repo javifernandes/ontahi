@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/postgres",
-  "version": "1.0.0-alpha.16",
+  "version": "1.0.0-alpha.17",
   "description": "PostgreSQL-backed runtime capabilities for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
   "license": "Apache-2.0",
