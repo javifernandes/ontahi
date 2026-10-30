@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertValidDomainOperationExecution,
   deriveOperationExecutionRequirements,
   resolveOperationExecutionAffordance,
 } from './operation-execution.js';
+import { defineDomainOperationMetadata, resolveDomainOperations } from './operations.js';
 
 const atomicOperation = {
   authority: 'server',
@@ -12,6 +14,103 @@ const atomicOperation = {
 } as const;
 
 describe('Operation execution planning', () => {
+  it('rejects immediate retry semantics on a durable Operation', () => {
+    expect(() =>
+      resolveDomainOperations('Document', {
+        analyze: defineDomainOperationMetadata({
+          durable: { runtime: 'in-process' },
+          execution: { retry: { maxAttempts: 2, when: ['temporary'] } },
+        }),
+      }),
+    ).toThrow('cannot declare immediate execution.retry');
+  });
+
+  it('accepts a bounded retry policy over explicit failure reasons', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: {
+          maxAttempts: 3,
+          when: ['dependency_unavailable', 'implementation_output_invalid'],
+          backoff: { kind: 'exponential', initialMs: 100, multiplier: 2, maxMs: 1_000 },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects non-string failure reasons from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: [42] },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
+  it('rejects sparse failure allowlists from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: new Array(1) },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
+  it('rejects a non-array failure allowlist from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: 'temporary' },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
+  it('rejects unsupported backoff kinds from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: {
+          maxAttempts: 2,
+          when: ['temporary'],
+          backoff: { kind: 'linear', initialMs: 1, maxMs: 10 },
+        },
+      } as never),
+    ).toThrow('must be "fixed" or "exponential"');
+  });
+
+  it.each([
+    [{ maxAttempts: 0, when: ['temporary'] }, 'maxAttempts'],
+    [{ maxAttempts: 2, when: [] }, 'when'],
+    [{ maxAttempts: 2, when: [''] }, 'when'],
+    [{ maxAttempts: 2, when: ['temporary', 'temporary'] }, 'duplicate'],
+    [{ maxAttempts: 2, when: ['temporary'], backoff: { kind: 'fixed', delayMs: -1 } }, 'delayMs'],
+    [
+      {
+        maxAttempts: 2,
+        when: ['temporary'],
+        backoff: { kind: 'exponential', initialMs: -1, maxMs: 10 },
+      },
+      'initialMs',
+    ],
+    [
+      {
+        maxAttempts: 2,
+        when: ['temporary'],
+        backoff: { kind: 'exponential', initialMs: 1, multiplier: 0, maxMs: 10 },
+      },
+      'multiplier',
+    ],
+    [
+      {
+        maxAttempts: 2,
+        when: ['temporary'],
+        backoff: { kind: 'exponential', initialMs: 1, maxMs: -1 },
+      },
+      'maxMs',
+    ],
+  ] as const)('rejects an invalid retry policy: %j', (retry, message) => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry,
+      }),
+    ).toThrow(message);
+  });
+
   it('derives the atomic Data Graph capability from static Operation metadata', () => {
     expect(deriveOperationExecutionRequirements(atomicOperation)).toEqual([
       { kind: 'data-graph.atomicity' },

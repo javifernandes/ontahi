@@ -15,6 +15,7 @@ import {
   type OperationConditionContracts,
   type PortableOperationConditions,
 } from '../../data-graph/model-expression/index.js';
+import type { DomainOperationExecutionMetadata } from '../../data-graph/operation-execution.js';
 import {
   attachOperationInputSchema,
   type OperationInputSchema,
@@ -363,11 +364,12 @@ export type DomainOperationDeclaration<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
   TFailure extends OperationFailure = OperationFailure,
   TInfraError extends OperationRuntimeError = never,
-> = ServerDomainOperationMetadata<TInput, TResult> & {
+> = Omit<ServerDomainOperationMetadata<TInput, TResult>, 'execution'> & {
   input?: InputSchemaLike<TInput>;
   output?: OutputSchemaLike<TResult>;
   graphOutput?: GraphOutputDescriptor;
   graphOps?: DomainOperationGraphOpsMetadata;
+  execution?: DomainOperationExecutionMetadata<TFailure['reason']>;
   layer?: string;
   run: DomainOperationRun<HydratedOperationInput<NoInfer<TInput>>, TResult, TFailure, TInfraError>;
   defectLogMessage?: string;
@@ -455,7 +457,12 @@ type DefineDomainOperationCall = {
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
       'kind' | 'execution' | 'output'
-    > & { output?: TOutput },
+    > & {
+      execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
+        atomicity?: never;
+      };
+      output?: TOutput;
+    },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
 };
 

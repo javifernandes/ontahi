@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { forbidOperationFailureRetry, isOperationFailureRetryForbidden } from './failures.js';
+
 import {
   architecture,
   checkServerDomainOperationPermission,
@@ -17,6 +19,15 @@ const userPrincipal: Principal = {
 };
 
 describe('authentication Principal and invocation context', () => {
+  it('preserves the retry-denial classification when a concern copies a failure', () => {
+    const failure = forbidOperationFailureRetry({
+      reason: 'login_required',
+      message: 'Login required',
+    });
+
+    expect(isOperationFailureRetryForbidden({ ...failure })).toBe(true);
+  });
+
   it('exposes the current Principal only inside its invocation scope', async () => {
     const { app } = architecture({});
 

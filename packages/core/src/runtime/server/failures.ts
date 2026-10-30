@@ -9,6 +9,21 @@ import {
   PersistenceFailedError,
 } from './operation/types.js';
 
+const operationFailureRetryForbidden = Symbol('ontahi.operationFailureRetryForbidden');
+
+export const forbidOperationFailureRetry = <TFailure extends OperationFailure>(
+  failure: TFailure,
+): TFailure => {
+  Object.defineProperty(failure, operationFailureRetryForbidden, {
+    enumerable: true,
+    value: true,
+  });
+  return failure;
+};
+
+export const isOperationFailureRetryForbidden = (failure: OperationFailure): boolean =>
+  operationFailureRetryForbidden in failure;
+
 export const isOperationRuntimeError = (value: unknown): value is OperationRuntimeError =>
   value instanceof PersistenceFailedError || value instanceof ExternalDependencyFailedError;
 

@@ -16,7 +16,10 @@ import {
 } from './entity-mutation-authoring.js';
 import { reflectContextualSelections } from './entity-selections.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
-import type { DomainOperationExecutionMetadata } from './operation-execution.js';
+import {
+  assertValidDomainOperationExecution,
+  type DomainOperationExecutionMetadata,
+} from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { query } from './query.js';
@@ -704,6 +707,13 @@ export const resolveDomainOperations = <
 
       if (operation.output !== undefined && !isGraphSchemaDefinition(operation.output)) {
         throw new Error(`Domain operation "${operationId}" output must be an Ontahi schema.`);
+      }
+
+      assertValidDomainOperationExecution(operationId, operation.execution);
+      if (operation.durable && operation.execution?.retry) {
+        throw new Error(
+          `Durable domain operation "${operationId}" cannot declare immediate execution.retry semantics.`,
+        );
       }
 
       const authority = operation.authority ?? defaults?.authority ?? 'server';
