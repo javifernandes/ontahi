@@ -1,16 +1,17 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { runServerOperation } from './operation/run.js';
 import { createOperationRunner } from './operation/runner.js';
 import type { OperationResult } from './operation/types.js';
 import { getCurrentSemanticExecutionContext } from './semantic-execution.js';
 
 import {
+  authenticated,
   runServerEffect,
   withInvocationContext,
   type LayerConcern,
   type LayerConcernRuntime,
-  type runServerOperation,
   type OperationFailure,
 } from './index.js';
 
@@ -54,6 +55,39 @@ const createRunOperationEffect = () =>
   ) as unknown as RunOperationEffect & ReturnType<typeof vi.fn>;
 
 describe('createOperationRunner', () => {
+  it('validates retry metadata on the public runner path', () => {
+    expect(() =>
+      createOperationRunner<BookInput, BookResult, OperationFailure>(
+        input => Effect.succeed({ title: input.bookSlug }),
+        {
+          scope: 'Book.fetch',
+          execution: { retry: { maxAttempts: 0, when: ['temporary'] } },
+        } as never,
+        createRunOperationEffect(),
+      ),
+    ).toThrow('maxAttempts');
+  });
+
+  it('never retries a classified authentication denial', async () => {
+    const authentication = authenticated<BookInput>();
+    const runAuthentication = vi.fn(authentication.run);
+    const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
+      input => Effect.succeed({ title: input.bookSlug }),
+      {
+        scope: 'Book.fetch',
+        requires: [{ run: runAuthentication }],
+        execution: { retry: { maxAttempts: 3, when: ['not_authenticated'] } },
+      },
+      runServerOperation,
+    );
+
+    await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({
+      success: false,
+      reason: 'not_authenticated',
+    });
+    expect(runAuthentication).toHaveBeenCalledOnce();
+  });
+
   it('derives a causal Operation activity from the receiver-owned invocation', async () => {
     let observedExecution = getCurrentSemanticExecutionContext();
     const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(

@@ -41,7 +41,11 @@ export const assertValidDomainOperationExecution = (
       `Domain operation "${operationId}" execution.retry.maxAttempts must be a positive safe integer.`,
     );
   }
-  if (retry.when.length === 0 || retry.when.some(reason => reason.length === 0)) {
+  if (
+    !Array.isArray(retry.when) ||
+    retry.when.length === 0 ||
+    retry.when.some(reason => typeof reason !== 'string' || reason.length === 0)
+  ) {
     throw new Error(
       `Domain operation "${operationId}" execution.retry.when must contain non-empty failure reasons.`,
     );
@@ -60,6 +64,11 @@ export const assertValidDomainOperationExecution = (
       `Domain operation "${operationId}" execution.retry.backoff.delayMs`,
     );
     return;
+  }
+  if (backoff.kind !== 'exponential') {
+    throw new Error(
+      `Domain operation "${operationId}" execution.retry.backoff.kind must be "fixed" or "exponential".`,
+    );
   }
   assertFiniteNonNegative(
     backoff.initialMs,

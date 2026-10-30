@@ -37,6 +37,34 @@ describe('Operation execution planning', () => {
     ).not.toThrow();
   });
 
+  it('rejects non-string failure reasons from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: [42] },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
+  it('rejects a non-array failure allowlist from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: 'temporary' },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
+  it('rejects unsupported backoff kinds from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: {
+          maxAttempts: 2,
+          when: ['temporary'],
+          backoff: { kind: 'linear', initialMs: 1, maxMs: 10 },
+        },
+      } as never),
+    ).toThrow('must be "fixed" or "exponential"');
+  });
+
   it.each([
     [{ maxAttempts: 0, when: ['temporary'] }, 'maxAttempts'],
     [{ maxAttempts: 2, when: [] }, 'when'],

@@ -1,9 +1,10 @@
 import { Effect } from 'effect';
 
 import { evaluatePortableOperationCondition } from '../../../data-graph/model-expression/index.js';
-import type {
-  OperationRetryBackoff,
-  OperationRetryPolicy,
+import {
+  assertValidDomainOperationExecution,
+  type OperationRetryBackoff,
+  type OperationRetryPolicy,
 } from '../../../data-graph/operation-execution.js';
 import { isOpaqueContractConcern } from '../concerns/contract.js';
 import { applyLayerConcerns } from '../concerns.js';
@@ -15,7 +16,11 @@ import {
 } from '../context.js';
 import { withAtomicDataGraphExecution } from '../data-graph.js';
 import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
-import { createOperationFailure, isOperationFailure } from '../failures.js';
+import {
+  createOperationFailure,
+  isOperationFailure,
+  isOperationFailureRetryForbidden,
+} from '../failures.js';
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
 import { withSemanticExecutionActivity } from '../semantic-execution.js';
@@ -60,6 +65,7 @@ const applyOperationRetry = <TValue, TError>(
         if (
           ordinal >= policy.maxAttempts ||
           !isOperationFailure(error) ||
+          isOperationFailureRetryForbidden(error) ||
           !retryableReasons.has(error.reason)
         ) {
           return Effect.fail(error);
@@ -86,6 +92,7 @@ export const createOperationRunner = <
   options: OperationOptions<TInput, UnwrapEffectSuccess<TRawSuccess>, TFailure>,
   runOperationEffect: RunServerOperationFn,
 ): OperationRunner<TInput, UnwrapEffectSuccess<TRawSuccess>, TFailure, TInfraError> => {
+  assertValidDomainOperationExecution(options.scope, options.execution);
   const metadata: OperationRunner<
     TInput,
     UnwrapEffectSuccess<TRawSuccess>,

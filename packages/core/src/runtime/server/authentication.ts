@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { failOperation } from './failures.js';
+import { createOperationFailure, forbidOperationFailureRetry } from './failures.js';
 import { getCurrentInvocationContext, type Principal } from './invocation-context.js';
 import type { OperationInput, OperationRequirement } from './operation/requirement-types.js';
 import type { OperationFailure } from './operation/types.js';
@@ -29,9 +29,13 @@ export const requirePrincipal = <TReason extends string = 'not_authenticated'>(
 
     return principal
       ? Effect.succeed(principal)
-      : failOperation(
-          options?.reason ?? ('not_authenticated' as TReason),
-          options?.message ?? 'Not authenticated',
+      : Effect.fail(
+          forbidOperationFailureRetry(
+            createOperationFailure(
+              options?.reason ?? ('not_authenticated' as TReason),
+              options?.message ?? 'Not authenticated',
+            ),
+          ),
         );
   });
 
