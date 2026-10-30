@@ -56,6 +56,43 @@ describe('SQL Event delivery inspection materialization', () => {
     ).toThrow('Test SQL Event delivery failure reason is invalid');
   });
 
+  it.each([
+    [{ delivery_id: null }, 'identity'],
+    [{ subscription_id: null }, 'subscription identity'],
+    [{ occurrence_id: null }, 'occurrence identity'],
+    [{ event_id: null }, 'Event identity'],
+    [{ event_version: '1' }, 'Event version'],
+    [{ attempt: '2' }, 'attempt'],
+    [{ state: 'unknown' }, 'state'],
+  ])('rejects invalid required delivery columns: %s', (override, field) => {
+    expect(() =>
+      materializeDurableEventDeliveryInspection({ ...row, ...override }, timestamp, 'Test SQL'),
+    ).toThrow(`Test SQL Event delivery ${field} is invalid`);
+  });
+
+  it('materializes present lease and acknowledgement timestamps without failure fields', () => {
+    const inspected = materializeDurableEventDeliveryInspection(
+      {
+        ...row,
+        state: 'acknowledged',
+        lease_expires_at: 'lease',
+        acknowledged_at: 'acknowledged',
+        failed_at: null,
+        failure_reason: null,
+      },
+      timestamp,
+      'Test SQL',
+    );
+
+    expect(inspected).toMatchObject({
+      state: 'acknowledged',
+      leaseExpiresAt: 'timestamp:lease',
+      acknowledgedAt: 'timestamp:acknowledged',
+    });
+    expect(inspected).not.toHaveProperty('failedAt');
+    expect(inspected).not.toHaveProperty('failureReason');
+  });
+
   it('normalizes the bound before loading and materializes every row', async () => {
     const inspected = await inspectSqlEventDeliveries({
       query: { limit: 3, states: ['failed', 'failed'] },
