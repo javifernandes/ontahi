@@ -1,6 +1,6 @@
 # 146m. Managed HTTP Event Egress
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/146m-managed-http-event-egress`
 
@@ -311,22 +311,22 @@ roll back the domain Unit Of Work that caused it.
 
 ## Acceptance Checklist
 
-- [ ] One declared Event reaches one local HTTP receiver through a named, application-admitted
+- [x] One declared Event reaches one local HTTP receiver through a named, application-admitted
       subscription and destination Resource.
-- [ ] Event occurrence, subscription, delivery, claim, and transport-attempt identities remain
+- [x] Event occurrence, subscription, delivery, claim, and transport-attempt identities remain
       distinct and inspectable.
-- [ ] A `2xx` response acknowledges the durable delivery exactly once from Ontahí's perspective.
+- [x] A `2xx` response acknowledges the durable delivery exactly once from Ontahí's perspective.
 - [x] A retryable failure preserves delivery identity, increments attempt on the next claim, and
       cannot create a tight retry loop.
 - [x] Terminal rejection behavior is explicit and does not masquerade as successful delivery.
-- [ ] Process recreation retains pending delivery without retaining a JavaScript callback or stack.
-- [ ] The transmitted envelope carries stable idempotency identifiers and a verifiable signature.
-- [ ] Event declarations contain no URL, credential, signing key, or provider topology.
-- [ ] Safe diagnostics show outcome and causal ownership without exposing secrets or sensitive
+- [x] Process recreation retains pending delivery without retaining a JavaScript callback or stack.
+- [x] The transmitted envelope carries stable idempotency identifiers and a verifiable signature.
+- [x] Event declarations contain no URL, credential, signing key, or provider topology.
+- [x] Safe diagnostics show outcome and causal ownership without exposing secrets or sensitive
       payloads.
-- [ ] Unsupported Event Runtime capabilities fail before the worker claims delivery.
-- [ ] Domain commit and Event acceptance remain complete even when external delivery later fails.
-- [ ] The HTTP adapter can be replaced by a fake transport without changing subscription or
+- [x] Unsupported Event Runtime capabilities fail before the worker claims delivery.
+- [x] Domain commit and Event acceptance remain complete even when external delivery later fails.
+- [x] The HTTP adapter can be replaced by a fake transport without changing subscription or
       delivery lifecycle semantics.
 
 ## Implementation Checkpoint: Transport-Neutral Kernel
@@ -397,7 +397,15 @@ them through the shared conformance suite and the PostgreSQL/MySQL providers, an
 adapter classify terminal rejection without owning persistence policy. A retryable attempt is not
 claimable before its persisted availability time, preventing tight host polling loops.
 
-The next egress concern is safe retained attempt evidence and inspection: define bounded retention,
-redaction, query, and replay/recovery affordances without turning lifecycle state into an unbounded
-audit log. The generic HTTP ingress direction can separately grow Runtime Protocol endpoints when
-that reuse is proven, without turning this package into a web framework.
+Plan 146n follows with a deliberately smaller retained-state inspection capability. It exposes the
+current lifecycle facts already stored by SQL runtimes, with an explicit query bound and a
+payload-free result, without adding attempt history, cursor traversal, replay, or an audit store.
+The generic HTTP ingress direction can separately grow Runtime Protocol endpoints when that reuse
+is proven, without turning this package into a web framework.
+
+## Closure
+
+The transport-neutral processor, generic HTTP adapter, delayed retry, terminal failure, stable
+headers, HMAC signature, SQL recreation proof, and bounded attempt evidence now satisfy this
+vertical. Dynamic subscription management, queue transports, resource governance, and federation
+remain separate plans rather than hidden expansion of HTTP egress.

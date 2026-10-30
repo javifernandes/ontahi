@@ -60,6 +60,7 @@ describe('MySQL Event Runtime', () => {
       replay: false,
       durableAcceptance: true,
       durableDelivery: true,
+      deliveryInspection: true,
       acknowledgement: true,
       ordering: 'subscription',
       deduplication: false,
@@ -96,6 +97,50 @@ describe('MySQL Event Runtime', () => {
       ['mysql-conformance.terminal-failure'],
     );
     expect(rows).toEqual([{ state: 'failed', failure_reason: 'destination-rejected' }]);
+  });
+
+  it('inspects a bounded payload-free snapshot of durable delivery state', async () => {
+    const events = runtime();
+    await events.durableDelivery!.register(subscription('inspect-deliveries'));
+    const failedOccurrenceIds: string[] = [];
+    for (const key of ['inspect-failed-first', 'inspect-failed-second']) {
+      const occurrence = await events.accept(emission(key));
+      const claim = await events.durableDelivery!.claim('inspect-deliveries', {
+        consumerId: 'private-worker-id',
+        leaseMs: 1_000,
+      });
+      await events.durableDelivery!.fail(claim!, { reason: 'destination-rejected' });
+      failedOccurrenceIds.push(occurrence.occurrenceId);
+    }
+    await events.accept(emission('inspect-pending'));
+
+    const inspected = await events.deliveryInspection!.inspect('inspect-deliveries', {
+      limit: 10,
+      states: ['failed'],
+    });
+
+    expect(inspected.map(row => row.occurrenceId).sort()).toEqual(failedOccurrenceIds.sort());
+    for (const row of inspected) {
+      expect(row).toMatchObject({
+        kind: 'durable-event-delivery-inspection',
+        subscriptionId: 'inspect-deliveries',
+        eventId: 'TodoListExportReady',
+        eventVersion: 1,
+        state: 'failed',
+        attempt: 1,
+        failureReason: 'destination-rejected',
+      });
+      expect(row).not.toHaveProperty('payload');
+      expect(row).not.toHaveProperty('claimedBy');
+      expect(row.failedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+
+    const bounded = await events.deliveryInspection!.inspect('inspect-deliveries', {
+      limit: 1,
+      states: ['failed'],
+    });
+    expect(bounded).toHaveLength(1);
+    expect(failedOccurrenceIds).toContain(bounded[0]?.occurrenceId);
   });
 
   it('delivers retained occurrences registered before or after acceptance', async () => {

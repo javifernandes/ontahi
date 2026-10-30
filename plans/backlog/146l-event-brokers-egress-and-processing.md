@@ -18,7 +18,7 @@ Related plans:
 
 Executable child plan:
 
-1. [146m. Managed HTTP Event Egress](../current/146m-managed-http-event-egress.md)
+1. [146m. Managed HTTP Event Egress](../done/146m-managed-http-event-egress.md)
 
 ## Summary
 

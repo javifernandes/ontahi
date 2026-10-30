@@ -18,6 +18,11 @@ interchangeable. Query values remain separate from SQL text.
 Provider packages own drivers, mutation compilation, exact mutation results, locking, transaction
 lifecycle, and schema introspection. This package neither opens connections nor manages migrations.
 
+The `/events` entrypoint contains the smaller shared SQL materialization boundary proven by both
+durable Event adapters. It normalizes bounded inspection queries and converts provider rows into
+payload-free delivery lifecycle evidence; PostgreSQL and MySQL still own their query syntax,
+timestamp decoding, locking, and storage schema.
+
 Experimental contextual membership is read-only and opt-in. `compileQuery` accepts receiver-owned
 `selectionMappings` to validate and compile `relation-image` to correlated `EXISTS`; `compileSelection`
 and mutation compilers remain closed. `createSqlReadRuntime({ relationSelections: true, ... })`

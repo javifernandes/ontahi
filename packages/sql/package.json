@@ -28,6 +28,11 @@
       "types": "./dist/data-graph/index.d.ts",
       "import": "./dist/data-graph/index.js",
       "require": "./dist/data-graph/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "import": "./dist/events/index.js",
+      "require": "./dist/events/index.js"
     }
   },
   "publishConfig": {

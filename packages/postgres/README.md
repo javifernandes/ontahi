@@ -110,8 +110,8 @@ Migration generation and schema evolution remain host responsibilities.
 `createPostgresEventRuntime({ pool })` retains accepted Event Occurrences and provides stable
 correlated subscriptions with leased claims, acknowledgement, release/retry, cancellation, and
 recovery after runtime recreation. It also preserves the ordinary process-local live subscription
-surface. The adapter advertises durable acceptance, durable delivery, retention, acknowledgement,
-subscription ordering, and spill-to-storage overflow. It deliberately does not claim general
+surface. The adapter advertises durable acceptance, durable delivery, bounded delivery inspection,
+retention, acknowledgement, subscription ordering, and spill-to-storage overflow. It deliberately does not claim general
 replay, deduplication, exactly-once processing, or atomic publication with Data Graph mutations.
 
 ```ts
@@ -132,6 +132,11 @@ const claim = await durable.claim(`todo-export:${requestId}`, {
   leaseMs: 30_000,
 });
 if (claim) await durable.acknowledge(claim);
+
+const failed = await eventRuntime.deliveryInspection!.inspect(`todo-export:${requestId}`, {
+  limit: 20,
+  states: ['failed'],
+});
 ```
 
 The host owns migrations. `createPostgresEventSchemaSql()` returns the bounded table/index contract
@@ -141,7 +146,14 @@ matching retained occurrences, closing the occurrence-before-subscriber window. 
 claimed by at most one live lease; expiry or explicit release makes the same delivery identity
 claimable with an incremented attempt. Acknowledgement prevents later claims. Cancelling a stable
 subscription prevents future delivery without deleting its occurrences or already-created
-deliveries.
+deliveries. Inspection reads only the current retained lifecycle state and excludes payload,
+correlation, causation, claim identity, and worker identity; it does not retain attempt history or
+grant client access by itself.
+
+Hosts upgrading an existing Event schema must add the inspection-order index through their migration
+system, for example
+`CREATE INDEX ontahi_event_deliveries_inspection_idx ON ontahi_event_deliveries (subscription_id, created_at, delivery_id)`
+when using the default table name. Schema generation includes it for new installations.
 
 Adapter authors can run `verifyDurableEventRuntimeConformance` from `@ontahi/core/runtime/server`
 against another retained implementation. It proves early-occurrence matching, exclusive claim,

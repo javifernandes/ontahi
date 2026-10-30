@@ -15,6 +15,8 @@ describe('MySQL Event schema contract', () => {
     expect(sql).toContain('acceptance_order bigint unsigned NOT NULL AUTO_INCREMENT UNIQUE');
     expect(sql.match(/COLLATE utf8mb4_0900_bin/g)?.length).toBeGreaterThanOrEqual(8);
     expect(sql).toContain('(event_id, event_version, acceptance_order)');
+    expect(sql).toContain('`ontahi_event_deliveries_inspection_idx`');
+    expect(sql).toContain('(subscription_id, created_at, delivery_id)');
     expect(sql.match(/ENGINE=InnoDB/g)).toHaveLength(3);
   });
 

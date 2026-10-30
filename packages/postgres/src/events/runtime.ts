@@ -1,5 +1,6 @@
 import {
   normalizeDurableEventDeliverySettlement,
+  type DurableEventDeliveryInspectionQuery,
   type DurableEventSubscription,
   type DurableEventDeliverySettlement,
   type EventDelivery,
@@ -10,6 +11,7 @@ import {
   type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
+import { inspectSqlEventDeliveries } from '@ontahi/sql/events';
 import type { Pool, PoolClient } from 'pg';
 
 import {
@@ -311,6 +313,34 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     }
   };
 
+  const inspectDeliveries = async (
+    subscriptionId: string,
+    inspectionQuery: DurableEventDeliveryInspectionQuery,
+  ) => {
+    requireIdentity(subscriptionId, 'Durable Event subscription id');
+    return inspectSqlEventDeliveries({
+      query: inspectionQuery,
+      timestamp: isoDate,
+      provider: 'PostgreSQL',
+      loadRows: async query => {
+        const result = await options.pool.query(
+          `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
+                  occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
+                  delivery.created_at, delivery.available_at, delivery.lease_expires_at,
+                  delivery.acknowledged_at, delivery.failed_at, delivery.failure_reason
+           FROM ${tables.deliveries} AS delivery
+           JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
+           WHERE delivery.subscription_id = $1
+             AND ($2::text[] IS NULL OR delivery.state = ANY($2::text[]))
+           ORDER BY delivery.created_at DESC, delivery.delivery_id DESC
+           LIMIT $3`,
+          [subscriptionId, query.states ?? null, query.limit],
+        );
+        return result.rows as Record<string, unknown>[];
+      },
+    });
+  };
+
   return {
     capabilities: {
       liveSubscription: true,
@@ -318,6 +348,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       replay: false,
       durableAcceptance: true,
       durableDelivery: true,
+      deliveryInspection: true,
       acknowledgement: true,
       ordering: 'subscription',
       deduplication: false,
@@ -339,6 +370,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
         },
       };
     },
+    deliveryInspection: { inspect: inspectDeliveries },
     durableDelivery: {
       register,
       claim,

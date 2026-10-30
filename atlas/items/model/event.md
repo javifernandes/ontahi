@@ -118,6 +118,14 @@ safe occurrence, delivery, attempt, subscription, Event, and destination identit
 projected body or resolved destination value.
 
 Core does not own a polling loop, concurrency, backoff, shutdown, or HTTP mechanics. The host
-schedules the one-claim processor; `retryAfterMs` remains advisory evidence until delayed retry has
-durable semantics. Terminal rejection, dead letters, HTTP signing, retained attempt history, and a
-real SQL-backed external receiver remain open Plan 146m slices.
+schedules the one-claim processor. PostgreSQL and MySQL now persist delayed availability and
+terminal failure through one provider-neutral settlement contract; the generic HTTP adapter lowers
+real requests with stable identity headers and HMAC signing, and a SQL-backed receiver proof covers
+retry, runtime recreation, and acknowledgement.
+
+The retained runtimes may also advertise a separate delivery-inspection capability. It returns a
+caller-bounded snapshot for one subscription with current state, semantic identities, attempt count,
+timestamps, lease expiry, and bounded failure reason. It excludes payload, correlation, causation,
+claim identity, and worker identity. This capability is operational evidence only: it neither grants
+client visibility nor implies retained attempt history, cursor traversal, replay, or a durable audit
+log. Plan 158 remains the authority for later authorization, governance, and evidence disclosure.

@@ -106,12 +106,45 @@ export type DurableEventDeliveryCapability = {
   cancel: (subscriptionId: string) => Promise<void>;
 };
 
+export type DurableEventDeliveryState = 'pending' | 'claimed' | 'acknowledged' | 'failed';
+
+export type DurableEventDeliveryInspection = {
+  readonly kind: 'durable-event-delivery-inspection';
+  readonly deliveryId: string;
+  readonly subscriptionId: string;
+  readonly occurrenceId: string;
+  readonly eventId: string;
+  readonly eventVersion: number;
+  readonly state: DurableEventDeliveryState;
+  readonly attempt: number;
+  readonly createdAt: string;
+  readonly availableAt: string;
+  readonly leaseExpiresAt?: string;
+  readonly acknowledgedAt?: string;
+  readonly failedAt?: string;
+  readonly failureReason?: string;
+};
+
+export type DurableEventDeliveryInspectionQuery = {
+  /** Required so every inspection is explicitly bounded. Maximum: 100. */
+  readonly limit: number;
+  readonly states?: readonly DurableEventDeliveryState[];
+};
+
+export type DurableEventDeliveryInspectionCapability = {
+  inspect: (
+    subscriptionId: string,
+    query: DurableEventDeliveryInspectionQuery,
+  ) => Promise<readonly DurableEventDeliveryInspection[]>;
+};
+
 export type EventRuntimeCapabilities = {
   readonly liveSubscription: boolean;
   readonly retention: boolean;
   readonly replay: boolean;
   readonly durableAcceptance: boolean;
   readonly durableDelivery: boolean;
+  readonly deliveryInspection: boolean;
   readonly acknowledgement: boolean;
   readonly ordering: 'none' | 'acceptance' | 'event' | 'key' | 'subscription' | 'global';
   readonly deduplication: boolean;
@@ -126,6 +159,7 @@ export type EventRuntime = {
   accept: (emission: EventEmission) => Promise<EventOccurrence>;
   subscribe: (eventId: string, subscriber: EventSubscriber) => EventSubscription;
   readonly durableDelivery?: DurableEventDeliveryCapability;
+  readonly deliveryInspection?: DurableEventDeliveryInspectionCapability;
 };
 
 export type EventPayload<TEvent extends AnyEventDeclaration> = InferGraphSchemaClientInput<

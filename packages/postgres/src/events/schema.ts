@@ -74,5 +74,7 @@ export const createPostgresEventSchemaSql = (
     )`,
     `CREATE INDEX ${identifier(`${resolvePostgresEventTableNames(tables).deliveries}_claim_idx`)}
       ON ${names.deliveries} (subscription_id, state, available_at, created_at, delivery_id)`,
+    `CREATE INDEX ${identifier(`${resolvePostgresEventTableNames(tables).deliveries}_inspection_idx`)}
+      ON ${names.deliveries} (subscription_id, created_at, delivery_id)`,
   ];
 };

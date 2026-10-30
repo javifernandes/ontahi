@@ -1,5 +1,6 @@
 import {
   normalizeDurableEventDeliverySettlement,
+  type DurableEventDeliveryInspectionQuery,
   type DurableEventSubscription,
   type DurableEventDeliverySettlement,
   type EventDelivery,
@@ -10,6 +11,7 @@ import {
   type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
+import { inspectSqlEventDeliveries } from '@ontahi/sql/events';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import {
@@ -411,12 +413,42 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     );
   };
 
+  const inspectDeliveries = async (
+    subscriptionId: string,
+    inspectionQuery: DurableEventDeliveryInspectionQuery,
+  ) => {
+    requireIdentity(subscriptionId, 'Durable Event subscription id');
+    return inspectSqlEventDeliveries({
+      query: inspectionQuery,
+      timestamp: mysqlTimestampToIso,
+      provider: 'MySQL',
+      loadRows: async query => {
+        const stateFilter = query.states?.map(() => '?').join(', ');
+        const [rows] = await options.pool.query<RowDataPacket[]>(
+          `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
+                  occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
+                  delivery.created_at, delivery.available_at, delivery.lease_expires_at,
+                  delivery.acknowledged_at, delivery.failed_at, delivery.failure_reason
+           FROM ${tables.deliveries} AS delivery
+           JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
+           WHERE delivery.subscription_id = ?
+           ${stateFilter === undefined ? '' : `AND delivery.state IN (${stateFilter})`}
+           ORDER BY delivery.created_at DESC, delivery.delivery_id DESC
+           LIMIT ?`,
+          [subscriptionId, ...(query.states ?? []), query.limit],
+        );
+        return rows;
+      },
+    });
+  };
+
   const capabilities = {
     liveSubscription: true,
     retention: true,
     replay: false,
     durableAcceptance: true,
     durableDelivery: true,
+    deliveryInspection: true,
     acknowledgement: true,
     ordering: 'subscription',
     deduplication: false,
@@ -428,6 +460,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     capabilities,
     accept,
     subscribe,
+    deliveryInspection: { inspect: inspectDeliveries },
     durableDelivery: {
       register,
       claim,

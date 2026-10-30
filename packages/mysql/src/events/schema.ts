@@ -82,6 +82,8 @@ export const createMysqlEventSchemaSql = (tables?: MysqlEventTableNames): readon
         (subscription_id, occurrence_id),
       INDEX ${identifier(`${resolved.deliveries}_claim_idx`)}
         (subscription_id, state, available_at, created_at, delivery_id),
+      INDEX ${identifier(`${resolved.deliveries}_inspection_idx`)}
+        (subscription_id, created_at, delivery_id),
       CONSTRAINT ${identifier(`${resolved.deliveries}_subscription_fk`)}
         FOREIGN KEY (subscription_id) REFERENCES ${names.subscriptions} (subscription_id),
       CONSTRAINT ${identifier(`${resolved.deliveries}_occurrence_fk`)}

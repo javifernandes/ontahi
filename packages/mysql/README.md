@@ -76,11 +76,17 @@ acceptance share a MySQL user lock scoped to the configured table set, closing t
 backfill and publication. Competing claims use InnoDB row locks with `SKIP LOCKED`; claim identity
 and lease expiry fence stale workers.
 
-Its advertised capabilities are durable acceptance, durable delivery, acknowledgement, retention,
-and per-subscription ordering. It deliberately advertises no replay cursor, deduplication, or atomic
+Its advertised capabilities are durable acceptance, durable delivery, bounded delivery inspection,
+acknowledgement, retention, and per-subscription ordering. Inspection is a payload-free snapshot of
+current retained state, not attempt history or an authorization decision. It deliberately advertises no replay cursor, deduplication, or atomic
 publication with Data Graph mutations. Cancellation stops future delivery creation without deleting
 retained occurrences or deliveries already created. The deployment must permit
 `GET_LOCK`/`RELEASE_LOCK`, and the generated tables must remain InnoDB, for these guarantees.
+
+Hosts upgrading an existing Event schema must add the inspection-order index through their migration
+system, for example
+`CREATE INDEX ontahi_event_deliveries_inspection_idx ON ontahi_event_deliveries (subscription_id, created_at, delivery_id)`
+when using the default table name. Schema generation includes it for new installations.
 
 The adapter has the same Core semantic contract and conformance proof as PostgreSQL, but its schema,
 locking, JSON predicates, and deterministic hashed delivery identities are MySQL-owned details.

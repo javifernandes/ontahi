@@ -633,6 +633,7 @@ describe('vercel workflow task executor', () => {
           replay: false,
           durableAcceptance: true,
           durableDelivery: true,
+          deliveryInspection: false,
           acknowledgement: true,
           ordering: 'subscription',
           deduplication: false,
