@@ -83,6 +83,11 @@ publication with Data Graph mutations. Cancellation stops future delivery creati
 retained occurrences or deliveries already created. The deployment must permit
 `GET_LOCK`/`RELEASE_LOCK`, and the generated tables must remain InnoDB, for these guarantees.
 
+Hosts upgrading an existing Event schema must add the inspection-order index through their migration
+system, for example
+`CREATE INDEX ontahi_event_deliveries_inspection_idx ON ontahi_event_deliveries (subscription_id, created_at, delivery_id)`
+when using the default table name. Schema generation includes it for new installations.
+
 The adapter has the same Core semantic contract and conformance proof as PostgreSQL, but its schema,
 locking, JSON predicates, and deterministic hashed delivery identities are MySQL-owned details.
 Using `/events` does not configure or require `/data-graph`.

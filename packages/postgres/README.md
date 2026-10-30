@@ -150,6 +150,11 @@ deliveries. Inspection reads only the current retained lifecycle state and exclu
 correlation, causation, claim identity, and worker identity; it does not retain attempt history or
 grant client access by itself.
 
+Hosts upgrading an existing Event schema must add the inspection-order index through their migration
+system, for example
+`CREATE INDEX ontahi_event_deliveries_inspection_idx ON ontahi_event_deliveries (subscription_id, created_at, delivery_id)`
+when using the default table name. Schema generation includes it for new installations.
+
 Adapter authors can run `verifyDurableEventRuntimeConformance` from `@ontahi/core/runtime/server`
 against another retained implementation. It proves early-occurrence matching, exclusive claim,
 identity-preserving retry, acknowledgement, and recovery through runtime recreation.

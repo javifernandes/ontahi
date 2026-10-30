@@ -47,6 +47,12 @@ describe('Event Runtime capability requirements', () => {
     );
 
     const deliveryInspection = { inspect: async () => [] };
+    expect(() =>
+      requireDurableEventDeliveryInspection({
+        ...ephemeral,
+        capabilities: { ...ephemeral.capabilities, deliveryInspection: true },
+      }),
+    ).toThrow('does not provide durable Event delivery inspection');
     expect(
       requireDurableEventDeliveryInspection({
         ...ephemeral,

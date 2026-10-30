@@ -10,6 +10,9 @@ describe('durable Event delivery inspection query', () => {
     expect(() => normalizeDurableEventDeliveryInspectionQuery({ limit: 0 })).toThrow(
       'positive safe integer',
     );
+    expect(() => normalizeDurableEventDeliveryInspectionQuery({ limit: 1.5 })).toThrow(
+      'positive safe integer',
+    );
     expect(() =>
       normalizeDurableEventDeliveryInspectionQuery({
         limit: MAX_DURABLE_EVENT_DELIVERY_INSPECTION_LIMIT + 1,
