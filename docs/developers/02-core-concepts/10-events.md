@@ -222,7 +222,7 @@ const result = await processNextEventEgressDelivery({
 });
 ```
 
-An `accepted` transport outcome acknowledges the durable claim. A `retryable` outcome records an
+An `accepted` transport outcome acknowledges the durable claim. A `retryable` outcome records a
 relative delay using `retryAfterMs` or the processor's `retryDelayMs` policy; the durable provider
 computes availability from its own clock. The delivery cannot be claimed before that instant, then
 preserves `deliveryId` and increments `attempt`. A
@@ -249,8 +249,37 @@ HMAC-SHA256 secret. The adapter sends one `POST`, signs the exact transmitted JS
 stable Event and delivery identity headers, refuses URL credentials and redirects, and never
 retries internally. `2xx` is accepted; `408`, `429`, `5xx`, network failure, and timeout are
 retryable. Other statuses are rejected and become terminally failed deliveries. Retained attempt
-history, terminal-delivery inspection, destination admission, and secret resolution remain explicit
-follow-up concerns.
+history, destination admission, and secret resolution remain explicit follow-up concerns.
+
+## Inspect current durable delivery state without creating an audit log
+
+PostgreSQL and MySQL separately advertise `deliveryInspection`. The server-side capability returns
+one explicitly bounded snapshot for a stable subscription:
+
+```ts
+import { requireDurableEventDeliveryInspection } from '@ontahi/core/runtime/server';
+
+const inspection = requireDurableEventDeliveryInspection(eventRuntime);
+const failed = await inspection.inspect('customer-export-webhook', {
+  limit: 20,
+  states: ['failed'],
+});
+```
+
+The caller must choose a positive limit no greater than 100 and may filter `pending`, `claimed`,
+`acknowledged`, or `failed` deliveries. Results contain Event, occurrence, subscription, and delivery
+identities; current state and attempt count; lifecycle timestamps; lease expiry; and the bounded
+terminal failure reason when present.
+
+The snapshot deliberately excludes payload, correlation, causation, claim identity, and worker
+identity. It has no cursor, attempt history, or replay operation. Capability availability is not
+authorization to project this evidence through Runtime Protocol or expose it to every application
+client; a host must make that disclosure decision explicitly.
+
+New SQL schemas include an inspection-order index on
+`(subscription_id, created_at, delivery_id)`. Because Ontahí never migrates host databases at
+runtime, hosts upgrading an existing Event schema must add that index through their own migration
+system before relying on bounded inspection at scale.
 
 ## Wait for an Event durably
 
