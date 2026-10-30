@@ -568,12 +568,15 @@ envelope. Exhaustion produces `model_resource_exhausted`; it is not an authoriza
 provider availability failure. The counter is intentionally not durable across process restart.
 
 `resourceEvidenceDisclosure` is a separate host-owned projection decision. Its safe default is
-`none`; `summary` returns only aggregate attempt, token, and duration evidence when those metrics
-are complete; `debug` may return provider/model identities, per-attempt metrics, causal trace, and
-admission details. Nested invocation scopes can reduce disclosure but cannot widen it. Evidence is
-attached to the Runtime Protocol response beside the semantic result, so changing visibility does
-not change an Operation's output contract. Capture is invocation-local and ephemeral: enabling it
-does not create a persistent accounting store.
+`none`; `summary` counts every admitted attempt and distinguishes attempts with provider-reported
+usage and failed provider calls. Token and duration totals appear only when every admitted attempt
+reported that metric, so a failed first attempt cannot disappear behind a successful retry or make
+partial usage look complete. `debug` may additionally return provider/model identities,
+per-attempt metrics, causal trace, admission details, and the outcome of attempts that returned no
+usage. Nested invocation scopes can reduce disclosure but cannot widen it. Evidence is attached to
+the Runtime Protocol response beside the semantic result, so changing visibility does not change
+an Operation's output contract. Capture is invocation-local and ephemeral: enabling it does not
+create a persistent accounting store or an automatic retry policy.
 
 ## In-Memory Graph
 

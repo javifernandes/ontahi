@@ -254,6 +254,43 @@ describe('model-backed Operation executor', () => {
     expect(generate).toHaveBeenCalledOnce();
   });
 
+  it('counts a failed provider attempt before a successful retry without claiming complete usage', async () => {
+    const generate = vi
+      .fn<ModelProvider['generate']>()
+      .mockRejectedValueOnce(new ModelInterpretationError('model_unavailable', 'Try again.'))
+      .mockImplementationOnce(async providerRequest => {
+        providerRequest.reportUsage?.({
+          provider: 'openai',
+          model: 'gpt-test',
+          totalTokens: 12,
+          durationMs: 25,
+        });
+        return { title: 'Set the table' };
+      });
+    const executor = createModelOperationExecutor({ provider: { generate } });
+
+    await withInvocationContext(
+      {
+        modelResourceLimits: { maxAttempts: 3 },
+        resourceEvidenceDisclosure: 'summary',
+      },
+      async () => {
+        await expect(
+          Effect.runPromise(Effect.either(executor.execute(request))),
+        ).resolves.toMatchObject({
+          left: { reason: 'model_execution_failed', code: 'model_unavailable' },
+        });
+        await expect(Effect.runPromise(executor.execute(request))).resolves.toEqual({
+          title: 'Set the table',
+        });
+        expect(projectCurrentResourceEvidence()).toEqual({
+          visibility: 'summary',
+          model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
+        });
+      },
+    );
+  });
+
   it('rejects provider output that does not satisfy the Operation output contract', async () => {
     const executor = createModelOperationExecutor({
       provider: { generate: vi.fn().mockResolvedValue({ title: '' }) },

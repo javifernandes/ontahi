@@ -110,6 +110,13 @@ identity, and admission details; `debug` is intended for trusted development sur
 scopes may narrow but not widen disclosure, and this observational capture does not imply durable
 storage or accounting.
 
+Invocation-local evidence counts admitted attempts independently from provider usage callbacks.
+Failed calls that report no tokens still consume and expose an attempt, while a later retry keeps
+its own Resource-attempt identity. Aggregate token and duration totals are omitted when any admitted
+attempt lacks that measurement, preventing partial provider evidence from being presented as a
+complete execution total. This is attempt accounting only: retry selection, durable quotas,
+pricing, and authorization remain separate policies.
+
 ## First Bounded Proof
 
 Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a

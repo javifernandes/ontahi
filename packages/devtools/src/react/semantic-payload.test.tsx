@@ -72,14 +72,20 @@ describe('SemanticPayload', () => {
           result: { ok: true, kind: 'success', value: { title: 'Buy milk' } },
           resourceEvidence: {
             visibility: 'summary',
-            model: { attempts: 1, totalTokens: 24, durationMs: 180 },
+            model: {
+              attempts: 2,
+              reportedAttempts: 1,
+              failedAttempts: 1,
+              durationMs: 180,
+            },
           },
         }}
       />,
     );
     expect(screen.getByText('Resource usage summary')).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Attempts · 1' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Total · 24 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempts · 2' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Reported attempts · 1' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Failed attempts · 1' })).toBeTruthy();
     expect(screen.queryByText(/openai/)).toBeNull();
 
     ui.rerender(
@@ -148,6 +154,17 @@ describe('SemanticPayload', () => {
           resourceEvidence: {
             visibility: 'debug',
             model: {
+              attemptOutcomes: [
+                {
+                  outcome: 'failed',
+                  usageReported: false,
+                  activity: {
+                    attemptId: 'attempt-0',
+                    correlationId: 'execution-1',
+                    admission: { attempt: 1, maxAttempts: 3 },
+                  },
+                },
+              ],
               attempts: [
                 {
                   provider: 'openai',
@@ -196,6 +213,9 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
     expect(screen.getAllByText('Resource usage')).toHaveLength(4);
+    expect(screen.getByText('Resource attempt')).toBeTruthy();
+    expect(screen.getByText('failed')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Usage reported · no' })).toBeTruthy();
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Input · 120 tokens' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Total · 138 tokens' })).toBeTruthy();

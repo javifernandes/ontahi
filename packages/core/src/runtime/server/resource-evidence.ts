@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type {
+  ModelResourceActivity,
+  ModelResourceAttemptOutcome,
   ModelResourceUsage,
   ResourceEvidence,
   ResourceEvidenceDisclosure,
@@ -9,6 +11,7 @@ import type {
 type ResourceEvidenceState = {
   readonly disclosure: ResourceEvidenceDisclosure;
   readonly modelUsage: ModelResourceUsage[];
+  readonly modelAttemptOutcomes: ModelResourceAttemptOutcome[];
 };
 
 const storage = new AsyncLocalStorage<ResourceEvidenceState>();
@@ -36,10 +39,36 @@ export const withResourceEvidence = <TValue>(
       {
         disclosure: narrowDisclosure(parent.disclosure, disclosure),
         modelUsage: parent.modelUsage,
+        modelAttemptOutcomes: parent.modelAttemptOutcomes,
       },
       run,
     );
-  return storage.run({ disclosure: disclosure ?? 'none', modelUsage: [] }, run);
+  return storage.run(
+    { disclosure: disclosure ?? 'none', modelUsage: [], modelAttemptOutcomes: [] },
+    run,
+  );
+};
+
+export const recordModelResourceAttempt = (
+  activity: ModelResourceActivity | undefined,
+): ((outcome: ModelResourceAttemptOutcome['outcome']) => void) => {
+  const state = storage.getStore();
+  if (!state || state.disclosure === 'none') return () => undefined;
+  const attempt: {
+    outcome: ModelResourceAttemptOutcome['outcome'];
+    activity?: ModelResourceActivity;
+  } = {
+    outcome: 'started',
+    ...(activity ? { activity } : {}),
+  };
+  state.modelAttemptOutcomes.push({ ...attempt, usageReported: false });
+  const index = state.modelAttemptOutcomes.length - 1;
+  return outcome => {
+    const usageReported = state.modelUsage.some(
+      usage => activity !== undefined && usage.activity?.attemptId === activity.attemptId,
+    );
+    state.modelAttemptOutcomes[index] = { ...attempt, outcome, usageReported };
+  };
 };
 
 export const recordModelResourceUsage = (usage: ModelResourceUsage): void => {
@@ -60,16 +89,45 @@ const sumIfComplete = (
 export const projectResourceEvidence = (
   usage: readonly ModelResourceUsage[],
   disclosure: ResourceEvidenceDisclosure,
+  attemptOutcomes: readonly ModelResourceAttemptOutcome[] = [],
 ): ResourceEvidence | undefined => {
-  if (disclosure === 'none' || usage.length === 0) return undefined;
-  if (disclosure === 'debug') return { visibility: 'debug', model: { attempts: [...usage] } };
+  if (disclosure === 'none' || (usage.length === 0 && attemptOutcomes.length === 0))
+    return undefined;
+  const projectedAttemptOutcomes = attemptOutcomes.map(attempt => ({
+    ...attempt,
+    usageReported:
+      attempt.usageReported ||
+      (attempt.activity !== undefined &&
+        usage.some(entry => entry.activity?.attemptId === attempt.activity?.attemptId)),
+  }));
+  if (disclosure === 'debug')
+    return {
+      visibility: 'debug',
+      model: {
+        attempts: [...usage],
+        ...(projectedAttemptOutcomes.length === 0
+          ? {}
+          : { attemptOutcomes: projectedAttemptOutcomes }),
+      },
+    };
 
-  const totalTokens = sumIfComplete(usage, entry => entry.totalTokens);
-  const durationMs = sumIfComplete(usage, entry => entry.durationMs);
+  const attempts = attemptOutcomes.length || usage.length;
+  const reportedAttempts =
+    projectedAttemptOutcomes.length === 0
+      ? usage.length
+      : projectedAttemptOutcomes.filter(attempt => attempt.usageReported).length;
+  const complete = reportedAttempts === attempts;
+  const totalTokens = complete ? sumIfComplete(usage, entry => entry.totalTokens) : undefined;
+  const durationMs = complete ? sumIfComplete(usage, entry => entry.durationMs) : undefined;
+  const failedAttempts = projectedAttemptOutcomes.filter(
+    attempt => attempt.outcome === 'failed',
+  ).length;
   return {
     visibility: 'summary',
     model: {
-      attempts: usage.length,
+      attempts,
+      ...(attemptOutcomes.length === 0 ? {} : { reportedAttempts }),
+      ...(failedAttempts === 0 ? {} : { failedAttempts }),
       ...(totalTokens === undefined ? {} : { totalTokens }),
       ...(durationMs === undefined ? {} : { durationMs }),
     },
@@ -81,7 +139,11 @@ export const projectCurrentResourceEvidence = (
 ): ResourceEvidence | undefined => {
   const state = storage.getStore();
   return state
-    ? projectResourceEvidence([...additionalUsage, ...state.modelUsage], state.disclosure)
+    ? projectResourceEvidence(
+        [...additionalUsage, ...state.modelUsage],
+        state.disclosure,
+        state.modelAttemptOutcomes,
+      )
     : undefined;
 };
 

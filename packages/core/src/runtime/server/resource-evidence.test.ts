@@ -6,6 +6,7 @@ import {
   getCurrentResourceEvidenceDisclosure,
   projectCurrentResourceEvidence,
   projectResourceEvidence,
+  recordModelResourceAttempt,
   recordModelResourceUsage,
   withResourceEvidence,
 } from './resource-evidence.js';
@@ -41,6 +42,60 @@ describe('resource evidence', () => {
     expect(
       projectResourceEvidence([usage, { provider: 'anthropic', model: 'claude-test' }], 'summary'),
     ).toEqual({ visibility: 'summary', model: { attempts: 2 } });
+  });
+
+  it('counts admitted attempts even when a failed attempt reports no usage', () => {
+    withResourceEvidence('summary', () => {
+      const failed = recordModelResourceAttempt({
+        attemptId: 'attempt-1',
+        correlationId: 'correlation-1',
+        admission: { attempt: 1, maxAttempts: 3 },
+      });
+      failed('failed');
+      const completed = recordModelResourceAttempt({
+        attemptId: 'attempt-2',
+        correlationId: 'correlation-1',
+        admission: { attempt: 2, maxAttempts: 3 },
+      });
+      recordModelResourceUsage({
+        ...usage,
+        activity: {
+          attemptId: 'attempt-2',
+          correlationId: 'correlation-1',
+          admission: { attempt: 2, maxAttempts: 3 },
+        },
+      });
+      completed('completed');
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
+      });
+    });
+  });
+
+  it('keeps per-attempt outcomes in debug evidence', () => {
+    withResourceEvidence('debug', () => {
+      const complete = recordModelResourceAttempt({
+        attemptId: 'attempt-1',
+        correlationId: 'correlation-1',
+      });
+      complete('failed');
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'debug',
+        model: {
+          attempts: [],
+          attemptOutcomes: [
+            {
+              outcome: 'failed',
+              usageReported: false,
+              activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
+            },
+          ],
+        },
+      });
+    });
   });
 
   it('shares captured attempts across nested scopes while preventing wider disclosure', () => {

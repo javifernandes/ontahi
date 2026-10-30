@@ -417,9 +417,20 @@ export type ModelResourceUsage = {
 export type ResourceEvidenceDisclosure = 'none' | 'summary' | 'debug';
 
 export type ModelResourceEvidenceSummary = {
+  /** Provider attempts admitted by the runtime, including attempts without usage reports. */
   readonly attempts: number;
+  /** Admitted attempts for which the provider returned metering evidence. */
+  readonly reportedAttempts?: number;
+  /** Admitted attempts whose provider call rejected. */
+  readonly failedAttempts?: number;
   readonly totalTokens?: number;
   readonly durationMs?: number;
+};
+
+export type ModelResourceAttemptOutcome = {
+  readonly outcome: 'started' | 'completed' | 'failed';
+  readonly activity?: ModelResourceActivity;
+  readonly usageReported: boolean;
 };
 
 /** Portable resource evidence. Debug evidence may expose sensitive runtime topology and identity. */
@@ -430,7 +441,10 @@ export type ResourceEvidence =
     }
   | {
       readonly visibility: 'debug';
-      readonly model: { readonly attempts: readonly ModelResourceUsage[] };
+      readonly model: {
+        readonly attempts: readonly ModelResourceUsage[];
+        readonly attemptOutcomes?: readonly ModelResourceAttemptOutcome[];
+      };
     };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {
