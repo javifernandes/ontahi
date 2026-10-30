@@ -1,7 +1,5 @@
 import {
-  normalizeDurableEventDeliveryInspectionQuery,
   normalizeDurableEventDeliverySettlement,
-  type DurableEventDeliveryInspection,
   type DurableEventDeliveryInspectionQuery,
   type DurableEventSubscription,
   type DurableEventDeliverySettlement,
@@ -13,6 +11,7 @@ import {
   type EventSubscriber,
 } from '@ontahi/core/runtime/server';
 import { cloneJson, isJsonValue } from '@ontahi/core/value/json';
+import { inspectSqlEventDeliveries } from '@ontahi/sql/events';
 import type { Pool, PoolClient } from 'pg';
 
 import {
@@ -63,30 +62,6 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
   attempt: Number(row.attempt),
   occurrence: occurrenceFromRow(row),
 });
-
-const deliveryInspectionFromRow = (
-  row: Record<string, unknown>,
-): DurableEventDeliveryInspection => {
-  if (row.failure_reason !== null && typeof row.failure_reason !== 'string') {
-    throw new TypeError('PostgreSQL Event delivery failure reason is invalid.');
-  }
-  return {
-    kind: 'durable-event-delivery-inspection',
-    deliveryId: String(row.delivery_id),
-    subscriptionId: String(row.subscription_id),
-    occurrenceId: String(row.occurrence_id),
-    eventId: String(row.event_id),
-    eventVersion: Number(row.event_version),
-    state: String(row.state) as DurableEventDeliveryInspection['state'],
-    attempt: Number(row.attempt),
-    createdAt: isoDate(row.created_at),
-    availableAt: isoDate(row.available_at),
-    ...(row.lease_expires_at === null ? {} : { leaseExpiresAt: isoDate(row.lease_expires_at) }),
-    ...(row.acknowledged_at === null ? {} : { acknowledgedAt: isoDate(row.acknowledged_at) }),
-    ...(row.failed_at === null ? {} : { failedAt: isoDate(row.failed_at) }),
-    ...(row.failure_reason === null ? {} : { failureReason: row.failure_reason }),
-  };
-};
 
 const inTransaction = async <T>(
   pool: Pick<Pool, 'connect'>,
@@ -343,21 +318,27 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     inspectionQuery: DurableEventDeliveryInspectionQuery,
   ) => {
     requireIdentity(subscriptionId, 'Durable Event subscription id');
-    const query = normalizeDurableEventDeliveryInspectionQuery(inspectionQuery);
-    const result = await options.pool.query(
-      `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
-              occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
-              delivery.created_at, delivery.available_at, delivery.lease_expires_at,
-              delivery.acknowledged_at, delivery.failed_at, delivery.failure_reason
-       FROM ${tables.deliveries} AS delivery
-       JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
-       WHERE delivery.subscription_id = $1
-         AND ($2::text[] IS NULL OR delivery.state = ANY($2::text[]))
-       ORDER BY delivery.created_at DESC, delivery.delivery_id DESC
-       LIMIT $3`,
-      [subscriptionId, query.states ?? null, query.limit],
-    );
-    return result.rows.map(row => deliveryInspectionFromRow(row as Record<string, unknown>));
+    return inspectSqlEventDeliveries({
+      query: inspectionQuery,
+      timestamp: isoDate,
+      provider: 'PostgreSQL',
+      loadRows: async query => {
+        const result = await options.pool.query(
+          `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
+                  occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
+                  delivery.created_at, delivery.available_at, delivery.lease_expires_at,
+                  delivery.acknowledged_at, delivery.failed_at, delivery.failure_reason
+           FROM ${tables.deliveries} AS delivery
+           JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
+           WHERE delivery.subscription_id = $1
+             AND ($2::text[] IS NULL OR delivery.state = ANY($2::text[]))
+           ORDER BY delivery.created_at DESC, delivery.delivery_id DESC
+           LIMIT $3`,
+          [subscriptionId, query.states ?? null, query.limit],
+        );
+        return result.rows as Record<string, unknown>[];
+      },
+    });
   };
 
   return {

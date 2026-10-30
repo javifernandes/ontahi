@@ -2,6 +2,7 @@
 '@ontahi/core': minor
 '@ontahi/mysql': minor
 '@ontahi/postgres': minor
+'@ontahi/sql': minor
 ---
 
 Add an explicitly bounded, payload-free durable Event Delivery inspection capability and implement
