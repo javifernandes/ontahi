@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { field, graphSchema, type InferGraphSchemaValue } from '../../../data-graph/index.js';
 import { withInvocationContext } from '../invocation-context.js';
+import { runServerOperation } from '../operation/run.js';
+import { createOperationRunner } from '../operation/runner.js';
 import { projectCurrentResourceEvidence } from '../resource-evidence.js';
 import { withSemanticExecutionActivity } from '../semantic-execution.js';
 
@@ -31,6 +33,63 @@ const request = {
 } satisfies ModelOperationExecutionRequest<InferGraphSchemaValue<typeof Input>, typeof Output>;
 
 describe('model-backed Operation executor', () => {
+  it('uses general Operation resilience for provider and structured-output failures', async () => {
+    const generate = vi
+      .fn<ModelProvider['generate']>()
+      .mockRejectedValueOnce(new ModelInterpretationError('model_unavailable', 'Try again.'))
+      .mockImplementationOnce(async providerRequest => {
+        providerRequest.reportUsage?.({
+          provider: 'deepseek',
+          model: 'deepseek-test',
+          totalTokens: 12,
+        });
+        return { title: '' };
+      })
+      .mockImplementationOnce(async providerRequest => {
+        providerRequest.reportUsage?.({
+          provider: 'deepseek',
+          model: 'deepseek-test',
+          totalTokens: 24,
+        });
+        return { title: 'Set the table' };
+      });
+    const run = modelOperation({
+      provider: { generate },
+      operation: request.operation,
+      context: ({ goal }: InferGraphSchemaValue<typeof Input>) =>
+        Effect.succeed({ currentGoal: goal }),
+    });
+    const suggest = createOperationRunner(
+      run,
+      {
+        scope: request.operation.id,
+        execution: {
+          retry: {
+            maxAttempts: 3,
+            when: ['model_execution_failed', 'model_output_invalid'],
+          },
+        },
+      },
+      runServerOperation,
+    );
+
+    await withInvocationContext(
+      { modelResourceLimits: { maxAttempts: 3 }, resourceEvidenceDisclosure: 'summary' },
+      async () => {
+        await expect(suggest(request.input)).resolves.toEqual({
+          success: true,
+          data: { title: 'Set the table' },
+        });
+        expect(projectCurrentResourceEvidence()).toEqual({
+          visibility: 'summary',
+          model: { attempts: 3, reportedAttempts: 2, failedAttempts: 1 },
+        });
+      },
+    );
+
+    expect(generate).toHaveBeenCalledTimes(3);
+  });
+
   it('builds an ordinary Operation run function from declarative context and instructions', async () => {
     const generate = vi.fn<ModelProvider['generate']>(async request => {
       request.reportUsage?.({

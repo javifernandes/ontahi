@@ -169,9 +169,13 @@ so requirements, conditions, concerns, and Resource admission remain inside each
 cache publication, effect-intent execution, and the final serialized result remain
 invocation-scoped.
 
-Attempt identity/evidence projection, composition with atomic authoring, and a consumer
-model-backed proof remain follow-ups before the first slice is complete. Durable runtimes still
-reject this immediate-only capability rather than silently promising persisted retries.
+The consumer model-backed proof now composes the ordinary model Operation executor with the
+canonical Operation runner. One invocation recovers from a provider failure, rejects invalid
+structured output, then succeeds; all three attempts pass independently through Model Resource
+Governance and appear in provider-neutral evidence. Attempt identity/evidence projection and
+composition with atomic authoring remain follow-ups before the first slice is complete. Durable
+runtimes still reject this immediate-only capability rather than silently promising persisted
+retries.
 
 ## Deferred Slices
 
@@ -185,15 +189,15 @@ reject this immediate-only capability rather than silently promising persisted r
 
 ## Acceptance Checklist
 
-- [ ] Retry belongs to the Operation execution contract, not `ModelProvider` or one task adapter.
+- [x] Retry belongs to the Operation execution contract, not `ModelProvider` or one task adapter.
 - [ ] One invocation can contain several separately identified attempts.
-- [ ] Only declared typed failures request another attempt.
-- [ ] Resource Governance independently admits and accounts for every attempt.
+- [x] Only declared typed failures request another attempt.
+- [x] Resource Governance independently admits and accounts for every attempt.
 - [ ] Cancellation and exhaustion are distinct terminal outcomes.
 - [ ] No public contract claims that retries make external effects exactly once.
-- [ ] Immediate-runtime limitations are reflected and documented.
-- [ ] A deterministic non-model proof exercises the same policy.
-- [ ] LangGraph remains an optional adapter with no public types in the declaration.
+- [x] Immediate-runtime limitations are reflected and documented.
+- [x] A deterministic non-model proof exercises the same policy.
+- [x] LangGraph remains an optional adapter with no public types in the declaration.
 
 ## Non-Goals
 
