@@ -81,26 +81,31 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
 
 const deliveryInspectionFromRow = (
   row: Record<string, unknown>,
-): DurableEventDeliveryInspection => ({
-  kind: 'durable-event-delivery-inspection',
-  deliveryId: String(row.delivery_id),
-  subscriptionId: String(row.subscription_id),
-  occurrenceId: String(row.occurrence_id),
-  eventId: String(row.event_id),
-  eventVersion: Number(row.event_version),
-  state: String(row.state) as DurableEventDeliveryInspection['state'],
-  attempt: Number(row.attempt),
-  createdAt: mysqlTimestampToIso(row.created_at),
-  availableAt: mysqlTimestampToIso(row.available_at),
-  ...(row.lease_expires_at === null
-    ? {}
-    : { leaseExpiresAt: mysqlTimestampToIso(row.lease_expires_at) }),
-  ...(row.acknowledged_at === null
-    ? {}
-    : { acknowledgedAt: mysqlTimestampToIso(row.acknowledged_at) }),
-  ...(row.failed_at === null ? {} : { failedAt: mysqlTimestampToIso(row.failed_at) }),
-  ...(row.failure_reason === null ? {} : { failureReason: String(row.failure_reason) }),
-});
+): DurableEventDeliveryInspection => {
+  if (row.failure_reason !== null && typeof row.failure_reason !== 'string') {
+    throw new TypeError('MySQL Event delivery failure reason is invalid.');
+  }
+  return {
+    kind: 'durable-event-delivery-inspection',
+    deliveryId: String(row.delivery_id),
+    subscriptionId: String(row.subscription_id),
+    occurrenceId: String(row.occurrence_id),
+    eventId: String(row.event_id),
+    eventVersion: Number(row.event_version),
+    state: String(row.state) as DurableEventDeliveryInspection['state'],
+    attempt: Number(row.attempt),
+    createdAt: mysqlTimestampToIso(row.created_at),
+    availableAt: mysqlTimestampToIso(row.available_at),
+    ...(row.lease_expires_at === null
+      ? {}
+      : { leaseExpiresAt: mysqlTimestampToIso(row.lease_expires_at) }),
+    ...(row.acknowledged_at === null
+      ? {}
+      : { acknowledgedAt: mysqlTimestampToIso(row.acknowledged_at) }),
+    ...(row.failed_at === null ? {} : { failedAt: mysqlTimestampToIso(row.failed_at) }),
+    ...(row.failure_reason === null ? {} : { failureReason: row.failure_reason }),
+  };
+};
 
 type LiveSubscriber = { readonly eventId: string; readonly subscriber: EventSubscriber };
 
