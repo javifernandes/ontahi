@@ -69,21 +69,23 @@ describe('createOperationRunner', () => {
   });
 
   it('never retries a classified authentication denial', async () => {
-    const authentication = authenticated<BookInput>();
+    const authentication = authenticated<BookInput, 'login_required'>({
+      reason: 'login_required',
+    });
     const runAuthentication = vi.fn(authentication.run);
     const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
       input => Effect.succeed({ title: input.bookSlug }),
       {
         scope: 'Book.fetch',
         requires: [{ run: runAuthentication }],
-        execution: { retry: { maxAttempts: 3, when: ['not_authenticated'] } },
+        execution: { retry: { maxAttempts: 3, when: ['login_required'] } },
       },
       runServerOperation,
     );
 
     await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({
       success: false,
-      reason: 'not_authenticated',
+      reason: 'login_required',
     });
     expect(runAuthentication).toHaveBeenCalledOnce();
   });

@@ -14,7 +14,10 @@ const operationFailureRetryForbidden = Symbol('ontahi.operationFailureRetryForbi
 export const forbidOperationFailureRetry = <TFailure extends OperationFailure>(
   failure: TFailure,
 ): TFailure => {
-  Object.defineProperty(failure, operationFailureRetryForbidden, { value: true });
+  Object.defineProperty(failure, operationFailureRetryForbidden, {
+    enumerable: true,
+    value: true,
+  });
   return failure;
 };
 

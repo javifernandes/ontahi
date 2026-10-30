@@ -44,7 +44,7 @@ export const assertValidDomainOperationExecution = (
   if (
     !Array.isArray(retry.when) ||
     retry.when.length === 0 ||
-    retry.when.some(reason => typeof reason !== 'string' || reason.length === 0)
+    Array.from(retry.when).some(reason => typeof reason !== 'string' || reason.length === 0)
   ) {
     throw new Error(
       `Domain operation "${operationId}" execution.retry.when must contain non-empty failure reasons.`,

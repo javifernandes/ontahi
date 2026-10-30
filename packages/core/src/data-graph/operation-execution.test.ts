@@ -45,6 +45,14 @@ describe('Operation execution planning', () => {
     ).toThrow('non-empty failure reasons');
   });
 
+  it('rejects sparse failure allowlists from untyped consumers', () => {
+    expect(() =>
+      assertValidDomainOperationExecution('Document.analyze', {
+        retry: { maxAttempts: 2, when: new Array(1) },
+      } as never),
+    ).toThrow('non-empty failure reasons');
+  });
+
   it('rejects a non-array failure allowlist from untyped consumers', () => {
     expect(() =>
       assertValidDomainOperationExecution('Document.analyze', {
