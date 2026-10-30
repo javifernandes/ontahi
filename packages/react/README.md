@@ -51,6 +51,35 @@ const total = useGraphQuery(openTodos.count());
 const first = useGraphQuery(openTodos.first());
 ```
 
+Queries that depend on render values can be authored directly in the hook. `useGraphQuery` derives
+its React Query key from the canonical graph program rather than the Query object's JavaScript
+identity, so a fresh builder instance on each render does not require `useMemo` for correctness or
+cache stability:
+
+```tsx
+const todo = useGraphQuery(
+  TodoItem.all()
+    .where(todo => todo.id.eq(todoId))
+    .as(TodoListItem)
+    .one(),
+);
+```
+
+When a dependency is not available yet, disable the read instead of inventing a sentinel locator:
+
+```tsx
+const todo = useGraphQuery(
+  TodoItem.all()
+    .where(todo => todo.id.eq(todoId ?? ''))
+    .as(TodoListItem)
+    .one(),
+  { enabled: Boolean(todoId) },
+);
+```
+
+Use a local Query variable when the same authored Query has multiple consumers. Reserve `useMemo`
+for unusually expensive application-side query construction, not as routine hook ceremony.
+
 `OntahiGraphProvider` installs a conventional same-origin Fetch client by default. Operation
 invocation and permission, Graph Read, Graph Command, and Durable Operation inspection all use one
 Runtime Transport at `POST /runtime`. Reflected Explorer data remains outside the registered

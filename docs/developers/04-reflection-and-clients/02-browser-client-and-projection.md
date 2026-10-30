@@ -224,20 +224,13 @@ apply every permission and data policy on that receiver.
 The UI authors the same membership language used from Node:
 
 ```tsx
-const visibleTodos = useMemo(() => {
-  const inList = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
-
-  return status === 'all' ? inList : inList.and(todo => todo.completed.eq(status === 'completed'));
-}, [selectedListId, status]);
-
-const todosQuery = useMemo(
-  () =>
-    TodoItem.all()
-      .where(visibleTodos)
-      .as(TodoListItem)
-      .orderBy(todo => todo.title),
-  [visibleTodos],
-);
+const inList = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
+const visibleTodos =
+  status === 'all' ? inList : inList.and(todo => todo.completed.eq(status === 'completed'));
+const todosQuery = TodoItem.all()
+  .where(visibleTodos)
+  .as(TodoListItem)
+  .orderBy(todo => todo.title);
 
 const todos = useGraphQuery(todosQuery, {
   enabled: Boolean(selectedListId),
@@ -248,6 +241,14 @@ const liveTodos = useGraphQuery(todosQuery, {
   observation: 'live',
 });
 ```
+
+The local variable above exists because both hooks consume the same authored Query. It does not
+need `useMemo`: `useGraphQuery` derives cache identity from the canonical graph program, not from
+the Query object's JavaScript reference. For a single consumer, author the Query directly inside
+`useGraphQuery`. A changed render value changes the canonical key; an equivalent fresh builder
+does not. Use `enabled` while a required value is unavailable rather than placing a fake ID in the
+Selection. Memoization is only useful when application-side construction is itself unusually
+expensive.
 
 `observation: 'live'` changes only the evaluation lifecycle. It opens the same complete-snapshot
 observation exposed by the runtime-bound Query's `.observe()`: the authored Query, parameters,
