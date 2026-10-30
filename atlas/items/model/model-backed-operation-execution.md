@@ -8,6 +8,8 @@ horizon: next
 supports:
   - ontahi.model.domain-operation
   - ontahi.model.operation-invocation
+  - ontahi.model.operation-execution-resilience
+  - ontahi.model.operation-implementation-binding
   - ontahi.runtime-capability-model
   - bookops.semantic-editorial-experience
 typeOf:
@@ -22,6 +24,8 @@ relatedPlans:
   - ontahi://plans/153b-declarative-operation-context-scope
   - ontahi://plans/155-declarative-basic-entity-mutations
   - ontahi://plans/156-model-backed-domain-operation-executor
+  - ontahi://plans/162-operation-execution-resilience
+  - ontahi://plans/163-operation-implementation-bindings-and-variants
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---

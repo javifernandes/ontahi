@@ -52,6 +52,8 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 21. [`Semantic Subjects And Runtime Concerns`](./model/semantic-subjects-and-runtime-concerns.md)
     (shaping)
 22. [`Semantic Module`](./model/semantic-module.md) (shaping)
+23. [`Operation Execution Resilience`](./model/operation-execution-resilience.md) (shaping)
+24. [`Operation Implementation Binding`](./model/operation-implementation-binding.md) (shaping)
 
 ## Adjacent Runtime Shapes
 

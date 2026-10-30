@@ -10,6 +10,8 @@ supports:
   - ontahi.operation-contracts
   - ontahi.runtime-capability-model
   - ontahi.independently-usable
+  - ontahi.model.operation-execution-resilience
+  - ontahi.model.operation-implementation-binding
 typeOf:
   - spec-workstream-atlas.atlas-model.model-item
 relatedPlans:
@@ -20,6 +22,8 @@ relatedPlans:
   - ontahi://plans/120-ontahi-environment-resources-and-semantic-bindings
   - bookops://plans/90-event-driven-architecture-runtime
   - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/162-operation-execution-resilience
+  - ontahi://plans/163-operation-implementation-bindings-and-variants
 migratedFrom: bookops://atlas/model/operation-invocation
 sourceCommit: 67713696
 ---
@@ -29,6 +33,11 @@ An [[ontahi.model.operation-invocation|Operation Invocation]] is a semantic mess
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 
 Operation invocations are requests or intentions and may produce a canonical result. They remain distinct from events, which state facts and may support fan-out or replay without one request/result relationship.
+
+An invocation may contain several execution attempts without becoming several invocations. Runtime
+composition selects an Operation implementation binding, and an explicit resilience policy may
+request another attempt after a typed failure. Attempt, binding, retry, fallback, redrive, replay,
+and request identity remain observable and non-interchangeable.
 
 HTTP ingress makes that boundary executable: a provider can authenticate and normalize an external
 event into a typed channel, and reflected ingress metadata can map that channel to an operation

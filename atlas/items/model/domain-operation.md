@@ -9,6 +9,8 @@ supports:
   - ontahi.operation-contracts
   - ontahi.authority-policies
   - ontahi.model.operation-invocation
+  - ontahi.model.operation-execution-resilience
+  - ontahi.model.operation-implementation-binding
   - bookops.semantic-editorial-experience
 typeOf:
   - spec-workstream-atlas.atlas-model.model-item
@@ -30,6 +32,8 @@ relatedPlans:
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/142d-existing-operation-refs
   - ontahi://plans/142e-portable-operation-condition-bridge
+  - ontahi://plans/162-operation-execution-resilience
+  - ontahi://plans/163-operation-implementation-bindings-and-variants
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
@@ -41,9 +45,16 @@ client invocation, server execution, and evidence. They are not mandatory transp
 ordinary [[ontahi.model.query|Queries]] or [[ontahi.model.command|Commands]].
 
 The operation contract does not require one permanent implementation mode. Runtime composition may
-eventually bind the same semantic operation to code, a model, an external system, or a composition,
-while immediate, durable, and streamed execution remain independent lifecycle choices. See
-[[ontahi.model.model-backed-operation-execution|Model-Backed Operation Execution]].
+bind the same semantic operation to code, a model, an external system, another language/runtime,
+or a composition while preserving its invocation contract. See
+[[ontahi.model.operation-implementation-binding|Operation Implementation Binding]] and
+[[ontahi.model.model-backed-operation-execution|Model-Backed Operation Execution]]. Immediate,
+durable, and streamed execution remain independent lifecycle choices.
+
+One Operation Invocation may contain several execution attempts under an explicit
+[[ontahi.model.operation-execution-resilience|Operation Execution Resilience]] policy. Retry does
+not create another semantic invocation, select another implementation implicitly, grant authority,
+or make effects idempotent.
 
 When an operation concerns existing entities, a [[ontahi.model.selection|Selection]] can describe its target independently from the behavior, cardinality requirements, authority, and effects the operation adds.
 

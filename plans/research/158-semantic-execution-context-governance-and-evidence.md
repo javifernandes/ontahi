@@ -24,6 +24,8 @@ Related plans:
 9. [146j. First-Class Events And Configurable Event Runtime](../done/146j-first-class-events-runtime-protocol-gate.md)
 10. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 11. [146m. Managed HTTP Event Egress](../done/146m-managed-http-event-egress.md)
+12. [162. Operation Execution Resilience](../current/162-operation-execution-resilience.md)
+13. [163. Operation Implementation Bindings And Variants](163-operation-implementation-bindings-and-variants.md)
 
 ## Summary
 
