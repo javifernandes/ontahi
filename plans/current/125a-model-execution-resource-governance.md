@@ -166,6 +166,11 @@ envelope. Aggregate token and duration totals are withheld unless every admitted
 the corresponding evidence. Debug projection carries bounded completed/failed attempt outcomes;
 it does not add automatic retry, retain provider errors, or make the counter durable.
 
+Plan 162 owns the decision to schedule another attempt, failure eligibility, and backoff as general
+Operation execution semantics. Resource Governance independently admits and accounts for each
+requested attempt. Plan 163 owns implementation selection and fallback; a Resource binding may
+constrain that selection but does not define the Operation contract.
+
 ## Non-Goals
 
 1. Do not build customer billing, invoicing, subscription plans, or payment integration.

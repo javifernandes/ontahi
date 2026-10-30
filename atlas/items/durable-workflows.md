@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/153f-queue-backed-task-runtime
   - ontahi://plans/155-adapter-capability-completeness
   - ontahi://plans/155a-vercel-workflow-event-waits
+  - ontahi://plans/162-operation-execution-resilience
   - bookops://plans/90-event-driven-architecture-runtime
 migratedFrom: bookops://atlas/durable-workflows
 sourceCommit: 67713696
@@ -27,6 +28,12 @@ sourceCommit: 67713696
 Durable Workflows cover long-running tasks, retries, event-driven execution, workflow tiers, and the runtime machinery needed for imports, sync, and agent-assisted work.
 
 Ontahi separates durable execution from message transport. Vercel Workflow, DBOS, Restate, and Temporal are execution-engine adapter candidates; RabbitMQ and similar brokers can transport jobs or events but do not by themselves provide workflow journals, durable timers, step replay, or task lifecycle state.
+
+Retry policy belongs to the Operation execution model rather than one workflow adapter. A durable
+runtime may interpret that policy through native scheduling and checkpoint mechanics only when it
+preserves invocation, attempt, cancellation, exhaustion, and evidence semantics. Rehydration cannot
+silently reset an attempt budget. Immediate runtimes may interpret a bounded subset without
+claiming restart survival.
 
 Durable operation metadata is the source for task definitions and adapter projections. The Vercel adapter derives statically discoverable workflow and step entrypoints from the analyzed application model; applications configure concrete stores, runtime composition, output files, and optional host step runners.
 
