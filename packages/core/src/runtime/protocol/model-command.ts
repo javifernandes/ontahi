@@ -95,13 +95,22 @@ const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
 const resourceEvidenceKeys = new Set(['visibility', 'model']);
-const resourceEvidenceModelKeys = new Set(['attempts', 'totalTokens', 'durationMs']);
+const resourceEvidenceModelKeys = new Set([
+  'attempts',
+  'reportedAttempts',
+  'failedAttempts',
+  'totalTokens',
+  'durationMs',
+]);
+const resourceAttemptOutcomeKeys = new Set(['outcome', 'activity', 'usageReported']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
 const isBoundedIdentity = (value: unknown, maximumLength = 256): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= maximumLength;
 const isPositiveInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 const parseModelResourceActivity = (value: unknown) => {
   if (value === undefined) return true;
@@ -177,9 +186,30 @@ const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => 
   if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys) || !isRecord(value.model))
     return undefined;
   if (value.visibility === 'debug') {
-    if (!hasOnlyKeys(value.model, new Set(['attempts']))) return undefined;
-    const attempts = parseModelResourceUsageList(value.model.attempts);
-    return attempts?.length ? { visibility: 'debug', model: { attempts } } : undefined;
+    if (!hasOnlyKeys(value.model, new Set(['attempts', 'attemptOutcomes']))) return undefined;
+    if (!Array.isArray(value.model.attempts)) return undefined;
+    const attempts =
+      value.model.attempts.length === 0 ? [] : parseModelResourceUsageList(value.model.attempts);
+    if (!attempts) return undefined;
+    const attemptOutcomes = value.model.attemptOutcomes;
+    if (
+      attemptOutcomes !== undefined &&
+      (!Array.isArray(attemptOutcomes) ||
+        attemptOutcomes.length === 0 ||
+        !attemptOutcomes.every(
+          attempt =>
+            isRecord(attempt) &&
+            hasOnlyKeys(attempt, resourceAttemptOutcomeKeys) &&
+            (attempt.outcome === 'started' ||
+              attempt.outcome === 'completed' ||
+              attempt.outcome === 'failed') &&
+            typeof attempt.usageReported === 'boolean' &&
+            parseModelResourceActivity(attempt.activity),
+        ))
+    )
+      return undefined;
+    if (attempts.length === 0 && attemptOutcomes === undefined) return undefined;
+    return cloneJson(value) as ResourceEvidence;
   }
   if (
     value.visibility !== 'summary' ||
@@ -193,6 +223,11 @@ const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => 
       metric !== undefined &&
       (typeof metric !== 'number' || !Number.isFinite(metric) || metric < 0)
     )
+      return undefined;
+  }
+  for (const key of ['reportedAttempts', 'failedAttempts'] as const) {
+    const count = value.model[key];
+    if (count !== undefined && (!isNonNegativeInteger(count) || count > value.model.attempts))
       return undefined;
   }
   return cloneJson(value) as ResourceEvidence;

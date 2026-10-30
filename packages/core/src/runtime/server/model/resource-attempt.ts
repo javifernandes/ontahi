@@ -1,4 +1,5 @@
 import type { ModelResourceActivity, ModelResourceUsage } from '../../contracts.js';
+import { recordModelResourceAttempt } from '../resource-evidence.js';
 import {
   getCurrentSemanticExecutionContext,
   withSemanticExecutionActivity,
@@ -27,23 +28,31 @@ const projectActivity = (
   };
 };
 
-export const withModelResourceAttempt = <TValue>(
+export const withModelResourceAttempt = async <TValue>(
   reportUsage: ((usage: ModelResourceUsage) => void) | undefined,
   run: (
     report: ((usage: ModelResourceUsage) => void) | undefined,
     admission: ModelResourceAdmission | undefined,
-  ) => TValue,
-): TValue => {
+  ) => Promise<TValue>,
+): Promise<TValue> => {
   const owner = getCurrentSemanticExecutionContext()?.subject;
-  return withSemanticExecutionActivity({ kind: 'resource-attempt', id: 'model' }, () => {
+  return withSemanticExecutionActivity({ kind: 'resource-attempt', id: 'model' }, async () => {
     const admission = admitModelResourceAttempt();
     const activity = projectActivity(owner, admission);
+    const completeAttempt = recordModelResourceAttempt(activity);
     const report = reportUsage
       ? (usage: ModelResourceUsage) => {
           const { activity: _providerActivity, ...providerUsage } = usage;
           reportUsage(activity ? { ...providerUsage, activity } : providerUsage);
         }
       : undefined;
-    return run(report, admission);
+    try {
+      const value = await run(report, admission);
+      completeAttempt('completed');
+      return value;
+    } catch (error) {
+      completeAttempt('failed');
+      throw error;
+    }
   });
 };

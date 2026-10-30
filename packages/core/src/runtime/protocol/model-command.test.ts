@@ -102,7 +102,12 @@ describe('Runtime Protocol model.command family', () => {
       result: { status: 'answered', message: 'Done.' },
       resourceEvidence: {
         visibility: 'summary',
-        model: { attempts: 2, totalTokens: 120, durationMs: 450 },
+        model: {
+          attempts: 2,
+          reportedAttempts: 1,
+          failedAttempts: 1,
+          durationMs: 450,
+        },
       },
     } as const;
 
@@ -112,7 +117,16 @@ describe('Runtime Protocol model.command family', () => {
         ...response,
         resourceEvidence: {
           visibility: 'debug',
-          model: { attempts: [{ provider: 'openai', model: 'gpt-test' }] },
+          model: {
+            attempts: [{ provider: 'openai', model: 'gpt-test' }],
+            attemptOutcomes: [
+              {
+                outcome: 'completed',
+                usageReported: true,
+                activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
+              },
+            ],
+          },
         },
       }),
     ).toMatchObject({ success: true });
@@ -128,8 +142,20 @@ describe('Runtime Protocol model.command family', () => {
     for (const resourceEvidence of [
       null,
       { visibility: 'debug', model: { attempts: [] } },
+      {
+        visibility: 'debug',
+        model: { attemptOutcomes: [{ outcome: 'failed', usageReported: false }] },
+      },
       { visibility: 'debug', model: { attempts: [], provider: 'openai' } },
       { visibility: 'summary', model: { attempts: 1, totalTokens: -1 } },
+      { visibility: 'summary', model: { attempts: 1, reportedAttempts: 2 } },
+      {
+        visibility: 'debug',
+        model: {
+          attempts: [],
+          attemptOutcomes: [{ outcome: 'failed', usageReported: false, activity: {} }],
+        },
+      },
     ]) {
       expect(parseModelCommandProtocolResponse({ ...response, resourceEvidence })).toMatchObject({
         success: false,

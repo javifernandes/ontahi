@@ -159,6 +159,13 @@ provider fields remain absent, retries remain separate charged attempts, and pro
 not part of the protocol. Evidence quality and durable aggregate accounting remain subsequent
 experiments.
 
+Attempt evidence now follows admission rather than provider usage reports. A rejected provider
+call therefore remains visible as a consumed attempt even when it returned no token or duration
+measurement, and a later successful call is counted separately under the same invocation-local
+envelope. Aggregate token and duration totals are withheld unless every admitted attempt supplied
+the corresponding evidence. Debug projection carries bounded completed/failed attempt outcomes;
+it does not add automatic retry, retain provider errors, or make the counter durable.
+
 ## Non-Goals
 
 1. Do not build customer billing, invoicing, subscription plans, or payment integration.
@@ -185,7 +192,7 @@ experiments.
       remain distinct typed outcomes with explicit enforcement owners.
 - [x] One limit rejects work before provider disclosure or cost, and one supported generation limit
       propagates cancellation or a precise bounded outcome.
-- [ ] Retry and multiple-attempt usage are additive and never presented as one uncharged execution.
+- [x] Retry and multiple-attempt usage are additive and never presented as one uncharged execution.
 - [x] Telemetry and Devtools can display redacted usage, limit, and outcome evidence without raw
       prompts, results, credentials, or graph context by default.
 - [x] Resource evidence is independent from semantic results, defaults to no client disclosure,

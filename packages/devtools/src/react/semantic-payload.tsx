@@ -140,6 +140,36 @@ const ResourceUsageAttempt = ({
   );
 };
 
+const ResourceAttemptOutcome = ({
+  outcome,
+  index,
+}: {
+  readonly outcome: unknown;
+  readonly index: number;
+}) => {
+  if (!isRecord(outcome)) return null;
+  const activity = isRecord(outcome.activity) ? outcome.activity : undefined;
+  const admission = activity && isRecord(activity.admission) ? activity.admission : undefined;
+  return (
+    <div key={index} style={styles.semanticCard}>
+      <div style={styles.resourceUsageHeader}>
+        <span style={{ ...styles.semanticLabel, marginBottom: 0 }}>Resource attempt</span>
+        <span style={styles.semanticValue}>{String(outcome.outcome ?? 'unknown')}</span>
+      </div>
+      <div style={styles.resourceUsageMetrics}>
+        <ResourceMetric
+          label='Attempt'
+          value={String(admission?.attempt ?? activity?.attemptId ?? 'unknown')}
+        />
+        <ResourceMetric
+          label='Usage reported'
+          value={outcome.usageReported === true ? 'yes' : 'no'}
+        />
+      </div>
+    </div>
+  );
+};
+
 const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) => {
   if (!isRecord(evidence) || !isRecord(evidence.model)) return null;
   if (evidence.visibility === 'summary') {
@@ -148,6 +178,15 @@ const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) =>
         <span style={styles.semanticLabel}>Resource usage summary</span>
         <div style={styles.resourceUsageMetrics}>
           <ResourceMetric label='Attempts' value={String(evidence.model.attempts ?? 'unknown')} />
+          {evidence.model.reportedAttempts === undefined ? null : (
+            <ResourceMetric
+              label='Reported attempts'
+              value={String(evidence.model.reportedAttempts)}
+            />
+          )}
+          {evidence.model.failedAttempts === undefined ? null : (
+            <ResourceMetric label='Failed attempts' value={String(evidence.model.failedAttempts)} />
+          )}
           {evidence.model.totalTokens === undefined ? null : (
             <ResourceMetric label='Total' value={`${String(evidence.model.totalTokens)} tokens`} />
           )}
@@ -158,11 +197,20 @@ const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) =>
       </div>
     );
   }
-  return evidence.visibility === 'debug' && Array.isArray(evidence.model.attempts)
-    ? evidence.model.attempts.map((usage, index) => (
-        <ResourceUsageAttempt key={index} usage={usage} index={index} />
-      ))
-    : null;
+  if (evidence.visibility !== 'debug' || !Array.isArray(evidence.model.attempts)) return null;
+  const outcomes = Array.isArray(evidence.model.attemptOutcomes)
+    ? evidence.model.attemptOutcomes
+    : [];
+  return (
+    <>
+      {outcomes.map((outcome, index) => (
+        <ResourceAttemptOutcome key={`outcome-${index}`} outcome={outcome} index={index} />
+      ))}
+      {evidence.model.attempts.map((usage, index) => (
+        <ResourceUsageAttempt key={`usage-${index}`} usage={usage} index={index} />
+      ))}
+    </>
+  );
 };
 
 export type ResultTableOrdering = {
