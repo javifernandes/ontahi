@@ -12,6 +12,7 @@ type ResourceEvidenceState = {
   readonly disclosure: ResourceEvidenceDisclosure;
   readonly modelUsage: ModelResourceUsage[];
   readonly modelAttemptOutcomes: ModelResourceAttemptOutcome[];
+  readonly suppressedModelAttempts: { count: number };
 };
 
 const storage = new AsyncLocalStorage<ResourceEvidenceState>();
@@ -40,11 +41,17 @@ export const withResourceEvidence = <TValue>(
         disclosure: narrowDisclosure(parent.disclosure, disclosure),
         modelUsage: parent.modelUsage,
         modelAttemptOutcomes: parent.modelAttemptOutcomes,
+        suppressedModelAttempts: parent.suppressedModelAttempts,
       },
       run,
     );
   return storage.run(
-    { disclosure: disclosure ?? 'none', modelUsage: [], modelAttemptOutcomes: [] },
+    {
+      disclosure: disclosure ?? 'none',
+      modelUsage: [],
+      modelAttemptOutcomes: [],
+      suppressedModelAttempts: { count: 0 },
+    },
     run,
   );
 };
@@ -53,7 +60,11 @@ export const recordModelResourceAttempt = (
   activity: ModelResourceActivity | undefined,
 ): ((outcome: ModelResourceAttemptOutcome['outcome']) => void) => {
   const state = storage.getStore();
-  if (!state || state.disclosure === 'none') return () => undefined;
+  if (!state) return () => undefined;
+  if (state.disclosure === 'none') {
+    state.suppressedModelAttempts.count += 1;
+    return () => undefined;
+  }
   const attempt: {
     outcome: ModelResourceAttemptOutcome['outcome'];
     activity?: ModelResourceActivity;
@@ -90,6 +101,7 @@ export const projectResourceEvidence = (
   usage: readonly ModelResourceUsage[],
   disclosure: ResourceEvidenceDisclosure,
   attemptOutcomes: readonly ModelResourceAttemptOutcome[] = [],
+  hasSuppressedAttempts = false,
 ): ResourceEvidence | undefined => {
   if (disclosure === 'none' || (usage.length === 0 && attemptOutcomes.length === 0))
     return undefined;
@@ -116,7 +128,7 @@ export const projectResourceEvidence = (
     projectedAttemptOutcomes.length === 0
       ? usage.length
       : projectedAttemptOutcomes.filter(attempt => attempt.usageReported).length;
-  const complete = reportedAttempts === attempts;
+  const complete = !hasSuppressedAttempts && reportedAttempts === attempts;
   const totalTokens = complete ? sumIfComplete(usage, entry => entry.totalTokens) : undefined;
   const durationMs = complete ? sumIfComplete(usage, entry => entry.durationMs) : undefined;
   const failedAttempts = projectedAttemptOutcomes.filter(
@@ -143,6 +155,7 @@ export const projectCurrentResourceEvidence = (
         [...additionalUsage, ...state.modelUsage],
         state.disclosure,
         state.modelAttemptOutcomes,
+        state.suppressedModelAttempts.count > 0,
       )
     : undefined;
 };

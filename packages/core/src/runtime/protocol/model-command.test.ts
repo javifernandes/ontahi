@@ -142,6 +142,10 @@ describe('Runtime Protocol model.command family', () => {
     for (const resourceEvidence of [
       null,
       { visibility: 'debug', model: { attempts: [] } },
+      {
+        visibility: 'debug',
+        model: { attemptOutcomes: [{ outcome: 'failed', usageReported: false }] },
+      },
       { visibility: 'debug', model: { attempts: [], provider: 'openai' } },
       { visibility: 'summary', model: { attempts: 1, totalTokens: -1 } },
       { visibility: 'summary', model: { attempts: 1, reportedAttempts: 2 } },

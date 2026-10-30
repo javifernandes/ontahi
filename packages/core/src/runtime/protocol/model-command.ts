@@ -187,8 +187,9 @@ const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => 
     return undefined;
   if (value.visibility === 'debug') {
     if (!hasOnlyKeys(value.model, new Set(['attempts', 'attemptOutcomes']))) return undefined;
+    if (!Array.isArray(value.model.attempts)) return undefined;
     const attempts =
-      Array.isArray(value.model.attempts) && value.model.attempts.length === 0
+      value.model.attempts.length === 0
         ? []
         : parseModelResourceUsageList(value.model.attempts);
     if (!attempts) return undefined;

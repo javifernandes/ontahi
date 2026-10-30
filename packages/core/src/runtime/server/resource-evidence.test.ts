@@ -120,6 +120,25 @@ describe('resource evidence', () => {
     });
   });
 
+  it('withholds outer aggregates when a nested scope suppresses an attempt', () => {
+    withResourceEvidence('summary', () => {
+      recordModelResourceUsage(usage);
+      withResourceEvidence('none', () => {
+        const complete = recordModelResourceAttempt({
+          attemptId: 'suppressed-attempt',
+          correlationId: 'correlation-1',
+        });
+        recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test', totalTokens: 8 });
+        complete('completed');
+      });
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        model: { attempts: 1 },
+      });
+    });
+  });
+
   it('inherits a parent policy when a nested scope does not specify one', () => {
     withResourceEvidence('summary', () =>
       withResourceEvidence(undefined, () =>
