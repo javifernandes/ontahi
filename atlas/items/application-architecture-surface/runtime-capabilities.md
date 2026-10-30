@@ -62,6 +62,12 @@ unused concerns or grant their capabilities; each configured implementation adve
 proven guarantees. Provider-neutral conformance establishes shared semantics while physical schema,
 locking, and transaction mechanisms remain adapter-owned.
 
+Durable delivery inspection is advertised independently from durable delivery. PostgreSQL and MySQL
+can expose a bounded, payload-free snapshot of current delivery lifecycle state because they retain
+that state already. The in-memory runtime and workflow adapters do not synthesize it. Capability
+availability does not authorize projection to a browser or make the snapshot an audit-history or
+replay surface.
+
 `@ontahi/postgres/tasks` and `@ontahi/mysql/tasks` extend that proof to a third independently
 selectable concern. A host can compose either provider's Data Graph storage, Task Storage, and Event Runtime over one pool without
 constructing a monolithic adapter or implying a shared transaction. The Task Storage conformance

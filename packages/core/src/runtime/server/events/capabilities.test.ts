@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { requireDurableEventDelivery } from './capabilities.js';
+import {
+  requireDurableEventDelivery,
+  requireDurableEventDeliveryInspection,
+} from './capabilities.js';
 import { createInMemoryEventRuntime } from './in-memory-runtime.js';
 import type { DurableEventDeliveryCapability, EventRuntime } from './types.js';
 
@@ -20,6 +23,7 @@ describe('Event Runtime capability requirements', () => {
         replay: false,
         durableAcceptance: true,
         durableDelivery: true,
+        deliveryInspection: false,
         acknowledgement: true,
         ordering: 'subscription',
         deduplication: false,
@@ -34,5 +38,21 @@ describe('Event Runtime capability requirements', () => {
     } satisfies EventRuntime;
 
     expect(requireDurableEventDelivery(runtime)).toBe(durableDelivery);
+  });
+
+  it('requires delivery inspection to be both advertised and implemented', () => {
+    const ephemeral = createInMemoryEventRuntime();
+    expect(() => requireDurableEventDeliveryInspection(ephemeral)).toThrow(
+      'does not provide durable Event delivery inspection',
+    );
+
+    const deliveryInspection = { inspect: async () => [] };
+    expect(
+      requireDurableEventDeliveryInspection({
+        ...ephemeral,
+        capabilities: { ...ephemeral.capabilities, deliveryInspection: true },
+        deliveryInspection,
+      }),
+    ).toBe(deliveryInspection);
   });
 });

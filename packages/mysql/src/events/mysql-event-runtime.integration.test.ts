@@ -60,6 +60,7 @@ describe('MySQL Event Runtime', () => {
       replay: false,
       durableAcceptance: true,
       durableDelivery: true,
+      deliveryInspection: true,
       acknowledgement: true,
       ordering: 'subscription',
       deduplication: false,
@@ -96,6 +97,37 @@ describe('MySQL Event Runtime', () => {
       ['mysql-conformance.terminal-failure'],
     );
     expect(rows).toEqual([{ state: 'failed', failure_reason: 'destination-rejected' }]);
+  });
+
+  it('inspects a bounded payload-free snapshot of durable delivery state', async () => {
+    const events = runtime();
+    await events.durableDelivery!.register(subscription('inspect-deliveries'));
+    const occurrence = await events.accept(emission('inspect'));
+    const claim = await events.durableDelivery!.claim('inspect-deliveries', {
+      consumerId: 'private-worker-id',
+      leaseMs: 1_000,
+    });
+    await events.durableDelivery!.fail(claim!, { reason: 'destination-rejected' });
+
+    const inspected = await events.deliveryInspection!.inspect('inspect-deliveries', {
+      limit: 10,
+      states: ['failed'],
+    });
+
+    expect(inspected).toHaveLength(1);
+    expect(inspected[0]).toMatchObject({
+      kind: 'durable-event-delivery-inspection',
+      subscriptionId: 'inspect-deliveries',
+      occurrenceId: occurrence.occurrenceId,
+      eventId: 'TodoListExportReady',
+      eventVersion: 1,
+      state: 'failed',
+      attempt: 1,
+      failureReason: 'destination-rejected',
+    });
+    expect(inspected[0]).not.toHaveProperty('payload');
+    expect(inspected[0]).not.toHaveProperty('claimedBy');
+    expect(inspected[0]?.failedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('delivers retained occurrences registered before or after acceptance', async () => {

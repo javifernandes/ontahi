@@ -1,5 +1,12 @@
 export { createEventApplication, EventIngressValidationError } from './application.js';
-export { requireDurableEventDelivery } from './capabilities.js';
+export {
+  requireDurableEventDelivery,
+  requireDurableEventDeliveryInspection,
+} from './capabilities.js';
+export {
+  MAX_DURABLE_EVENT_DELIVERY_INSPECTION_LIMIT,
+  normalizeDurableEventDeliveryInspectionQuery,
+} from './inspection.js';
 export {
   verifyDurableEventRuntimeConformance,
   type DurableEventRuntimeConformanceHarness,
@@ -47,6 +54,10 @@ export type {
   EventRuntime,
   EventRuntimeCapabilities,
   DurableEventDeliveryCapability,
+  DurableEventDeliveryInspection,
+  DurableEventDeliveryInspectionCapability,
+  DurableEventDeliveryInspectionQuery,
+  DurableEventDeliveryState,
   DurableEventSubscription,
   EventSubscriber,
   EventSubscription,

@@ -1,5 +1,8 @@
 import {
+  normalizeDurableEventDeliveryInspectionQuery,
   normalizeDurableEventDeliverySettlement,
+  type DurableEventDeliveryInspection,
+  type DurableEventDeliveryInspectionQuery,
   type DurableEventSubscription,
   type DurableEventDeliverySettlement,
   type EventDelivery,
@@ -74,6 +77,29 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
   subscriptionId: String(row.subscription_id),
   attempt: Number(row.attempt),
   occurrence: occurrenceFromRow(row),
+});
+
+const deliveryInspectionFromRow = (
+  row: Record<string, unknown>,
+): DurableEventDeliveryInspection => ({
+  kind: 'durable-event-delivery-inspection',
+  deliveryId: String(row.delivery_id),
+  subscriptionId: String(row.subscription_id),
+  occurrenceId: String(row.occurrence_id),
+  eventId: String(row.event_id),
+  eventVersion: Number(row.event_version),
+  state: String(row.state) as DurableEventDeliveryInspection['state'],
+  attempt: Number(row.attempt),
+  createdAt: mysqlTimestampToIso(row.created_at),
+  availableAt: mysqlTimestampToIso(row.available_at),
+  ...(row.lease_expires_at === null
+    ? {}
+    : { leaseExpiresAt: mysqlTimestampToIso(row.lease_expires_at) }),
+  ...(row.acknowledged_at === null
+    ? {}
+    : { acknowledgedAt: mysqlTimestampToIso(row.acknowledged_at) }),
+  ...(row.failed_at === null ? {} : { failedAt: mysqlTimestampToIso(row.failed_at) }),
+  ...(row.failure_reason === null ? {} : { failureReason: String(row.failure_reason) }),
 });
 
 type LiveSubscriber = { readonly eventId: string; readonly subscriber: EventSubscriber };
@@ -411,12 +437,36 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     );
   };
 
+  const inspectDeliveries = async (
+    subscriptionId: string,
+    inspectionQuery: DurableEventDeliveryInspectionQuery,
+  ) => {
+    requireIdentity(subscriptionId, 'Durable Event subscription id');
+    const query = normalizeDurableEventDeliveryInspectionQuery(inspectionQuery);
+    const stateFilter = query.states?.map(() => '?').join(', ');
+    const [rows] = await options.pool.query<RowDataPacket[]>(
+      `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
+              occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
+              delivery.created_at, delivery.available_at, delivery.lease_expires_at,
+              delivery.acknowledged_at, delivery.failed_at, delivery.failure_reason
+       FROM ${tables.deliveries} AS delivery
+       JOIN ${tables.occurrences} AS occurrence USING (occurrence_id)
+       WHERE delivery.subscription_id = ?
+       ${stateFilter === undefined ? '' : `AND delivery.state IN (${stateFilter})`}
+       ORDER BY delivery.created_at DESC, delivery.delivery_id DESC
+       LIMIT ?`,
+      [subscriptionId, ...(query.states ?? []), query.limit],
+    );
+    return rows.map(row => deliveryInspectionFromRow(row));
+  };
+
   const capabilities = {
     liveSubscription: true,
     retention: true,
     replay: false,
     durableAcceptance: true,
     durableDelivery: true,
+    deliveryInspection: true,
     acknowledgement: true,
     ordering: 'subscription',
     deduplication: false,
@@ -428,6 +478,7 @@ export const createMysqlEventRuntime = (options: MysqlEventRuntimeOptions): Even
     capabilities,
     accept,
     subscribe,
+    deliveryInspection: { inspect: inspectDeliveries },
     durableDelivery: {
       register,
       claim,

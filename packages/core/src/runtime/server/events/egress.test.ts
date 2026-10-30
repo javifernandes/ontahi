@@ -85,6 +85,7 @@ const runtimeHarness = () => {
       replay: false,
       durableAcceptance: true,
       durableDelivery: true,
+      deliveryInspection: false,
       acknowledgement: true,
       ordering: 'subscription',
       deduplication: false,

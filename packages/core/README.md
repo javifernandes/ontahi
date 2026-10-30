@@ -740,6 +740,13 @@ acceptance, durable delivery, acknowledgement, or the claim API is absent. Adapt
 an occurrence accepted before subscription, exclusive claims, lease expiry with stale-claim
 fencing, and a claim recovered after runtime recreation.
 
+A retained adapter may separately advertise `deliveryInspection` and expose a bounded snapshot of
+current delivery lifecycle state. Callers must supply a limit of at most 100 and may filter by
+state. The snapshot contains semantic and lifecycle identities, timestamps, attempt count, and a
+bounded terminal failure reason; it excludes Event payload, correlation, causation, claim identity,
+and worker identity. It is a server-side operational capability, not authorization to expose those
+details to every application client, and it is not an attempt-history, audit, or replay API.
+
 Structural delete behavior belongs to the relation declaration when every mutation path must obey
 it. A required `hasMany` ownership edge can cascade, while an attribute-free many-to-many edge can
 detach its relation facts:

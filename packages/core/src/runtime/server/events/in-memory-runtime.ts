@@ -57,6 +57,7 @@ export const createInMemoryEventRuntime = (
       replay: false,
       durableAcceptance: false,
       durableDelivery: false,
+      deliveryInspection: false,
       acknowledgement: false,
       ordering: 'acceptance',
       deduplication: false,

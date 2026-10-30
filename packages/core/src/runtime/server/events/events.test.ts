@@ -330,6 +330,7 @@ describe('first-class Events', () => {
       replay: false,
       durableAcceptance: false,
       durableDelivery: false,
+      deliveryInspection: false,
       acknowledgement: false,
       ordering: 'acceptance',
       deduplication: false,
