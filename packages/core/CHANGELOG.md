@@ -1,5 +1,15 @@
 # @ontahi/core
 
+## 1.0.0-alpha.18
+
+### Minor Changes
+
+- e91ded6: Identify every immediate Operation execution attempt and link model Resource debug evidence to its containing Operation attempt.
+- a3c8aa9: Allow immediate Domain Operations to declare typed retry allowlists with bounded fixed or
+  exponential backoff through reflected execution metadata.
+- 823e87f: Count admitted model attempts independently from provider usage reports, preserve failed attempts
+  across retries, and expose incomplete attempt accounting through Resource Evidence and Devtools.
+
 ## 1.0.0-alpha.17
 
 ### Minor Changes

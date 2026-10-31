@@ -1,5 +1,23 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.18
+
+### Minor Changes
+
+- e91ded6: Identify every immediate Operation execution attempt and link model Resource debug evidence to its containing Operation attempt.
+- 823e87f: Count admitted model attempts independently from provider usage reports, preserve failed attempts
+  across retries, and expose incomplete attempt accounting through Resource Evidence and Devtools.
+
+### Patch Changes
+
+- Updated dependencies [e91ded6]
+- Updated dependencies [a3c8aa9]
+- Updated dependencies [823e87f]
+  - @ontahi/core@1.0.0-alpha.18
+  - @ontahi/language@1.0.0-alpha.18
+  - @ontahi/react@1.0.0-alpha.18
+  - @ontahi/language-codemirror@1.0.0-alpha.18
+
 ## 1.0.0-alpha.17
 
 ### Patch Changes
