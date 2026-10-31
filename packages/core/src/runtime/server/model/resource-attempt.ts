@@ -1,4 +1,5 @@
 import type { ModelResourceActivity, ModelResourceUsage } from '../../contracts.js';
+import { getCurrentOperationExecutionAttempt } from '../context.js';
 import { recordModelResourceAttempt } from '../resource-evidence.js';
 import {
   getCurrentSemanticExecutionContext,
@@ -14,6 +15,7 @@ const projectActivity = (
 ): ModelResourceActivity | undefined => {
   const attempt = getCurrentSemanticExecutionContext();
   if (!attempt) return undefined;
+  const operationAttempt = getCurrentOperationExecutionAttempt();
   const resourceOwner: ModelResourceActivity['owner'] =
     owner?.kind === 'operation' || owner?.kind === 'intent-resolution'
       ? { kind: owner.kind, id: owner.id, ...(owner.runId ? { runId: owner.runId } : {}) }
@@ -22,6 +24,7 @@ const projectActivity = (
     attemptId: attempt.executionId,
     correlationId: attempt.correlationId,
     ...(attempt.causationId ? { causationId: attempt.causationId } : {}),
+    ...(operationAttempt ? { operationAttempt } : {}),
     ...(resourceOwner ? { owner: resourceOwner } : {}),
     ...(attempt.origin ? { origin: attempt.origin } : {}),
     ...(admission ? { admission } : {}),

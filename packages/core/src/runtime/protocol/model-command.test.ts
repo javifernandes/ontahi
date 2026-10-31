@@ -79,6 +79,7 @@ describe('Runtime Protocol model.command family', () => {
             attemptId: 'attempt-1',
             correlationId: 'execution-1',
             causationId: 'intent-1',
+            operationAttempt: { attemptId: 'operation-attempt-1', ordinal: 1 },
             owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
             origin: { channel: 'web', clientInstanceId: 'tab-1' },
             admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
@@ -171,6 +172,19 @@ describe('Runtime Protocol model.command family', () => {
     [[{ provider: 'openai', model: 'gpt-test', unknown: 1 }]],
     [[{ provider: 'openai', model: 'gpt-test', totalTokens: -1 }]],
     [[{ provider: 'openai', model: 'gpt-test', activity: {} }]],
+    [
+      [
+        {
+          provider: 'openai',
+          model: 'gpt-test',
+          activity: {
+            attemptId: 'a',
+            correlationId: 'c',
+            operationAttempt: { attemptId: 'operation-attempt-1', ordinal: 0 },
+          },
+        },
+      ],
+    ],
     [
       [
         {

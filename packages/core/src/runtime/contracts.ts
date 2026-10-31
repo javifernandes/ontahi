@@ -382,6 +382,10 @@ export type ModelResourceActivity = {
   readonly attemptId: string;
   readonly correlationId: string;
   readonly causationId?: string;
+  readonly operationAttempt?: {
+    readonly attemptId: string;
+    readonly ordinal: number;
+  };
   readonly owner?: {
     readonly kind: 'operation' | 'intent-resolution';
     readonly id: string;

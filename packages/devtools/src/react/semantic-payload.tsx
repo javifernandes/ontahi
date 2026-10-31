@@ -95,6 +95,12 @@ const ResourceUsageAttempt = ({
               label='Correlation'
               value={String(usage.activity.correlationId ?? 'unknown')}
             />
+            {!isRecord(usage.activity.operationAttempt) ? null : (
+              <ResourceMetric
+                label='Operation attempt'
+                value={`${String(usage.activity.operationAttempt.ordinal ?? 'unknown')} · ${String(usage.activity.operationAttempt.attemptId ?? 'unknown')}`}
+              />
+            )}
             {!isRecord(usage.activity.owner) ? null : (
               <ResourceMetric
                 label='Owner'
@@ -150,6 +156,8 @@ const ResourceAttemptOutcome = ({
   if (!isRecord(outcome)) return null;
   const activity = isRecord(outcome.activity) ? outcome.activity : undefined;
   const admission = activity && isRecord(activity.admission) ? activity.admission : undefined;
+  const operationAttempt =
+    activity && isRecord(activity.operationAttempt) ? activity.operationAttempt : undefined;
   return (
     <div key={index} style={styles.semanticCard}>
       <div style={styles.resourceUsageHeader}>
@@ -165,6 +173,12 @@ const ResourceAttemptOutcome = ({
           label='Usage reported'
           value={outcome.usageReported === true ? 'yes' : 'no'}
         />
+        {operationAttempt ? (
+          <ResourceMetric
+            label='Operation attempt'
+            value={`${String(operationAttempt.ordinal ?? 'unknown')} · ${String(operationAttempt.attemptId ?? 'unknown')}`}
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import type { OperationRuntimeContext } from '../context-types.js';
 import {
   getOperationRuntimeContext,
   operationRuntimeContextStorage,
+  startOperationExecutionAttempt,
   toContextRecord,
 } from '../context.js';
 import { withAtomicDataGraphExecution } from '../data-graph.js';
@@ -55,27 +56,31 @@ const retryDelayMs = (
 const applyOperationRetry = <TValue, TError>(
   effect: Effect.Effect<TValue, TError>,
   policy: OperationRetryPolicy | undefined,
+  context: OperationRuntimeContext,
 ): Effect.Effect<TValue, TError> => {
-  if (!policy || policy.maxAttempts === 1) return effect;
-  const retryableReasons = new Set(policy.when);
+  const retryableReasons = new Set(policy?.when ?? []);
 
   const attempt = (ordinal: number): Effect.Effect<TValue, TError> =>
-    effect.pipe(
-      Effect.catchAll(error => {
-        if (
-          ordinal >= policy.maxAttempts ||
-          !isOperationFailure(error) ||
-          isOperationFailureRetryForbidden(error) ||
-          !retryableReasons.has(error.reason)
-        ) {
-          return Effect.fail(error);
-        }
-        const delayMs = retryDelayMs(policy.backoff, ordinal);
-        return (delayMs > 0 ? Effect.sleep(delayMs) : Effect.void).pipe(
-          Effect.flatMap(() => attempt(ordinal + 1)),
-        );
-      }),
-    );
+    Effect.suspend(() => {
+      startOperationExecutionAttempt(context, ordinal);
+      return effect.pipe(
+        Effect.catchAll(error => {
+          if (
+            !policy ||
+            ordinal >= policy.maxAttempts ||
+            !isOperationFailure(error) ||
+            isOperationFailureRetryForbidden(error) ||
+            !retryableReasons.has(error.reason)
+          ) {
+            return Effect.fail(error);
+          }
+          const delayMs = retryDelayMs(policy.backoff, ordinal);
+          return (delayMs > 0 ? Effect.sleep(delayMs) : Effect.void).pipe(
+            Effect.flatMap(() => attempt(ordinal + 1)),
+          );
+        }),
+      );
+    });
 
   return attempt(1);
 };
@@ -203,13 +208,16 @@ export const createOperationRunner = <
     return withSemanticExecutionActivity({ kind: 'operation', id: metadata.scope }, () =>
       operationRuntimeContextStorage.run(context, async () => {
         const runCurrentOperation = () =>
-          runOperationEffect(applyOperationRetry(guardedEffect, metadata.execution?.retry), {
-            scope: metadata.scope,
-            telemetrySpanName: metadata.telemetrySpanName,
-            defectLogMessage: metadata.defectLogMessage,
-            defectPublicMessage: metadata.defectPublicMessage,
-            extra,
-          });
+          runOperationEffect(
+            applyOperationRetry(guardedEffect, metadata.execution?.retry, context),
+            {
+              scope: metadata.scope,
+              telemetrySpanName: metadata.telemetrySpanName,
+              defectLogMessage: metadata.defectLogMessage,
+              defectPublicMessage: metadata.defectPublicMessage,
+              extra,
+            },
+          );
 
         const cacheRefs = [
           ...(metadata.cache?.value ? [metadata.cache.value(input)] : []),

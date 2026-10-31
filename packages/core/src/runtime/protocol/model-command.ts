@@ -87,11 +87,13 @@ const resourceActivityKeys = new Set([
   'attemptId',
   'correlationId',
   'causationId',
+  'operationAttempt',
   'owner',
   'origin',
   'admission',
 ]);
 const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
+const operationAttemptKeys = new Set(['attemptId', 'ordinal']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
 const resourceEvidenceKeys = new Set(['visibility', 'model']);
@@ -120,6 +122,14 @@ const parseModelResourceActivity = (value: unknown) => {
     !isBoundedIdentity(value.attemptId) ||
     !isBoundedIdentity(value.correlationId) ||
     (value.causationId !== undefined && !isBoundedIdentity(value.causationId))
+  )
+    return false;
+  if (
+    value.operationAttempt !== undefined &&
+    (!isRecord(value.operationAttempt) ||
+      !hasOnlyKeys(value.operationAttempt, operationAttemptKeys) ||
+      !isBoundedIdentity(value.operationAttempt.attemptId) ||
+      !isPositiveInteger(value.operationAttempt.ordinal))
   )
     return false;
   if (

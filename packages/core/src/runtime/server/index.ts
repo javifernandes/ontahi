@@ -127,6 +127,7 @@ export {
   getOrCreateServerContextResource,
   memoizeInServerContext,
   getOperationRuntimeContext,
+  getCurrentOperationExecutionAttempt,
   getRequiredOperationRuntimeContext,
   operationRuntimeContextStorage,
   serverContext,
@@ -457,7 +458,11 @@ export type {
   LayerScopedOptions,
 } from './layer-types.js';
 export type { ArchitectureDefinition, ArchitectureLayerDefaults } from './architecture-types.js';
-export type { OperationRuntimeContext, ServerOperationContext } from './context-types.js';
+export type {
+  OperationExecutionAttempt,
+  OperationRuntimeContext,
+  ServerOperationContext,
+} from './context-types.js';
 export type {
   LayerOperationOptions,
   OperationCacheConfig,
