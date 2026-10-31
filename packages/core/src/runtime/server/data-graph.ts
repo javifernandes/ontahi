@@ -115,10 +115,13 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
     TRequirements
   >;
 
-export const withAtomicDataGraphExecution = <TInput>(): LayerConcern<
-  TInput,
-  OperationFailure<'execution_unavailable'>
-> => ({
+type AtomicDataGraphExecutionOptions = {
+  requireIndependentBoundary?: boolean;
+};
+
+export const withAtomicDataGraphExecution = <TInput>(
+  options: AtomicDataGraphExecutionOptions = {},
+): LayerConcern<TInput, OperationFailure<'execution_unavailable'>> => ({
   run: <TSuccess, TNextError>(
     _runtime: LayerConcernRuntime<TInput>,
     next: Effect.Effect<TSuccess, TNextError>,
@@ -130,6 +133,12 @@ export const withAtomicDataGraphExecution = <TInput>(): LayerConcern<
             DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY,
           )
         ) {
+          if (options.requireIndependentBoundary) {
+            return failOperation(
+              'execution_unavailable',
+              'This retrying atomic Operation requires its own Data Graph transaction boundary.',
+            );
+          }
           return next;
         }
 

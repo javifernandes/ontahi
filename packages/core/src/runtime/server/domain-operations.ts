@@ -476,9 +476,14 @@ type DefineAtomicDomainOperation = <
   operation: Omit<
     DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
     'kind' | 'durable' | 'execution' | 'output'
-  > & { output?: TOutput },
+  > & {
+    execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
+      atomicity?: never;
+    };
+    output?: TOutput;
+  },
 ) => DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
-  execution: { atomicity: 'required' };
+  execution: DomainOperationExecutionMetadata<TFailure['reason']> & { atomicity: 'required' };
 };
 
 type DefineDomainOperation = DefineDomainOperationCall & {
@@ -508,11 +513,13 @@ const defineDomainOperationImplementation = (
 };
 
 const defineAtomicDomainOperationImplementation = (
-  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind' | 'execution'>,
+  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind' | 'execution'> & {
+    execution?: Omit<DomainOperationExecutionMetadata, 'atomicity'>;
+  },
 ) =>
   defineDomainOperationImplementation({
     ...operation,
-    execution: { atomicity: 'required' },
+    execution: { ...operation.execution, atomicity: 'required' },
   });
 
 export const defineDomainOperation = Object.assign(defineDomainOperationImplementation, {

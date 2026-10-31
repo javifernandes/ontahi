@@ -9,6 +9,9 @@ Parent research: [125. Ontahi AI Operations](../research/125-ontahi-ai-operation
 Broader research:
 [158. Semantic Execution Context, Governance And Evidence](../research/158-semantic-execution-context-governance-and-evidence.md).
 
+Related research:
+[164. Derived Models, Projections And Provenance](../research/164-derived-models-projections-and-provenance.md).
+
 Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-operation-execution.md),
 [Runtime Capability Model](../../atlas/items/application-architecture-surface/runtime-capabilities.md).
 
@@ -48,6 +51,13 @@ ports with Ontahi concerns, rate limiting, telemetry, runtime capabilities, and 
 non-model service. Promote only the genuinely shared lifecycle and resource-policy concepts;
 provider-specific tokens, prompts, structured generation, and model identifiers remain model
 adapter evidence.
+
+External search is the leading non-model comparison. Indexing and querying a managed search
+provider consume requests, latency, quota, concurrency, and money that should be attributable to
+the indexing or search Operation. The provider is a governed Resource; the search index is a
+separate derived model whose source lineage and freshness belong to Plan 164. This distinction
+prevents governance from owning index semantics and prevents the derived-model design from
+reimplementing admission, measurement, or audit for every external service.
 
 ## Relationship To Authority
 
