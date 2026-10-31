@@ -47,6 +47,11 @@ debug Resource evidence causally links a narrower provider attempt to its contai
 attempt. This identity is ephemeral evidence; it is not a durable checkpoint or part of the
 Operation's business result.
 
+When an Operation requires local atomicity, every retry opens a fresh transaction boundary. A
+failed attempt rolls its Data Graph work back before the next attempt begins from committed state;
+only a successful result publishes its effect intents. This rollback guarantee does not extend
+exactly-once semantics to irreversible external effects.
+
 Resilience relates to [[ontahi.model.operation-implementation-binding|Operation Implementation
 Binding]] without collapsing into it. Retry repeats a selected implementation. Fallback explicitly
 selects another implementation after failure and requires separate policy and evidence.

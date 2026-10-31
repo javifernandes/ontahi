@@ -273,6 +273,12 @@ checks around the body, then success effects. For `operation.atomic(...)`, requi
 conditions, opaque pre/body/post checks, and their Data Graph work share the declared transaction.
 Cache invalidation and host hooks happen after successful execution.
 
+An atomic Operation may also declare `execution.retry`. Every explicitly eligible typed failure
+starts a new attempt with a fresh transaction boundary: failed Data Graph work rolls back, the next
+attempt begins from committed state, and only the successful attempt's effect intents are
+published. Retry does not make external effects exactly once; keep irreversible calls outside the
+retried body unless they supply their own idempotency or reconciliation contract.
+
 `concerns: [...]` is the current middleware seam: a concern receives the next computation and can
 act before it, after it, or around a failure. A success effect is different. The operation body
 returns it alongside its value, and the runtime executes it only after the body and postconditions

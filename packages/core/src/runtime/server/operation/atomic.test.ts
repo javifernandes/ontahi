@@ -16,7 +16,10 @@ import {
   defineDomainOperation,
   defineDomainOperationsForEntity,
   getCurrentDataGraphRuntime,
+  getCurrentOperationExecutionAttempt,
+  run as runEffect,
   runServerDomainOperationRaw,
+  withEffects,
 } from '../index.js';
 
 type Runtime = DataGraphExecutionRuntime<never>;
@@ -332,6 +335,80 @@ describe('atomic Domain Operations', () => {
       reason: 'body_failed',
     });
     expect(state.revisions).toBe(0);
+  });
+
+  it('opens a fresh atomic boundary for every retry and publishes only successful effects', async () => {
+    const state = { revisions: 0 };
+    const transactionStarts: number[] = [];
+    const attemptOrdinals: number[] = [];
+    const publishedRevisions: number[] = [];
+    let pendingRevisions = 0;
+    const transactionRuntime = createRuntime(<TResult>() => {
+      pendingRevisions += 1;
+      return Effect.succeed(undefined as TResult);
+    });
+    const parentRuntime = Object.assign(
+      createRuntime(<TResult>() => Effect.succeed(undefined as TResult)),
+      {
+        transaction: <TValue, TError, TRequirements>(
+          work: (runtime: Runtime) => Effect.Effect<TValue, TError, TRequirements>,
+        ) =>
+          Effect.suspend(() => {
+            transactionStarts.push(state.revisions);
+            pendingRevisions = state.revisions;
+            return work(transactionRuntime).pipe(
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  state.revisions = pendingRevisions;
+                }),
+              ),
+            );
+          }),
+      },
+    ) satisfies TransactionRuntime;
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      never,
+      undefined,
+      undefined,
+      TransactionRuntime
+    >({ createRuntime: () => parentRuntime });
+    const records = graph.bindSelectionEntity(RecordDefinition);
+    const failure = createOperationFailure('revision_conflict', 'Retry the revision.');
+    const mutate = defineDomainOperationsForEntity(
+      RecordDefinition,
+      {
+        mutate: defineDomainOperation.atomic({
+          execution: {
+            retry: { maxAttempts: 2, when: ['revision_conflict'] },
+          },
+          concerns: [graph.withRuntime()],
+          *run() {
+            const attempt = getCurrentOperationExecutionAttempt();
+            attemptOrdinals.push(attempt?.ordinal ?? 0);
+            yield* records.insert({ id: 'record-1', revision: attempt?.ordinal ?? 0 }).run();
+            if (attempt?.ordinal === 1) return yield* Effect.fail(failure);
+            return withEffects({ revision: attempt?.ordinal }, [
+              runEffect(
+                Effect.sync(() => publishedRevisions.push(attempt?.ordinal ?? 0)).pipe(
+                  Effect.asVoid,
+                ),
+              ),
+            ]);
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.atomic-retry' },
+    ).mutate;
+
+    await expect(runServerDomainOperationRaw(mutate, {})).resolves.toEqual({
+      success: true,
+      data: { revision: 2 },
+    });
+    expect(attemptOrdinals).toEqual([1, 2]);
+    expect(transactionStarts).toEqual([0, 0]);
+    expect(state.revisions).toBe(1);
+    expect(publishedRevisions).toEqual([2]);
   });
 
   it('fails before preconditions and body evaluation when local atomicity is unavailable', async () => {

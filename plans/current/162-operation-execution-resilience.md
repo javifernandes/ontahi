@@ -175,9 +175,10 @@ structured output, then succeeds; all three attempts pass independently through 
 Governance and appear in provider-neutral evidence. The immediate runner assigns every execution
 attempt a unique identity and one-based ordinal. Model Resource evidence links its narrower
 provider attempts to that containing Operation attempt, and trusted server code can inspect the
-current attempt without adding it to the business result. Composition with atomic authoring remains
-a follow-up before the first slice is complete. Durable runtimes still reject this immediate-only
-capability rather than silently promising persisted retries.
+current attempt without adding it to the business result. Atomic Operations open a fresh local
+transaction for every attempt: a failed attempt rolls its writes back, the next attempt starts from
+committed state, and effect intents are published only from the successful result. Durable runtimes
+still reject this immediate-only capability rather than silently promising persisted retries.
 
 ## Deferred Slices
 
