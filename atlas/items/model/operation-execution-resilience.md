@@ -50,7 +50,9 @@ Operation's business result.
 When an Operation requires local atomicity, every retry opens a fresh transaction boundary. A
 failed attempt rolls its Data Graph work back before the next attempt begins from committed state;
 only a successful result publishes its effect intents. This rollback guarantee does not extend
-exactly-once semantics to irreversible external effects.
+exactly-once semantics to irreversible external effects. A retrying atomic Operation cannot reuse
+an enclosing transaction: it fails closed unless the runtime can supply a separately proven nested
+rollback boundary.
 
 Resilience relates to [[ontahi.model.operation-implementation-binding|Operation Implementation
 Binding]] without collapsing into it. Retry repeats a selected implementation. Fallback explicitly

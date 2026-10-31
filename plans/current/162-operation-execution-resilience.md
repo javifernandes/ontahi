@@ -177,8 +177,10 @@ attempt a unique identity and one-based ordinal. Model Resource evidence links i
 provider attempts to that containing Operation attempt, and trusted server code can inspect the
 current attempt without adding it to the business result. Atomic Operations open a fresh local
 transaction for every attempt: a failed attempt rolls its writes back, the next attempt starts from
-committed state, and effect intents are published only from the successful result. Durable runtimes
-still reject this immediate-only capability rather than silently promising persisted retries.
+committed state, and effect intents are published only from the successful result. A retrying atomic
+Operation fails closed inside an already active atomic boundary until a runtime advertises and
+proves nested rollback/savepoint semantics. Durable runtimes still reject this immediate-only
+capability rather than silently promising persisted retries.
 
 ## Deferred Slices
 

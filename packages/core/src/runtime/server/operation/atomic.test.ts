@@ -411,6 +411,44 @@ describe('atomic Domain Operations', () => {
     expect(publishedRevisions).toEqual([2]);
   });
 
+  it('discards effects returned by an attempt whose postcondition requests a retry', async () => {
+    const { graph, records, state } = createTransactionalRecordFixture();
+    const publishedRevisions: number[] = [];
+    const failure = createOperationFailure('revision_conflict', 'Retry the revision.');
+    const mutate = defineDomainOperationsForEntity(
+      RecordDefinition,
+      {
+        mutate: defineDomainOperation.atomic({
+          execution: {
+            retry: { maxAttempts: 2, when: ['revision_conflict'] },
+          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              post: () =>
+                getCurrentOperationExecutionAttempt()?.ordinal === 1 ? failure : undefined,
+            }),
+          ],
+          *run() {
+            const revision = getCurrentOperationExecutionAttempt()?.ordinal ?? 0;
+            yield* records.insert({ id: 'record-1', revision }).run();
+            return withEffects({ revision }, [
+              runEffect(Effect.sync(() => publishedRevisions.push(revision)).pipe(Effect.asVoid)),
+            ]);
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.atomic-postcondition-retry' },
+    ).mutate;
+
+    await expect(runServerDomainOperationRaw(mutate, {})).resolves.toEqual({
+      success: true,
+      data: { revision: 2 },
+    });
+    expect(state.revisions).toBe(1);
+    expect(publishedRevisions).toEqual([2]);
+  });
+
   it('fails before preconditions and body evaluation when local atomicity is unavailable', async () => {
     const pre = vi.fn();
     const body = vi.fn(() => Effect.void);
@@ -436,7 +474,7 @@ describe('atomic Domain Operations', () => {
     expect(body).not.toHaveBeenCalled();
   });
 
-  it('reuses an active atomic boundary for nested atomic Operations', async () => {
+  it('reuses an active boundary for nested atomic Operations but rejects nested retries', async () => {
     const transactions = vi.fn();
     const transactionRuntime = createRuntime(<TResult>() => Effect.succeed(undefined as TResult));
     const parentRuntime = Object.assign(
@@ -469,15 +507,35 @@ describe('atomic Domain Operations', () => {
       },
       { exposure: 'server-only', layer: 'tests.operation.atomic-nested' },
     ).inner;
+    const retryFailure = createOperationFailure('temporary', 'Retry later.');
+    const retriedBody = vi.fn(
+      (): Effect.Effect<string, typeof retryFailure> => Effect.succeed('retried'),
+    );
+    const retriedInner = defineDomainOperationsForEntity(
+      RecordDefinition,
+      {
+        retriedInner: defineDomainOperation.atomic({
+          execution: { retry: { maxAttempts: 2, when: ['temporary'] } },
+          concerns: [graph.withRuntime()],
+          run: retriedBody,
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.atomic-nested' },
+    ).retriedInner;
     const outer = defineDomainOperationsForEntity(
       RecordDefinition,
       {
         outer: defineDomainOperation.atomic({
           concerns: [graph.withRuntime()],
           run: () =>
-            Effect.promise(() => runServerDomainOperationRaw(inner, {})).pipe(
-              Effect.map(result => (result.success ? result.data : 'failed')),
-            ),
+            Effect.promise(async () => {
+              const reused = await runServerDomainOperationRaw(inner, {});
+              const rejected = await runServerDomainOperationRaw(retriedInner, {});
+              return {
+                reused: reused.success ? reused.data : 'failed',
+                rejected: rejected.success ? 'unexpected-success' : rejected.reason,
+              };
+            }),
         }),
       },
       { exposure: 'server-only', layer: 'tests.operation.atomic-nested' },
@@ -485,8 +543,9 @@ describe('atomic Domain Operations', () => {
 
     await expect(runServerDomainOperationRaw(outer, {})).resolves.toEqual({
       success: true,
-      data: 'inner',
+      data: { reused: 'inner', rejected: 'execution_unavailable' },
     });
     expect(transactions).toHaveBeenCalledOnce();
+    expect(retriedBody).not.toHaveBeenCalled();
   });
 });
