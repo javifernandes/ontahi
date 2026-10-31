@@ -8,6 +8,7 @@ import { getCurrentSemanticExecutionContext } from './semantic-execution.js';
 
 import {
   authenticated,
+  getCurrentOperationExecutionAttempt,
   runServerEffect,
   withInvocationContext,
   type LayerConcern,
@@ -55,6 +56,28 @@ const createRunOperationEffect = () =>
   ) as unknown as RunOperationEffect & ReturnType<typeof vi.fn>;
 
 describe('createOperationRunner', () => {
+  it('gives every execution attempt a stable ordinal and unique identity', async () => {
+    const attempts: Array<ReturnType<typeof getCurrentOperationExecutionAttempt>> = [];
+    const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
+      input =>
+        Effect.suspend(() => {
+          attempts.push(getCurrentOperationExecutionAttempt());
+          return attempts.length < 3
+            ? Effect.fail({ reason: 'temporary', message: 'Try again.' })
+            : Effect.succeed({ title: input.bookSlug });
+        }),
+      {
+        scope: 'Book.fetch',
+        execution: { retry: { maxAttempts: 3, when: ['temporary'] } },
+      },
+      runServerOperation,
+    );
+
+    await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({ success: true });
+    expect(attempts.map(attempt => attempt?.ordinal)).toEqual([1, 2, 3]);
+    expect(new Set(attempts.map(attempt => attempt?.attemptId)).size).toBe(3);
+  });
+
   it('validates retry metadata on the public runner path', () => {
     expect(() =>
       createOperationRunner<BookInput, BookResult, OperationFailure>(

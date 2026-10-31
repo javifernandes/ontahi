@@ -179,6 +179,10 @@ describe('SemanticPayload', () => {
                   activity: {
                     attemptId: 'attempt-1',
                     correlationId: 'execution-1',
+                    operationAttempt: {
+                      attemptId: 'operation-attempt-2',
+                      ordinal: 2,
+                    },
                     owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
                     origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
                     admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
@@ -213,6 +217,7 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
     expect(screen.getAllByText('Resource usage')).toHaveLength(4);
+    expect(screen.getByText('2 · operation-attempt-2')).toBeTruthy();
     expect(screen.getByText('Resource attempt')).toBeTruthy();
     expect(screen.getByText('failed')).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Usage reported · no' })).toBeTruthy();

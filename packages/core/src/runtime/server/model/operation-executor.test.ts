@@ -74,16 +74,31 @@ describe('model-backed Operation executor', () => {
     );
 
     await withInvocationContext(
-      { modelResourceLimits: { maxAttempts: 3 }, resourceEvidenceDisclosure: 'summary' },
+      { modelResourceLimits: { maxAttempts: 3 }, resourceEvidenceDisclosure: 'debug' },
       async () => {
         await expect(suggest(request.input)).resolves.toEqual({
           success: true,
           data: { title: 'Set the table' },
         });
-        expect(projectCurrentResourceEvidence()).toEqual({
-          visibility: 'summary',
-          model: { attempts: 3, reportedAttempts: 2, failedAttempts: 1 },
-        });
+        const evidence = projectCurrentResourceEvidence();
+        expect(evidence).toMatchObject({ visibility: 'debug' });
+        if (!evidence || evidence.visibility !== 'debug')
+          throw new Error('Expected debug evidence');
+        expect(
+          evidence.model.attemptOutcomes?.map(
+            attempt => attempt.activity?.operationAttempt?.ordinal,
+          ),
+        ).toEqual([1, 2, 3]);
+        expect(
+          new Set(
+            evidence.model.attemptOutcomes?.map(
+              attempt => attempt.activity?.operationAttempt?.attemptId,
+            ),
+          ).size,
+        ).toBe(3);
+        expect(
+          evidence.model.attempts.map(usage => usage.activity?.operationAttempt?.ordinal),
+        ).toEqual([2, 3]);
       },
     );
 

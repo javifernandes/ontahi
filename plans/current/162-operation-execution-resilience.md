@@ -172,10 +172,12 @@ invocation-scoped.
 The consumer model-backed proof now composes the ordinary model Operation executor with the
 canonical Operation runner. One invocation recovers from a provider failure, rejects invalid
 structured output, then succeeds; all three attempts pass independently through Model Resource
-Governance and appear in provider-neutral evidence. Attempt identity/evidence projection and
-composition with atomic authoring remain follow-ups before the first slice is complete. Durable
-runtimes still reject this immediate-only capability rather than silently promising persisted
-retries.
+Governance and appear in provider-neutral evidence. The immediate runner assigns every execution
+attempt a unique identity and one-based ordinal. Model Resource evidence links its narrower
+provider attempts to that containing Operation attempt, and trusted server code can inspect the
+current attempt without adding it to the business result. Composition with atomic authoring remains
+a follow-up before the first slice is complete. Durable runtimes still reject this immediate-only
+capability rather than silently promising persisted retries.
 
 ## Deferred Slices
 
@@ -190,7 +192,7 @@ retries.
 ## Acceptance Checklist
 
 - [x] Retry belongs to the Operation execution contract, not `ModelProvider` or one task adapter.
-- [ ] One invocation can contain several separately identified attempts.
+- [x] One invocation can contain several separately identified attempts.
 - [x] Only declared typed failures request another attempt.
 - [x] Resource Governance independently admits and accounts for every attempt.
 - [ ] Cancellation and exhaustion are distinct terminal outcomes.

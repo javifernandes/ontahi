@@ -7,7 +7,7 @@ import {
   getOrCreateContextResource,
   type ServerContextResourceApi,
 } from './context-resources.js';
-import type { OperationRuntimeContext } from './context-types.js';
+import type { OperationExecutionAttempt, OperationRuntimeContext } from './context-types.js';
 
 export const operationRuntimeContextStorage = new AsyncLocalStorage<OperationRuntimeContext>();
 
@@ -22,6 +22,25 @@ export const getRequiredOperationRuntimeContext = (): OperationRuntimeContext =>
   }
 
   return context;
+};
+
+export const getCurrentOperationExecutionAttempt = (): OperationExecutionAttempt | undefined =>
+  getOperationRuntimeContext()?.attempt;
+
+let fallbackOperationAttemptSequence = 0;
+
+export const startOperationExecutionAttempt = (
+  context: OperationRuntimeContext,
+  ordinal: number,
+): OperationExecutionAttempt => {
+  const attempt = {
+    attemptId:
+      globalThis.crypto?.randomUUID?.() ??
+      `ontahi-operation-attempt-${Date.now()}-${(fallbackOperationAttemptSequence += 1)}`,
+    ordinal,
+  };
+  context.attempt = attempt;
+  return attempt;
 };
 
 export const getOrCreateServerContextResource = <TValue>(

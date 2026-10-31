@@ -41,6 +41,12 @@ persist attempt state and scheduling. LangGraph, Temporal, Step Functions, Verce
 other engines are adapters for that execution meaning; their provider task or state types do not
 become Ontahí's model.
 
+The immediate runtime assigns a unique identity and one-based ordinal to every attempted
+execution, including the first. Trusted server composition can inspect the current attempt, while
+debug Resource evidence causally links a narrower provider attempt to its containing Operation
+attempt. This identity is ephemeral evidence; it is not a durable checkpoint or part of the
+Operation's business result.
+
 Resilience relates to [[ontahi.model.operation-implementation-binding|Operation Implementation
 Binding]] without collapsing into it. Retry repeats a selected implementation. Fallback explicitly
 selects another implementation after failure and requires separate policy and evidence.

@@ -557,8 +557,11 @@ The runtime creates its own execution and correlation identities, then derives O
 Resolution and model Resource-attempt activities. `getCurrentSemanticExecutionContext()` exposes
 the current safe projection to trusted server composition. Origin is diagnostic provenance only:
 it does not grant authority or select cache, policy or accounting scope. Model usage may include an
-`activity` projection with its attempt, correlation, semantic owner and origin; Devtools renders
-that projection without retaining prompts or model results.
+`activity` projection with its Resource attempt, correlation, semantic owner and origin. When the
+provider call belongs to an Operation, debug evidence also identifies the containing Operation
+attempt and its one-based ordinal. `getCurrentOperationExecutionAttempt()` exposes that same
+identity to trusted server code during requirements, concerns and the body. Devtools renders the
+projection without retaining prompts or model results.
 
 `modelResourceLimits` is a host-owned, invocation-local governance envelope. Every admitted model
 provider call reserves one attempt before receiving prompt or context data, and the output-token
