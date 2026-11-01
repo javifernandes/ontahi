@@ -54,6 +54,11 @@ exactly-once semantics to irreversible external effects. A retrying atomic Opera
 an enclosing transaction: it fails closed unless the runtime can supply a separately proven nested
 rollback boundary.
 
+The immediate runtime preserves the final typed failure when its retry budget is exhausted and
+marks the last execution attempt with protected `retry-exhausted` evidence. Cooperative
+cancellation interrupts pending backoff as well as active execution and cannot begin another
+attempt. Persisted retry schedules, redrive, and idempotency remain separate durable capabilities.
+
 Resilience relates to [[ontahi.model.operation-implementation-binding|Operation Implementation
 Binding]] without collapsing into it. Retry repeats a selected implementation. Fallback explicitly
 selects another implementation after failure and requires separate policy and evidence.

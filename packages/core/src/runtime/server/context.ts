@@ -43,6 +43,18 @@ export const startOperationExecutionAttempt = (
   return attempt;
 };
 
+export const markOperationRetryExhausted = (
+  context: OperationRuntimeContext,
+  maxAttempts: number,
+  failureReason: string,
+): void => {
+  if (!context.attempt) return;
+  context.attempt = {
+    ...context.attempt,
+    terminal: { kind: 'retry-exhausted', maxAttempts, failureReason },
+  };
+};
+
 export const getOrCreateServerContextResource = <TValue>(
   key: string,
   factory: () => Promise<TValue> | TValue,

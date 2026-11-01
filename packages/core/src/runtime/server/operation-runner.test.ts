@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runServerOperation } from './operation/run.js';
@@ -76,6 +76,74 @@ describe('createOperationRunner', () => {
     await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({ success: true });
     expect(attempts.map(attempt => attempt?.ordinal)).toEqual([1, 2, 3]);
     expect(new Set(attempts.map(attempt => attempt?.attemptId)).size).toBe(3);
+  });
+
+  it('marks retry exhaustion on the final attempt without replacing the typed failure', async () => {
+    let terminalAttempt: ReturnType<typeof getCurrentOperationExecutionAttempt>;
+    const runOperationEffect = vi.fn(async effect => {
+      const exit = await Effect.runPromiseExit(effect);
+      terminalAttempt = getCurrentOperationExecutionAttempt();
+      if (Exit.isSuccess(exit)) return { success: true, data: exit.value };
+      const failure = Cause.failureOption(exit.cause);
+      if (failure._tag !== 'Some') throw Cause.squash(exit.cause);
+      return { success: false, ...(failure.value as OperationFailure) };
+    }) as unknown as RunOperationEffect;
+    const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
+      () => Effect.fail({ reason: 'temporary', message: 'Try again.' }),
+      {
+        scope: 'Book.fetch',
+        execution: { retry: { maxAttempts: 2, when: ['temporary'] } },
+      },
+      runOperationEffect,
+    );
+
+    await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({
+      success: false,
+      reason: 'temporary',
+    });
+    expect(terminalAttempt).toMatchObject({
+      ordinal: 2,
+      terminal: { kind: 'retry-exhausted', maxAttempts: 2, failureReason: 'temporary' },
+    });
+  });
+
+  it('cancels a retry during backoff without starting another attempt', async () => {
+    let attempts = 0;
+    let releaseFirstAttempt!: () => void;
+    const firstAttempt = new Promise<void>(resolve => {
+      releaseFirstAttempt = resolve;
+    });
+    const runOperationEffect = vi.fn(async effect => {
+      const fiber = Effect.runFork(effect);
+      await firstAttempt;
+      const exit = await Effect.runPromise(Fiber.interrupt(fiber));
+      expect(Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)).toBe(true);
+      return { success: false, reason: 'cancelled', message: 'Cancelled.' };
+    }) as unknown as RunOperationEffect;
+    const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(
+      () =>
+        Effect.sync(() => {
+          attempts += 1;
+          releaseFirstAttempt();
+        }).pipe(Effect.zipRight(Effect.fail({ reason: 'temporary', message: 'Try again.' }))),
+      {
+        scope: 'Book.fetch',
+        execution: {
+          retry: {
+            maxAttempts: 2,
+            when: ['temporary'],
+            backoff: { kind: 'fixed', delayMs: 60_000 },
+          },
+        },
+      },
+      runOperationEffect,
+    );
+
+    await expect(runner({ bookSlug: 'progbook' })).resolves.toMatchObject({
+      success: false,
+      reason: 'cancelled',
+    });
+    expect(attempts).toBe(1);
   });
 
   it('validates retry metadata on the public runner path', () => {

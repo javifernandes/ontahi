@@ -1,6 +1,11 @@
 export type OperationExecutionAttempt = {
   readonly attemptId: string;
   readonly ordinal: number;
+  readonly terminal?: {
+    readonly kind: 'retry-exhausted';
+    readonly maxAttempts: number;
+    readonly failureReason: string;
+  };
 };
 
 export type OperationRuntimeContext = {

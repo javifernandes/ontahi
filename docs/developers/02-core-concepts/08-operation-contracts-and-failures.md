@@ -277,7 +277,9 @@ An atomic Operation may also declare `execution.retry`. Every explicitly eligibl
 starts a new attempt with a fresh transaction boundary: failed Data Graph work rolls back, the next
 attempt begins from committed state, and only the successful attempt's effect intents are
 published. Attempts stop at `execution.retry.maxAttempts`; the final attempt's failure is returned
-unchanged. Retry does not make external effects exactly once; keep irreversible calls outside the
+unchanged and is marked internally as `retry-exhausted` evidence. Cancelling an immediate
+invocation interrupts an active attempt or pending backoff without starting the next attempt. Retry
+does not make external effects exactly once; keep irreversible calls outside the
 retried body unless they supply their own idempotency or reconciliation contract. A retrying atomic
 Operation currently fails closed when invoked inside an existing atomic boundary because Ontahí
 does not yet claim nested savepoint semantics.
