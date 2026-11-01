@@ -840,13 +840,70 @@ export const isOntahiEntityDeclaration = (value: unknown): value is AnyOntahiEnt
     typeof (value as AnyOntahiEntityDeclaration)[ONTAHI_ENTITY_DECLARATION].bind === 'function',
   );
 
+const withBoundDomainOperations = (
+  app: OntahiApplicationBuilder,
+  context: OntahiEntityBindingContext,
+): OntahiApplicationBuilder => {
+  const bind = context.bindOperationImplementation;
+  if (!bind) return app;
+
+  const graph = new Proxy(app.graph, {
+    get(target, property, receiver) {
+      if (property !== 'defineEntity' && property !== 'defineGraphEntity') {
+        return Reflect.get(target, property, receiver);
+      }
+      const defineEntity = Reflect.get(target, property, receiver) as (
+        entity: { name: string },
+        config?: Record<string, unknown>,
+      ) => object;
+      return (entity: { name: string }, config?: Record<string, unknown>) => {
+        if (!config?.domainOperations) return defineEntity.call(target, entity, config);
+
+        const authoredDomainOperations = config.domainOperations;
+        const bindOperations = (
+          operations: Record<string, DomainOperationDeclaration<any, any, any, any>>,
+        ) =>
+          Object.fromEntries(
+            Object.entries(operations).map(([name, operation]) => [
+              name,
+              bind(`${entity.name}.${name}`, operation),
+            ]),
+          );
+        const domainOperations =
+          typeof authoredDomainOperations === 'function'
+            ? (...args: readonly unknown[]) =>
+                bindOperations(
+                  (
+                    authoredDomainOperations as (
+                      ...args: readonly unknown[]
+                    ) => Record<string, DomainOperationDeclaration<any, any, any, any>>
+                  )(...args),
+                )
+            : bindOperations(
+                authoredDomainOperations as Record<
+                  string,
+                  DomainOperationDeclaration<any, any, any, any>
+                >,
+              );
+        return defineEntity.call(target, entity, { ...config, domainOperations });
+      };
+    },
+  });
+
+  return new Proxy(app, {
+    get(target, property, receiver) {
+      return property === 'graph' ? graph : Reflect.get(target, property, receiver);
+    },
+  });
+};
+
 export const bindOntahiEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
   declaration: TDeclaration,
   app: OntahiApplicationBuilder,
   context: OntahiEntityBindingContext,
 ): BoundOntahiEntityDeclaration<TDeclaration> =>
   declaration[ONTAHI_ENTITY_DECLARATION].bind(
-    app,
+    withBoundDomainOperations(app, context),
     context,
   ) as BoundOntahiEntityDeclaration<TDeclaration>;
 

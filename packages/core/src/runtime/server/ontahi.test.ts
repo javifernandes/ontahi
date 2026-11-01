@@ -978,6 +978,102 @@ describe('ontahi application composition root', () => {
     ).toThrow('selects unknown implementation "missing"');
   });
 
+  it('supports empty implementation names in static and environment dispatch', async () => {
+    const Analysis = entity({
+      name: 'EmptyNamedImplementationAnalysis',
+      fields: { id: field.id() },
+      operations: ({ app }) => ({
+        staticallySelected: app.operation.define({
+          implementations: { '': { run: () => Effect.succeed('static') } },
+          dispatch: { use: '' },
+        }),
+        environmentSelected: app.operation.define({
+          implementations: { '': { run: () => Effect.succeed('environment') } },
+          dispatch: operationBinding('analysis'),
+        }),
+      }),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      entities: [Analysis],
+      operationBindings: { analysis: '' },
+    });
+
+    await expect(
+      application.invokeOperation(
+        application.graph.getDomainOperation(
+          'EmptyNamedImplementationAnalysis.staticallySelected',
+        )!,
+        {},
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'static',
+    });
+    await expect(
+      application.invokeOperation(
+        application.graph.getDomainOperation(
+          'EmptyNamedImplementationAnalysis.environmentSelected',
+        )!,
+        {},
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'environment',
+    });
+  });
+
+  it('does not resolve environment bindings through inherited object properties', () => {
+    const Analysis = entity({
+      name: 'OwnBindingAnalysis',
+      fields: { id: field.id() },
+      operations: ({ app }) => ({
+        summarize: app.operation.define({
+          implementations: { local: { run: () => Effect.succeed('local') } },
+          dispatch: operationBinding('constructor'),
+        }),
+      }),
+    });
+    const storage = () => createInMemoryDataGraphStorage();
+
+    expect(() => ontahi({ storage: storage(), entities: [Analysis] })).toThrow(
+      'requires environment implementation binding "constructor"',
+    );
+    expect(() =>
+      ontahi({
+        storage: storage(),
+        entities: [Analysis],
+        operationBindings: { constructor: 'constructor' },
+      }),
+    ).toThrow('selects unknown implementation "constructor"');
+  });
+
+  it('does not expose caller-authored effective implementation metadata', () => {
+    const Analysis = entity({
+      name: 'AuthoredImplementationMetadataAnalysis',
+      fields: { id: field.id() },
+      operations: ({ app }) => {
+        const authored = {
+          run: () => Effect.succeed('summary'),
+          implementation: {
+            selected: 'invented',
+            selection: { kind: 'static' as const },
+          },
+        };
+        return { summarize: app.operation.define(authored) };
+      },
+    });
+    const application = ontahi({ storage: createInMemoryDataGraphStorage(), entities: [Analysis] });
+    const operation = application.graph.getDomainOperation(
+      'AuthoredImplementationMetadataAnalysis.summarize',
+    )!;
+
+    expect(operation.implementation).toBeUndefined();
+    expect(
+      application.graph.describe().domainOperations.find(({ id }) => id === operation.id),
+    ).not.toHaveProperty('implementation');
+  });
+
   it('injects typed sibling entities and application capabilities into unified operations', () => {
     const Label = entity({
       name: 'Label',
@@ -1589,6 +1685,43 @@ describe('ontahi application composition root', () => {
     });
 
     expect(application.graph.entityNames).toEqual(['CatalogNote', 'CatalogLabel']);
+  });
+
+  it('resolves environment Operation bindings declared by custom entity modules', async () => {
+    const AnalysisSchema = defineEntitySchema('CustomBoundAnalysis', { id: field.id() });
+    const Analysis = entityModule({
+      entity: AnalysisSchema,
+      bind: app =>
+        app.graph.defineEntity(AnalysisSchema, {
+          domainOperations: {
+            summarize: app.operation.define({
+              implementations: {
+                local: { run: () => Effect.succeed('local') },
+                model: { run: () => Effect.succeed('model') },
+              },
+              dispatch: operationBinding('analysis'),
+            }),
+          },
+        }),
+    });
+    expect(() =>
+      ontahi({ storage: createInMemoryDataGraphStorage(), entities: [Analysis] }),
+    ).toThrow('requires environment implementation binding "analysis"');
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      entities: [Analysis],
+      operationBindings: { analysis: 'model' },
+    });
+    const operation = application.graph.getDomainOperation('CustomBoundAnalysis.summarize')!;
+
+    await expect(application.invokeOperation(operation, {})).resolves.toMatchObject({
+      ok: true,
+      value: 'model',
+    });
+    expect(operation.implementation).toMatchObject({
+      selected: 'model',
+      selection: { kind: 'environment-binding', binding: 'analysis' },
+    });
   });
 
   it('can replace the binder of a unified declaration without losing its preparation', () => {

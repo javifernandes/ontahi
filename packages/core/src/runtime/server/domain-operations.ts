@@ -48,6 +48,7 @@ import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
+import { hasOwn } from '../../value/object.js';
 
 import {
   getOperationRuntimeContext,
@@ -349,7 +350,7 @@ type ServerDomainOperationMetadata<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
 > = Omit<
   DomainOperationMetadata<TInput, DomainOperationCacheMetadata<TInput>, TResult>,
-  'authority' | 'exposure' | 'durable' | 'conditions'
+  'authority' | 'exposure' | 'durable' | 'conditions' | 'implementation'
 > &
   Partial<
     Pick<
@@ -596,10 +597,14 @@ const defineDomainOperationImplementation = (
   const selectedImplementation =
     operation.dispatch && 'use' in operation.dispatch ? operation.dispatch.use : undefined;
   const implementation =
-    operation.implementations && selectedImplementation
+    operation.implementations && selectedImplementation !== undefined
       ? operation.implementations[selectedImplementation]
       : undefined;
-  if (operation.implementations && selectedImplementation && !implementation) {
+  if (
+    operation.implementations &&
+    selectedImplementation !== undefined &&
+    !hasOwn(operation.implementations, selectedImplementation)
+  ) {
     throw new Error(
       `Domain Operation dispatch selects unknown implementation "${selectedImplementation}".`,
     );
@@ -627,10 +632,14 @@ const defineDomainOperationImplementation = (
         );
       }));
 
+  const { implementation: _authoredImplementation, ...authoredOperation } =
+    operation as typeof operation & {
+      implementation?: DomainOperationMetadata['implementation'];
+    };
   return {
     kind: 'domain-operation',
     authority: 'server',
-    ...operation,
+    ...authoredOperation,
     run,
     ...(implementation
       ? {
@@ -656,23 +665,18 @@ export const bindDomainOperationImplementation = <
     return operation;
   }
   const binding = operation.dispatch.binding;
-  const selected = bindings[binding];
-  if (!selected) {
+  if (!hasOwn(bindings, binding)) {
     throw new Error(
       `Domain Operation "${operationId}" requires environment implementation binding "${binding}".`,
     );
   }
-  const implementation = operation.implementations[selected];
-  if (!implementation) {
+  const selected = bindings[binding]!;
+  if (!hasOwn(operation.implementations, selected)) {
     throw new Error(
       `Environment implementation binding "${binding}" selects unknown implementation "${selected}" for Domain Operation "${operationId}".`,
     );
   }
-  const {
-    run: _unresolvedRun,
-    implementation: _unresolvedImplementation,
-    ...declaration
-  } = operation;
+  const { run: _unresolvedRun, ...declaration } = operation;
   const resolved = defineDomainOperationImplementation({
     ...declaration,
     dispatch: { use: selected },
