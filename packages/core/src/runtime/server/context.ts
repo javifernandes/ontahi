@@ -43,6 +43,14 @@ export const startOperationExecutionAttempt = (
   return attempt;
 };
 
+export const selectOperationImplementation = (
+  context: OperationRuntimeContext,
+  implementation: { readonly id: string; readonly kind?: string },
+): void => {
+  if (!context.attempt) return;
+  context.attempt = { ...context.attempt, implementation };
+};
+
 export const markOperationRetryExhausted = (
   context: OperationRuntimeContext,
   maxAttempts: number,

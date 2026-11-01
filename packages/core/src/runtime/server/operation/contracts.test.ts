@@ -31,6 +31,27 @@ const createReadRuntime = () =>
     runCommand: vi.fn(() => Effect.succeed(undefined)),
   }) as DataGraphExecutionRuntime<never>;
 
+const assertDomainOperationImplementationContracts = () => {
+  defineDomainOperation({
+    implementations: {
+      local: { run: () => Effect.succeed({ summary: 'local' }) },
+    },
+    // @ts-expect-error dispatch must name a declared implementation
+    dispatch: { use: 'missing' },
+  });
+
+  const directRun = {
+    run: () => Effect.succeed({ summary: 'local' }),
+    implementations: {
+      local: { run: () => Effect.succeed({ summary: 'variant' }) },
+    },
+    dispatch: { use: 'local' as const },
+  };
+  // @ts-expect-error direct run declarations cannot also carry implementation variants
+  defineDomainOperation(directRun);
+};
+void assertDomainOperationImplementationContracts;
+
 describe('opaque Domain Operation contract concerns', () => {
   it('preserves authored concern order for non-atomic operations', async () => {
     const markerConcern = {

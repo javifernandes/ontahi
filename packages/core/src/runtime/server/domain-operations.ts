@@ -52,6 +52,7 @@ import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 import {
   getOperationRuntimeContext,
   operationRuntimeContextStorage,
+  selectOperationImplementation,
   toContextRecord,
 } from './context.js';
 import { getRequiredDataGraphRuntime } from './data-graph.js';
@@ -372,6 +373,8 @@ export type DomainOperationDeclaration<
   execution?: DomainOperationExecutionMetadata<TFailure['reason']>;
   layer?: string;
   run: DomainOperationRun<HydratedOperationInput<NoInfer<TInput>>, TResult, TFailure, TInfraError>;
+  implementations?: DomainOperationImplementations<TInput, TResult, TFailure, TInfraError>;
+  dispatch?: DomainOperationImplementationDispatch;
   defectLogMessage?: string;
   defectPublicMessage?: string;
   extra?: (input: TInput) => Record<string, unknown>;
@@ -388,6 +391,32 @@ export type DomainOperationDeclaration<
     input: TInput;
     result: OperationResult<TaskRunRef, TFailure | TaskFailure>;
   }) => Promise<unknown> | unknown;
+};
+
+export type DomainOperationImplementation<
+  TInput extends OperationInput = OperationInput,
+  TResult extends DomainOperationSuccess = DomainOperationSuccess,
+  TFailure extends OperationFailure = OperationFailure,
+  TInfraError extends OperationRuntimeError = never,
+> = {
+  readonly kind?: string;
+  readonly run: DomainOperationRun<
+    HydratedOperationInput<NoInfer<TInput>>,
+    TResult,
+    TFailure,
+    TInfraError
+  >;
+};
+
+export type DomainOperationImplementations<
+  TInput extends OperationInput = OperationInput,
+  TResult extends DomainOperationSuccess = DomainOperationSuccess,
+  TFailure extends OperationFailure = OperationFailure,
+  TInfraError extends OperationRuntimeError = never,
+> = Record<string, DomainOperationImplementation<TInput, TResult, TFailure, TInfraError>>;
+
+export type DomainOperationImplementationDispatch<TName extends string = string> = {
+  readonly use: TName;
 };
 
 export type DomainOperationDeclarations = Record<
@@ -439,10 +468,12 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'durable' | 'execution' | 'output'
+      'kind' | 'durable' | 'execution' | 'output' | 'implementations' | 'dispatch'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
       output?: TOutput;
+      implementations?: never;
+      dispatch?: never;
     },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
     durable: DurableOperationDeclarationMetadata<TInput, TResult>;
@@ -456,14 +487,46 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'execution' | 'output'
+      'kind' | 'execution' | 'output' | 'implementations' | 'dispatch'
     > & {
       execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
         atomicity?: never;
       };
       output?: TOutput;
+      implementations?: never;
+      dispatch?: never;
     },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
+  <
+    TInput extends OperationInput,
+    TResult extends DomainOperationSuccess,
+    TFailure extends OperationFailure = OperationFailure,
+    TInfraError extends OperationRuntimeError = never,
+    TOutput extends OutputSchemaLike<any> | undefined = undefined,
+    TImplementations extends DomainOperationImplementations<
+      TInput,
+      TResult,
+      TFailure,
+      TInfraError
+    > = DomainOperationImplementations<TInput, TResult, TFailure, TInfraError>,
+  >(
+    operation: Omit<
+      DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+      'kind' | 'durable' | 'execution' | 'output' | 'run' | 'implementations' | 'dispatch'
+    > & {
+      execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
+        atomicity?: never;
+      };
+      output?: TOutput;
+      run?: never;
+      durable?: never;
+      implementations: TImplementations;
+      dispatch: DomainOperationImplementationDispatch<keyof TImplementations & string>;
+    },
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
+    implementations: TImplementations;
+    dispatch: DomainOperationImplementationDispatch<keyof TImplementations & string>;
+  };
 };
 
 type DefineAtomicDomainOperation = <
@@ -475,12 +538,14 @@ type DefineAtomicDomainOperation = <
 >(
   operation: Omit<
     DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-    'kind' | 'durable' | 'execution' | 'output'
+    'kind' | 'durable' | 'execution' | 'output' | 'implementations' | 'dispatch'
   > & {
     execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
       atomicity?: never;
     };
     output?: TOutput;
+    implementations?: never;
+    dispatch?: never;
   },
 ) => DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
   execution: DomainOperationExecutionMetadata<TFailure['reason']> & { atomicity: 'required' };
@@ -491,7 +556,9 @@ type DefineDomainOperation = DefineDomainOperationCall & {
 };
 
 const defineDomainOperationImplementation = (
-  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind'>,
+  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind' | 'run'> & {
+    run?: DomainOperationRun<any, any, any, any>;
+  },
 ) => {
   const input = (operation.input ?? EmptyInputSchema) as InputSchemaLike<any>;
   assertSupportedExistingOperationRefs(input);
@@ -503,11 +570,45 @@ const defineDomainOperationImplementation = (
   if (operation.durable && operation.execution?.atomicity === 'required') {
     throw new Error('Durable Domain Operations cannot require one Data Graph atomic boundary.');
   }
+  if (operation.run && operation.implementations) {
+    throw new Error('Domain Operations cannot declare both run and implementations.');
+  }
+  if (operation.dispatch && !operation.implementations) {
+    throw new Error('Domain Operations cannot declare dispatch without implementations.');
+  }
+  if (operation.implementations && !operation.dispatch) {
+    throw new Error('Domain Operations must declare dispatch when implementations are declared.');
+  }
+  const implementation =
+    operation.implementations && operation.dispatch
+      ? operation.implementations[operation.dispatch.use]
+      : undefined;
+  if (operation.implementations && operation.dispatch && !implementation) {
+    throw new Error(
+      `Domain Operation dispatch selects unknown implementation "${operation.dispatch.use}".`,
+    );
+  }
+  if (!operation.run && !implementation) {
+    throw new Error('Domain Operations must declare run or implementations with dispatch.');
+  }
+  const run = implementation
+    ? (input: unknown) => {
+        const context = getOperationRuntimeContext();
+        if (context) {
+          selectOperationImplementation(context, {
+            id: operation.dispatch!.use,
+            ...(implementation.kind ? { kind: implementation.kind } : {}),
+          });
+        }
+        return implementation.run(input);
+      }
+    : operation.run!;
 
   return {
     kind: 'domain-operation',
     authority: 'server',
     ...operation,
+    run,
     input: attachOperationInputSchema(input),
   };
 };

@@ -284,6 +284,31 @@ retried body unless they supply their own idempotency or reconciliation contract
 Operation currently fails closed when invoked inside an existing atomic boundary because Ontahí
 does not yet claim nested savepoint semantics.
 
+An Operation may colocate several compatible implementations and select one statically without
+changing its contract or invocation surface:
+
+```ts
+defineDomainOperation({
+  input: AnalyzeInput,
+  output: Analysis,
+  implementations: {
+    local: { kind: 'code', run: analyzeLocally },
+    model: {
+      kind: 'model',
+      run: modelOperation({
+        /* provider and bounded context */
+      }),
+    },
+  },
+  dispatch: { use: 'model' },
+});
+```
+
+The selected implementation is trusted declaration metadata and is recorded on each execution
+attempt. Callers cannot choose it through Operation input. Keep using `run` for the ordinary
+single-implementation case. Static selection does not imply fallback, feature flags, A/B rollout,
+or simultaneous execution.
+
 `concerns: [...]` is the current middleware seam: a concern receives the next computation and can
 act before it, after it, or around a failure. A success effect is different. The operation body
 returns it alongside its value, and the runtime executes it only after the body and postconditions
