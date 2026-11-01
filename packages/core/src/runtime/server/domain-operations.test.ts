@@ -16,10 +16,13 @@ import {
   defineDomainOperation,
   defineDomainOperationsForEntity,
   failOperation,
+  getCurrentOperationExecutionAttempt,
   getCurrentInvocationContext,
+  modelOperation,
   runServerDomainOperationRaw,
   withInvocationContext,
   type OperationFailure,
+  type ModelProvider,
 } from './index.js';
 
 describe('server Domain Operation Ref resolution', () => {
@@ -739,5 +742,140 @@ describe('server Domain Operation execution resilience', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('server Domain Operation implementation variants', () => {
+  const AnalysisInput = graphSchema.object({ text: field.nonEmptyString({ trim: true }) });
+  const AnalysisOutput = graphSchema.object({ summary: field.nonEmptyString({ trim: true }) });
+
+  it('selects a declared implementation without changing the Operation contract', async () => {
+    const selectedAttempts: Array<ReturnType<typeof getCurrentOperationExecutionAttempt>> = [];
+    const generate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
+      summary: 'model analysis',
+    });
+    const implementations = {
+      local: {
+        kind: 'code',
+        run: ({ text }: { text: string }) => Effect.succeed({ summary: `local: ${text}` }),
+      },
+      model: {
+        kind: 'model',
+        run: modelOperation({
+          provider: { generate },
+          operation: {
+            id: 'Analysis.summarize',
+            input: AnalysisInput,
+            output: AnalysisOutput,
+          },
+          instructions: 'Summarize the supplied text.',
+          context: () => Effect.succeed({ purpose: 'test' }),
+        }),
+      },
+    };
+    const defineAnalysis = (use: 'local' | 'model') =>
+      defineDomainOperationsForEntity(
+        'Analysis',
+        {
+          summarize: defineDomainOperation({
+            input: AnalysisInput,
+            output: AnalysisOutput,
+            implementations,
+            dispatch: { use },
+            concerns: [
+              {
+                run: (_runtime, next) =>
+                  next.pipe(
+                    Effect.tap(() =>
+                      Effect.sync(() => {
+                        selectedAttempts.push(getCurrentOperationExecutionAttempt());
+                      }),
+                    ),
+                  ),
+              },
+            ],
+          }),
+        },
+        { exposure: 'server-only', layer: 'tests.operation.implementation-variants' },
+      ).summarize;
+
+    const local = defineAnalysis('local');
+    const model = defineAnalysis('model');
+
+    await expect(runServerDomainOperationRaw(local, { text: 'evidence' })).resolves.toEqual({
+      success: true,
+      data: { summary: 'local: evidence' },
+    });
+    await expect(runServerDomainOperationRaw(model, { text: 'evidence' })).resolves.toEqual({
+      success: true,
+      data: { summary: 'model analysis' },
+    });
+    expect(local.id).toBe(model.id);
+    expect(selectedAttempts.map(attempt => attempt?.implementation)).toEqual([
+      { id: 'local', kind: 'code' },
+      { id: 'model', kind: 'model' },
+    ]);
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an unknown static implementation selection', () => {
+    expect(() =>
+      defineDomainOperation({
+        implementations: {
+          local: { run: () => Effect.succeed({ summary: 'local' }) },
+        },
+        dispatch: { use: 'missing' },
+      } as never),
+    ).toThrow('unknown implementation "missing"');
+  });
+
+  it('rejects ambiguous or absent implementation declarations', () => {
+    expect(() =>
+      defineDomainOperation({
+        run: () => Effect.succeed({ summary: 'direct' }),
+        implementations: {
+          local: { run: () => Effect.succeed({ summary: 'local' }) },
+        },
+        dispatch: { use: 'local' },
+      } as never),
+    ).toThrow('cannot declare both run and implementations');
+    expect(() => defineDomainOperation({} as never)).toThrow(
+      'must declare run or implementations with dispatch',
+    );
+  });
+
+  it('attributes the selected implementation independently on every retry attempt', async () => {
+    const attempts: Array<ReturnType<typeof getCurrentOperationExecutionAttempt>> = [];
+    const analyze = defineDomainOperationsForEntity(
+      'RetryingVariantAnalysis',
+      {
+        summarize: defineDomainOperation({
+          execution: { retry: { maxAttempts: 2, when: ['temporary'] } },
+          implementations: {
+            local: {
+              kind: 'code',
+              run: () => {
+                attempts.push(getCurrentOperationExecutionAttempt());
+                return attempts.length === 1
+                  ? failOperation('temporary', 'Try again.')
+                  : Effect.succeed({ summary: 'ready' });
+              },
+            },
+          },
+          dispatch: { use: 'local' },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.implementation-variant-retry' },
+    ).summarize;
+
+    await expect(runServerDomainOperationRaw(analyze, {})).resolves.toEqual({
+      success: true,
+      data: { summary: 'ready' },
+    });
+    expect(attempts.map(attempt => attempt?.implementation)).toEqual([
+      { id: 'local', kind: 'code' },
+      { id: 'local', kind: 'code' },
+    ]);
+    expect(new Set(attempts.map(attempt => attempt?.attemptId)).size).toBe(2);
   });
 });

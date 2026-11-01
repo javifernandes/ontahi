@@ -1,6 +1,6 @@
 # 163. Operation Implementation Bindings And Variants
 
-Status: research
+Status: current
 
 Canonical ID: `ontahi://plans/163-operation-implementation-bindings-and-variants`
 
@@ -51,34 +51,32 @@ authority supplied by an untrusted caller.
 7. How are compatible implementations supplied from TypeScript, Rust, a remote subgraph, or a
    model provider without making TypeScript factories the semantic format?
 
-## Provisional Shape
+## Authoring Shape
 
-Explanatory only:
+The primary authoring affordance keeps implementations and dispatch in the same Operation
+declaration. Their internal representation remains separable for reflection and future runtime
+composition:
 
 ```ts
-operation({
-  id: 'RecallAnalysis.analyze',
+defineDomainOperation({
   input: AnalyzeRecallInput,
   output: AnalyzeRecallOutput,
-  failures: AnalyzeRecallFailures,
-});
-
-bindings({
-  'RecallAnalysis.analyze': {
-    local: codeImplementation(...),
-    model: modelImplementation(...),
+  implementations: {
+    local: { kind: 'code', run: analyzeLocally },
+    model: {
+      kind: 'model',
+      run: modelOperation({ ... }),
+    },
   },
-});
-
-selectImplementation({
-  operation: 'RecallAnalysis.analyze',
-  binding: environment.MODEL_ENABLED ? 'model' : 'local',
+  dispatch: { use: 'model' },
 });
 ```
 
-The final design may place the binding registry in Application composition, a Semantic Module, or
-an environment artifact. It must not require simultaneous implementations when an application only
-wants to replace one implementation during migration.
+`run` remains the simple/default authoring form and does not require an implementation registry.
+`dispatch.use` is the first static policy. Feature flags, rollout, fallback, caller-sensitive
+selection, and remote binding are separate future policies rather than overloaded meanings of
+`use`. Concrete provider credentials and endpoints remain runtime resources even when a model
+implementation is declared alongside the Operation.
 
 ## Relationship To Existing Runtime Adapters
 
@@ -116,13 +114,25 @@ Use one structured analysis contract with:
 Then compare a remote or alternate-runtime implementation to ensure the abstraction is not merely
 a feature flag around two TypeScript functions.
 
+### First implementation checkpoint
+
+The first static proof accepts named `implementations` plus `dispatch.use` in one
+`defineDomainOperation` declaration. A deterministic code implementation and a provider-neutral
+model implementation share one input/output contract and Operation identity. The selected stable
+implementation id and optional kind are attached to every Operation execution attempt before the
+implementation runs. Ordinary `run` declarations remain unchanged.
+
+This checkpoint deliberately keeps provider construction inside the model implementation helper.
+Environment-owned binding of provider Resources, reflected selector policies, fallback, feature
+flags, and remote implementations remain subsequent slices.
+
 ## Acceptance Criteria For Research
 
-- [ ] Contract, implementation, binding, selection, and fallback have non-overlapping meanings.
-- [ ] Callers cannot select a privileged binding through ordinary Operation input.
-- [ ] A single implementation remains the simple/default authoring case.
-- [ ] Code-backed and model-backed implementations satisfy the same validation contract.
-- [ ] Selection is attributable through execution context and evidence.
+- [x] Contract, implementation, binding, selection, and fallback have non-overlapping meanings.
+- [x] Callers cannot select a privileged binding through ordinary Operation input.
+- [x] A single implementation remains the simple/default authoring case.
+- [x] Code-backed and model-backed implementations satisfy the same validation contract.
+- [x] Selection is attributable through execution context and evidence.
 - [ ] Feature flags and A/B tools can adapt to the semantic selector without becoming Core.
 - [ ] Remote and multi-language implementations fit without changing Operation identity.
 - [ ] The design composes with Modules, resilience, authorization, and Resource Governance.

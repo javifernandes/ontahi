@@ -35,9 +35,15 @@ migration, feature flags, controlled rollout, A/B testing, fallback, shadow eval
 environment-specific execution. Those policies remain distinct: selection occurs before an
 attempt; fallback changes binding after failure; shadow execution must not duplicate effects.
 
-The selected binding is trusted execution context and attributable evidence. Stable binding
-identity may be safe to retain while provider model, endpoint, process topology, credentials, and
-other adapter details remain protected by disclosure policy.
+The primary authoring form may colocate named implementations and a dispatch policy with the
+Operation contract; this does not collapse their internal meanings. The simple `run` form remains
+the ordinary single-implementation case. The first static selector names one implementation with
+`dispatch.use`; caller input cannot select it.
+
+The selected binding is trusted execution context and attributable evidence. Every immediate
+execution attempt records the stable implementation id and optional kind before its body runs.
+Stable binding identity may be safe to retain while provider model, endpoint, process topology,
+credentials, and other adapter details remain protected by disclosure policy.
 
 This concept generalizes existing adapter boundaries without forcing every integration through
 Events. A remote Operation binding preserves request/result semantics; Events continue to represent

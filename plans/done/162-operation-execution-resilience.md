@@ -13,7 +13,7 @@ Related plans:
 1. [125a. Model Execution Resource Governance](125a-model-execution-resource-governance.md)
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [158. Semantic Execution Context, Governance And Evidence](../research/158-semantic-execution-context-governance-and-evidence.md)
-4. [163. Operation Implementation Bindings And Variants](../research/163-operation-implementation-bindings-and-variants.md)
+4. [163. Operation Implementation Bindings And Variants](../current/163-operation-implementation-bindings-and-variants.md)
 5. [153d. LangGraph Task Runtime Comparison](../done/153d-langgraph-task-runtime-comparison.md)
 
 ## Summary
@@ -223,6 +223,6 @@ Durable retry scheduling and recovery remain future Durable Operation adapter wo
 deduplication, ambiguous-effect handling, and idempotency remain owned by
 [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md). Fallback and binding
 selection remain owned by
-[Plan 163](../research/163-operation-implementation-bindings-and-variants.md). These capabilities
+[Plan 163](../current/163-operation-implementation-bindings-and-variants.md). These capabilities
 must reuse the invocation/attempt distinction established here rather than reopening the immediate
 retry contract.
