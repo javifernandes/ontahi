@@ -40,6 +40,13 @@ Operation contract; this does not collapse their internal meanings. The simple `
 the ordinary single-implementation case. The first static selector names one implementation with
 `dispatch.use`; caller input cannot select it.
 
+An application environment may instead satisfy `operationBinding(key)` through its trusted
+`operationBindings` composition map. Resolution occurs once while binding the application graph;
+missing bindings and selections absent from the Operation's implementation registry reject
+composition. Reflection explains the effective implementation and whether it came from a static
+selector or an environment binding. This environment seam does not imply per-invocation routing,
+rollout, fallback, or feature-flag semantics.
+
 The selected binding is trusted execution context and attributable evidence. Every immediate
 execution attempt records the stable implementation id and optional kind before its body runs.
 Stable binding identity may be safe to retain while provider model, endpoint, process topology,

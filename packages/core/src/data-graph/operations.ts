@@ -258,7 +258,16 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   conditions?: PortableOperationConditions;
   cache?: TCache;
   durable?: DurableOperationMetadata<TInput, TResult>;
+  implementation?: {
+    selected: string;
+    kind?: string;
+    selection: { kind: 'static' } | { kind: 'environment-binding'; binding: string };
+  };
 };
+
+export type DomainOperationImplementationMetadata = NonNullable<
+  DomainOperationMetadata['implementation']
+>;
 
 export type DomainOperationDefaults<TInput = unknown, TCache = unknown> = Partial<
   Pick<DomainOperationMetadata<TInput, TCache>, 'authority' | 'exposure' | 'bridge'>
@@ -547,6 +556,7 @@ type ResolvedDomainOperationLike = {
   execution?: DomainOperationExecutionMetadata;
   conditions?: PortableOperationConditions;
   durable?: DurableOperationMetadata<any, any>;
+  implementation?: DomainOperationImplementationMetadata;
 };
 
 type GraphApiGraphOperation<TEntities extends Record<string, AnyGraphApiEntity>> = {
@@ -622,6 +632,7 @@ type GraphApiSummary = {
     exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
     execution?: DomainOperationExecutionMetadata;
     conditions?: PortableOperationConditions;
+    implementation?: DomainOperationImplementationMetadata;
     hasBridgeQuery: boolean;
     input?: GraphSchemaDescriptor;
   }>;
@@ -1430,6 +1441,7 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         exposure: operation.exposure,
         ...(operation.execution ? { execution: operation.execution } : {}),
         ...(operation.conditions ? { conditions: operation.conditions } : {}),
+        ...(operation.implementation ? { implementation: operation.implementation } : {}),
         hasBridgeQuery: Boolean(operation.bridge?.query?.length),
         ...(isGraphSchemaDefinition(operation.input)
           ? { input: toGraphSchemaDescriptor(operation.input) }

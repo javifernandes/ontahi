@@ -32,9 +32,11 @@ import {
   defineTaskExecutionStep,
   entityModule,
   entityModuleWithCapabilities,
+  getCurrentOperationExecutionAttempt,
   getRequiredDataGraphRuntime,
   inProcessTasks,
   ontahi,
+  operationBinding,
   operationGroup,
   relation,
   relationConstraint,
@@ -899,6 +901,81 @@ describe('ontahi application composition root', () => {
     ).resolves.toMatchObject({
       rows: [{ id: 'note-1', title: 'One root', version: 'v1' }],
     });
+  });
+
+  it('selects an Operation implementation from the application environment and explains it', async () => {
+    let selectedAttemptImplementation: unknown;
+    const Analysis = entity({
+      name: 'BoundAnalysis',
+      fields: { id: field.id() },
+      operations: ({ app }) => ({
+        summarize: app.operation.define({
+          implementations: {
+            local: {
+              kind: 'code',
+              run: () => Effect.succeed({ summary: 'local' }),
+            },
+            model: {
+              kind: 'model',
+              run: () =>
+                Effect.sync(() => {
+                  selectedAttemptImplementation =
+                    getCurrentOperationExecutionAttempt()?.implementation;
+                  return { summary: 'model' };
+                }),
+            },
+          },
+          dispatch: operationBinding('analysis'),
+        }),
+      }),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { BoundAnalysis: [] } }),
+      entities: [Analysis],
+      operationBindings: { analysis: 'model' },
+    });
+    const operation = application.graph.getDomainOperation('BoundAnalysis.summarize')!;
+
+    await expect(application.invokeOperation(operation, {})).resolves.toMatchObject({
+      ok: true,
+      value: { summary: 'model' },
+    });
+    expect(operation.implementation).toEqual({
+      selected: 'model',
+      kind: 'model',
+      selection: { kind: 'environment-binding', binding: 'analysis' },
+    });
+    expect(selectedAttemptImplementation).toEqual({ id: 'model', kind: 'model' });
+    expect(
+      application.graph.describe().domainOperations.find(({ id }) => id === operation.id),
+    ).toMatchObject({ implementation: operation.implementation });
+  });
+
+  it('rejects missing and unknown environment Operation implementation bindings', () => {
+    const Analysis = entity({
+      name: 'InvalidBoundAnalysis',
+      fields: { id: field.id() },
+      operations: ({ app }) => ({
+        summarize: app.operation.define({
+          implementations: {
+            local: { run: () => Effect.succeed({ summary: 'local' }) },
+          },
+          dispatch: operationBinding('analysis'),
+        }),
+      }),
+    });
+    const storage = () => createInMemoryDataGraphStorage({ dataset: { InvalidBoundAnalysis: [] } });
+
+    expect(() => ontahi({ storage: storage(), entities: [Analysis] })).toThrow(
+      'requires environment implementation binding "analysis"',
+    );
+    expect(() =>
+      ontahi({
+        storage: storage(),
+        entities: [Analysis],
+        operationBindings: { analysis: 'missing' },
+      }),
+    ).toThrow('selects unknown implementation "missing"');
   });
 
   it('injects typed sibling entities and application capabilities into unified operations', () => {

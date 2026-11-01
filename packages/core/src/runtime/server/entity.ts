@@ -399,6 +399,10 @@ export type OntahiEntityCommandCatalog = Record<string, OntahiEntityCommands<Any
 export type OntahiEntityBindingContext<TEntities extends object = OntahiEntityCommandCatalog> = {
   entities: TEntities;
   operationConditions?: PortableOperationConditionRegistry;
+  bindOperationImplementation?: (
+    operationId: string,
+    operation: DomainOperationDeclaration<any, any, any, any>,
+  ) => DomainOperationDeclaration<any, any, any, any>;
 };
 
 export type OntahiEntityOperationContext<TEntity extends AnyEntityDefinition> = {
@@ -1221,12 +1225,19 @@ const defineOntahiEntity = <
             ([, declaration]) => declaration.kind === 'domain-operation',
           ),
         ) as DomainOperationsFrom<TOperations>;
-        const domainOperations = materializeDomainOperationConditions(
+        const conditionedDomainOperations = materializeDomainOperationConditions(
           schema.name,
           authoredDomainOperations as DomainOperationsFrom<TOperations> &
             Record<string, DomainOperationDeclaration<any, any, any, any>>,
           context.operationConditions,
         );
+        const domainOperations = Object.fromEntries(
+          Object.entries(conditionedDomainOperations).map(([name, declaration]) => [
+            name,
+            context.bindOperationImplementation?.(`${schema.name}.${name}`, declaration) ??
+              declaration,
+          ]),
+        ) as typeof conditionedDomainOperations;
 
         const boundEntity = app.graph.defineEntity(schema, {
           exposure: config.exposure,

@@ -374,7 +374,7 @@ export type DomainOperationDeclaration<
   layer?: string;
   run: DomainOperationRun<HydratedOperationInput<NoInfer<TInput>>, TResult, TFailure, TInfraError>;
   implementations?: DomainOperationImplementations<TInput, TResult, TFailure, TInfraError>;
-  dispatch?: DomainOperationImplementationDispatch;
+  dispatch?: DomainOperationImplementationDispatch | DomainOperationEnvironmentBinding;
   defectLogMessage?: string;
   defectPublicMessage?: string;
   extra?: (input: TInput) => Record<string, unknown>;
@@ -418,6 +418,16 @@ export type DomainOperationImplementations<
 export type DomainOperationImplementationDispatch<TName extends string = string> = {
   readonly use: TName;
 };
+
+export type DomainOperationEnvironmentBinding = {
+  readonly kind: 'environment-binding';
+  readonly binding: string;
+};
+
+export const operationBinding = (binding: string): DomainOperationEnvironmentBinding => ({
+  kind: 'environment-binding',
+  binding,
+});
 
 export type DomainOperationDeclarations = Record<
   string,
@@ -521,11 +531,15 @@ type DefineDomainOperationCall = {
       run?: never;
       durable?: never;
       implementations: TImplementations;
-      dispatch: DomainOperationImplementationDispatch<keyof TImplementations & string>;
+      dispatch:
+        | DomainOperationImplementationDispatch<keyof TImplementations & string>
+        | DomainOperationEnvironmentBinding;
     },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
     implementations: TImplementations;
-    dispatch: DomainOperationImplementationDispatch<keyof TImplementations & string>;
+    dispatch:
+      | DomainOperationImplementationDispatch<keyof TImplementations & string>
+      | DomainOperationEnvironmentBinding;
   };
 };
 
@@ -579,16 +593,20 @@ const defineDomainOperationImplementation = (
   if (operation.implementations && !operation.dispatch) {
     throw new Error('Domain Operations must declare dispatch when implementations are declared.');
   }
+  const selectedImplementation =
+    operation.dispatch && 'use' in operation.dispatch ? operation.dispatch.use : undefined;
   const implementation =
-    operation.implementations && operation.dispatch
-      ? operation.implementations[operation.dispatch.use]
+    operation.implementations && selectedImplementation
+      ? operation.implementations[selectedImplementation]
       : undefined;
-  if (operation.implementations && operation.dispatch && !implementation) {
+  if (operation.implementations && selectedImplementation && !implementation) {
     throw new Error(
-      `Domain Operation dispatch selects unknown implementation "${operation.dispatch.use}".`,
+      `Domain Operation dispatch selects unknown implementation "${selectedImplementation}".`,
     );
   }
-  if (!operation.run && !implementation) {
+  const environmentBinding =
+    operation.dispatch && 'binding' in operation.dispatch ? operation.dispatch : undefined;
+  if (!operation.run && !implementation && !environmentBinding) {
     throw new Error('Domain Operations must declare run or implementations with dispatch.');
   }
   const run = implementation
@@ -596,21 +614,76 @@ const defineDomainOperationImplementation = (
         const context = getOperationRuntimeContext();
         if (context) {
           selectOperationImplementation(context, {
-            id: operation.dispatch!.use,
+            id: selectedImplementation!,
             ...(implementation.kind ? { kind: implementation.kind } : {}),
           });
         }
         return implementation.run(input);
       }
-    : operation.run!;
+    : (operation.run ??
+      (() => {
+        throw new Error(
+          `Domain Operation implementation binding "${environmentBinding!.binding}" has not been resolved by an Ontahi application environment.`,
+        );
+      }));
 
   return {
     kind: 'domain-operation',
     authority: 'server',
     ...operation,
     run,
+    ...(implementation
+      ? {
+          implementation: {
+            selected: selectedImplementation!,
+            ...(implementation.kind ? { kind: implementation.kind } : {}),
+            selection: { kind: 'static' as const },
+          },
+        }
+      : {}),
     input: attachOperationInputSchema(input),
   };
+};
+
+export const bindDomainOperationImplementation = <
+  TOperation extends DomainOperationDeclaration<any, any, any, any>,
+>(
+  operationId: string,
+  operation: TOperation,
+  bindings: Readonly<Record<string, string>>,
+): TOperation => {
+  if (!operation.implementations || !operation.dispatch || !('binding' in operation.dispatch)) {
+    return operation;
+  }
+  const binding = operation.dispatch.binding;
+  const selected = bindings[binding];
+  if (!selected) {
+    throw new Error(
+      `Domain Operation "${operationId}" requires environment implementation binding "${binding}".`,
+    );
+  }
+  const implementation = operation.implementations[selected];
+  if (!implementation) {
+    throw new Error(
+      `Environment implementation binding "${binding}" selects unknown implementation "${selected}" for Domain Operation "${operationId}".`,
+    );
+  }
+  const {
+    run: _unresolvedRun,
+    implementation: _unresolvedImplementation,
+    ...declaration
+  } = operation;
+  const resolved = defineDomainOperationImplementation({
+    ...declaration,
+    dispatch: { use: selected },
+  });
+  return {
+    ...resolved,
+    implementation: {
+      ...resolved.implementation,
+      selection: { kind: 'environment-binding', binding },
+    },
+  } as unknown as TOperation;
 };
 
 const defineAtomicDomainOperationImplementation = (

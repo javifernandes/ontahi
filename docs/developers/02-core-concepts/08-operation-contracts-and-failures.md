@@ -309,6 +309,35 @@ attempt. Callers cannot choose it through Operation input. Keep using `run` for 
 single-implementation case. Static selection does not imply fallback, feature flags, A/B rollout,
 or simultaneous execution.
 
+When the host environment should choose the implementation, declare a trusted binding instead of
+hard-coding `dispatch.use`:
+
+```ts
+const Analysis = entity({
+  // ...
+  operations: ({ app }) => ({
+    summarize: app.operation.define({
+      implementations: {
+        local: { kind: 'code', run: summarizeLocally },
+        model: { kind: 'model', run: summarizeWithModel },
+      },
+      dispatch: operationBinding('analysis'),
+    }),
+  }),
+});
+
+const application = ontahi({
+  // ...
+  operationBindings: { analysis: 'model' },
+});
+```
+
+Environment bindings resolve once while the application graph is composed. Missing bindings and
+unknown implementation names fail application startup. `graph.describe()` reports the selected
+implementation and whether selection was static or supplied by an environment binding. This is
+static host composition, not caller-controlled routing, feature flagging, fallback, or per-request
+dispatch.
+
 `concerns: [...]` is the current middleware seam: a concern receives the next computation and can
 act before it, after it, or around a failure. A success effect is different. The operation body
 returns it alongside its value, and the runtime executes it only after the body and postconditions

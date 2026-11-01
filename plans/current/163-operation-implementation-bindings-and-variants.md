@@ -126,6 +126,19 @@ This checkpoint deliberately keeps provider construction inside the model implem
 Environment-owned binding of provider Resources, reflected selector policies, fallback, feature
 flags, and remote implementations remain subsequent slices.
 
+### Environment binding checkpoint
+
+The application host may now replace hard-coded `dispatch.use` with
+`dispatch: operationBinding(key)` and satisfy that key through `ontahi({ operationBindings })`.
+The binding is resolved once during application graph composition, before execution. Composition
+rejects a missing binding or an implementation name absent from the Operation registry.
+
+The effective stable implementation id, optional kind, and selection origin are retained on the
+resolved Operation and exposed through `graph.describe()`. Execution attempts continue to record
+the effective implementation. This proves environment-specific migration without caller-controlled
+routing or edits to the Operation contract. Dynamic flags, rollout, fallback, remote bindings, and
+provider Resource construction remain separate follow-ups.
+
 ## Acceptance Criteria For Research
 
 - [x] Contract, implementation, binding, selection, and fallback have non-overlapping meanings.
