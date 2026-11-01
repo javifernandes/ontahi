@@ -507,7 +507,11 @@ describe('atomic Domain Operations', () => {
       },
       { exposure: 'server-only', layer: 'tests.operation.atomic-nested' },
     ).inner;
-    const retryFailure = createOperationFailure('temporary', 'Retry later.');
+    const retryFailure = createOperationFailure(
+      'execution_unavailable',
+      'Independent boundary unavailable.',
+    );
+    const nestedAttempts: number[] = [];
     const retriedBody = vi.fn(
       (): Effect.Effect<string, typeof retryFailure> => Effect.succeed('retried'),
     );
@@ -515,8 +519,16 @@ describe('atomic Domain Operations', () => {
       RecordDefinition,
       {
         retriedInner: defineDomainOperation.atomic({
-          execution: { retry: { maxAttempts: 2, when: ['temporary'] } },
-          concerns: [graph.withRuntime()],
+          execution: { retry: { maxAttempts: 2, when: ['execution_unavailable'] } },
+          concerns: [
+            graph.withRuntime(),
+            {
+              run: (_runtime, next) =>
+                Effect.sync(() => {
+                  nestedAttempts.push(getCurrentOperationExecutionAttempt()?.ordinal ?? 0);
+                }).pipe(Effect.zipRight(next)),
+            },
+          ],
           run: retriedBody,
         }),
       },
@@ -546,6 +558,7 @@ describe('atomic Domain Operations', () => {
       data: { reused: 'inner', rejected: 'execution_unavailable' },
     });
     expect(transactions).toHaveBeenCalledOnce();
+    expect(nestedAttempts).toEqual([1]);
     expect(retriedBody).not.toHaveBeenCalled();
   });
 });

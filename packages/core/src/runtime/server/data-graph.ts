@@ -9,7 +9,7 @@ import {
 } from '../../data-graph/transaction.js';
 
 import { getOperationRuntimeContext, getRequiredOperationRuntimeContext } from './context.js';
-import { failOperation } from './failures.js';
+import { createOperationFailure, failOperation, forbidOperationFailureRetry } from './failures.js';
 import type { LayerConcern, LayerConcernRuntime } from './layer-types.js';
 import { OPERATION_CACHE_STORE_RESOURCE_KEY } from './operation/cache.js';
 import type { OperationFailure } from './operation/types.js';
@@ -134,9 +134,13 @@ export const withAtomicDataGraphExecution = <TInput>(
           )
         ) {
           if (options.requireIndependentBoundary) {
-            return failOperation(
-              'execution_unavailable',
-              'This retrying atomic Operation requires its own Data Graph transaction boundary.',
+            return Effect.fail(
+              forbidOperationFailureRetry(
+                createOperationFailure(
+                  'execution_unavailable',
+                  'This retrying atomic Operation requires its own Data Graph transaction boundary.',
+                ),
+              ),
             );
           }
           return next;
