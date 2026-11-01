@@ -1,6 +1,6 @@
 # 162. Operation Execution Resilience
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/162-operation-execution-resilience`
 
@@ -198,8 +198,8 @@ capability rather than silently promising persisted retries.
 - [x] One invocation can contain several separately identified attempts.
 - [x] Only declared typed failures request another attempt.
 - [x] Resource Governance independently admits and accounts for every attempt.
-- [ ] Cancellation and exhaustion are distinct terminal outcomes.
-- [ ] No public contract claims that retries make external effects exactly once.
+- [x] Cancellation and exhaustion are distinct terminal outcomes.
+- [x] No public contract claims that retries make external effects exactly once.
 - [x] Immediate-runtime limitations are reflected and documented.
 - [x] A deterministic non-model proof exercises the same policy.
 - [x] LangGraph remains an optional adapter with no public types in the declaration.
@@ -212,3 +212,17 @@ capability rather than silently promising persisted retries.
 4. Do not retry all defects, validation failures, or authorization denials by default.
 5. Do not infer idempotency from a retry declaration.
 6. Do not retain every attempt durably unless the host selects that evidence policy.
+
+## Closure / Evolution
+
+Closed for the immediate runtime. Cancellation interrupts an active attempt or pending backoff
+without beginning another attempt. Exhaustion returns the final declared failure unchanged while
+the last attempt carries protected `retry-exhausted` evidence with the budget and failure reason.
+
+Durable retry scheduling and recovery remain future Durable Operation adapter work. Invocation
+deduplication, ambiguous-effect handling, and idempotency remain owned by
+[Plan 132](../next/132-durable-invocation-identity-and-idempotency.md). Fallback and binding
+selection remain owned by
+[Plan 163](../research/163-operation-implementation-bindings-and-variants.md). These capabilities
+must reuse the invocation/attempt distinction established here rather than reopening the immediate
+retry contract.

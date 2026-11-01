@@ -11,6 +11,7 @@ import { applyLayerConcerns } from '../concerns.js';
 import type { OperationRuntimeContext } from '../context-types.js';
 import {
   getOperationRuntimeContext,
+  markOperationRetryExhausted,
   operationRuntimeContextStorage,
   startOperationExecutionAttempt,
   toContextRecord,
@@ -65,13 +66,16 @@ const applyOperationRetry = <TValue, TError>(
       startOperationExecutionAttempt(context, ordinal);
       return effect.pipe(
         Effect.catchAll(error => {
-          if (
-            !policy ||
-            ordinal >= policy.maxAttempts ||
-            !isOperationFailure(error) ||
-            isOperationFailureRetryForbidden(error) ||
-            !retryableReasons.has(error.reason)
-          ) {
+          const retryEligible =
+            policy !== undefined &&
+            isOperationFailure(error) &&
+            !isOperationFailureRetryForbidden(error) &&
+            retryableReasons.has(error.reason);
+          if (!retryEligible) {
+            return Effect.fail(error);
+          }
+          if (ordinal >= policy.maxAttempts) {
+            markOperationRetryExhausted(context, policy.maxAttempts, error.reason);
             return Effect.fail(error);
           }
           const delayMs = retryDelayMs(policy.backoff, ordinal);

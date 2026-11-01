@@ -9,7 +9,7 @@ Shapes: [Operation Implementation Binding](../../atlas/items/model/operation-imp
 
 Related plans:
 
-1. [162. Operation Execution Resilience](../current/162-operation-execution-resilience.md)
+1. [162. Operation Execution Resilience](../done/162-operation-execution-resilience.md)
 2. [120. Environment Resources And Semantic Bindings](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
 3. [125a. Model Execution Resource Governance](../current/125a-model-execution-resource-governance.md)
 4. [154. Semantic Program Kernel And Distributed Evaluation](154-semantic-program-kernel-and-distributed-evaluation.md)
