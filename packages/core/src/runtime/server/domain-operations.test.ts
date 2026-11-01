@@ -829,6 +829,19 @@ describe('server Domain Operation implementation variants', () => {
     ).toThrow('unknown implementation "missing"');
   });
 
+  it('can execute a selected implementation directly outside an Operation runtime context', async () => {
+    const summarize = defineDomainOperation({
+      implementations: {
+        local: { run: () => Effect.succeed({ summary: 'local' }) },
+      },
+      dispatch: { use: 'local' },
+    });
+
+    await expect(
+      Effect.runPromise(summarize.run({}) as Effect.Effect<{ summary: string }>),
+    ).resolves.toEqual({ summary: 'local' });
+  });
+
   it('rejects ambiguous or absent implementation declarations', () => {
     expect(() =>
       defineDomainOperation({
@@ -842,6 +855,19 @@ describe('server Domain Operation implementation variants', () => {
     expect(() => defineDomainOperation({} as never)).toThrow(
       'must declare run or implementations with dispatch',
     );
+    expect(() =>
+      defineDomainOperation({
+        run: () => Effect.succeed({ summary: 'direct' }),
+        dispatch: { use: 'local' },
+      } as never),
+    ).toThrow('cannot declare dispatch without implementations');
+    expect(() =>
+      defineDomainOperation({
+        implementations: {
+          local: { run: () => Effect.succeed({ summary: 'local' }) },
+        },
+      } as never),
+    ).toThrow('must declare dispatch when implementations are declared');
   });
 
   it('attributes the selected implementation independently on every retry attempt', async () => {

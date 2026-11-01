@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { selectOperationImplementation } from './context.js';
+
 import {
   getOrCreateServerContextResource,
   memoizeInServerContext,
@@ -8,6 +10,18 @@ import {
 } from './index.js';
 
 describe('server runtime context resources', () => {
+  it('does not attach an implementation before an execution attempt starts', () => {
+    const context = {
+      scope: 'tests.runtime.context.no-attempt',
+      telemetrySpanName: 'tests.runtime.context.no-attempt',
+      resources: new Map(),
+    };
+
+    selectOperationImplementation(context, { id: 'local', kind: 'code' });
+
+    expect(context).not.toHaveProperty('attempt');
+  });
+
   it('reuses an in-flight resource for repeated calls in the same context', async () => {
     const factory = vi.fn(async () => ({ value: 'bookops' }));
 

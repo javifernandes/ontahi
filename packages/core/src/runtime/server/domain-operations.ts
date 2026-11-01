@@ -468,10 +468,12 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'durable' | 'execution' | 'output'
+      'kind' | 'durable' | 'execution' | 'output' | 'implementations' | 'dispatch'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
       output?: TOutput;
+      implementations?: never;
+      dispatch?: never;
     },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
     durable: DurableOperationDeclarationMetadata<TInput, TResult>;
@@ -485,12 +487,14 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'execution' | 'output'
+      'kind' | 'execution' | 'output' | 'implementations' | 'dispatch'
     > & {
       execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
         atomicity?: never;
       };
       output?: TOutput;
+      implementations?: never;
+      dispatch?: never;
     },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
   <
@@ -534,12 +538,14 @@ type DefineAtomicDomainOperation = <
 >(
   operation: Omit<
     DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-    'kind' | 'durable' | 'execution' | 'output'
+    'kind' | 'durable' | 'execution' | 'output' | 'implementations' | 'dispatch'
   > & {
     execution?: Omit<DomainOperationExecutionMetadata<TFailure['reason']>, 'atomicity'> & {
       atomicity?: never;
     };
     output?: TOutput;
+    implementations?: never;
+    dispatch?: never;
   },
 ) => DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
   execution: DomainOperationExecutionMetadata<TFailure['reason']> & { atomicity: 'required' };
@@ -567,10 +573,19 @@ const defineDomainOperationImplementation = (
   if (operation.run && operation.implementations) {
     throw new Error('Domain Operations cannot declare both run and implementations.');
   }
-  const implementation = operation.implementations?.[operation.dispatch?.use ?? ''];
-  if (operation.implementations && !implementation) {
+  if (operation.dispatch && !operation.implementations) {
+    throw new Error('Domain Operations cannot declare dispatch without implementations.');
+  }
+  if (operation.implementations && !operation.dispatch) {
+    throw new Error('Domain Operations must declare dispatch when implementations are declared.');
+  }
+  const implementation =
+    operation.implementations && operation.dispatch
+      ? operation.implementations[operation.dispatch.use]
+      : undefined;
+  if (operation.implementations && operation.dispatch && !implementation) {
     throw new Error(
-      `Domain Operation dispatch selects unknown implementation "${operation.dispatch?.use ?? ''}".`,
+      `Domain Operation dispatch selects unknown implementation "${operation.dispatch.use}".`,
     );
   }
   if (!operation.run && !implementation) {
