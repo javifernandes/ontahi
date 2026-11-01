@@ -191,7 +191,11 @@ export const createOperationRunner = <
           );
           const atomicEffect = applyLayerConcerns(
             concernRuntime,
-            [withAtomicDataGraphExecution()],
+            [
+              withAtomicDataGraphExecution({
+                requireIndependentBoundary: metadata.execution?.retry !== undefined,
+              }),
+            ],
             operationEffect,
           );
           return applyLayerConcerns(concernRuntime, otherConcerns, atomicEffect);
