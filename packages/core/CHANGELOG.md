@@ -1,5 +1,23 @@
 # @ontahi/core
 
+## 1.0.0-alpha.18
+
+### Minor Changes
+
+- e91ded6: Identify every immediate Operation execution attempt and link model Resource debug evidence to its containing Operation attempt.
+- 084241d: Allow Domain Operations to declare compatible named implementations and a static dispatch choice
+  inside one declaration while attributing the selected implementation to each execution attempt.
+- a3c8aa9: Allow immediate Domain Operations to declare typed retry allowlists with bounded fixed or
+  exponential backoff through reflected execution metadata.
+- 306641f: Allow application environments to select a declared Domain Operation implementation through a
+  trusted `operationBinding(...)`, with startup validation and reflected selection evidence.
+- 471f2c0: Expose retry-exhaustion evidence on the final Operation execution attempt and guarantee that
+  immediate cancellation interrupts pending backoff before another attempt starts.
+- 823e87f: Count admitted model attempts independently from provider usage reports, preserve failed attempts
+  across retries, and expose incomplete attempt accounting through Resource Evidence and Devtools.
+- 4fa75fe: Allow atomic Domain Operations to combine their transaction boundary with execution retry policy,
+  rolling back each failed attempt before opening the next boundary.
+
 ## 1.0.0-alpha.17
 
 ### Minor Changes
