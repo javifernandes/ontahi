@@ -1,5 +1,18 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.18
+
+### Patch Changes
+
+- Updated dependencies [e91ded6]
+- Updated dependencies [084241d]
+- Updated dependencies [a3c8aa9]
+- Updated dependencies [306641f]
+- Updated dependencies [471f2c0]
+- Updated dependencies [823e87f]
+- Updated dependencies [4fa75fe]
+  - @ontahi/core@1.0.0-alpha.18
+
 ## 1.0.0-alpha.17
 
 ### Patch Changes
