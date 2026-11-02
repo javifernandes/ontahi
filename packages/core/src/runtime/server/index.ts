@@ -232,6 +232,7 @@ export { layer, operation, runServerOperation } from './dsl.js';
 export {
   defineDomainOperation,
   defineDomainOperationsForEntity,
+  operationBinding,
   checkServerDomainOperationPermission,
   createTaskDefinitionFromDurableDomainOperation,
   invokeConfiguredServerDomainOperation,
@@ -245,6 +246,7 @@ export {
   type DomainOperationEffectsMetadata,
   type DomainOperationImplementation,
   type DomainOperationImplementationDispatch,
+  type DomainOperationEnvironmentBinding,
   type DomainOperationImplementations,
   type HydratedOperationInput,
   type HydratedSemanticSelection,

@@ -48,7 +48,10 @@ import type { ArchitectureDefinition } from './architecture-types.js';
 import { getOperationRuntimeContext } from './context.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
 import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
-import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
+import {
+  bindDomainOperationImplementation,
+  createTaskDefinitionFromDurableDomainOperation,
+} from './domain-operations.js';
 import { executeEntityMutationLifecycle } from './entity-mutation-lifecycle.js';
 import {
   bindOntahiEntity,
@@ -212,6 +215,7 @@ export type OntahiOptions<
   events?: TEvents;
   eventRuntime?: EventRuntime;
   operationConditions?: PortableOperationConditionRegistry;
+  operationBindings?: Readonly<Record<string, string>>;
   derivedFields?: PortableDerivedFieldRegistry;
   fieldGenerators?: Record<
     string,
@@ -628,6 +632,10 @@ export const ontahi = <
   const bindingContext = {
     entities: entityCommands,
     operationConditions: options.operationConditions,
+    bindOperationImplementation: (
+      operationId: string,
+      operation: Parameters<typeof bindDomainOperationImplementation>[1],
+    ) => bindDomainOperationImplementation(operationId, operation, options.operationBindings ?? {}),
   };
   const entities = (
     Array.isArray(declaredEntities)
