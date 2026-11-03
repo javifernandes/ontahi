@@ -96,16 +96,26 @@ const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
 const operationAttemptKeys = new Set(['attemptId', 'ordinal']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
-const resourceEvidenceKeys = new Set(['visibility', 'model', 'services']);
-const resourceEvidenceModelKeys = new Set([
+const resourceEvidenceKeys = new Set(['visibility', 'attempts', 'resources']);
+const modelResourceSummaryKeys = new Set([
+  'kind',
+  'resourceId',
   'attempts',
   'reportedAttempts',
   'failedAttempts',
   'totalTokens',
   'durationMs',
 ]);
-const resourceAttemptOutcomeKeys = new Set(['outcome', 'activity', 'usageReported']);
+const modelResourceAttemptKeys = new Set([
+  'kind',
+  'resourceId',
+  'outcome',
+  'activity',
+  'usage',
+  'usageReported',
+]);
 const serviceResourceAttemptKeys = new Set([
+  'kind',
   'resourceId',
   'provider',
   'action',
@@ -114,6 +124,7 @@ const serviceResourceAttemptKeys = new Set([
   'activity',
 ]);
 const serviceResourceSummaryKeys = new Set([
+  'kind',
   'resourceId',
   'attempts',
   'failedAttempts',
@@ -215,103 +226,75 @@ const parseModelResourceUsageList = (value: unknown): readonly ModelResourceUsag
   return parsed.every(item => item !== undefined) ? parsed : undefined;
 };
 
+const isResourceOutcome = (value: unknown) =>
+  value === 'started' || value === 'completed' || value === 'failed';
+
+const isOptionalMetric = (value: unknown) =>
+  value === undefined || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+
+const parseResourceAttemptEvidence = (value: unknown): boolean => {
+  if (!isRecord(value) || !isResourceOutcome(value.outcome)) return false;
+  if (value.kind === 'model') {
+    if (
+      !hasOnlyKeys(value, modelResourceAttemptKeys) ||
+      value.resourceId !== 'model' ||
+      typeof value.usageReported !== 'boolean' ||
+      !parseModelResourceActivity(value.activity)
+    )
+      return false;
+    const usage = value.usage;
+    return (
+      usage === undefined ||
+      (isRecord(usage) &&
+        usage.activity === undefined &&
+        parseModelResourceUsage(usage) !== undefined)
+    );
+  }
+  return (
+    value.kind === 'service' &&
+    hasOnlyKeys(value, serviceResourceAttemptKeys) &&
+    isBoundedIdentity(value.resourceId) &&
+    (value.provider === undefined || isBoundedIdentity(value.provider)) &&
+    (value.action === undefined || isBoundedIdentity(value.action)) &&
+    isOptionalMetric(value.durationMs) &&
+    parseServiceResourceActivity(value.activity)
+  );
+};
+
+const parseResourceEvidenceSummary = (value: unknown): boolean => {
+  if (!isRecord(value) || !isPositiveInteger(value.attempts)) return false;
+  if (
+    value.failedAttempts !== undefined &&
+    (!isNonNegativeInteger(value.failedAttempts) || value.failedAttempts > value.attempts)
+  )
+    return false;
+  if (!isOptionalMetric(value.durationMs)) return false;
+  if (value.kind === 'service')
+    return hasOnlyKeys(value, serviceResourceSummaryKeys) && isBoundedIdentity(value.resourceId);
+  if (
+    value.kind !== 'model' ||
+    value.resourceId !== 'model' ||
+    !hasOnlyKeys(value, modelResourceSummaryKeys)
+  )
+    return false;
+  if (
+    value.reportedAttempts !== undefined &&
+    (!isNonNegativeInteger(value.reportedAttempts) || value.reportedAttempts > value.attempts)
+  )
+    return false;
+  return isOptionalMetric(value.totalTokens);
+};
+
 const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => {
   if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys)) return undefined;
   if (value.visibility === 'debug') {
-    if (value.model !== undefined) {
-      if (!isRecord(value.model)) return undefined;
-      if (!hasOnlyKeys(value.model, new Set(['attempts', 'attemptOutcomes']))) return undefined;
-      if (!Array.isArray(value.model.attempts)) return undefined;
-      const attempts =
-        value.model.attempts.length === 0 ? [] : parseModelResourceUsageList(value.model.attempts);
-      if (!attempts) return undefined;
-      const attemptOutcomes = value.model.attemptOutcomes;
-      if (
-        attemptOutcomes !== undefined &&
-        (!Array.isArray(attemptOutcomes) ||
-          attemptOutcomes.length === 0 ||
-          !attemptOutcomes.every(
-            attempt =>
-              isRecord(attempt) &&
-              hasOnlyKeys(attempt, resourceAttemptOutcomeKeys) &&
-              (attempt.outcome === 'started' ||
-                attempt.outcome === 'completed' ||
-                attempt.outcome === 'failed') &&
-              typeof attempt.usageReported === 'boolean' &&
-              parseModelResourceActivity(attempt.activity),
-          ))
-      )
-        return undefined;
-      if (attempts.length === 0 && attemptOutcomes === undefined) return undefined;
-    }
-    if (
-      value.services !== undefined &&
-      (!Array.isArray(value.services) ||
-        value.services.length === 0 ||
-        !value.services.every(
-          attempt =>
-            isRecord(attempt) &&
-            hasOnlyKeys(attempt, serviceResourceAttemptKeys) &&
-            isBoundedIdentity(attempt.resourceId) &&
-            (attempt.provider === undefined || isBoundedIdentity(attempt.provider)) &&
-            (attempt.action === undefined || isBoundedIdentity(attempt.action)) &&
-            (attempt.outcome === 'started' ||
-              attempt.outcome === 'completed' ||
-              attempt.outcome === 'failed') &&
-            (attempt.durationMs === undefined ||
-              (typeof attempt.durationMs === 'number' &&
-                Number.isFinite(attempt.durationMs) &&
-                attempt.durationMs >= 0)) &&
-            parseServiceResourceActivity(attempt.activity),
-        ))
-    )
-      return undefined;
-    if (value.model === undefined && value.services === undefined) return undefined;
+    if (!Array.isArray(value.attempts) || value.attempts.length === 0) return undefined;
+    if (!value.attempts.every(parseResourceAttemptEvidence)) return undefined;
     return cloneJson(value) as ResourceEvidence;
   }
   if (value.visibility !== 'summary') return undefined;
-  if (value.model !== undefined) {
-    if (
-      !isRecord(value.model) ||
-      !hasOnlyKeys(value.model, resourceEvidenceModelKeys) ||
-      !isPositiveInteger(value.model.attempts)
-    )
-      return undefined;
-    for (const key of ['totalTokens', 'durationMs'] as const) {
-      const metric = value.model[key];
-      if (
-        metric !== undefined &&
-        (typeof metric !== 'number' || !Number.isFinite(metric) || metric < 0)
-      )
-        return undefined;
-    }
-    for (const key of ['reportedAttempts', 'failedAttempts'] as const) {
-      const count = value.model[key];
-      if (count !== undefined && (!isNonNegativeInteger(count) || count > value.model.attempts))
-        return undefined;
-    }
-  }
-  if (
-    value.services !== undefined &&
-    (!Array.isArray(value.services) ||
-      value.services.length === 0 ||
-      !value.services.every(
-        summary =>
-          isRecord(summary) &&
-          hasOnlyKeys(summary, serviceResourceSummaryKeys) &&
-          isBoundedIdentity(summary.resourceId) &&
-          isPositiveInteger(summary.attempts) &&
-          (summary.failedAttempts === undefined ||
-            (isNonNegativeInteger(summary.failedAttempts) &&
-              summary.failedAttempts <= summary.attempts)) &&
-          (summary.durationMs === undefined ||
-            (typeof summary.durationMs === 'number' &&
-              Number.isFinite(summary.durationMs) &&
-              summary.durationMs >= 0)),
-      ))
-  )
-    return undefined;
-  if (value.model === undefined && value.services === undefined) return undefined;
+  if (!Array.isArray(value.resources) || value.resources.length === 0) return undefined;
+  if (!value.resources.every(parseResourceEvidenceSummary)) return undefined;
   return cloneJson(value) as ResourceEvidence;
 };
 

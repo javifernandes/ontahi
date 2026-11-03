@@ -2,20 +2,19 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type {
   ModelResourceActivity,
-  ModelResourceAttemptOutcome,
+  ModelResourceAttemptEvidence,
   ModelResourceUsage,
+  ResourceAttemptEvidence,
   ResourceEvidence,
   ResourceEvidenceDisclosure,
-  ServiceResourceAttempt,
+  ResourceEvidenceSummary,
+  ServiceResourceAttemptEvidence,
 } from '../contracts.js';
 
 type ResourceEvidenceState = {
   readonly disclosure: ResourceEvidenceDisclosure;
-  readonly modelUsage: ModelResourceUsage[];
-  readonly modelAttemptOutcomes: ModelResourceAttemptOutcome[];
-  readonly suppressedModelAttempts: { count: number };
-  readonly serviceAttempts: ServiceResourceAttempt[];
-  readonly suppressedServiceAttempts: { count: number };
+  readonly attempts: ResourceAttemptEvidence[];
+  readonly suppressedAttempts: Map<string, number>;
 };
 
 const storage = new AsyncLocalStorage<ResourceEvidenceState>();
@@ -24,6 +23,10 @@ const disclosureRank: Record<ResourceEvidenceDisclosure, number> = {
   summary: 1,
   debug: 2,
 };
+const MODEL_RESOURCE_KEY = 'model:model';
+
+const resourceKey = (kind: ResourceAttemptEvidence['kind'], resourceId: string) =>
+  `${kind}:${resourceId}`;
 
 const narrowDisclosure = (
   parent: ResourceEvidenceDisclosure,
@@ -42,131 +45,214 @@ export const withResourceEvidence = <TValue>(
     return storage.run(
       {
         disclosure: narrowDisclosure(parent.disclosure, disclosure),
-        modelUsage: parent.modelUsage,
-        modelAttemptOutcomes: parent.modelAttemptOutcomes,
-        suppressedModelAttempts: parent.suppressedModelAttempts,
-        serviceAttempts: parent.serviceAttempts,
-        suppressedServiceAttempts: parent.suppressedServiceAttempts,
+        attempts: parent.attempts,
+        suppressedAttempts: parent.suppressedAttempts,
       },
       run,
     );
   return storage.run(
     {
       disclosure: disclosure ?? 'none',
-      modelUsage: [],
-      modelAttemptOutcomes: [],
-      suppressedModelAttempts: { count: 0 },
-      serviceAttempts: [],
-      suppressedServiceAttempts: { count: 0 },
+      attempts: [],
+      suppressedAttempts: new Map(),
     },
     run,
   );
 };
 
+const incrementSuppressedAttempt = (state: ResourceEvidenceState, key: string) =>
+  state.suppressedAttempts.set(key, (state.suppressedAttempts.get(key) ?? 0) + 1);
+
+const validateEvidenceIdentity = (name: string, value: string | undefined): void => {
+  if (value !== undefined && (value.length === 0 || value.length > 256))
+    throw new RangeError(`${name} must contain between 1 and 256 characters.`);
+};
+
 export const recordServiceResourceAttempt = (
-  attempt: Omit<ServiceResourceAttempt, 'outcome' | 'durationMs'>,
+  attempt: Omit<ServiceResourceAttemptEvidence, 'kind' | 'outcome' | 'durationMs'>,
 ): ((outcome: 'completed' | 'failed', durationMs: number) => void) => {
+  validateEvidenceIdentity('resourceId', attempt.resourceId);
+  validateEvidenceIdentity('provider', attempt.provider);
+  validateEvidenceIdentity('action', attempt.action);
   const state = storage.getStore();
   if (!state) return () => undefined;
+  const key = resourceKey('service', attempt.resourceId);
   if (state.disclosure === 'none') {
-    state.suppressedServiceAttempts.count += 1;
+    incrementSuppressedAttempt(state, key);
     return () => undefined;
   }
-  state.serviceAttempts.push({ ...attempt, outcome: 'started' });
-  const index = state.serviceAttempts.length - 1;
+  state.attempts.push({ kind: 'service', ...attempt, outcome: 'started' });
+  const index = state.attempts.length - 1;
   return (outcome, durationMs) => {
-    state.serviceAttempts[index] = { ...attempt, outcome, durationMs };
+    state.attempts[index] = { kind: 'service', ...attempt, outcome, durationMs };
   };
 };
 
 export const recordModelResourceAttempt = (
   activity: ModelResourceActivity | undefined,
-): ((outcome: ModelResourceAttemptOutcome['outcome']) => void) => {
+): ((outcome: ModelResourceAttemptEvidence['outcome']) => void) => {
   const state = storage.getStore();
   if (!state) return () => undefined;
   if (state.disclosure === 'none') {
-    state.suppressedModelAttempts.count += 1;
+    incrementSuppressedAttempt(state, MODEL_RESOURCE_KEY);
     return () => undefined;
   }
-  const attempt: {
-    outcome: ModelResourceAttemptOutcome['outcome'];
-    activity?: ModelResourceActivity;
-  } = {
+  const attempt: ModelResourceAttemptEvidence = {
+    kind: 'model',
+    resourceId: 'model',
     outcome: 'started',
     ...(activity ? { activity } : {}),
+    usageReported: false,
   };
-  state.modelAttemptOutcomes.push({ ...attempt, usageReported: false });
-  const index = state.modelAttemptOutcomes.length - 1;
+  state.attempts.push(attempt);
+  const index = state.attempts.length - 1;
   return outcome => {
-    const usageReported = state.modelUsage.some(
-      usage => activity !== undefined && usage.activity?.attemptId === activity.attemptId,
-    );
-    state.modelAttemptOutcomes[index] = { ...attempt, outcome, usageReported };
+    const current = state.attempts[index];
+    if (current?.kind === 'model') state.attempts[index] = { ...current, outcome };
   };
+};
+
+const attachModelUsage = (attempts: ResourceAttemptEvidence[], usage: ModelResourceUsage): void => {
+  const { activity, ...providerUsage } = usage;
+  let index = -1;
+  if (activity)
+    for (let candidate = attempts.length - 1; candidate >= 0; candidate -= 1) {
+      const attempt = attempts[candidate];
+      if (attempt?.kind === 'model' && attempt.activity?.attemptId === activity.attemptId) {
+        index = candidate;
+        break;
+      }
+    }
+  const existing = index < 0 ? undefined : attempts[index];
+  if (existing?.kind === 'model') {
+    attempts[index] = { ...existing, usage: providerUsage, usageReported: true };
+    return;
+  }
+  attempts.push({
+    kind: 'model',
+    resourceId: 'model',
+    outcome: 'completed',
+    ...(activity ? { activity } : {}),
+    usage: providerUsage,
+    usageReported: true,
+  });
 };
 
 export const recordModelResourceUsage = (usage: ModelResourceUsage): void => {
   const state = storage.getStore();
-  if (state && state.disclosure !== 'none') state.modelUsage.push(usage);
+  if (state && state.disclosure !== 'none') attachModelUsage(state.attempts, usage);
 };
 
 const sumIfComplete = (
-  usage: readonly ModelResourceUsage[],
-  select: (entry: ModelResourceUsage) => number | undefined,
-) => {
-  const values = usage.map(select);
-  return values.every((value): value is number => value !== undefined)
+  values: readonly (number | undefined)[],
+  complete: boolean,
+): number | undefined =>
+  complete && values.every((value): value is number => value !== undefined)
     ? values.reduce((total, value) => total + value, 0)
     : undefined;
+
+const summarizeModel = (
+  attempts: readonly ModelResourceAttemptEvidence[],
+  hasSuppressedAttempts: boolean,
+): ResourceEvidenceSummary => {
+  const reported = attempts.filter(attempt => attempt.usageReported);
+  const complete = !hasSuppressedAttempts && reported.length === attempts.length;
+  const totalTokens = sumIfComplete(
+    reported.map(attempt => attempt.usage?.totalTokens),
+    complete,
+  );
+  const durationMs = sumIfComplete(
+    reported.map(attempt => attempt.usage?.durationMs),
+    complete,
+  );
+  const failedAttempts = attempts.filter(attempt => attempt.outcome === 'failed').length;
+  return {
+    kind: 'model',
+    resourceId: 'model',
+    attempts: attempts.length,
+    reportedAttempts: reported.length,
+    ...(failedAttempts === 0 ? {} : { failedAttempts }),
+    ...(totalTokens === undefined ? {} : { totalTokens }),
+    ...(durationMs === undefined ? {} : { durationMs }),
+  };
+};
+
+const summarizeService = (
+  resourceId: string,
+  attempts: readonly ServiceResourceAttemptEvidence[],
+  hasSuppressedAttempts: boolean,
+): ResourceEvidenceSummary => {
+  const durationMs = sumIfComplete(
+    attempts.map(attempt => attempt.durationMs),
+    !hasSuppressedAttempts,
+  );
+  const failedAttempts = attempts.filter(attempt => attempt.outcome === 'failed').length;
+  return {
+    kind: 'service',
+    resourceId,
+    attempts: attempts.length,
+    ...(failedAttempts === 0 ? {} : { failedAttempts }),
+    ...(durationMs === undefined ? {} : { durationMs }),
+  };
+};
+
+const projectAttempts = (
+  attempts: readonly ResourceAttemptEvidence[],
+  disclosure: ResourceEvidenceDisclosure,
+  suppressedAttempts: ReadonlyMap<string, number>,
+): ResourceEvidence | undefined => {
+  if (disclosure === 'none' || attempts.length === 0) return undefined;
+  if (disclosure === 'debug') return { visibility: 'debug', attempts: [...attempts] };
+  const modelAttempts = attempts.filter(
+    (attempt): attempt is ModelResourceAttemptEvidence => attempt.kind === 'model',
+  );
+  const serviceAttempts = attempts.filter(
+    (attempt): attempt is ServiceResourceAttemptEvidence => attempt.kind === 'service',
+  );
+  const resources: ResourceEvidenceSummary[] = [];
+  if (modelAttempts.length > 0)
+    resources.push(
+      summarizeModel(modelAttempts, (suppressedAttempts.get(MODEL_RESOURCE_KEY) ?? 0) > 0),
+    );
+  const serviceAttemptsByResource = new Map<string, ServiceResourceAttemptEvidence[]>();
+  for (const attempt of serviceAttempts) {
+    const resourceAttempts = serviceAttemptsByResource.get(attempt.resourceId) ?? [];
+    resourceAttempts.push(attempt);
+    serviceAttemptsByResource.set(attempt.resourceId, resourceAttempts);
+  }
+  for (const [resourceId, resourceAttempts] of serviceAttemptsByResource) {
+    resources.push(
+      summarizeService(
+        resourceId,
+        resourceAttempts,
+        (suppressedAttempts.get(resourceKey('service', resourceId)) ?? 0) > 0,
+      ),
+    );
+  }
+  return resources.length === 0 ? undefined : { visibility: 'summary', resources };
 };
 
 export const projectResourceEvidence = (
   usage: readonly ModelResourceUsage[],
   disclosure: ResourceEvidenceDisclosure,
-  attemptOutcomes: readonly ModelResourceAttemptOutcome[] = [],
+  outcomes: readonly {
+    readonly outcome: ModelResourceAttemptEvidence['outcome'];
+    readonly activity?: ModelResourceActivity;
+    readonly usageReported: boolean;
+  }[] = [],
   hasSuppressedAttempts = false,
 ): ResourceEvidence | undefined => {
-  if (disclosure === 'none' || (usage.length === 0 && attemptOutcomes.length === 0))
-    return undefined;
-  const projectedAttemptOutcomes = attemptOutcomes.map(attempt => ({
-    ...attempt,
-    usageReported:
-      attempt.usageReported ||
-      (attempt.activity !== undefined &&
-        usage.some(entry => entry.activity?.attemptId === attempt.activity?.attemptId)),
+  const attempts: ResourceAttemptEvidence[] = outcomes.map(outcome => ({
+    kind: 'model',
+    resourceId: 'model',
+    ...outcome,
   }));
-  if (disclosure === 'debug')
-    return {
-      visibility: 'debug',
-      model: {
-        attempts: [...usage],
-        ...(projectedAttemptOutcomes.length === 0
-          ? {}
-          : { attemptOutcomes: projectedAttemptOutcomes }),
-      },
-    };
-
-  const attempts = attemptOutcomes.length || usage.length;
-  const reportedAttempts =
-    projectedAttemptOutcomes.length === 0
-      ? usage.length
-      : projectedAttemptOutcomes.filter(attempt => attempt.usageReported).length;
-  const complete = !hasSuppressedAttempts && reportedAttempts === attempts;
-  const totalTokens = complete ? sumIfComplete(usage, entry => entry.totalTokens) : undefined;
-  const durationMs = complete ? sumIfComplete(usage, entry => entry.durationMs) : undefined;
-  const failedAttempts = projectedAttemptOutcomes.filter(
-    attempt => attempt.outcome === 'failed',
-  ).length;
-  return {
-    visibility: 'summary',
-    model: {
-      attempts,
-      ...(attemptOutcomes.length === 0 ? {} : { reportedAttempts }),
-      ...(failedAttempts === 0 ? {} : { failedAttempts }),
-      ...(totalTokens === undefined ? {} : { totalTokens }),
-      ...(durationMs === undefined ? {} : { durationMs }),
-    },
-  };
+  for (const entry of usage) attachModelUsage(attempts, entry);
+  return projectAttempts(
+    attempts,
+    disclosure,
+    hasSuppressedAttempts ? new Map([[MODEL_RESOURCE_KEY, 1]]) : new Map(),
+  );
 };
 
 export const projectCurrentResourceEvidence = (
@@ -174,40 +260,9 @@ export const projectCurrentResourceEvidence = (
 ): ResourceEvidence | undefined => {
   const state = storage.getStore();
   if (!state) return undefined;
-  const model = projectResourceEvidence(
-    [...additionalUsage, ...state.modelUsage],
-    state.disclosure,
-    state.modelAttemptOutcomes,
-    state.suppressedModelAttempts.count > 0,
-  );
-  if (state.disclosure === 'none') return undefined;
-  const services =
-    state.disclosure === 'debug'
-      ? [...state.serviceAttempts]
-      : [...new Set(state.serviceAttempts.map(attempt => attempt.resourceId))].map(resourceId => {
-          const attempts = state.serviceAttempts.filter(
-            attempt => attempt.resourceId === resourceId,
-          );
-          const durations = attempts.map(attempt => attempt.durationMs);
-          const durationMs =
-            state.suppressedServiceAttempts.count === 0 &&
-            durations.every((duration): duration is number => duration !== undefined)
-              ? durations.reduce((total, duration) => total + duration, 0)
-              : undefined;
-          const failedAttempts = attempts.filter(attempt => attempt.outcome === 'failed').length;
-          return {
-            resourceId,
-            attempts: attempts.length,
-            ...(failedAttempts === 0 ? {} : { failedAttempts }),
-            ...(durationMs === undefined ? {} : { durationMs }),
-          };
-        });
-  if (!model && services.length === 0) return undefined;
-  return {
-    visibility: state.disclosure,
-    ...(model?.model ? { model: model.model } : {}),
-    ...(services.length === 0 ? {} : { services }),
-  } as ResourceEvidence;
+  const attempts = [...state.attempts];
+  for (const usage of additionalUsage) attachModelUsage(attempts, usage);
+  return projectAttempts(attempts, state.disclosure, state.suppressedAttempts);
 };
 
 export const getCurrentResourceEvidenceDisclosure = (): ResourceEvidenceDisclosure =>

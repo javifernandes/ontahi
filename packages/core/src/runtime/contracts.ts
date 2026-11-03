@@ -378,7 +378,12 @@ export type TaskRunListItem = TaskSnapshot & {
 
 /** Context is optional host-defined interaction context, never an authority credential. */
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
-export type ModelResourceActivity = {
+export type ResourceAdmission = {
+  readonly attempt: number;
+  readonly maxAttempts?: number;
+};
+
+export type ResourceActivity<TAdmission extends ResourceAdmission = ResourceAdmission> = {
   readonly attemptId: string;
   readonly correlationId: string;
   readonly causationId?: string;
@@ -396,40 +401,19 @@ export type ModelResourceActivity = {
     readonly surface?: string;
     readonly clientInstanceId?: string;
   };
-  readonly admission?: {
-    readonly attempt: number;
-    readonly maxAttempts?: number;
-    readonly maxOutputTokens?: number;
-  };
+  readonly admission?: TAdmission;
 };
+
+export type ModelResourceActivity = ResourceActivity<
+  ResourceAdmission & { readonly maxOutputTokens?: number }
+>;
 
 /** Runtime-owned causal attribution for one non-model service attempt. */
-export type ServiceResourceActivity = {
-  readonly attemptId: string;
-  readonly correlationId: string;
-  readonly causationId?: string;
-  readonly operationAttempt?: {
-    readonly attemptId: string;
-    readonly ordinal: number;
-  };
-  readonly owner?: {
-    readonly kind: 'operation' | 'intent-resolution';
-    readonly id: string;
-    readonly runId?: string;
-  };
-  readonly origin?: {
-    readonly channel: 'web' | 'cli' | 'agent' | 'api' | 'system';
-    readonly surface?: string;
-    readonly clientInstanceId?: string;
-  };
-  readonly admission?: {
-    readonly attempt: number;
-    readonly maxAttempts?: number;
-  };
-};
+export type ServiceResourceActivity = ResourceActivity;
 
 /** Locally observed evidence for one attempt against an external or scarce service. */
-export type ServiceResourceAttempt = {
+export type ServiceResourceAttemptEvidence = {
+  readonly kind: 'service';
   readonly resourceId: string;
   readonly provider?: string;
   readonly action?: string;
@@ -456,6 +440,8 @@ export type ModelResourceUsage = {
 export type ResourceEvidenceDisclosure = 'none' | 'summary' | 'debug';
 
 export type ModelResourceEvidenceSummary = {
+  readonly kind: 'model';
+  readonly resourceId: 'model';
   /** Provider attempts admitted by the runtime, including attempts without usage reports. */
   readonly attempts: number;
   /** Admitted attempts for which the provider returned metering evidence. */
@@ -467,43 +453,36 @@ export type ModelResourceEvidenceSummary = {
 };
 
 export type ServiceResourceEvidenceSummary = {
+  readonly kind: 'service';
   readonly resourceId: string;
   readonly attempts: number;
   readonly failedAttempts?: number;
   readonly durationMs?: number;
 };
 
-export type ModelResourceAttemptOutcome = {
+export type ModelResourceAttemptEvidence = {
+  readonly kind: 'model';
+  readonly resourceId: 'model';
   readonly outcome: 'started' | 'completed' | 'failed';
   readonly activity?: ModelResourceActivity;
+  readonly usage?: Omit<ModelResourceUsage, 'activity'>;
   readonly usageReported: boolean;
 };
 
+export type ResourceAttemptEvidence = ModelResourceAttemptEvidence | ServiceResourceAttemptEvidence;
+
+export type ResourceEvidenceSummary = ModelResourceEvidenceSummary | ServiceResourceEvidenceSummary;
+
 /** Portable resource evidence. Debug evidence may expose sensitive runtime topology and identity. */
 export type ResourceEvidence =
-  | ({ readonly visibility: 'summary' } & (
-      | {
-          readonly model: ModelResourceEvidenceSummary;
-          readonly services?: readonly ServiceResourceEvidenceSummary[];
-        }
-      | {
-          readonly model?: never;
-          readonly services: readonly ServiceResourceEvidenceSummary[];
-        }
-    ))
-  | ({ readonly visibility: 'debug' } & (
-      | {
-          readonly model: {
-            readonly attempts: readonly ModelResourceUsage[];
-            readonly attemptOutcomes?: readonly ModelResourceAttemptOutcome[];
-          };
-          readonly services?: readonly ServiceResourceAttempt[];
-        }
-      | {
-          readonly model?: never;
-          readonly services: readonly ServiceResourceAttempt[];
-        }
-    ));
+  | {
+      readonly visibility: 'summary';
+      readonly resources: readonly ResourceEvidenceSummary[];
+    }
+  | {
+      readonly visibility: 'debug';
+      readonly attempts: readonly ResourceAttemptEvidence[];
+    };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {
       status: 'pending';

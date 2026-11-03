@@ -22,10 +22,7 @@ An Operation that calls a paid or scarce non-model service can place the externa
 the same admission, attribution, and Resource-evidence lifecycle used by model execution:
 
 ```ts
-import {
-  withServiceResourceAttempt,
-  withServiceResourceLimits,
-} from '@ontahi/core/runtime/server';
+import { withServiceResourceAttempt, withServiceResourceLimits } from '@ontahi/core/runtime/server';
 
 await withServiceResourceLimits('paid-search', { maxAttempts: 2 }, () =>
   withServiceResourceAttempt(

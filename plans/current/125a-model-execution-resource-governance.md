@@ -200,6 +200,12 @@ This slice confirms a small shared lifecycle without erasing model specificity:
 4. static configuration may be closed over by an Operation implementation without becoming
    semantic input or reflected metadata.
 
+The implementation reflects that boundary as one discriminated Resource-attempt ledger rather
+than parallel model and service evidence stores. Debug projection emits typed attempts; summary
+projection groups typed Resource identities. Model attempts retain nested provider metering, while
+service attempts retain their own provider/action metadata. This keeps the shared lifecycle
+polymorphic without flattening every Resource into an artificial universal schema.
+
 Dynamic BYOK is the next binding pressure, not part of this first API. A later experiment should
 resolve a configured Resource instance from trusted application, workspace/tenant, Principal, or
 invocation scope and keep the secret opaque. Authorization will eventually decide which authority

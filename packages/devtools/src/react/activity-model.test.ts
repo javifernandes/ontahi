@@ -49,7 +49,7 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
   },
 });
 
-const modelUsageActivity = (attempts: unknown): ExchangeActivity => ({
+const modelUsageActivity = (usage: unknown): ExchangeActivity => ({
   ...exchangeActivity({ version: 1, kind: 'model-command', text: 'help' }, 'model.command'),
   settled: {
     kind: 'exchange.settled',
@@ -70,7 +70,22 @@ const modelUsageActivity = (attempts: unknown): ExchangeActivity => ({
       body: {
         kind: 'model-command-result',
         result: { status: 'answered', message: 'Done.' },
-        resourceEvidence: { visibility: 'debug', model: { attempts } },
+        resourceEvidence: {
+          visibility: 'debug',
+          attempts: Array.isArray(usage)
+            ? usage.map((entry, index) => ({
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'completed',
+                usageReported: true,
+                usage: entry,
+                activity: {
+                  attemptId: `attempt-${index}`,
+                  correlationId: 'execution-1',
+                },
+              }))
+            : usage,
+        },
       },
     },
   },
@@ -563,7 +578,7 @@ describe('Devtools activity model', () => {
     const summaryBody = summary.settled!.response!.body as Record<string, unknown>;
     summaryBody.resourceEvidence = {
       visibility: 'summary',
-      model: { attempts: 2, totalTokens: 240 },
+      resources: [{ kind: 'model', resourceId: 'model', attempts: 2, totalTokens: 240 }],
     };
     expect(modelResourceUsageSummary(summary)).toBe('2 calls · 240 tokens');
   });

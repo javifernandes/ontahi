@@ -55,8 +55,8 @@ export const withServiceResourceAttempt = async <TValue>(
       const activity = projectActivity(owner, admission);
       const complete = recordServiceResourceAttempt({
         resourceId: options.resourceId,
-        ...(options.provider ? { provider: options.provider } : {}),
-        ...(options.action ? { action: options.action } : {}),
+        ...(options.provider === undefined ? {} : { provider: options.provider }),
+        ...(options.action === undefined ? {} : { action: options.action }),
         ...(activity ? { activity } : {}),
       });
       const startedAt = performance.now();

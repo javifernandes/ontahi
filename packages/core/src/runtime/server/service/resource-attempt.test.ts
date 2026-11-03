@@ -49,8 +49,9 @@ describe('service Resource attempt', () => {
     expect(request).toHaveBeenCalledOnce();
     expect(result.evidence).toMatchObject({
       visibility: 'debug',
-      services: [
+      attempts: [
         {
+          kind: 'service',
           resourceId: 'paid-suggestions',
           provider: 'fake-http',
           action: 'suggest',
@@ -79,7 +80,24 @@ describe('service Resource attempt', () => {
 
     expect(evidence).toMatchObject({
       visibility: 'summary',
-      services: [{ resourceId: 'paid-suggestions', attempts: 1, failedAttempts: 1 }],
+      resources: [
+        {
+          kind: 'service',
+          resourceId: 'paid-suggestions',
+          attempts: 1,
+          failedAttempts: 1,
+        },
+      ],
     });
+  });
+
+  it.each([
+    [{ resourceId: '' }, 'resourceId'],
+    [{ resourceId: 'valid', provider: '' }, 'provider'],
+    [{ resourceId: 'valid', action: 'x'.repeat(257) }, 'action'],
+  ])('rejects invalid evidence identity at registration: %j', async (options, name) => {
+    await expect(withServiceResourceAttempt(options, async () => undefined)).rejects.toThrow(
+      `${name} must contain between 1 and 256 characters.`,
+    );
   });
 });

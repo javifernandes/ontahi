@@ -72,11 +72,15 @@ describe('SemanticPayload', () => {
           result: { ok: true, kind: 'success', value: { title: 'Buy milk' } },
           resourceEvidence: {
             visibility: 'summary',
-            model: {
-              attempts: 2,
-              reportedAttempts: 1,
-              failedAttempts: 1,
-            },
+            resources: [
+              {
+                kind: 'model',
+                resourceId: 'model',
+                attempts: 2,
+                reportedAttempts: 1,
+                failedAttempts: 1,
+              },
+            ],
           },
         }}
       />,
@@ -94,9 +98,27 @@ describe('SemanticPayload', () => {
           kind: 'invocation-result',
           result: { ok: true, kind: 'success' },
           resourceEvidence: {
+            visibility: 'summary',
+            resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByText('Resource usage summary')).toBeNull();
+    expect(screen.getByText('Service Resource')).toBeTruthy();
+    expect(screen.getByText('paid-search')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempts · 1' })).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success' },
+          resourceEvidence: {
             visibility: 'debug',
-            services: [
+            attempts: [
               {
+                kind: 'service',
                 resourceId: 'paid-suggestions',
                 provider: 'fake-http',
                 action: 'suggest',
@@ -181,20 +203,24 @@ describe('SemanticPayload', () => {
           },
           resourceEvidence: {
             visibility: 'debug',
-            model: {
-              attemptOutcomes: [
-                {
-                  outcome: 'failed',
-                  usageReported: false,
-                  activity: {
-                    attemptId: 'attempt-0',
-                    correlationId: 'execution-1',
-                    admission: { attempt: 1, maxAttempts: 3 },
-                  },
+            attempts: [
+              {
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'failed',
+                usageReported: false,
+                activity: {
+                  attemptId: 'attempt-0',
+                  correlationId: 'execution-1',
+                  admission: { attempt: 1, maxAttempts: 3 },
                 },
-              ],
-              attempts: [
-                {
+              },
+              {
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'completed',
+                usageReported: true,
+                usage: {
                   provider: 'openai',
                   model: 'gpt-test',
                   inputTokens: 120,
@@ -204,38 +230,51 @@ describe('SemanticPayload', () => {
                   cacheWriteInputTokens: 3,
                   reasoningTokens: 6,
                   durationMs: 250,
-                  activity: {
-                    attemptId: 'attempt-1',
-                    correlationId: 'execution-1',
-                    operationAttempt: {
-                      attemptId: 'operation-attempt-2',
-                      ordinal: 2,
-                    },
-                    owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
-                    origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
-                    admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
-                  },
                 },
-                {
-                  provider: 'ollama',
-                  model: 'local-test',
-                  activity: {
-                    attemptId: 'attempt-2',
-                    correlationId: 'execution-2',
+                activity: {
+                  attemptId: 'attempt-1',
+                  correlationId: 'execution-1',
+                  operationAttempt: {
+                    attemptId: 'operation-attempt-2',
+                    ordinal: 2,
                   },
+                  owner: { kind: 'intent-resolution', id: 'ontahi.model-command' },
+                  origin: { channel: 'web', surface: 'command-chat', clientInstanceId: 'tab-1' },
+                  admission: { attempt: 1, maxAttempts: 3, maxOutputTokens: 1_024 },
                 },
-                {
-                  provider: 'deepseek',
-                  model: 'deepseek-test',
-                  activity: {
-                    owner: {},
-                    origin: { channel: 'cli' },
-                  },
+              },
+              {
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'completed',
+                usageReported: true,
+                usage: { provider: 'ollama', model: 'local-test' },
+                activity: {
+                  attemptId: 'attempt-2',
+                  correlationId: 'execution-2',
                 },
-                {},
-                'redacted',
-              ],
-            },
+              },
+              {
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'completed',
+                usageReported: true,
+                usage: { provider: 'deepseek', model: 'deepseek-test' },
+                activity: {
+                  attemptId: 'attempt-3',
+                  correlationId: 'execution-3',
+                  owner: {},
+                  origin: { channel: 'cli' },
+                },
+              },
+              {
+                kind: 'model',
+                resourceId: 'model',
+                outcome: 'completed',
+                usageReported: false,
+              },
+              'redacted',
+            ],
           },
         }}
       />,
@@ -244,11 +283,11 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('executed')).toBeTruthy();
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
-    expect(screen.getAllByText('Resource usage')).toHaveLength(4);
-    expect(screen.getByText('2 · operation-attempt-2')).toBeTruthy();
-    expect(screen.getByText('Resource attempt')).toBeTruthy();
+    expect(screen.getAllByText('Resource usage')).toHaveLength(3);
+    expect(screen.getAllByText('2 · operation-attempt-2')).toHaveLength(2);
+    expect(screen.getAllByText('Resource attempt')).toHaveLength(5);
     expect(screen.getByText('failed')).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Usage reported · no' })).toBeTruthy();
+    expect(screen.getAllByRole('group', { name: 'Usage reported · no' })).toHaveLength(2);
     expect(screen.getByText('openai · gpt-test')).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Input · 120 tokens' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Total · 138 tokens' })).toBeTruthy();
@@ -268,13 +307,11 @@ describe('SemanticPayload', () => {
     expect(
       screen.getByRole('group', { name: 'Generation ceiling · 1024 output tokens' }),
     ).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Attempt · attempt-2' })).toBeTruthy();
+    expect(screen.getAllByRole('group', { name: 'Attempt · attempt-2' })).toHaveLength(2);
     expect(screen.getByRole('group', { name: 'Correlation · execution-2' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Attempt · unknown' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Correlation · unknown' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Owner · activity: unknown' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Origin · cli' })).toBeTruthy();
-    expect(screen.getByText('model · unknown')).toBeTruthy();
 
     ui.rerender(
       <SemanticPayload

@@ -29,11 +29,28 @@ describe('resource evidence', () => {
   it('projects debug attempts and safe aggregate summaries', () => {
     expect(projectResourceEvidence([usage], 'debug')).toEqual({
       visibility: 'debug',
-      model: { attempts: [usage] },
+      attempts: [
+        {
+          kind: 'model',
+          resourceId: 'model',
+          outcome: 'completed',
+          usage,
+          usageReported: true,
+        },
+      ],
     });
     expect(projectResourceEvidence([usage], 'summary')).toEqual({
       visibility: 'summary',
-      model: { attempts: 1, totalTokens: 12, durationMs: 25 },
+      resources: [
+        {
+          kind: 'model',
+          resourceId: 'model',
+          attempts: 1,
+          reportedAttempts: 1,
+          totalTokens: 12,
+          durationMs: 25,
+        },
+      ],
     });
     expect(projectResourceEvidence([usage], 'none')).toBeUndefined();
     expect(projectResourceEvidence([], 'debug')).toBeUndefined();
@@ -42,7 +59,10 @@ describe('resource evidence', () => {
   it('does not claim incomplete aggregate metrics', () => {
     expect(
       projectResourceEvidence([usage, { provider: 'anthropic', model: 'claude-test' }], 'summary'),
-    ).toEqual({ visibility: 'summary', model: { attempts: 2 } });
+    ).toEqual({
+      visibility: 'summary',
+      resources: [{ kind: 'model', resourceId: 'model', attempts: 2, reportedAttempts: 2 }],
+    });
   });
 
   it('counts admitted attempts even when a failed attempt reports no usage', () => {
@@ -70,7 +90,15 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
+        resources: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            attempts: 2,
+            reportedAttempts: 1,
+            failedAttempts: 1,
+          },
+        ],
       });
     });
   });
@@ -85,16 +113,15 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'debug',
-        model: {
-          attempts: [],
-          attemptOutcomes: [
-            {
-              outcome: 'failed',
-              usageReported: false,
-              activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
-            },
-          ],
-        },
+        attempts: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'failed',
+            usageReported: false,
+            activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
+          },
+        ],
       });
     });
   });
@@ -107,15 +134,28 @@ describe('resource evidence', () => {
         recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test' });
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'summary',
-          model: { attempts: 2 },
+          resources: [{ kind: 'model', resourceId: 'model', attempts: 2, reportedAttempts: 2 }],
         });
       });
       withResourceEvidence('debug', () => {
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'debug',
-          model: {
-            attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
-          },
+          attempts: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              outcome: 'completed',
+              usage,
+              usageReported: true,
+            },
+            {
+              kind: 'model',
+              resourceId: 'model',
+              outcome: 'completed',
+              usage: { provider: 'anthropic', model: 'claude-test' },
+              usageReported: true,
+            },
+          ],
         });
       });
     });
@@ -135,7 +175,7 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        model: { attempts: 1 },
+        resources: [{ kind: 'model', resourceId: 'model', attempts: 1, reportedAttempts: 1 }],
       });
     });
   });
@@ -155,7 +195,16 @@ describe('resource evidence', () => {
         recordModelResourceUsage(usage);
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'summary',
-          model: { attempts: 1, totalTokens: 12, durationMs: 25 },
+          resources: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              attempts: 1,
+              reportedAttempts: 1,
+              totalTokens: 12,
+              durationMs: 25,
+            },
+          ],
         });
       }),
     );
@@ -166,9 +215,22 @@ describe('resource evidence', () => {
       recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test' });
       expect(projectCurrentResourceEvidence([usage])).toEqual({
         visibility: 'debug',
-        model: {
-          attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
-        },
+        attempts: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'completed',
+            usage: { provider: 'anthropic', model: 'claude-test' },
+            usageReported: true,
+          },
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'completed',
+            usage,
+            usageReported: true,
+          },
+        ],
       });
     });
   });
@@ -184,9 +246,15 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        services: [
-          { resourceId: 'paid-search', attempts: 2, failedAttempts: 1, durationMs: 20 },
-          { resourceId: 'shipping', attempts: 1, durationMs: 5 },
+        resources: [
+          {
+            kind: 'service',
+            resourceId: 'paid-search',
+            attempts: 2,
+            failedAttempts: 1,
+            durationMs: 20,
+          },
+          { kind: 'service', resourceId: 'shipping', attempts: 1, durationMs: 5 },
         ],
       });
     });
@@ -203,7 +271,22 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        services: [{ resourceId: 'paid-search', attempts: 1 }],
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
+      });
+    });
+  });
+
+  it('only withholds aggregates for the resource suppressed by a nested scope', () => {
+    withResourceEvidence('summary', () => {
+      const visible = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      visible('completed', 12);
+      withResourceEvidence('none', () => {
+        recordServiceResourceAttempt({ resourceId: 'shipping' });
+      });
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1, durationMs: 12 }],
       });
     });
   });
