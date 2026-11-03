@@ -8,6 +8,7 @@ import {
   projectResourceEvidence,
   recordModelResourceAttempt,
   recordModelResourceUsage,
+  recordServiceResourceAttempt,
   withResourceEvidence,
 } from './resource-evidence.js';
 
@@ -168,6 +169,41 @@ describe('resource evidence', () => {
         model: {
           attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
         },
+      });
+    });
+  });
+
+  it('projects service attempts independently from model-specific usage', () => {
+    withResourceEvidence('summary', () => {
+      const complete = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      complete('completed', 12);
+      const fail = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      fail('failed', 8);
+      const other = recordServiceResourceAttempt({ resourceId: 'shipping' });
+      other('completed', 5);
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        services: [
+          { resourceId: 'paid-search', attempts: 2, failedAttempts: 1, durationMs: 20 },
+          { resourceId: 'shipping', attempts: 1, durationMs: 5 },
+        ],
+      });
+    });
+  });
+
+  it('does not expose or overstate service evidence suppressed by a nested scope', () => {
+    withResourceEvidence('summary', () => {
+      const visible = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      visible('completed', 12);
+      withResourceEvidence('none', () => {
+        const hidden = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+        hidden('completed', 8);
+      });
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        services: [{ resourceId: 'paid-search', attempts: 1 }],
       });
     });
   });

@@ -92,6 +92,34 @@ describe('SemanticPayload', () => {
       <SemanticPayload
         value={{
           kind: 'invocation-result',
+          result: { ok: true, kind: 'success' },
+          resourceEvidence: {
+            visibility: 'debug',
+            services: [
+              {
+                resourceId: 'paid-suggestions',
+                provider: 'fake-http',
+                action: 'suggest',
+                outcome: 'completed',
+                durationMs: 12,
+                activity: { admission: { attempt: 1, maxAttempts: 2 } },
+              },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Service Resource')).toBeTruthy();
+    expect(screen.getByText('paid-suggestions')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Provider · fake-http' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Action · suggest' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Outcome · completed' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Admission · Attempt 1 of 2' })).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          kind: 'invocation-result',
           result: {
             ok: false,
             kind: 'rejected',

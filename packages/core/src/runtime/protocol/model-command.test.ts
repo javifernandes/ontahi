@@ -135,6 +135,28 @@ describe('Runtime Protocol model.command family', () => {
       parseModelCommandProtocolResponse({
         ...response,
         resourceEvidence: {
+          visibility: 'debug',
+          services: [
+            {
+              resourceId: 'paid-suggestions',
+              provider: 'fake-http',
+              action: 'suggest',
+              outcome: 'completed',
+              durationMs: 12,
+              activity: {
+                attemptId: 'service-attempt-1',
+                correlationId: 'execution-1',
+                admission: { attempt: 1, maxAttempts: 2 },
+              },
+            },
+          ],
+        },
+      }),
+    ).toMatchObject({ success: true });
+    expect(
+      parseModelCommandProtocolResponse({
+        ...response,
+        resourceEvidence: {
           visibility: 'summary',
           model: { attempts: 1, provider: 'openai' },
         },
@@ -148,6 +170,22 @@ describe('Runtime Protocol model.command family', () => {
         model: { attemptOutcomes: [{ outcome: 'failed', usageReported: false }] },
       },
       { visibility: 'debug', model: { attempts: [], provider: 'openai' } },
+      { visibility: 'debug', services: [] },
+      { visibility: 'summary', services: [{ resourceId: '', attempts: 1 }] },
+      {
+        visibility: 'debug',
+        services: [
+          {
+            resourceId: 'paid-suggestions',
+            outcome: 'completed',
+            activity: {
+              attemptId: 'service-attempt-1',
+              correlationId: 'execution-1',
+              admission: { attempt: 1, maxOutputTokens: 10 },
+            },
+          },
+        ],
+      },
       { visibility: 'summary', model: { attempts: 1, totalTokens: -1 } },
       { visibility: 'summary', model: { attempts: 1, reportedAttempts: 2 } },
       {

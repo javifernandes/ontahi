@@ -82,7 +82,7 @@ describe('model-backed Operation executor', () => {
         });
         const evidence = projectCurrentResourceEvidence();
         expect(evidence).toMatchObject({ visibility: 'debug' });
-        if (!evidence || evidence.visibility !== 'debug')
+        if (!evidence || evidence.visibility !== 'debug' || !evidence.model)
           throw new Error('Expected debug evidence');
         expect(
           evidence.model.attemptOutcomes?.map(

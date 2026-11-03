@@ -178,10 +178,21 @@ export {
   type ModelResourceLimits,
 } from './model/resource-governance.js';
 export {
+  withServiceResourceAttempt,
+  type ServiceResourceAttemptOptions,
+} from './service/resource-attempt.js';
+export {
+  ServiceResourceExhaustedError,
+  withServiceResourceLimits,
+  type ServiceResourceAdmission,
+  type ServiceResourceLimits,
+} from './service/resource-governance.js';
+export {
   getCurrentResourceEvidenceDisclosure,
   projectCurrentResourceEvidence,
   projectResourceEvidence,
   recordModelResourceUsage,
+  recordServiceResourceAttempt,
   withResourceEvidence,
 } from './resource-evidence.js';
 export type {

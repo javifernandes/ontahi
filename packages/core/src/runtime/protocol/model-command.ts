@@ -96,7 +96,7 @@ const resourceOwnerKeys = new Set(['kind', 'id', 'runId']);
 const operationAttemptKeys = new Set(['attemptId', 'ordinal']);
 const resourceOriginKeys = new Set(['channel', 'surface', 'clientInstanceId']);
 const resourceAdmissionKeys = new Set(['attempt', 'maxAttempts', 'maxOutputTokens']);
-const resourceEvidenceKeys = new Set(['visibility', 'model']);
+const resourceEvidenceKeys = new Set(['visibility', 'model', 'services']);
 const resourceEvidenceModelKeys = new Set([
   'attempts',
   'reportedAttempts',
@@ -105,6 +105,20 @@ const resourceEvidenceModelKeys = new Set([
   'durationMs',
 ]);
 const resourceAttemptOutcomeKeys = new Set(['outcome', 'activity', 'usageReported']);
+const serviceResourceAttemptKeys = new Set([
+  'resourceId',
+  'provider',
+  'action',
+  'outcome',
+  'durationMs',
+  'activity',
+]);
+const serviceResourceSummaryKeys = new Set([
+  'resourceId',
+  'attempts',
+  'failedAttempts',
+  'durationMs',
+]);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
 const isBoundedIdentity = (value: unknown, maximumLength = 256): value is string =>
@@ -165,6 +179,15 @@ const parseModelResourceActivity = (value: unknown) => {
   );
 };
 
+const parseServiceResourceActivity = (value: unknown) => {
+  if (!parseModelResourceActivity(value)) return false;
+  return (
+    !isRecord(value) ||
+    !isRecord(value.admission) ||
+    !Object.prototype.hasOwnProperty.call(value.admission, 'maxOutputTokens')
+  );
+};
+
 const parseModelResourceUsage = (value: unknown): ModelResourceUsage | undefined => {
   if (
     !isRecord(value) ||
@@ -193,53 +216,102 @@ const parseModelResourceUsageList = (value: unknown): readonly ModelResourceUsag
 };
 
 const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => {
-  if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys) || !isRecord(value.model))
-    return undefined;
+  if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys)) return undefined;
   if (value.visibility === 'debug') {
-    if (!hasOnlyKeys(value.model, new Set(['attempts', 'attemptOutcomes']))) return undefined;
-    if (!Array.isArray(value.model.attempts)) return undefined;
-    const attempts =
-      value.model.attempts.length === 0 ? [] : parseModelResourceUsageList(value.model.attempts);
-    if (!attempts) return undefined;
-    const attemptOutcomes = value.model.attemptOutcomes;
+    if (value.model !== undefined) {
+      if (!isRecord(value.model)) return undefined;
+      if (!hasOnlyKeys(value.model, new Set(['attempts', 'attemptOutcomes']))) return undefined;
+      if (!Array.isArray(value.model.attempts)) return undefined;
+      const attempts =
+        value.model.attempts.length === 0 ? [] : parseModelResourceUsageList(value.model.attempts);
+      if (!attempts) return undefined;
+      const attemptOutcomes = value.model.attemptOutcomes;
+      if (
+        attemptOutcomes !== undefined &&
+        (!Array.isArray(attemptOutcomes) ||
+          attemptOutcomes.length === 0 ||
+          !attemptOutcomes.every(
+            attempt =>
+              isRecord(attempt) &&
+              hasOnlyKeys(attempt, resourceAttemptOutcomeKeys) &&
+              (attempt.outcome === 'started' ||
+                attempt.outcome === 'completed' ||
+                attempt.outcome === 'failed') &&
+              typeof attempt.usageReported === 'boolean' &&
+              parseModelResourceActivity(attempt.activity),
+          ))
+      )
+        return undefined;
+      if (attempts.length === 0 && attemptOutcomes === undefined) return undefined;
+    }
     if (
-      attemptOutcomes !== undefined &&
-      (!Array.isArray(attemptOutcomes) ||
-        attemptOutcomes.length === 0 ||
-        !attemptOutcomes.every(
+      value.services !== undefined &&
+      (!Array.isArray(value.services) ||
+        value.services.length === 0 ||
+        !value.services.every(
           attempt =>
             isRecord(attempt) &&
-            hasOnlyKeys(attempt, resourceAttemptOutcomeKeys) &&
+            hasOnlyKeys(attempt, serviceResourceAttemptKeys) &&
+            isBoundedIdentity(attempt.resourceId) &&
+            (attempt.provider === undefined || isBoundedIdentity(attempt.provider)) &&
+            (attempt.action === undefined || isBoundedIdentity(attempt.action)) &&
             (attempt.outcome === 'started' ||
               attempt.outcome === 'completed' ||
               attempt.outcome === 'failed') &&
-            typeof attempt.usageReported === 'boolean' &&
-            parseModelResourceActivity(attempt.activity),
+            (attempt.durationMs === undefined ||
+              (typeof attempt.durationMs === 'number' &&
+                Number.isFinite(attempt.durationMs) &&
+                attempt.durationMs >= 0)) &&
+            parseServiceResourceActivity(attempt.activity),
         ))
     )
       return undefined;
-    if (attempts.length === 0 && attemptOutcomes === undefined) return undefined;
+    if (value.model === undefined && value.services === undefined) return undefined;
     return cloneJson(value) as ResourceEvidence;
   }
-  if (
-    value.visibility !== 'summary' ||
-    !hasOnlyKeys(value.model, resourceEvidenceModelKeys) ||
-    !isPositiveInteger(value.model.attempts)
-  )
-    return undefined;
-  for (const key of ['totalTokens', 'durationMs'] as const) {
-    const metric = value.model[key];
+  if (value.visibility !== 'summary') return undefined;
+  if (value.model !== undefined) {
     if (
-      metric !== undefined &&
-      (typeof metric !== 'number' || !Number.isFinite(metric) || metric < 0)
+      !isRecord(value.model) ||
+      !hasOnlyKeys(value.model, resourceEvidenceModelKeys) ||
+      !isPositiveInteger(value.model.attempts)
     )
       return undefined;
+    for (const key of ['totalTokens', 'durationMs'] as const) {
+      const metric = value.model[key];
+      if (
+        metric !== undefined &&
+        (typeof metric !== 'number' || !Number.isFinite(metric) || metric < 0)
+      )
+        return undefined;
+    }
+    for (const key of ['reportedAttempts', 'failedAttempts'] as const) {
+      const count = value.model[key];
+      if (count !== undefined && (!isNonNegativeInteger(count) || count > value.model.attempts))
+        return undefined;
+    }
   }
-  for (const key of ['reportedAttempts', 'failedAttempts'] as const) {
-    const count = value.model[key];
-    if (count !== undefined && (!isNonNegativeInteger(count) || count > value.model.attempts))
-      return undefined;
-  }
+  if (
+    value.services !== undefined &&
+    (!Array.isArray(value.services) ||
+      value.services.length === 0 ||
+      !value.services.every(
+        summary =>
+          isRecord(summary) &&
+          hasOnlyKeys(summary, serviceResourceSummaryKeys) &&
+          isBoundedIdentity(summary.resourceId) &&
+          isPositiveInteger(summary.attempts) &&
+          (summary.failedAttempts === undefined ||
+            (isNonNegativeInteger(summary.failedAttempts) &&
+              summary.failedAttempts <= summary.attempts)) &&
+          (summary.durationMs === undefined ||
+            (typeof summary.durationMs === 'number' &&
+              Number.isFinite(summary.durationMs) &&
+              summary.durationMs >= 0)),
+      ))
+  )
+    return undefined;
+  if (value.model === undefined && value.services === undefined) return undefined;
   return cloneJson(value) as ResourceEvidence;
 };
 

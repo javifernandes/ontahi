@@ -31,6 +31,10 @@ this audit in the same pull request:
 - Add the package name to the npm trusted-publishing bootstrap loop in `RELEASING.md`. A new npm
   package still requires its one-time registry and OIDC trust bootstrap before the first automated
   publish can succeed.
+- Complete that one-time npm bootstrap before merging the first generated release pull request that
+  contains the package. Creating the package in the repository does not create its npm name or
+  authorize GitHub OIDC: publish the verified Linux candidate once when required, then run
+  `npm trust github` with the repository's release workflow and environment.
 - Audit every clean-room or partial-package fixture. A fixture that installs package `A` from a
   tarball must also install the complete transitive closure of Ontahí tarballs required by `A`; it
   must not resolve a newly introduced internal dependency from npm before that package exists
@@ -53,6 +57,9 @@ installation can still change.
 - Ensure internal `workspace:*` dependencies become the expected exact lockstep version when packed.
 - Verify a package before its first registry publication: every internal dependency in the clean
   consumer must be overridden by the candidate tarball set, never fetched by package name.
+- Treat a successful registry upload followed by a transient `npm view` miss as propagation delay,
+  not proof that publication failed. Retry the immutable release workflow; it must compare or skip
+  the now-visible artifact rather than rebuild, repack, or publish a different payload.
 
 ## Validation
 

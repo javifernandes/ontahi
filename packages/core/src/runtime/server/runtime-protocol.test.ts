@@ -20,7 +20,7 @@ import {
   getCurrentInvocationContext,
   withInvocationContext as runWithInvocationContext,
 } from './invocation-context.js';
-import { recordModelResourceUsage } from './resource-evidence.js';
+import { recordModelResourceUsage, recordServiceResourceAttempt } from './resource-evidence.js';
 import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
@@ -820,6 +820,12 @@ describe('application Runtime Protocol', () => {
     application.resolveOperation = () => operation as never;
     application.invokeOperation = vi.fn(async () => {
       recordModelResourceUsage({ provider: 'openai', model: 'gpt-test', totalTokens: 18 });
+      const completeService = recordServiceResourceAttempt({
+        resourceId: 'paid-search',
+        provider: 'fake-http',
+        action: 'index',
+      });
+      completeService('completed', 12);
       declareSelectionChange({
         kind: 'selection',
         entityName: 'Todo',
@@ -862,6 +868,15 @@ describe('application Runtime Protocol', () => {
           model: {
             attempts: [{ provider: 'openai', model: 'gpt-test', totalTokens: 18 }],
           },
+          services: [
+            {
+              resourceId: 'paid-search',
+              provider: 'fake-http',
+              action: 'index',
+              outcome: 'completed',
+              durationMs: 12,
+            },
+          ],
         },
       },
       metadata: {
