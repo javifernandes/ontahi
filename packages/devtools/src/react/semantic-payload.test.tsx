@@ -134,6 +134,40 @@ describe('SemanticPayload', () => {
       <SemanticPayload
         value={{
           kind: 'invocation-result',
+          result: { ok: true, kind: 'success' },
+          resourceEvidence: {
+            visibility: 'debug',
+            model: {
+              attemptOutcomes: [
+                {
+                  outcome: 'completed',
+                  usageReported: true,
+                  activity: { attemptId: 'legacy-attempt' },
+                },
+              ],
+              attempts: [
+                {
+                  provider: 'anthropic',
+                  model: 'claude-test',
+                  totalTokens: 42,
+                  durationMs: 100,
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Resource attempt')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Attempt · legacy-attempt' })).toBeTruthy();
+    expect(screen.getByText('anthropic · claude-test')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Total · 42 tokens' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Duration · 100 ms' })).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          kind: 'invocation-result',
           result: {
             ok: false,
             kind: 'rejected',

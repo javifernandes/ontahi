@@ -87,6 +87,14 @@ describe('resource evidence', () => {
         resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
       }),
     ).toBeUndefined();
+    expect(
+      toModelCommandResourceEvidence({
+        visibility: 'debug',
+        attempts: [
+          { kind: 'service', resourceId: 'paid-search', outcome: 'completed', durationMs: 2 },
+        ],
+      }),
+    ).toBeUndefined();
   });
 
   it('counts admitted attempts even when a failed attempt reports no usage', () => {

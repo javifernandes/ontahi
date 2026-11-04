@@ -569,6 +569,30 @@ describe('Devtools activity model', () => {
       model: { attempts: 2, totalTokens: 240 },
     };
     expect(modelResourceUsageSummary(summary)).toBe('2 calls · 240 tokens');
+
+    summaryBody.resourceEvidence = {
+      visibility: 'summary',
+      resources: [
+        { kind: 'service', resourceId: 'paid-search', attempts: 1 },
+        { kind: 'model', resourceId: 'model', attempts: 1 },
+      ],
+    };
+    expect(modelResourceUsageSummary(summary)).toBe('1 call');
+
+    summaryBody.resourceEvidence = {
+      visibility: 'debug',
+      attempts: [
+        { kind: 'service', resourceId: 'paid-search', outcome: 'completed' },
+        {
+          kind: 'model',
+          resourceId: 'model',
+          outcome: 'completed',
+          usageReported: true,
+          usage: { provider: 'anthropic', model: 'claude-test', totalTokens: 15 },
+        },
+      ],
+    };
+    expect(modelResourceUsageSummary(summary)).toBe('anthropic · claude-test · 15 tokens');
   });
 
   it('summarizes every ordered destination and composite identities', () => {
