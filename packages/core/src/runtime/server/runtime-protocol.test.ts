@@ -20,7 +20,7 @@ import {
   getCurrentInvocationContext,
   withInvocationContext as runWithInvocationContext,
 } from './invocation-context.js';
-import { recordModelResourceUsage } from './resource-evidence.js';
+import { recordModelResourceUsage, recordServiceResourceAttempt } from './resource-evidence.js';
 import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
@@ -242,7 +242,7 @@ describe('application Runtime Protocol', () => {
         result: { status: 'answered', message: 'Try buying milk.' },
         resourceEvidence: {
           visibility: 'summary',
-          model: { attempts: 2, totalTokens: 30, durationMs: 200 },
+          model: { attempts: 2, reportedAttempts: 2, totalTokens: 30, durationMs: 200 },
         },
       },
     });
@@ -820,6 +820,12 @@ describe('application Runtime Protocol', () => {
     application.resolveOperation = () => operation as never;
     application.invokeOperation = vi.fn(async () => {
       recordModelResourceUsage({ provider: 'openai', model: 'gpt-test', totalTokens: 18 });
+      const completeService = recordServiceResourceAttempt({
+        resourceId: 'paid-search',
+        provider: 'fake-http',
+        action: 'index',
+      });
+      completeService('completed', 12);
       declareSelectionChange({
         kind: 'selection',
         entityName: 'Todo',
@@ -859,9 +865,23 @@ describe('application Runtime Protocol', () => {
         result: { ok: true, kind: 'success', value: { completed: 3 } },
         resourceEvidence: {
           visibility: 'debug',
-          model: {
-            attempts: [{ provider: 'openai', model: 'gpt-test', totalTokens: 18 }],
-          },
+          attempts: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              outcome: 'completed',
+              usage: { provider: 'openai', model: 'gpt-test', totalTokens: 18 },
+              usageReported: true,
+            },
+            {
+              kind: 'service',
+              resourceId: 'paid-search',
+              provider: 'fake-http',
+              action: 'index',
+              outcome: 'completed',
+              durationMs: 12,
+            },
+          ],
         },
       },
       metadata: {
@@ -875,6 +895,42 @@ describe('application Runtime Protocol', () => {
                   expression: { fieldName: 'listId', value: 'later' },
                 },
               },
+            },
+          ],
+        },
+      },
+    });
+
+    application.invokeOperation = vi.fn(async () => {
+      const completeService = recordServiceResourceAttempt({
+        resourceId: 'paid-search',
+        provider: 'fake-http',
+        action: 'index',
+      });
+      completeService('completed', 12);
+      return { ok: true as const, kind: 'success' as const, value: { completed: 3 } };
+    });
+    const serviceOnlyProtocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+    });
+    await expect(
+      serviceOnlyProtocol.dispatcher(accepted, {
+        principal: { kind: 'user', subject: 'user-1' },
+        resourceEvidenceDisclosure: 'debug',
+      }),
+    ).resolves.toMatchObject({
+      body: {
+        resourceEvidence: {
+          visibility: 'debug',
+          attempts: [
+            {
+              kind: 'service',
+              resourceId: 'paid-search',
+              provider: 'fake-http',
+              action: 'index',
+              outcome: 'completed',
+              durationMs: 12,
             },
           ],
         },

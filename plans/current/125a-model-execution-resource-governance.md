@@ -181,6 +181,38 @@ Operation execution semantics. Resource Governance independently admits and acco
 requested attempt. Plan 163 owns implementation selection and fallback; a Resource binding may
 constrain that selection but does not define the Operation contract.
 
+## Second Resource Slice: Governed HTTP Service
+
+A non-model paid HTTP service now supplies the comparison that this Plan intentionally deferred.
+The experiment gives the service a stable semantic `resourceId`, admits and counts each attempt,
+correlates it with the owning Operation and execution origin, and records locally observed outcome
+and duration. Provider binding and action are available only in debug evidence. Endpoint URLs,
+headers, API keys, request bodies, and responses remain host-owned implementation configuration and
+never enter Resource evidence.
+
+This slice confirms a small shared lifecycle without erasing model specificity:
+
+1. admission, attempt identity, causal attribution, outcome, duration, and disclosure apply to both
+   model and non-model Resources;
+2. tokens, model identity, generation ceilings, and provider-reported usage remain model-specific;
+3. one invocation may govern several service identities independently, while nested limits for the
+   same identity can only narrow and share accounting;
+4. static configuration may be closed over by an Operation implementation without becoming
+   semantic input or reflected metadata.
+
+The implementation reflects that boundary as one discriminated Resource-attempt ledger rather
+than parallel model and service evidence stores. Debug projection emits typed attempts; summary
+projection groups typed Resource identities. Model attempts retain nested provider metering, while
+service attempts retain their own provider/action metadata. This keeps the shared lifecycle
+polymorphic without flattening every Resource into an artificial universal schema.
+
+Dynamic BYOK is the next binding pressure, not part of this first API. A later experiment should
+resolve a configured Resource instance from trusted application, workspace/tenant, Principal, or
+invocation scope and keep the secret opaque. Authorization will eventually decide which authority
+may select or mutate those bindings; Resource Governance only consumes the resolved identity and
+limits. This separation also leaves implementation dispatch responsible for choosing a local or
+external implementation rather than turning Resource policy into feature-flag routing.
+
 ## Non-Goals
 
 1. Do not build customer billing, invoicing, subscription plans, or payment integration.
@@ -191,8 +223,8 @@ constrain that selection but does not define the Operation contract.
    separately proven durable store.
 5. Do not design general feature flags, multi-executor routing, shadow evaluation, or automatic
    fallback in this Plan.
-6. Do not add a generic resource scheduler for CPU, memory, storage, or non-model workloads unless
-   the model experiment proves a genuinely shared contract.
+6. Do not expand the proven model/service attempt contract into a generic scheduler for CPU,
+   memory, storage, or arbitrary workloads without another concrete consumer.
 7. Do not require domain Operation inputs to carry budgets, provider names, prices, or usage IDs.
 
 ## Acceptance And Verification
@@ -215,6 +247,8 @@ constrain that selection but does not define the Operation contract.
 - [ ] Provider-specific token and cost fields remain adapter evidence unless two independent
       providers justify a shared semantic contract.
 - [ ] The experiment records what requires durable accounting and what may remain observational.
+- [x] One non-model paid-service experiment reuses admission, attribution, disclosure, and evidence
+      lifecycle without inheriting model-only token or generation semantics.
 
 ## Closure
 

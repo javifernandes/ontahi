@@ -63,7 +63,12 @@ it('mounts the runtime entry with request authority and no domain wrapper', asyn
         message: 'Which document?',
         resourceEvidence: {
           visibility: 'summary',
-          model: { attempts: 1, totalTokens: 24, durationMs: 180 },
+          model: {
+            attempts: 1,
+            reportedAttempts: 1,
+            totalTokens: 24,
+            durationMs: 180,
+          },
         },
       },
     });

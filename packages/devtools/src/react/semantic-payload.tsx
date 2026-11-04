@@ -184,45 +184,129 @@ const ResourceAttemptOutcome = ({
   );
 };
 
-const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) => {
-  if (!isRecord(evidence) || !isRecord(evidence.model)) return null;
-  if (evidence.visibility === 'summary') {
-    return (
-      <div style={styles.semanticCard}>
-        <span style={styles.semanticLabel}>Resource usage summary</span>
-        <div style={styles.resourceUsageMetrics}>
-          <ResourceMetric label='Attempts' value={String(evidence.model.attempts ?? 'unknown')} />
-          {evidence.model.reportedAttempts === undefined ? null : (
-            <ResourceMetric
-              label='Reported attempts'
-              value={String(evidence.model.reportedAttempts)}
-            />
-          )}
-          {evidence.model.failedAttempts === undefined ? null : (
-            <ResourceMetric label='Failed attempts' value={String(evidence.model.failedAttempts)} />
-          )}
-          {evidence.model.totalTokens === undefined ? null : (
-            <ResourceMetric label='Total' value={`${String(evidence.model.totalTokens)} tokens`} />
-          )}
-          {evidence.model.durationMs === undefined ? null : (
-            <ResourceMetric label='Duration' value={`${String(evidence.model.durationMs)} ms`} />
-          )}
-        </div>
+const ServiceResourceEvidence = ({ value }: { readonly value: unknown }) => {
+  if (!isRecord(value)) return null;
+  const activity = isRecord(value.activity) ? value.activity : undefined;
+  const admission = activity && isRecord(activity.admission) ? activity.admission : undefined;
+  return (
+    <div style={styles.semanticCard}>
+      <div style={styles.resourceUsageHeader}>
+        <span style={{ ...styles.semanticLabel, marginBottom: 0 }}>Service Resource</span>
+        <span style={styles.semanticValue}>{String(value.resourceId ?? 'unknown')}</span>
       </div>
+      <div style={styles.resourceUsageMetrics}>
+        {value.provider === undefined ? null : (
+          <ResourceMetric label='Provider' value={String(value.provider)} />
+        )}
+        {value.action === undefined ? null : (
+          <ResourceMetric label='Action' value={String(value.action)} />
+        )}
+        {value.outcome === undefined ? null : (
+          <ResourceMetric label='Outcome' value={String(value.outcome)} />
+        )}
+        {value.attempts === undefined ? null : (
+          <ResourceMetric label='Attempts' value={String(value.attempts)} />
+        )}
+        {value.failedAttempts === undefined ? null : (
+          <ResourceMetric label='Failed attempts' value={String(value.failedAttempts)} />
+        )}
+        {value.durationMs === undefined ? null : (
+          <ResourceMetric label='Duration' value={`${String(value.durationMs)} ms`} />
+        )}
+        {admission?.attempt === undefined ? null : (
+          <ResourceMetric
+            label='Admission'
+            value={`Attempt ${String(admission.attempt)}${
+              admission.maxAttempts === undefined ? '' : ` of ${String(admission.maxAttempts)}`
+            }`}
+          />
+        )}
+        {activity?.attemptId === undefined ? null : (
+          <ResourceMetric label='Attempt' value={String(activity.attemptId)} />
+        )}
+        {activity?.correlationId === undefined ? null : (
+          <ResourceMetric label='Correlation' value={String(activity.correlationId)} />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) => {
+  if (!isRecord(evidence)) return null;
+  if (evidence.visibility === 'summary') {
+    const resources = isRecord(evidence.model)
+      ? [{ kind: 'model', ...evidence.model }]
+      : Array.isArray(evidence.resources)
+        ? evidence.resources
+        : [];
+    return (
+      <>
+        {resources.map((resource, index) =>
+          isRecord(resource) && resource.kind === 'model' ? (
+            <div key={`model-summary-${index}`} style={styles.semanticCard}>
+              <span style={styles.semanticLabel}>Resource usage summary</span>
+              <div style={styles.resourceUsageMetrics}>
+                <ResourceMetric label='Attempts' value={String(resource.attempts ?? 'unknown')} />
+                {resource.reportedAttempts === undefined ? null : (
+                  <ResourceMetric
+                    label='Reported attempts'
+                    value={String(resource.reportedAttempts)}
+                  />
+                )}
+                {resource.failedAttempts === undefined ? null : (
+                  <ResourceMetric label='Failed attempts' value={String(resource.failedAttempts)} />
+                )}
+                {resource.totalTokens === undefined ? null : (
+                  <ResourceMetric label='Total' value={`${String(resource.totalTokens)} tokens`} />
+                )}
+                {resource.durationMs === undefined ? null : (
+                  <ResourceMetric label='Duration' value={`${String(resource.durationMs)} ms`} />
+                )}
+              </div>
+            </div>
+          ) : (
+            <ServiceResourceEvidence key={`service-summary-${index}`} value={resource} />
+          ),
+        )}
+      </>
     );
   }
-  if (evidence.visibility !== 'debug' || !Array.isArray(evidence.model.attempts)) return null;
-  const outcomes = Array.isArray(evidence.model.attemptOutcomes)
-    ? evidence.model.attemptOutcomes
-    : [];
+  if (evidence.visibility !== 'debug') return null;
+  if (isRecord(evidence.model)) {
+    const usage = Array.isArray(evidence.model.attempts) ? evidence.model.attempts : [];
+    const outcomes = Array.isArray(evidence.model.attemptOutcomes)
+      ? evidence.model.attemptOutcomes
+      : [];
+    return (
+      <>
+        {outcomes.map((outcome, index) => (
+          <ResourceAttemptOutcome key={`model-outcome-${index}`} outcome={outcome} index={index} />
+        ))}
+        {usage.map((attempt, index) => (
+          <ResourceUsageAttempt key={`model-usage-${index}`} usage={attempt} index={index} />
+        ))}
+      </>
+    );
+  }
+  const attempts = Array.isArray(evidence.attempts) ? evidence.attempts : [];
   return (
     <>
-      {outcomes.map((outcome, index) => (
-        <ResourceAttemptOutcome key={`outcome-${index}`} outcome={outcome} index={index} />
-      ))}
-      {evidence.model.attempts.map((usage, index) => (
-        <ResourceUsageAttempt key={`usage-${index}`} usage={usage} index={index} />
-      ))}
+      {attempts.map((attempt, index) => {
+        if (!isRecord(attempt) || attempt.kind !== 'model')
+          return <ServiceResourceEvidence key={`service-attempt-${index}`} value={attempt} />;
+        return (
+          <div key={`model-attempt-${index}`}>
+            <ResourceAttemptOutcome outcome={attempt} index={index} />
+            {!isRecord(attempt.usage) ? null : (
+              <ResourceUsageAttempt
+                usage={{ ...attempt.usage, activity: attempt.activity }}
+                index={index}
+              />
+            )}
+          </div>
+        );
+      })}
     </>
   );
 };

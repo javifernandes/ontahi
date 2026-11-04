@@ -84,20 +84,17 @@ describe('model-backed Operation executor', () => {
         expect(evidence).toMatchObject({ visibility: 'debug' });
         if (!evidence || evidence.visibility !== 'debug')
           throw new Error('Expected debug evidence');
+        const attempts = evidence.attempts.filter(attempt => attempt.kind === 'model');
+        expect(attempts.map(attempt => attempt.activity?.operationAttempt?.ordinal)).toEqual([
+          1, 2, 3,
+        ]);
         expect(
-          evidence.model.attemptOutcomes?.map(
-            attempt => attempt.activity?.operationAttempt?.ordinal,
-          ),
-        ).toEqual([1, 2, 3]);
-        expect(
-          new Set(
-            evidence.model.attemptOutcomes?.map(
-              attempt => attempt.activity?.operationAttempt?.attemptId,
-            ),
-          ).size,
+          new Set(attempts.map(attempt => attempt.activity?.operationAttempt?.attemptId)).size,
         ).toBe(3);
         expect(
-          evidence.model.attempts.map(usage => usage.activity?.operationAttempt?.ordinal),
+          attempts
+            .filter(attempt => attempt.usageReported)
+            .map(attempt => attempt.activity?.operationAttempt?.ordinal),
         ).toEqual([2, 3]);
       },
     );
@@ -230,7 +227,15 @@ describe('model-backed Operation executor', () => {
       await Effect.runPromise(executor.execute(request));
       expect(projectCurrentResourceEvidence()).toMatchObject({
         visibility: 'debug',
-        model: { attempts: [{ provider: 'openai', model: 'gpt-test', totalTokens: 12 }] },
+        attempts: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'completed',
+            usage: { provider: 'openai', model: 'gpt-test', totalTokens: 12 },
+            usageReported: true,
+          },
+        ],
       });
     });
   });
@@ -359,7 +364,15 @@ describe('model-backed Operation executor', () => {
         });
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'summary',
-          model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
+          resources: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              attempts: 2,
+              reportedAttempts: 1,
+              failedAttempts: 1,
+            },
+          ],
         });
       },
     );

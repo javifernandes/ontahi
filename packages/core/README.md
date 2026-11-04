@@ -16,6 +16,31 @@ Current docs:
 5. [Application Data Access](../../docs/application-data-access.md) - end-to-end Query, View,
    policy, React, and Operation authoring across the public packages
 
+## Experimental governed service attempts
+
+An Operation that calls a paid or scarce non-model service can place the external attempt inside
+the same admission, attribution, and Resource-evidence lifecycle used by model execution:
+
+```ts
+import { withServiceResourceAttempt, withServiceResourceLimits } from '@ontahi/core/runtime/server';
+
+await withServiceResourceLimits('paid-search', { maxAttempts: 2 }, () =>
+  withServiceResourceAttempt(
+    { resourceId: 'paid-search', provider: 'acme-http', action: 'query' },
+    () => searchClient.query('semantic machines'),
+  ),
+);
+```
+
+`resourceId` is stable semantic identity, not a URL or credential. Keep endpoints, API keys, BYOK
+values, request bodies, and responses in the host-owned client or Operation implementation. Debug
+evidence may expose provider binding and action; summary evidence exposes attempts, failures, and
+complete locally observed duration only. Nested limits for one Resource can only narrow and share
+accounting. Different Resource identities account independently.
+
+This first service slice intentionally does not resolve workspace/user configuration or authorize
+who may select a binding. Those remain separate environment-binding and authorization concerns.
+
 ## Experimental Entity variant reads
 
 An Entity can name a fixed classification for local read authoring without creating another

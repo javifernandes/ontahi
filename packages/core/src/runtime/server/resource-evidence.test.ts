@@ -8,6 +8,8 @@ import {
   projectResourceEvidence,
   recordModelResourceAttempt,
   recordModelResourceUsage,
+  recordServiceResourceAttempt,
+  toModelCommandResourceEvidence,
   withResourceEvidence,
 } from './resource-evidence.js';
 
@@ -28,11 +30,28 @@ describe('resource evidence', () => {
   it('projects debug attempts and safe aggregate summaries', () => {
     expect(projectResourceEvidence([usage], 'debug')).toEqual({
       visibility: 'debug',
-      model: { attempts: [usage] },
+      attempts: [
+        {
+          kind: 'model',
+          resourceId: 'model',
+          outcome: 'completed',
+          usage,
+          usageReported: true,
+        },
+      ],
     });
     expect(projectResourceEvidence([usage], 'summary')).toEqual({
       visibility: 'summary',
-      model: { attempts: 1, totalTokens: 12, durationMs: 25 },
+      resources: [
+        {
+          kind: 'model',
+          resourceId: 'model',
+          attempts: 1,
+          reportedAttempts: 1,
+          totalTokens: 12,
+          durationMs: 25,
+        },
+      ],
     });
     expect(projectResourceEvidence([usage], 'none')).toBeUndefined();
     expect(projectResourceEvidence([], 'debug')).toBeUndefined();
@@ -41,7 +60,41 @@ describe('resource evidence', () => {
   it('does not claim incomplete aggregate metrics', () => {
     expect(
       projectResourceEvidence([usage, { provider: 'anthropic', model: 'claude-test' }], 'summary'),
-    ).toEqual({ visibility: 'summary', model: { attempts: 2 } });
+    ).toEqual({
+      visibility: 'summary',
+      resources: [{ kind: 'model', resourceId: 'model', attempts: 2, reportedAttempts: 2 }],
+    });
+  });
+
+  it('projects model evidence onto the released model-command v1 wire shape', () => {
+    const summary = projectResourceEvidence([usage], 'summary');
+    expect(toModelCommandResourceEvidence(summary)).toEqual({
+      visibility: 'summary',
+      model: { attempts: 1, reportedAttempts: 1, totalTokens: 12, durationMs: 25 },
+    });
+    const debug = projectResourceEvidence([usage], 'debug');
+    expect(toModelCommandResourceEvidence(debug)).toEqual({
+      visibility: 'debug',
+      model: {
+        attempts: [usage],
+        attemptOutcomes: [{ outcome: 'completed', usageReported: true }],
+      },
+    });
+    expect(toModelCommandResourceEvidence(undefined)).toBeUndefined();
+    expect(
+      toModelCommandResourceEvidence({
+        visibility: 'summary',
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
+      }),
+    ).toBeUndefined();
+    expect(
+      toModelCommandResourceEvidence({
+        visibility: 'debug',
+        attempts: [
+          { kind: 'service', resourceId: 'paid-search', outcome: 'completed', durationMs: 2 },
+        ],
+      }),
+    ).toBeUndefined();
   });
 
   it('counts admitted attempts even when a failed attempt reports no usage', () => {
@@ -69,7 +122,15 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
+        resources: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            attempts: 2,
+            reportedAttempts: 1,
+            failedAttempts: 1,
+          },
+        ],
       });
     });
   });
@@ -84,16 +145,15 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'debug',
-        model: {
-          attempts: [],
-          attemptOutcomes: [
-            {
-              outcome: 'failed',
-              usageReported: false,
-              activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
-            },
-          ],
-        },
+        attempts: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'failed',
+            usageReported: false,
+            activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
+          },
+        ],
       });
     });
   });
@@ -106,15 +166,28 @@ describe('resource evidence', () => {
         recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test' });
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'summary',
-          model: { attempts: 2 },
+          resources: [{ kind: 'model', resourceId: 'model', attempts: 2, reportedAttempts: 2 }],
         });
       });
       withResourceEvidence('debug', () => {
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'debug',
-          model: {
-            attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
-          },
+          attempts: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              outcome: 'completed',
+              usage,
+              usageReported: true,
+            },
+            {
+              kind: 'model',
+              resourceId: 'model',
+              outcome: 'completed',
+              usage: { provider: 'anthropic', model: 'claude-test' },
+              usageReported: true,
+            },
+          ],
         });
       });
     });
@@ -134,7 +207,7 @@ describe('resource evidence', () => {
 
       expect(projectCurrentResourceEvidence()).toEqual({
         visibility: 'summary',
-        model: { attempts: 1 },
+        resources: [{ kind: 'model', resourceId: 'model', attempts: 1, reportedAttempts: 1 }],
       });
     });
   });
@@ -154,7 +227,16 @@ describe('resource evidence', () => {
         recordModelResourceUsage(usage);
         expect(projectCurrentResourceEvidence()).toEqual({
           visibility: 'summary',
-          model: { attempts: 1, totalTokens: 12, durationMs: 25 },
+          resources: [
+            {
+              kind: 'model',
+              resourceId: 'model',
+              attempts: 1,
+              reportedAttempts: 1,
+              totalTokens: 12,
+              durationMs: 25,
+            },
+          ],
         });
       }),
     );
@@ -165,9 +247,93 @@ describe('resource evidence', () => {
       recordModelResourceUsage({ provider: 'anthropic', model: 'claude-test' });
       expect(projectCurrentResourceEvidence([usage])).toEqual({
         visibility: 'debug',
-        model: {
-          attempts: [usage, { provider: 'anthropic', model: 'claude-test' }],
-        },
+        attempts: [
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'completed',
+            usage: { provider: 'anthropic', model: 'claude-test' },
+            usageReported: true,
+          },
+          {
+            kind: 'model',
+            resourceId: 'model',
+            outcome: 'completed',
+            usage,
+            usageReported: true,
+          },
+        ],
+      });
+    });
+  });
+
+  it('projects service attempts independently from model-specific usage', () => {
+    withResourceEvidence('summary', () => {
+      const complete = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      complete('completed', 12);
+      const fail = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      fail('failed', 8);
+      const other = recordServiceResourceAttempt({ resourceId: 'shipping' });
+      other('completed', 5);
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        resources: [
+          {
+            kind: 'service',
+            resourceId: 'paid-search',
+            attempts: 2,
+            failedAttempts: 1,
+            durationMs: 20,
+          },
+          { kind: 'service', resourceId: 'shipping', attempts: 1, durationMs: 5 },
+        ],
+      });
+    });
+  });
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid service duration evidence: %s',
+    durationMs => {
+      withResourceEvidence('debug', () => {
+        const complete = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+        expect(() => complete('completed', durationMs)).toThrow(
+          'durationMs must be a finite non-negative number.',
+        );
+        expect(projectCurrentResourceEvidence()).toMatchObject({
+          attempts: [{ kind: 'service', outcome: 'started' }],
+        });
+      });
+    },
+  );
+
+  it('does not expose or overstate service evidence suppressed by a nested scope', () => {
+    withResourceEvidence('summary', () => {
+      const visible = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      visible('completed', 12);
+      withResourceEvidence('none', () => {
+        const hidden = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+        hidden('completed', 8);
+      });
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
+      });
+    });
+  });
+
+  it('only withholds aggregates for the resource suppressed by a nested scope', () => {
+    withResourceEvidence('summary', () => {
+      const visible = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+      visible('completed', 12);
+      withResourceEvidence('none', () => {
+        recordServiceResourceAttempt({ resourceId: 'shipping' });
+      });
+
+      expect(projectCurrentResourceEvidence()).toEqual({
+        visibility: 'summary',
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1, durationMs: 12 }],
       });
     });
   });

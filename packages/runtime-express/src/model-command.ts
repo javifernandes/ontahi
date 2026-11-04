@@ -1,6 +1,7 @@
 import {
   ModelInterpretationError,
   projectCurrentResourceEvidence,
+  toModelCommandResourceEvidence,
   withInvocationContext,
   type ModelCommandRuntime,
 } from '@ontahi/core/runtime/server';
@@ -22,7 +23,9 @@ export const createModelCommandHandler =
         async () => {
           const result = await runtime.submit(request.body, controller.signal);
           const { resourceUsage, ...semanticResult } = result;
-          const resourceEvidence = projectCurrentResourceEvidence(resourceUsage);
+          const resourceEvidence = toModelCommandResourceEvidence(
+            projectCurrentResourceEvidence(resourceUsage),
+          );
           return {
             ...semanticResult,
             ...(resourceEvidence === undefined ? {} : { resourceEvidence }),

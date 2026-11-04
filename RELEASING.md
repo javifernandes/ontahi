@@ -114,6 +114,11 @@ for package in codegen core devtools explorer-react language language-codemirror
 done
 ```
 
+This interactive step is administrative bootstrap for a new npm package name, not the normal
+release identity. Complete it before the first release pull request containing that package is
+merged. Every later release is triggered by merging the generated release pull request and is
+published by GitHub Actions OIDC without depending on the maintainer who performed the bootstrap.
+
 ## Normal prerelease
 
 1. Review the accumulated `Release Ontahi <version>` pull request and its successful checks.
@@ -137,6 +142,11 @@ npm releases are immutable and the seventeen publishes cannot be transactional. 
 anything, the script checks every package version. If a network failure leaves a partial release,
 rerun the same workflow: identical existing tarballs are skipped and the missing packages continue
 in dependency order. A version that exists with different contents stops the release.
+
+The registry can accept a tarball before that version becomes visible to a subsequent metadata
+read. A retry during this propagation window may initially observe a duplicate-publication error;
+wait for the accepted version to become visible and rerun the same immutable workflow. Never mint a
+replacement tarball or version merely to work around registry propagation.
 
 Do not overwrite or unpublish a faulty release. Deprecate it when appropriate, publish a new
 prerelease version, and roll host applications back by reverting their exact package versions and

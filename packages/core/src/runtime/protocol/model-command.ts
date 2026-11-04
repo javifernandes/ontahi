@@ -10,9 +10,9 @@ import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 import type {
   ModelCommandRequest,
+  ModelCommandResourceEvidence,
   ModelCommandResult,
   ModelResourceUsage,
-  ResourceEvidence,
 } from '../contracts.js';
 import {
   parseOperationInvocationRequest,
@@ -46,7 +46,7 @@ export type ModelCommandProtocolResponse =
       readonly version: 1;
       readonly kind: 'model-command-result';
       readonly result: ModelCommandResult<ModelCommandCanonicalRequest, ModelCommandReadResponse>;
-      readonly resourceEvidence?: ResourceEvidence;
+      readonly resourceEvidence?: ModelCommandResourceEvidence;
     }
   | {
       readonly version: 1;
@@ -192,7 +192,7 @@ const parseModelResourceUsageList = (value: unknown): readonly ModelResourceUsag
   return parsed.every(item => item !== undefined) ? parsed : undefined;
 };
 
-const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => {
+const parseResourceEvidence = (value: unknown): ModelCommandResourceEvidence | undefined => {
   if (!isRecord(value) || !hasOnlyKeys(value, resourceEvidenceKeys) || !isRecord(value.model))
     return undefined;
   if (value.visibility === 'debug') {
@@ -219,7 +219,7 @@ const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => 
     )
       return undefined;
     if (attempts.length === 0 && attemptOutcomes === undefined) return undefined;
-    return cloneJson(value) as ResourceEvidence;
+    return cloneJson(value) as ModelCommandResourceEvidence;
   }
   if (
     value.visibility !== 'summary' ||
@@ -240,7 +240,7 @@ const parseResourceEvidence = (value: unknown): ResourceEvidence | undefined => 
     if (count !== undefined && (!isNonNegativeInteger(count) || count > value.model.attempts))
       return undefined;
   }
-  return cloneJson(value) as ResourceEvidence;
+  return cloneJson(value) as ModelCommandResourceEvidence;
 };
 
 export type ModelCommandCanonicalRequest =
