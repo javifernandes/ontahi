@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   ModelResourceActivity,
   ModelResourceAttemptEvidence,
+  ModelCommandResourceEvidence,
   ModelResourceUsage,
   ResourceAttemptEvidence,
   ResourceEvidence,
@@ -68,12 +69,18 @@ const validateEvidenceIdentity = (name: string, value: string | undefined): void
     throw new RangeError(`${name} must contain between 1 and 256 characters.`);
 };
 
-export const recordServiceResourceAttempt = (
-  attempt: Omit<ServiceResourceAttemptEvidence, 'kind' | 'outcome' | 'durationMs'>,
-): ((outcome: 'completed' | 'failed', durationMs: number) => void) => {
+export const validateServiceResourceAttemptEvidence = (
+  attempt: Pick<ServiceResourceAttemptEvidence, 'resourceId' | 'provider' | 'action'>,
+): void => {
   validateEvidenceIdentity('resourceId', attempt.resourceId);
   validateEvidenceIdentity('provider', attempt.provider);
   validateEvidenceIdentity('action', attempt.action);
+};
+
+export const recordServiceResourceAttempt = (
+  attempt: Omit<ServiceResourceAttemptEvidence, 'kind' | 'outcome' | 'durationMs'>,
+): ((outcome: 'completed' | 'failed', durationMs: number) => void) => {
+  validateServiceResourceAttemptEvidence(attempt);
   const state = storage.getStore();
   if (!state) return () => undefined;
   const key = resourceKey('service', attempt.resourceId);
@@ -84,6 +91,8 @@ export const recordServiceResourceAttempt = (
   state.attempts.push({ kind: 'service', ...attempt, outcome: 'started' });
   const index = state.attempts.length - 1;
   return (outcome, durationMs) => {
+    if (!Number.isFinite(durationMs) || durationMs < 0)
+      throw new RangeError('durationMs must be a finite non-negative number.');
     state.attempts[index] = { kind: 'service', ...attempt, outcome, durationMs };
   };
 };
@@ -202,7 +211,8 @@ const projectAttempts = (
   suppressedAttempts: ReadonlyMap<string, number>,
 ): ResourceEvidence | undefined => {
   if (disclosure === 'none' || attempts.length === 0) return undefined;
-  if (disclosure === 'debug') return { visibility: 'debug', attempts: [...attempts] };
+  if (disclosure === 'debug')
+    return { visibility: 'debug', attempts: [attempts[0]!, ...attempts.slice(1)] };
   const modelAttempts = attempts.filter(
     (attempt): attempt is ModelResourceAttemptEvidence => attempt.kind === 'model',
   );
@@ -229,7 +239,41 @@ const projectAttempts = (
       ),
     );
   }
-  return resources.length === 0 ? undefined : { visibility: 'summary', resources };
+  return resources.length === 0
+    ? undefined
+    : { visibility: 'summary', resources: [resources[0]!, ...resources.slice(1)] };
+};
+
+/** Projects generalized evidence onto the released model-command v1 wire shape. */
+export const toModelCommandResourceEvidence = (
+  evidence: ResourceEvidence | undefined,
+): ModelCommandResourceEvidence | undefined => {
+  if (!evidence) return undefined;
+  if (evidence.visibility === 'summary') {
+    const summary = evidence.resources.find(resource => resource.kind === 'model');
+    if (!summary || summary.kind !== 'model') return undefined;
+    const { kind: _kind, resourceId: _resourceId, ...model } = summary;
+    return { visibility: 'summary', model };
+  }
+  const modelAttempts = evidence.attempts.filter(
+    (attempt): attempt is ModelResourceAttemptEvidence => attempt.kind === 'model',
+  );
+  if (modelAttempts.length === 0) return undefined;
+  return {
+    visibility: 'debug',
+    model: {
+      attempts: modelAttempts.flatMap(attempt =>
+        attempt.usage
+          ? [{ ...attempt.usage, ...(attempt.activity ? { activity: attempt.activity } : {}) }]
+          : [],
+      ),
+      attemptOutcomes: modelAttempts.map(({ outcome, activity, usageReported }) => ({
+        outcome,
+        ...(activity ? { activity } : {}),
+        usageReported,
+      })),
+    },
+  };
 };
 
 export const projectResourceEvidence = (

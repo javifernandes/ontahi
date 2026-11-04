@@ -1,6 +1,9 @@
 import type { ServiceResourceActivity } from '../../contracts.js';
 import { getCurrentOperationExecutionAttempt } from '../context.js';
-import { recordServiceResourceAttempt } from '../resource-evidence.js';
+import {
+  recordServiceResourceAttempt,
+  validateServiceResourceAttemptEvidence,
+} from '../resource-evidence.js';
 import {
   getCurrentSemanticExecutionContext,
   withSemanticExecutionActivity,
@@ -47,6 +50,7 @@ export const withServiceResourceAttempt = async <TValue>(
   options: ServiceResourceAttemptOptions,
   run: (admission: ServiceResourceAdmission | undefined) => Promise<TValue>,
 ): Promise<TValue> => {
+  validateServiceResourceAttemptEvidence(options);
   const owner = getCurrentSemanticExecutionContext()?.subject;
   return withSemanticExecutionActivity(
     { kind: 'resource-attempt', id: options.resourceId },

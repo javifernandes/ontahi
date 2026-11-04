@@ -100,4 +100,22 @@ describe('service Resource attempt', () => {
       `${name} must contain between 1 and 256 characters.`,
     );
   });
+
+  it('validates evidence identity before consuming the Resource attempt limit', async () => {
+    await withServiceResourceLimits('paid-suggestions', { maxAttempts: 1 }, async () => {
+      await expect(
+        withServiceResourceAttempt(
+          { resourceId: 'paid-suggestions', provider: '' },
+          async () => undefined,
+        ),
+      ).rejects.toThrow('provider must contain between 1 and 256 characters.');
+
+      await expect(
+        withServiceResourceAttempt(
+          { resourceId: 'paid-suggestions', provider: 'fake-http' },
+          async admission => admission?.attempt,
+        ),
+      ).resolves.toBe(1);
+    });
+  });
 });

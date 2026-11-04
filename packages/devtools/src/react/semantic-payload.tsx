@@ -235,7 +235,11 @@ const ServiceResourceEvidence = ({ value }: { readonly value: unknown }) => {
 const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) => {
   if (!isRecord(evidence)) return null;
   if (evidence.visibility === 'summary') {
-    const resources = Array.isArray(evidence.resources) ? evidence.resources : [];
+    const resources = isRecord(evidence.model)
+      ? [{ kind: 'model', ...evidence.model }]
+      : Array.isArray(evidence.resources)
+        ? evidence.resources
+        : [];
     return (
       <>
         {resources.map((resource, index) =>
@@ -269,6 +273,22 @@ const ResourceEvidenceVisual = ({ evidence }: { readonly evidence: unknown }) =>
     );
   }
   if (evidence.visibility !== 'debug') return null;
+  if (isRecord(evidence.model)) {
+    const usage = Array.isArray(evidence.model.attempts) ? evidence.model.attempts : [];
+    const outcomes = Array.isArray(evidence.model.attemptOutcomes)
+      ? evidence.model.attemptOutcomes
+      : [];
+    return (
+      <>
+        {outcomes.map((outcome, index) => (
+          <ResourceAttemptOutcome key={`model-outcome-${index}`} outcome={outcome} index={index} />
+        ))}
+        {usage.map((attempt, index) => (
+          <ResourceUsageAttempt key={`model-usage-${index}`} usage={attempt} index={index} />
+        ))}
+      </>
+    );
+  }
   const attempts = Array.isArray(evidence.attempts) ? evidence.attempts : [];
   return (
     <>

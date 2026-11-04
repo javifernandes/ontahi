@@ -72,15 +72,7 @@ describe('SemanticPayload', () => {
           result: { ok: true, kind: 'success', value: { title: 'Buy milk' } },
           resourceEvidence: {
             visibility: 'summary',
-            resources: [
-              {
-                kind: 'model',
-                resourceId: 'model',
-                attempts: 2,
-                reportedAttempts: 1,
-                failedAttempts: 1,
-              },
-            ],
+            model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1 },
           },
         }}
       />,

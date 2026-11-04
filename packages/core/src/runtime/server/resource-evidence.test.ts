@@ -9,6 +9,7 @@ import {
   recordModelResourceAttempt,
   recordModelResourceUsage,
   recordServiceResourceAttempt,
+  toModelCommandResourceEvidence,
   withResourceEvidence,
 } from './resource-evidence.js';
 
@@ -63,6 +64,29 @@ describe('resource evidence', () => {
       visibility: 'summary',
       resources: [{ kind: 'model', resourceId: 'model', attempts: 2, reportedAttempts: 2 }],
     });
+  });
+
+  it('projects model evidence onto the released model-command v1 wire shape', () => {
+    const summary = projectResourceEvidence([usage], 'summary');
+    expect(toModelCommandResourceEvidence(summary)).toEqual({
+      visibility: 'summary',
+      model: { attempts: 1, reportedAttempts: 1, totalTokens: 12, durationMs: 25 },
+    });
+    const debug = projectResourceEvidence([usage], 'debug');
+    expect(toModelCommandResourceEvidence(debug)).toEqual({
+      visibility: 'debug',
+      model: {
+        attempts: [usage],
+        attemptOutcomes: [{ outcome: 'completed', usageReported: true }],
+      },
+    });
+    expect(toModelCommandResourceEvidence(undefined)).toBeUndefined();
+    expect(
+      toModelCommandResourceEvidence({
+        visibility: 'summary',
+        resources: [{ kind: 'service', resourceId: 'paid-search', attempts: 1 }],
+      }),
+    ).toBeUndefined();
   });
 
   it('counts admitted attempts even when a failed attempt reports no usage', () => {
@@ -259,6 +283,21 @@ describe('resource evidence', () => {
       });
     });
   });
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid service duration evidence: %s',
+    durationMs => {
+      withResourceEvidence('debug', () => {
+        const complete = recordServiceResourceAttempt({ resourceId: 'paid-search' });
+        expect(() => complete('completed', durationMs)).toThrow(
+          'durationMs must be a finite non-negative number.',
+        );
+        expect(projectCurrentResourceEvidence()).toMatchObject({
+          attempts: [{ kind: 'service', outcome: 'started' }],
+        });
+      });
+    },
+  );
 
   it('does not expose or overstate service evidence suppressed by a nested scope', () => {
     withResourceEvidence('summary', () => {

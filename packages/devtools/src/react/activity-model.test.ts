@@ -72,19 +72,7 @@ const modelUsageActivity = (usage: unknown): ExchangeActivity => ({
         result: { status: 'answered', message: 'Done.' },
         resourceEvidence: {
           visibility: 'debug',
-          attempts: Array.isArray(usage)
-            ? usage.map((entry, index) => ({
-                kind: 'model',
-                resourceId: 'model',
-                outcome: 'completed',
-                usageReported: true,
-                usage: entry,
-                activity: {
-                  attemptId: `attempt-${index}`,
-                  correlationId: 'execution-1',
-                },
-              }))
-            : usage,
+          model: { attempts: usage },
         },
       },
     },
@@ -578,7 +566,7 @@ describe('Devtools activity model', () => {
     const summaryBody = summary.settled!.response!.body as Record<string, unknown>;
     summaryBody.resourceEvidence = {
       visibility: 'summary',
-      resources: [{ kind: 'model', resourceId: 'model', attempts: 2, totalTokens: 240 }],
+      model: { attempts: 2, totalTokens: 240 },
     };
     expect(modelResourceUsageSummary(summary)).toBe('2 calls · 240 tokens');
   });

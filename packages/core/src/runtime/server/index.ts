@@ -193,6 +193,7 @@ export {
   projectResourceEvidence,
   recordModelResourceUsage,
   recordServiceResourceAttempt,
+  toModelCommandResourceEvidence,
   withResourceEvidence,
 } from './resource-evidence.js';
 export type {

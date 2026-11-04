@@ -473,15 +473,35 @@ export type ResourceAttemptEvidence = ModelResourceAttemptEvidence | ServiceReso
 
 export type ResourceEvidenceSummary = ModelResourceEvidenceSummary | ServiceResourceEvidenceSummary;
 
+export type NonEmptyResourceEvidenceList<TValue> = readonly [TValue, ...TValue[]];
+
 /** Portable resource evidence. Debug evidence may expose sensitive runtime topology and identity. */
 export type ResourceEvidence =
   | {
       readonly visibility: 'summary';
-      readonly resources: readonly ResourceEvidenceSummary[];
+      readonly resources: NonEmptyResourceEvidenceList<ResourceEvidenceSummary>;
     }
   | {
       readonly visibility: 'debug';
-      readonly attempts: readonly ResourceAttemptEvidence[];
+      readonly attempts: NonEmptyResourceEvidenceList<ResourceAttemptEvidence>;
+    };
+
+/** Released model-command v1 wire projection. Keep strict decoders backward compatible. */
+export type ModelCommandResourceEvidence =
+  | {
+      readonly visibility: 'summary';
+      readonly model: Omit<ModelResourceEvidenceSummary, 'kind' | 'resourceId'>;
+    }
+  | {
+      readonly visibility: 'debug';
+      readonly model: {
+        readonly attempts: readonly ModelResourceUsage[];
+        readonly attemptOutcomes?: readonly {
+          readonly outcome: ModelResourceAttemptEvidence['outcome'];
+          readonly activity?: ModelResourceActivity;
+          readonly usageReported: boolean;
+        }[];
+      };
     };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> = (
   | {

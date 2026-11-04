@@ -242,16 +242,7 @@ describe('application Runtime Protocol', () => {
         result: { status: 'answered', message: 'Try buying milk.' },
         resourceEvidence: {
           visibility: 'summary',
-          resources: [
-            {
-              kind: 'model',
-              resourceId: 'model',
-              attempts: 2,
-              reportedAttempts: 2,
-              totalTokens: 30,
-              durationMs: 200,
-            },
-          ],
+          model: { attempts: 2, reportedAttempts: 2, totalTokens: 30, durationMs: 200 },
         },
       },
     });

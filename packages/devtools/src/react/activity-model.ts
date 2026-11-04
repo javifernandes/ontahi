@@ -476,9 +476,11 @@ export const modelResourceUsageSummary = (activity: ExchangeActivity): string | 
   if (!isRecord(body) || !isRecord(body.resourceEvidence)) return undefined;
   const evidence = body.resourceEvidence;
   if (evidence.visibility === 'summary') {
-    const model = Array.isArray(evidence.resources)
-      ? evidence.resources.find(resource => isRecord(resource) && resource.kind === 'model')
-      : undefined;
+    const model = isRecord(evidence.model)
+      ? evidence.model
+      : Array.isArray(evidence.resources)
+        ? evidence.resources.find(resource => isRecord(resource) && resource.kind === 'model')
+        : undefined;
     if (!isRecord(model)) return undefined;
     const attempts = model.attempts;
     if (typeof attempts !== 'number') return undefined;
@@ -492,14 +494,18 @@ export const modelResourceUsageSummary = (activity: ExchangeActivity): string | 
       .join(' · ');
   }
   const usage =
-    evidence.visibility === 'debug' && Array.isArray(evidence.attempts)
-      ? evidence.attempts
-          .filter(attempt => isRecord(attempt) && attempt.kind === 'model')
-          .map(attempt =>
-            isRecord(attempt) && isRecord(attempt.usage) ? attempt.usage : undefined,
-          )
-          .filter(isRecord)
-      : [];
+    evidence.visibility !== 'debug'
+      ? []
+      : isRecord(evidence.model) && Array.isArray(evidence.model.attempts)
+        ? evidence.model.attempts.filter(isRecord)
+        : Array.isArray(evidence.attempts)
+          ? evidence.attempts
+              .filter(attempt => isRecord(attempt) && attempt.kind === 'model')
+              .map(attempt =>
+                isRecord(attempt) && isRecord(attempt.usage) ? attempt.usage : undefined,
+              )
+              .filter(isRecord)
+          : [];
   if (usage.length === 0) return undefined;
   const providers = [
     ...new Set(

@@ -103,16 +103,7 @@ describe('Runtime Protocol model.command family', () => {
       result: { status: 'answered', message: 'Done.' },
       resourceEvidence: {
         visibility: 'summary',
-        resources: [
-          {
-            kind: 'model',
-            resourceId: 'model',
-            attempts: 2,
-            reportedAttempts: 1,
-            failedAttempts: 1,
-            durationMs: 450,
-          },
-        ],
+        model: { attempts: 2, reportedAttempts: 1, failedAttempts: 1, durationMs: 450 },
       },
     } as const;
 
@@ -122,106 +113,53 @@ describe('Runtime Protocol model.command family', () => {
         ...response,
         resourceEvidence: {
           visibility: 'debug',
-          attempts: [
-            {
-              kind: 'model',
-              resourceId: 'model',
-              outcome: 'completed',
-              usageReported: true,
-              usage: { provider: 'openai', model: 'gpt-test' },
-              activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
-            },
-          ],
-        },
-      }),
-    ).toMatchObject({ success: true });
-    expect(
-      parseModelCommandProtocolResponse({
-        ...response,
-        resourceEvidence: {
-          visibility: 'summary',
-          resources: [
-            {
-              kind: 'service',
-              resourceId: 'paid-suggestions',
-              attempts: 1,
-              durationMs: 12,
-            },
-          ],
-        },
-      }),
-    ).toMatchObject({ success: true });
-    expect(
-      parseModelCommandProtocolResponse({
-        ...response,
-        resourceEvidence: {
-          visibility: 'debug',
-          attempts: [
-            {
-              kind: 'service',
-              resourceId: 'paid-suggestions',
-              provider: 'fake-http',
-              action: 'suggest',
-              outcome: 'completed',
-              durationMs: 12,
-              activity: {
-                attemptId: 'service-attempt-1',
-                correlationId: 'execution-1',
-                admission: { attempt: 1, maxAttempts: 2 },
+          model: {
+            attempts: [
+              {
+                provider: 'openai',
+                model: 'gpt-test',
+                activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
               },
-            },
-          ],
+            ],
+            attemptOutcomes: [
+              {
+                outcome: 'completed',
+                usageReported: true,
+                activity: { attemptId: 'attempt-1', correlationId: 'correlation-1' },
+              },
+            ],
+          },
         },
       }),
     ).toMatchObject({ success: true });
-    expect(
-      parseModelCommandProtocolResponse({
-        ...response,
-        resourceEvidence: {
-          visibility: 'summary',
-          resources: [{ kind: 'model', resourceId: 'model', attempts: 1, provider: 'openai' }],
-        },
-      }),
-    ).toMatchObject({ success: false });
     for (const resourceEvidence of [
       null,
-      { visibility: 'debug', attempts: [] },
-      { visibility: 'summary', resources: [] },
-      { visibility: 'summary', resources: [{ kind: 'service', resourceId: '', attempts: 1 }] },
+      { visibility: 'debug', model: { attempts: [] } },
+      { visibility: 'summary', model: { attempts: 0 } },
+      { visibility: 'summary', model: { attempts: 1, totalTokens: -1 } },
+      { visibility: 'summary', model: { attempts: 1, reportedAttempts: 2 } },
       {
         visibility: 'debug',
-        attempts: [
-          {
-            kind: 'service',
-            resourceId: 'paid-suggestions',
-            outcome: 'completed',
-            activity: {
-              attemptId: 'service-attempt-1',
-              correlationId: 'execution-1',
-              admission: { attempt: 1, maxOutputTokens: 10 },
+        model: {
+          attempts: [],
+          attemptOutcomes: [
+            {
+              outcome: 'failed',
+              usageReported: false,
+              activity: {},
             },
-          },
-        ],
-      },
-      {
-        visibility: 'summary',
-        resources: [{ kind: 'model', resourceId: 'model', attempts: 1, totalTokens: -1 }],
-      },
-      {
-        visibility: 'summary',
-        resources: [{ kind: 'model', resourceId: 'model', attempts: 1, reportedAttempts: 2 }],
+          ],
+        },
       },
       {
         visibility: 'debug',
-        attempts: [
-          {
-            kind: 'model',
-            resourceId: 'model',
-            outcome: 'failed',
-            usageReported: false,
-            activity: {},
-          },
-        ],
+        model: { attempts: [{ provider: 'openai', model: 'gpt-test' }] },
+        resources: [],
+      },
+      {
+        visibility: 'summary',
+        model: { attempts: 1 },
+        attempts: [],
       },
     ]) {
       expect(parseModelCommandProtocolResponse({ ...response, resourceEvidence })).toMatchObject({
