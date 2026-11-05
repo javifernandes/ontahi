@@ -62,7 +62,7 @@ const resolveInvocationContext = (input: InvocationContextInput): InvocationCont
     ? input.resourceBindingScope
     : parent?.resourceBindingScope;
   const inheritsResourceResolution =
-    input.resourceBindings === undefined && !hasResourceBindingScope(input);
+    input.resourceBindings === undefined && !hasResourceBindingScope(input) && !hasPrincipal(input);
 
   return {
     principal: hasPrincipal(input) ? (input.principal ?? null) : (parent?.principal ?? null),

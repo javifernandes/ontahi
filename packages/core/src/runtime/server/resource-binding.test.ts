@@ -66,6 +66,55 @@ describe('contextual Resource bindings', () => {
     });
   });
 
+  it('shares one in-flight resolution across overlapping calls', async () => {
+    const configured = { provider: 'openai', apiKey: 'in-flight-secret' };
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const resolve = vi.fn(async () => {
+      await pending;
+      return configured;
+    });
+
+    await withInvocationContext(
+      { principal: null, resourceBindings: { 'model.analysis': resolve } },
+      async () => {
+        const first = resolveResourceBinding(analysisModel);
+        const second = resolveResourceBinding(analysisModel);
+        await Promise.resolve();
+        expect(resolve).toHaveBeenCalledOnce();
+        release();
+        const [resolvedFirst, resolvedSecond] = await Promise.all([first, second]);
+        expect(resolvedSecond).toBe(resolvedFirst);
+      },
+    );
+
+    expect(resolve).toHaveBeenCalledOnce();
+  });
+
+  it('isolates resolved Resources when a nested context overrides the principal', async () => {
+    const alpha = { provider: 'openai', apiKey: 'alpha-secret' };
+    const beta = { provider: 'anthropic', apiKey: 'beta-secret' };
+    const resolve = vi.fn(({ principal }) => (principal?.subject === 'beta' ? beta : alpha));
+
+    await withInvocationContext(
+      {
+        principal: { kind: 'user', subject: 'alpha' },
+        resourceBindings: { 'model.analysis': resolve },
+      },
+      async () => {
+        expect(await resolveResourceBinding(analysisModel)).toBe(alpha);
+        await withInvocationContext({ principal: { kind: 'user', subject: 'beta' } }, async () => {
+          expect(await resolveResourceBinding(analysisModel)).toBe(beta);
+        });
+        expect(await resolveResourceBinding(analysisModel)).toBe(alpha);
+      },
+    );
+
+    expect(resolve).toHaveBeenCalledTimes(2);
+  });
+
   it('fails safely when a binding is missing or resolution fails', async () => {
     await expect(
       withInvocationContext({ principal: null }, () => resolveResourceBinding(analysisModel)),

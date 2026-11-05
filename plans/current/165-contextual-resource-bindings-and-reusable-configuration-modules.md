@@ -134,7 +134,9 @@ The first slice exposes `resourceBinding<T>(id)` and `resolveResourceBinding(ref
 `InvocationContext` input supplies a resolver registry and an optional JSON-safe binding scope. The
 same stable reference resolves different opaque values under different scopes, while nested
 contexts inherit one invocation-local promise cache unless they explicitly replace the registry or
-scope. Failed resolutions leave no cached rejection and may be retried by caller-owned policy.
+scope. An explicit Principal override also starts a fresh cache so one identity can never reuse or
+overwrite another identity's resolved instance. Failed resolutions leave no cached rejection and
+may be retried by caller-owned policy.
 
 Missing configuration and failed resolution use distinct typed, credential-safe errors. Resolver
 failures are deliberately not copied into the public error message or enumerable fields. Ordinary
