@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
   - ontahi://plans/160-semantic-modules-composition-and-system-boundaries
+  - ontahi://plans/165-contextual-resource-bindings-and-reusable-configuration-modules
 ---
 
 Ontahí's emerging metamodel contains several first-level semantic subjects with different enduring
@@ -80,6 +81,12 @@ than repeated in domain inputs. Candidate dimensions include:
 5. Operation, Task, Program Run, and Interaction identities when present;
 6. Unit Of Work and transaction scope;
 7. selected Resource binding and attempt identity.
+
+A stable semantic Resource identity may resolve to an opaque configured instance using trusted
+application context. Scope chooses the binding lookup context; it does not itself grant authority.
+The resolved provider, endpoint, or credential remains host-owned unless a deliberately safe
+identity is projected. Governance admits and accounts for the resolved Resource attempt without
+owning secret storage or binding selection. Plan 165 is the first contextual proof of this split.
 
 These identities remain distinct. Two browser tabs may share an authenticated Session while having
 different client-instance context. One CLI login may initiate several unrelated command sessions.

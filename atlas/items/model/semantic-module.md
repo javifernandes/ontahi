@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/71c-ontahi-application-module-composition
   - ontahi://plans/142h-distributed-execution-topologies
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
+  - ontahi://plans/165-contextual-resource-bindings-and-reusable-configuration-modules
 ---
 
 A [[ontahi.model.semantic-module|Semantic Module]] is a named, composable contribution to an
@@ -48,6 +49,13 @@ Module composition precedes execution topology. One Application may evaluate eve
 process, route one Module's Operations through Runtime Protocol, deliver another Module's Events
 asynchronously, or resolve Relations across graph segments. Those are bindings and placement
 decisions over the same semantic identities, not different domain programs.
+
+A reusable Module may also declare adapter holes around its semantic contribution. For example, a
+model-configuration Module can own non-secret configuration metadata and Operations while a
+consuming Application supplies its scope identity, persistence, opaque secret resolver, and later
+authorization policy. Reuse does not require Core to own a universal `Workspace`, nor does it make
+raw credentials part of the graph. Different scope instances are applications of one composed
+Module, not separate authored Modules.
 
 The completed Plan 71c used entity modules as a two-phase compatibility protocol while establishing
 `ontahi()` as the single composition root. That implementation is narrower and remains historical.

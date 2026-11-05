@@ -21,6 +21,7 @@ Related plans:
 5. [154. Semantic Program Kernel And Distributed Evaluation](154-semantic-program-kernel-and-distributed-evaluation.md)
 6. [158. Semantic Execution Context, Governance, And Evidence](158-semantic-execution-context-governance-and-evidence.md)
 7. [159. Next.js Application Runtime Mount](../current/159-nextjs-application-runtime-mount.md)
+8. [165. Contextual Resource Bindings And Reusable Configuration Modules](../current/165-contextual-resource-bindings-and-reusable-configuration-modules.md)
 
 ## Summary
 
@@ -101,6 +102,12 @@ A Module may contribute or depend on several first-level semantic forms:
 | Operation invocation               | Requests contracted work and observes a result or failure                          | Alerts invokes `sendMessage`                            |
 | Event publication/subscription     | Announces and reacts to a fact without requiring one consumer                      | Attendance emits `AttendanceRecorded`                   |
 | Interaction or Resource dependency | Requires participant input or an environment capability                            | Communications requests approval or consumes a provider |
+
+Plan 165 adds a reusable-configuration pressure test: a Module may contribute the portable model
+and Operations for model configuration while the consuming Application supplies its scope
+identity, storage, opaque secret binding, and authority. This resembles conversations or
+annotations attaching reusable behavior to application-owned identities. It does not make a
+Module synonymous with one tenant or instantiate a separate authored Module per scope.
 
 These links may share routing, context, observability, and policy machinery, but they retain their
 different semantics. Ontahí must not force every integration to Events in the name of decoupling,
