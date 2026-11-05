@@ -213,6 +213,11 @@ may select or mutate those bindings; Resource Governance only consumes the resol
 limits. This separation also leaves implementation dispatch responsible for choosing a local or
 external implementation rather than turning Resource policy into feature-flag routing.
 
+[Plan 165](165-contextual-resource-bindings-and-reusable-configuration-modules.md) owns that next
+experiment. It also tests whether model configuration can become a reusable Module whose consuming
+application supplies scope, storage, secrets, and later authority. Governance remains downstream
+of binding resolution and does not gain access to raw credentials.
+
 ## Non-Goals
 
 1. Do not build customer billing, invoicing, subscription plans, or payment integration.

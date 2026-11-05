@@ -12,6 +12,9 @@ Definition level: research-shaped
 
 Source plan: [100. Ontahi Framework Extraction](../done/100-ontahi-framework-extraction.md)
 
+Concrete pressure test:
+[165. Contextual Resource Bindings And Reusable Configuration Modules](../current/165-contextual-resource-bindings-and-reusable-configuration-modules.md)
+
 ## Summary
 
 Explore how an Ontahi application assigns environment capabilities to semantic parts of its model without repeating technology choices on every entity or operation.
@@ -32,6 +35,10 @@ durable: {
 Those declarations mix an operation's semantic needs with host technology selection. The desired direction resembles selectors, aspects, and a cascade: a resource binding selects model declarations and supplies a capability implementation, while the declarations retain only irreducible semantic properties.
 
 This plan should make the problem visible before standardizing an API. It is not yet a commitment to a universal resource model or deployment DSL.
+
+Plan 165 narrows one executable case before this broader selector/cascade model: one stable
+Resource identity resolves an opaque configured instance from trusted invocation scope. Its result
+should become evidence for this plan, not a parallel universal binding system.
 
 ## Context
 
