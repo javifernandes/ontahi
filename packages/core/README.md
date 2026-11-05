@@ -38,8 +38,40 @@ evidence may expose provider binding and action; summary evidence exposes attemp
 complete locally observed duration only. Nested limits for one Resource can only narrow and share
 accounting. Different Resource identities account independently.
 
-This first service slice intentionally does not resolve workspace/user configuration or authorize
-who may select a binding. Those remain separate environment-binding and authorization concerns.
+Contextual BYOK can retain that stable identity while resolving an opaque configured instance from
+trusted invocation context:
+
+```ts
+import { resolveResourceBinding, resourceBinding } from '@ontahi/core/runtime/server';
+
+type AnalysisModel = { analyze(input: string): Promise<{ summary: string }> };
+const analysisModel = resourceBinding<AnalysisModel>('model.analysis');
+
+const analyze = defineDomainOperation({
+  run: ({ text }) =>
+    Effect.promise(async () => {
+      const provider = await resolveResourceBinding(analysisModel);
+      return provider.analyze(text);
+    }),
+});
+
+await application.app.runtime.withInvocationContext(
+  {
+    principal,
+    resourceBindingScope: { workspaceId },
+    resourceBindings: {
+      'model.analysis': ({ scope }) => modelConfigurationFor(scope),
+    },
+  },
+  () => Analysis.analyze({ text }),
+);
+```
+
+`resourceBindingScope` and `resourceBindings` are receiver-owned. Ordinary Operation input cannot
+select them. Resolution is memoized for one invocation context; changing bindings or scope creates
+a new resolution lifecycle. Missing and failed resolution have typed, credential-safe errors.
+Authorization remains separate: a scope selects lookup context but does not grant permission to
+read, modify, or consume the configured binding.
 
 ## Experimental Entity variant reads
 

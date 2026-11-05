@@ -128,6 +128,26 @@ than owning every object it can annotate.
    - validate the public package boundary against one external multi-scope application;
    - feed consumer friction back into this plan without moving product-specific concepts into Core.
 
+## Contextual Binding Checkpoint
+
+The first slice exposes `resourceBinding<T>(id)` and `resolveResourceBinding(reference)`. Trusted
+`InvocationContext` input supplies a resolver registry and an optional JSON-safe binding scope. The
+same stable reference resolves different opaque values under different scopes, while nested
+contexts inherit one invocation-local promise cache unless they explicitly replace the registry or
+scope. An explicit Principal override also starts a fresh cache so one identity can never reuse or
+overwrite another identity's resolved instance. Failed resolutions leave no cached rejection and
+may be retried by caller-owned policy.
+
+Missing configuration and failed resolution use distinct typed, credential-safe errors. Resolver
+failures are deliberately not copied into the public error message or enumerable fields. Ordinary
+Operation input has no path to the registry or binding scope, and inherited-object properties are
+not accepted as configured bindings.
+
+This checkpoint intentionally uses an explicit resolver call inside Operation code. Declarative
+`resources: { ... }` injection, safe binding identity in evidence, Governance integration, storage,
+UI, vault adapters, and Authorization remain later slices. The primitive must earn that broader
+authoring form through consumer use first.
+
 ## Non-Goals
 
 1. Do not implement Authorization before its dedicated state-of-the-art research.
@@ -140,13 +160,13 @@ than owning every object it can annotate.
 
 ## Acceptance
 
-- [ ] One stable Resource reference resolves distinct opaque instances for two trusted scopes.
-- [ ] Callers cannot select a provider, endpoint, credential, or binding through ordinary input.
-- [ ] Missing and failed resolution have typed outcomes distinct from exhaustion and provider failure.
-- [ ] Secret values are absent from reflection, diagnostics, evidence, protocol responses, and errors.
+- [x] One stable Resource reference resolves distinct opaque instances for two trusted scopes.
+- [x] Callers cannot select a provider, endpoint, credential, or binding through ordinary input.
+- [x] Missing and failed resolution have typed outcomes distinct from exhaustion and provider failure.
+- [x] Secret values are absent from reflection, diagnostics, evidence, protocol responses, and errors.
 - [ ] Governance observes the stable Resource identity and effective attempt without owning binding.
-- [ ] The lifecycle and memoization scope of each resolved instance are explicit and tested.
-- [ ] A static application binding remains the simplest supported case.
+- [x] The lifecycle and memoization scope of each resolved instance are explicit and tested.
+- [x] A static application binding remains the simplest supported case.
 - [ ] A reusable model-configuration Module sketch accepts an application-owned scope contract.
 - [ ] Consumer evidence validates the API through packed or released package artifacts.
 

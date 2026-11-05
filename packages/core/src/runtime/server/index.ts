@@ -196,6 +196,16 @@ export {
   toModelCommandResourceEvidence,
   withResourceEvidence,
 } from './resource-evidence.js';
+export {
+  resolveResourceBinding,
+  resourceBinding,
+  ResourceBindingNotConfiguredError,
+  ResourceBindingResolutionError,
+  type ResourceBindingReference,
+  type ResourceBindingRegistry,
+  type ResourceBindingResolutionContext,
+  type ResourceBindingResolver,
+} from './resource-binding.js';
 export type {
   RateLimitResult,
   ServerRuntimeConfig,
