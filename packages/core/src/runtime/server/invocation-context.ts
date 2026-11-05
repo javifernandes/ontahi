@@ -12,6 +12,7 @@ import {
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
 import { withModelResourceLimits, type ModelResourceLimits } from './model/resource-governance.js';
+import type { ResourceBindingRegistry } from './resource-binding.js';
 import { withResourceEvidence } from './resource-evidence.js';
 import {
   createSemanticExecutionContext,
@@ -22,12 +23,19 @@ import {
 
 export type InvocationContext = ExecutionIdentity & {
   resources: ServerRuntimeResourceMap;
+  resourceBindings: ResourceBindingRegistry;
+  resourceBindingScope?: JsonValue;
+  resolvedResourceBindings: Map<string, Promise<unknown>>;
 };
 
 export type InvocationContextInput = {
   principal?: ExecutionIdentity['principal'];
   cacheScope?: JsonValue;
   resources?: ServerRuntimeResourceMap;
+  /** Host-owned configured Resource resolvers. Ordinary inputs cannot select these bindings. */
+  resourceBindings?: ResourceBindingRegistry;
+  /** Trusted lookup scope for contextual Resource bindings. It is not an authorization grant. */
+  resourceBindingScope?: JsonValue;
   /** Receiver-admitted provenance. It never grants authority or selects cache/accounting scope. */
   origin?: SemanticExecutionOrigin;
   /** Host-owned model limits. Nested invocation scopes may only narrow them. */
@@ -43,15 +51,27 @@ export const getCurrentInvocationContext = (): InvocationContext | undefined =>
 
 const hasPrincipal = (input: InvocationContextInput) => hasOwn(input, 'principal');
 const hasCacheScope = (input: InvocationContextInput) => hasOwn(input, 'cacheScope');
+const hasResourceBindingScope = (input: InvocationContextInput) =>
+  hasOwn(input, 'resourceBindingScope');
 
 const resolveInvocationContext = (input: InvocationContextInput): InvocationContext => {
   const parent = getCurrentInvocationContext();
   const cacheScope = hasCacheScope(input) ? input.cacheScope : parent?.cacheScope;
+  const resourceBindings = input.resourceBindings ?? parent?.resourceBindings ?? {};
+  const resourceBindingScope = hasResourceBindingScope(input)
+    ? input.resourceBindingScope
+    : parent?.resourceBindingScope;
+  const inheritsResourceResolution =
+    input.resourceBindings === undefined && !hasResourceBindingScope(input);
 
   return {
     principal: hasPrincipal(input) ? (input.principal ?? null) : (parent?.principal ?? null),
     ...(cacheScope === undefined ? {} : { cacheScope }),
     resources: input.resources ?? parent?.resources ?? createServerRuntimeResources(),
+    resourceBindings,
+    ...(resourceBindingScope === undefined ? {} : { resourceBindingScope }),
+    resolvedResourceBindings:
+      inheritsResourceResolution && parent ? parent.resolvedResourceBindings : new Map(),
   };
 };
 
