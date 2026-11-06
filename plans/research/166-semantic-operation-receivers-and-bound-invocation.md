@@ -109,9 +109,9 @@ the receiver explicit:
 
 ```ts
 type OperationReceiver =
-  | { kind: 'entity-type'; entityName: 'Workspace' }
-  | { kind: 'entity-ref'; entityName: 'Workspace'; ref: { id: 'ws-1' } }
-  | { kind: 'selection'; entityName: 'Plan'; selection: unknown }
+  | { kind: 'entity-type'; entityName: string }
+  | { kind: 'entity-ref'; entityName: string; ref: Record<string, unknown> }
+  | { kind: 'selection'; entityName: string; selection: unknown }
   | { kind: 'module-ref'; moduleName: string };
 
 type OperationInvokeRequest = {
