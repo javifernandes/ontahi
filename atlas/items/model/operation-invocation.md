@@ -24,11 +24,19 @@ relatedPlans:
   - ontahi://plans/125-ontahi-ai-operations
   - ontahi://plans/162-operation-execution-resilience
   - ontahi://plans/163-operation-implementation-bindings-and-variants
+  - ontahi://plans/166-semantic-operation-receivers-and-bound-invocation
 migratedFrom: bookops://atlas/model/operation-invocation
 sourceCommit: 67713696
 ---
 
 An [[ontahi.model.operation-invocation|Operation Invocation]] is a semantic message requesting that an Ontahi operation be interpreted.
+
+Plan 166 investigates carrying a typed semantic receiver alongside Operation identity and ordinary
+input. The receiver would make entity-type, entity-instance, Selection, and bound method
+projections explicit while preserving one transport-independent invocation. It must remain
+distinct from Principal, ambient Invocation Context, implementation binding, and Resource scope.
+The current request shape remains canonical until compatibility and multi-runtime conformance are
+specified.
 
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 

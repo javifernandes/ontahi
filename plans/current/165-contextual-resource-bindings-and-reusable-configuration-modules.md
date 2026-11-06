@@ -13,6 +13,7 @@ Related plans:
 2. [125a. Model Execution Resource Governance](125a-model-execution-resource-governance.md)
 3. [160. Semantic Modules, Composition, And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
 4. [163. Operation Implementation Bindings And Variants](163-operation-implementation-bindings-and-variants.md)
+5. [166. Semantic Operation Receivers And Bound Invocation](../research/166-semantic-operation-receivers-and-bound-invocation.md)
 
 ## Summary
 
@@ -147,6 +148,12 @@ This checkpoint intentionally uses an explicit resolver call inside Operation co
 `resources: { ... }` injection, safe binding identity in evidence, Governance integration, storage,
 UI, vault adapters, and Authorization remain later slices. The primitive must earn that broader
 authoring form through consumer use first.
+
+The low-level registry, resolver, invocation-local cache, and isolation rules remain valid. Further
+higher-level scope and authoring work pauses behind Plan 166: a receiver may be the semantic root
+from which an application declares a scope projection, while Resource binding remains responsible
+only for resolving the configured instance. Do not promote the current generic binding-scope value
+into the final domain API before that separation is tested.
 
 ## Non-Goals
 

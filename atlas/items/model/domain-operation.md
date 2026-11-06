@@ -34,11 +34,20 @@ relatedPlans:
   - ontahi://plans/142e-portable-operation-condition-bridge
   - ontahi://plans/162-operation-execution-resilience
   - ontahi://plans/163-operation-implementation-bindings-and-variants
+  - ontahi://plans/166-semantic-operation-receivers-and-bound-invocation
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
 
 A [[ontahi.model.domain-operation|Domain Operation]] is an application action expressed in domain language rather than transport, UI, or database language.
+
+Plan 166 investigates a stronger uniform model in which every Domain Operation is applied to an
+explicit semantic receiver: an Entity definition for type-level behavior, an Entity Ref for
+instance behavior, a Selection for collective behavior, or a justified higher-level semantic
+subject. Method-like syntax would be receiver binding over the canonical functional form
+`(receiver, input) -> Effect<output, failure>`, not a mutable object model. This is research rather
+than an accepted public API; existing Operations and Ref input contracts remain authoritative until
+the protocol, authority, lifecycle, and migration consequences are proven.
 
 Domain operations connect product intentions, input/result contracts, authorization requirements,
 client invocation, server execution, and evidence. They are not mandatory transport wrappers for

@@ -16,6 +16,7 @@ supports:
 relatedPlans:
   - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
   - ontahi://plans/154d-semantic-mutation-journal-and-query-invalidation
+  - ontahi://plans/166-semantic-operation-receivers-and-bound-invocation
 ---
 
 The Semantic Program Kernel is the shaping hypothesis that Ontahí Reads, Commands, Operation
@@ -44,6 +45,12 @@ This item records a research direction rather than an accepted universal AST or 
 API. Plan 154 owns the incremental proofs for typed holes, substitution, Reads and Commands,
 reactive evaluation, durable waits, distributed evaluation, Assistants, Sessions, and tooling. The
 item may be narrowed, split, or removed as those proofs produce evidence.
+
+Plan 166 separately tests whether a closed Operation application always has a typed semantic
+receiver and ordinary input. Receiver binding would be one form of partial application: an Entity
+definition, Entity Ref, Selection, or other declared semantic subject can be bound without changing
+the Operation's functional and effectful meaning. It does not make ambient session state or an
+authenticated Principal an implicit argument.
 
 The first internal proof represents an open Operation application as one argument tree containing
 value and named Hole terms. Hole types come from their positions in the Operation's existing input
