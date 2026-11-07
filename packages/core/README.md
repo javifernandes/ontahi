@@ -514,6 +514,23 @@ carry the same interaction identity through the Durable Operation Runtime Protoc
 This boundary supports alternate workflow adapters while keeping checkpoint and Interaction
 semantics owned by Ontahí.
 
+Server-owned application code can reconnect a domain object to recent execution after losing the
+initiating `TaskRunRef` by attaching one stable subject when starting the Task and querying the
+configured storage later:
+
+```ts
+const runs = await Effect.runPromise(
+  taskStorage.listBySubject({
+    subject: { type: 'workspace-source', id: sourceId },
+    statuses: ['queued', 'running', 'failed'],
+    limit: 20,
+  }),
+);
+```
+
+Subject discovery is exact, server-only, and explicitly bounded to at most 100 projected list
+items. The application remains responsible for authorizing the caller before exposing any result.
+
 ## Graph Read ordering capabilities
 
 The `graph.read` Runtime Protocol family also accepts metadata-only discovery:

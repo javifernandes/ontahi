@@ -43,6 +43,7 @@ export type SupabaseTaskStorageClient = {
 
 type SupabaseTaskRunSelectQuery = {
   eq(column: string, value: unknown): SupabaseTaskRunSelectQuery;
+  in(column: string, values: readonly unknown[]): SupabaseTaskRunSelectQuery;
   maybeSingle(): SupabaseQuery<TaskRunRow>;
   order(column: string, options: { ascending: boolean }): SupabaseTaskRunSelectQuery;
   limit(value: number): SupabaseQuery<TaskRunRow[]>;
@@ -167,6 +168,11 @@ const actorFilters = <TQuery extends { eq(column: string, value: unknown): TQuer
   const byKind = query.eq('trigger->actor->>kind', actor.kind);
   return actor.id === undefined ? byKind : byKind.eq('trigger->actor->>id', actor.id);
 };
+
+const subjectFilters = <TQuery extends { eq(column: string, value: unknown): TQuery }>(
+  query: TQuery,
+  subject: NonNullable<TaskRunSource['subject']>,
+) => query.eq('subject->>type', subject.type).eq('subject->>id', subject.id);
 
 export const createSupabaseTaskStorage = ({
   client,
@@ -300,6 +306,15 @@ export const createSupabaseTaskStorage = ({
         .limit(limit);
       if (result.error) {
         throw toPersistenceFailure('Failed to list task runs for actor.', result.error);
+      }
+      return (result.data ?? []).map(fromRow);
+    },
+    listBySubject: async ({ subject, statuses, limit }) => {
+      const query = subjectFilters(client.from(tableName).select('*'), subject);
+      const filtered = statuses ? query.in('status', statuses) : query;
+      const result = await filtered.order('created_at', { ascending: false }).limit(limit);
+      if (result.error) {
+        throw toPersistenceFailure('Failed to list task runs by subject.', result.error);
       }
       return (result.data ?? []).map(fromRow);
     },

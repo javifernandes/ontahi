@@ -1,6 +1,6 @@
 # 167. Durable Task Subject Discovery And Lifecycle Reactions
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/167-durable-task-subject-discovery-and-lifecycle-reactions`
 
@@ -119,10 +119,10 @@ An application operation or Query authorizes the caller and projects the result 
 
 ## Execution Slices
 
-- [ ] Inventory BookOps' Task Run projection and the minimum Atlas reconnect requirement.
-- [ ] Define and validate the stable Task subject schema.
-- [ ] Extend Task Storage and conformance fixtures with bounded exact-subject discovery.
-- [ ] Reflect subject metadata without exposing storage-private selectors.
+- [x] Inventory BookOps' Task Run projection and the minimum Atlas reconnect requirement.
+- [x] Define and validate the stable Task subject schema.
+- [x] Extend Task Storage and conformance fixtures with bounded exact-subject discovery.
+- [x] Reflect subject metadata without exposing storage-private selectors.
 - [ ] Prove authorized server-side discovery after losing the initiating `TaskRunRef`.
 - [ ] Specify terminal reaction ordering, retry, causal identity, and failure semantics.
 - [ ] Prove one typed Event emission after a durable successful transition.
@@ -131,16 +131,18 @@ An application operation or Query authorizes the caller and projects the result 
 
 ## Acceptance Checklist
 
-- [ ] A consumer can associate a Durable Operation run with one stable domain subject.
-- [ ] Another request can discover that same run by exact subject without an application-owned task
+- [x] A consumer can associate a Durable Operation run with one stable domain subject.
+- [x] Another request can discover that same run by exact subject without an application-owned task
       index.
-- [ ] Subject discovery is bounded, provider-neutral, and protected by application authorization.
-- [ ] PostgreSQL and at least one non-SQL/reference Task Storage satisfy the subject contract.
+- [x] Subject discovery is bounded and provider-neutral; application authorization remains required
+      at the server-owned operation or Query that projects it.
+- [x] PostgreSQL, MySQL, Supabase, and the in-memory reference Task Storage satisfy the subject
+      contract.
 - [ ] Terminal reactions are explicit and cannot fire before the terminal state is durable.
 - [ ] A retried reaction preserves one causal Event occurrence or an explicit idempotent emission
       identity.
 - [ ] Task completion remains successful when a post-terminal reaction later needs retry.
-- [ ] No consumer domain nouns enter Ontahí Core APIs or persistence schemas.
+- [x] No consumer domain nouns enter Ontahí Core APIs or persistence schemas.
 
 ## Verification
 
@@ -159,6 +161,17 @@ An application operation or Query authorizes the caller and projects the result 
    application projection.
 4. Terminal reactions are opt-in because many Tasks need no domain Event.
 5. Idempotency and cancellation remain separate framework concerns with their own contracts.
+
+## Checkpoint — 2026-11-07
+
+The first implementation slice is complete. Task Storage now exposes an exact `TaskSubject`
+selector with an explicit maximum-100 limit and optional status filter. The shared conformance
+proof loses the initiating Ref, recreates the storage facade, and recovers the expected run without
+an application-owned index. Memory, PostgreSQL, MySQL, and Supabase satisfy the same contract.
+
+This slice deliberately stops at the server-side storage capability. An authorized consumer proof
+and terminal lifecycle reactions remain open; no unrestricted browser protocol or automatic Event
+emission was added.
 
 ## Open Questions
 

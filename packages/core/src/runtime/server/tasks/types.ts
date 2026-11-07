@@ -17,6 +17,7 @@ import type {
   TaskRunSource,
   TaskRuntimeRef,
   TaskSnapshot,
+  TaskStatus,
   TaskSubject,
   TaskTrigger,
 } from '../../contracts.js';
@@ -147,6 +148,13 @@ export type TaskRunCreateInput = TaskRunIdentity & {
   runtime?: TaskRuntimeRef;
 };
 
+export type TaskRunsBySubjectQuery = {
+  readonly subject: TaskSubject;
+  /** Required so subject discovery is always explicitly bounded. Maximum: 100. */
+  readonly limit: number;
+  readonly statuses?: readonly TaskStatus[];
+};
+
 export type TaskStorageControl = {
   create(input: TaskRunCreateInput): Effect.Effect<TaskRunSource, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
@@ -155,6 +163,7 @@ export type TaskStorageControl = {
     actor: TaskActor,
     limit?: number,
   ): Effect.Effect<TaskRunListItem[], TaskFailure>;
+  listBySubject(query: TaskRunsBySubjectQuery): Effect.Effect<TaskRunListItem[], TaskFailure>;
 };
 
 export type TaskStorageEngine = {

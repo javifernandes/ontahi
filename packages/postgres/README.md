@@ -178,7 +178,8 @@ The host applies `createPostgresTaskSchemaSql()` through its migration system. C
 creates or changes tables. Interaction responses and Event waits use conditional updates so one
 pending continuation has one successful claimant across concurrent processes. Runtime recreation
 loads the same private checkpoint; public snapshots and recent-run listings omit the stored input,
-and listings omit result payloads.
+and listings omit result payloads. `listBySubject` provides the same bounded exact-subject discovery
+contract as the in-memory reference storage, with optional lifecycle-status filtering.
 
 Task Storage does not execute Tasks, observe database changes, retain JavaScript continuations, or
 make Data Graph commands and Event acceptance atomic. Those remain independently composed runtime

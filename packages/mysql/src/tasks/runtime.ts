@@ -9,6 +9,7 @@ import {
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunSource,
+  type TaskRunsBySubjectQuery,
   type TaskStatus,
 } from '@ontahi/core/runtime/server/tasks';
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
@@ -208,6 +209,17 @@ export const createMysqlTaskStorage = ({
            WHERE actor_kind = ?${idFilter}
            ORDER BY created_at DESC LIMIT ?`,
         parameters,
+      );
+      return rows.map(fromRow);
+    },
+    listBySubject: async ({ subject, statuses, limit }: TaskRunsBySubjectQuery) => {
+      const statusFilter = statuses ? ` AND status IN (${statuses.map(() => '?').join(', ')})` : '';
+      const [rows] = await pool.query<MysqlTaskRow[]>(
+        `SELECT * FROM ${table}
+           WHERE JSON_UNQUOTE(JSON_EXTRACT(subject, '$.type')) = ?
+             AND JSON_UNQUOTE(JSON_EXTRACT(subject, '$.id')) = ?${statusFilter}
+           ORDER BY created_at DESC LIMIT ?`,
+        [subject.type, subject.id, ...(statuses ?? []), limit],
       );
       return rows.map(fromRow);
     },

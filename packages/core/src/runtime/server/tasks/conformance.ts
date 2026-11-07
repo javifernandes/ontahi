@@ -88,6 +88,43 @@ export const verifyTaskStorageConformance = async (harness: TaskStorageConforman
   );
   invariant(!('result' in actorRuns[0]!), 'run listings must omit result payloads');
 
+  const secondSubjectRun = {
+    taskId: `${prefix}.task`,
+    runId: `${prefix}.second-subject-run`,
+  };
+  await run(
+    recreated.create({
+      ...secondSubjectRun,
+      subject: { type: 'fixture', id: `${prefix}-subject` },
+    }),
+  );
+  await run(
+    recreated.create({
+      taskId: `${prefix}.task`,
+      runId: `${prefix}.other-subject-run`,
+      subject: { type: 'fixture', id: `${prefix}-other-subject` },
+    }),
+  );
+  const boundedSubjectRuns = await run(
+    recreated.listBySubject({
+      subject: { type: 'fixture', id: `${prefix}-subject` },
+      limit: 1,
+    }),
+  );
+  invariant(boundedSubjectRuns.length === 1, 'subject discovery must honor its explicit limit');
+  const queuedSubjectRuns = await run(
+    recreated.listBySubject({
+      subject: { type: 'fixture', id: `${prefix}-subject` },
+      statuses: ['queued'],
+      limit: 20,
+    }),
+  );
+  invariant(
+    queuedSubjectRuns.length === 1 && queuedSubjectRuns[0]?.runId === secondSubjectRun.runId,
+    'subject discovery must match exact subject and requested statuses after recreation',
+  );
+  invariant(!('result' in queuedSubjectRuns[0]!), 'subject listings must omit result payloads');
+
   const duplicate = await run(Effect.flip(recreated.create(identity)));
   invariant(
     duplicate.reason === 'task_run_already_exists',
