@@ -50,6 +50,13 @@ a privileged placement, or select a Resource binding. A remote runtime needs the
 receiver descriptor in the semantic program, not a duplicate value on every request; it must fail
 closed when that meaning or its required guarantees are unavailable.
 
+Receiver binding and a closed invocation are different values. A bound Operation callable accepts
+the remaining arguments and injects its Ref, Selection, type, or relation source into the declared
+position. A closed invocation already contains complete input and can be sent or executed. Server
+facades, generated clients, React hooks, CLI session conveniences, Explorer, and model proposals
+should project one of those forms and always lower to the same closed invocation; full explicit
+input remains the permanent functional and interoperability API.
+
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 
 Operation invocations are requests or intentions and may produce a canonical result. They remain distinct from events, which state facts and may support fan-out or replay without one request/result relationship.

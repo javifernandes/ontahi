@@ -379,6 +379,142 @@ metadata evolution:
 This preserves the functional Operation protocol while allowing object-like affordances at every
 frontend.
 
+## API Comparison Checkpoint — 2026-11-07
+
+The third inventory slice compared Operation authoring, Ref and relation proxies, legacy derived
+input Refs, reflection, generated client Entities, React hooks, Explorer, and model-proposed
+applications. The repository currently has three partial ways to express receiver meaning:
+
+1. `defineEntityRefInput(Entity).receiver()` marks one legacy derived input Ref;
+2. `graphOps: { receiver: 'path' }` marks one reflected input path for Explorer;
+3. the Entity Ref proxy searches the input schema for one compatible Ref and injects it, rejecting
+   ambiguous same-Entity participants.
+
+These are evidence for one first-class declaration, not three APIs to preserve indefinitely. The
+legacy builder couples reception to flat-input Ref derivation, `graphOps` makes semantic meaning
+look like Graph UI metadata, and schema matching cannot represent type, Selection, relation, or
+cross-owner receivers reliably.
+
+### Declaration alternatives
+
+| Alternative                        | Example                                           | Strength                                                | Failure                                                                |
+| ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| infer from Entity placement        | `Workspace.operations.askPlans`                   | Minimal syntax                                          | Confuses owner with receiver; fails `TodoItem.addItem` and symmetry    |
+| infer unique compatible input      | input has one `Workspace` Ref                     | Preserves current Ref convenience                       | Meaning changes when another same-type participant is added            |
+| annotate the input schema node     | `ref(Workspace).receiver()`                       | Receiver sits beside participant type                   | Pollutes reusable schemas and cannot naturally express type reception  |
+| metadata path on Operation         | `receiver: { input: 'workspace' }`                | Explicit, portable, type-checkable, wire-compatible     | Needs distinct forms for type and relation reception                   |
+| separate receiver/input signatures | `operation.receiver(ref).input(args)`             | Pure canonical function is visually explicit            | Creates a second authored contract and complicates schema/codegen      |
+| declaration helper DSL             | `receiver: operation.receiver.input('workspace')` | Can validate kinds while compiling to portable metadata | More ceremony and couples data to a TypeScript-only builder vocabulary |
+
+The preferred authoring direction is an explicit `receiver` property in the same Operation
+declaration object as `input`, with a small discriminated algebra. Exact spelling remains open,
+but the conceptual forms are:
+
+```ts
+operation({
+  receiver: { kind: 'entity-type', entity: self },
+  input: CreateWorkspaceInput,
+  run: createWorkspace,
+});
+
+operation({
+  receiver: { kind: 'input', path: 'workspace' },
+  input: graphSchema.object({
+    workspace: graphSchema.ref(self),
+    question: graphSchema.string(),
+  }),
+  run: askPlans,
+});
+
+operation({
+  receiver: { kind: 'relation', source: 'book', relation: 'collaborators' },
+  input: graphSchema.object({
+    book: graphSchema.ref(Book),
+    user: graphSchema.ref(User),
+  }),
+  run: inviteCollaborator,
+});
+```
+
+An input receiver's Ref versus Selection kind, Entity type, cardinality, optionality, and existence
+requirement should be derived from the schema at `path`, not repeated in receiver metadata. A
+relation receiver adds semantic information the input schema alone cannot carry, but its source
+path must still resolve to a compatible Ref. Entity-type metadata compiles to a stable Entity
+identity; the live `self` object is only TypeScript authoring syntax.
+
+Receiver paths should initially be top-level names. Nested paths create awkward omission types,
+partial object reconstruction, validation messages, and binding semantics without a demonstrated
+use case. A later value-object receiver can justify general paths independently.
+
+### Canonical and projected APIs
+
+One Operation must retain one complete input type. Binding produces another callable by omitting
+only the receiver position from its public arguments:
+
+```text
+Operation<R, I, O, F>
+  unbound: invoke(operation, completeInput)
+  bound:   bindReceiver(operation, receiver)(remainingInput)
+  method:  receiver.operation(remainingInput)
+```
+
+This gives each surface an idiomatic projection without changing the request:
+
+| Surface                  | Candidate projection                                               | Lowers to                                  |
+| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------ |
+| server/functional        | `invoke(Workspace.askPlans, { workspace, question })`              | complete validated input                   |
+| Entity type              | `Workspace.create({ name })`                                       | declared type receiver + ordinary input    |
+| Entity Ref               | `workspace.askPlans({ question })`                                 | inject `workspace` at the declared path    |
+| Selection                | `plans.archive({ reason })`                                        | inject Selection at the declared path      |
+| relation                 | `book.collaborators.invite({ user })`                              | inject source Ref plus relation descriptor |
+| React                    | `const ask = useOperation(workspace.askPlans); ask.execute(input)` | same bound callable and complete request   |
+| generated/dynamic client | `bindReceiver(operation, workspace)`                               | reflected descriptor + complete request    |
+| CLI                      | `use workspace acme`; then `ask-plans ...`                         | session-side partial application only      |
+| model application        | proposal names Operation and complete participant input            | server validates and derives receiver      |
+
+The exact direct-method syntax is an affordance, not the canonical semantic API. A runtime that
+cannot generate methods can always expose `invoke` and `bindReceiver`. React should consume a
+bound Operation value rather than invent hook-only receiver options; component state may retain a
+Ref or Selection, while execution still sends an ordinary invocation. CLI `use` state is equally
+frontend-local and must never become ambient server scope.
+
+Current `operation(input)` already constructs a closed `DomainOperationInvocation`, and
+`useOperation(operation(input))` executes that closed value. Receiver binding should introduce a
+distinct typed bound callable rather than overload a closed invocation with missing arguments.
+That avoids confusing “prepared invocation” with “partially applied Operation”.
+
+### Ownership, discovery, and collisions
+
+The declaration site still owns the stable Operation identity and implementation organization.
+Receiver metadata controls where the behavior is additionally discoverable and bindable:
+
+1. `TodoItem.addItem` may remain owned by TodoItem but appear on a TodoList Ref or `items` relation;
+2. an Operation should not appear as a method on every compatible participant in its input;
+3. a receiver method name collision with a Ref, Selection, relation, or structural command member
+   must fail composition or require an explicit projection name;
+4. generated clients and Explorer must use the declared receiver, never repeat schema heuristics;
+5. changing the receiver while preserving input is a reflected API compatibility change even when
+   the wire request remains valid.
+
+This separation lets Modules organize and version behavior without pretending the receiver owns
+the implementation or deployment.
+
+### Migration direction
+
+1. Introduce portable receiver metadata on resolved and reflected Domain Operations.
+2. Validate input receiver paths and relation sources during graph composition.
+3. Compile existing `graphOps.receiver` and legacy `inputRef.receiver()` into the descriptor with
+   deprecation diagnostics when unambiguous.
+4. Let unique-schema matching remain a temporary local fallback for Operations without metadata;
+   never reflect or federate that guess as canonical meaning.
+5. Update Ref, Selection, relation, generated-client, Explorer, React, and model application
+   projections to consume the descriptor.
+6. Keep full explicit-input invocation available permanently as the functional escape hatch and
+   interoperability form.
+
+This direction does not yet choose public names, compatibility release timing, or Selection
+lifecycle semantics. Those belong to the implementation proposal and the next pressure-test slice.
+
 ## Evidence Scenarios
 
 1. `Workspace.create` uses the Workspace definition as receiver and returns a new Ref.
@@ -440,7 +576,7 @@ frontend.
 - [x] Receiver, Principal, input participant, ambient context, implementation, Resource, and scope have non-overlapping meanings.
 - [x] One canonical functional semantics explains entity-type, instance, Selection, and bound method projections.
 - [x] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
-- [ ] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
+- [x] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
 - [ ] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
 - [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.
