@@ -31,12 +31,15 @@ sourceCommit: 67713696
 
 An [[ontahi.model.operation-invocation|Operation Invocation]] is a semantic message requesting that an Ontahi operation be interpreted.
 
-Plan 166 investigates carrying a typed semantic receiver alongside Operation identity and ordinary
-input. The receiver would make entity-type, entity-instance, Selection, and bound method
-projections explicit while preserving one transport-independent invocation. It must remain
-distinct from Principal, ambient Invocation Context, implementation binding, and Resource scope.
-The current request shape remains canonical until compatibility and multi-runtime conformance are
-specified.
+Plan 166 investigates a typed semantic receiver while preserving one transport-independent
+invocation. Repository evidence now favors receiver binding as partial application of a
+distinguished input position: Entity Ref and Selection receivers lower into validated input, while
+the Entity-qualified Operation identity can supply a declared type receiver. Namespace ownership
+alone does not imply receiver mode. That form can preserve the current `{ operationId, input }`
+request instead of duplicating receiver identity in a parallel wire field. Reflection and remote
+runtimes would still need portable receiver-kind and receiver-position metadata. The
+receiver remains distinct from Principal, ambient Invocation Context, implementation binding, and
+Resource scope; protocol compatibility and multi-runtime conformance remain research questions.
 
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 

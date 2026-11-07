@@ -49,6 +49,13 @@ subject. Method-like syntax would be receiver binding over the canonical functio
 than an accepted public API; existing Operations and Ref input contracts remain authoritative until
 the protocol, authority, lifecycle, and migration consequences are proven.
 
+The first inventory found partial receiver semantics already present. Entity definitions namespace
+type-level Operations; bound Entity Refs inject themselves into a matching input participant;
+`graphOps.receiver` marks an explicit reflected receiver path; and Explorer can project Ref and
+one-cardinality Selection participants as instance actions. These mechanisms do not yet form one
+contract. In particular, Operation owner and receiver may differ, relation-bound behavior adds
+association pressure, and ambiguous same-type participants must never be guessed.
+
 Domain operations connect product intentions, input/result contracts, authorization requirements,
 client invocation, server execution, and evidence. They are not mandatory transport wrappers for
 ordinary [[ontahi.model.query|Queries]] or [[ontahi.model.command|Commands]].
