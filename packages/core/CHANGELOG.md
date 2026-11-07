@@ -1,5 +1,24 @@
 # @ontahi/core
 
+## 1.0.0-alpha.19
+
+### Minor Changes
+
+- 246da5d: Add bounded exact-subject Task Run discovery across in-memory, PostgreSQL, MySQL, and Supabase Task
+  Storage so server-owned application code can reconnect durable execution to domain context after
+  losing the initiating Task Run reference.
+- cc8e4e1: Add contextual Resource binding references and trusted invocation-scoped resolution so one stable
+  Resource identity can select opaque configured instances without passing credentials through
+  Operation input, reflection, or evidence.
+- 3029e2d: Add governed non-model service attempts with per-resource admission limits, semantic attribution,
+  safe Resource evidence, and opaque host-owned HTTP configuration. Model and service evidence share
+  one discriminated attempt ledger while preserving model-specific metering.
+  The released model-command v1 response keeps its existing model-only evidence shape while operation
+  responses expose the generalized resource ledger.
+
+  Display governed service attempts and summaries in Devtools without exposing service credentials or
+  request payloads.
+
 ## 1.0.0-alpha.18
 
 ### Minor Changes

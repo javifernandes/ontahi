@@ -1,5 +1,28 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.19
+
+### Minor Changes
+
+- 3029e2d: Add governed non-model service attempts with per-resource admission limits, semantic attribution,
+  safe Resource evidence, and opaque host-owned HTTP configuration. Model and service evidence share
+  one discriminated attempt ledger while preserving model-specific metering.
+  The released model-command v1 response keeps its existing model-only evidence shape while operation
+  responses expose the generalized resource ledger.
+
+  Display governed service attempts and summaries in Devtools without exposing service credentials or
+  request payloads.
+
+### Patch Changes
+
+- Updated dependencies [246da5d]
+- Updated dependencies [cc8e4e1]
+- Updated dependencies [3029e2d]
+  - @ontahi/core@1.0.0-alpha.19
+  - @ontahi/language@1.0.0-alpha.19
+  - @ontahi/react@1.0.0-alpha.19
+  - @ontahi/language-codemirror@1.0.0-alpha.19
+
 ## 1.0.0-alpha.18
 
 ### Minor Changes
