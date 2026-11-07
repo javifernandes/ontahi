@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { duplicateTaskRunFailure, missingTaskRunFailure } from './failures.js';
+import { normalizeTaskRunsBySubjectQuery } from './subject-discovery.js';
 import { normalizeTaskTrigger, taskTriggerActorMatches } from './triggers.js';
 import type {
   TaskActor,
@@ -224,5 +225,20 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           .slice(0, limit)
           .map(projectTaskRunListItem),
       ),
+    listBySubject: query =>
+      Effect.sync(() => {
+        const normalized = normalizeTaskRunsBySubjectQuery(query);
+        const statuses = normalized.statuses ? new Set(normalized.statuses) : undefined;
+        return Array.from(runs.values())
+          .filter(
+            source =>
+              source.subject?.type === normalized.subject.type &&
+              source.subject.id === normalized.subject.id &&
+              (!statuses || statuses.has(source.status)),
+          )
+          .sort(compareByCreatedAtDescending)
+          .slice(0, normalized.limit)
+          .map(projectTaskRunListItem);
+      }),
   };
 };

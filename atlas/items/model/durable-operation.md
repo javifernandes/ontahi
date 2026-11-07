@@ -48,6 +48,14 @@ semantics. Timeout and cancellation end the waiter subscription without deleting
 
 Cache invalidation associated with a durable operation occurs when the run completes, rather than when the runtime merely accepts the start request.
 
+A Task Run may carry one JSON-safe `TaskSubject` with a stable `type` and `id`. Server-owned
+application code can reconnect domain context to execution after navigation or process restart by
+asking Task Storage for recent runs with that exact subject, an explicit maximum-100 limit, and an
+optional lifecycle-status filter. The selector is provider-neutral and returns projected list
+items rather than private Task source state. Ontahí does not expose this as an unrestricted client
+predicate: the consuming application authorizes the Principal and decides which projection to
+publish.
+
 Some workflow engines require a lightweight generated task artifact. That artifact must be a complete mechanical projection of the durable operation contract and must never become a separately authored model.
 
 The current runtime reflects declared durable idempotency policies but does not yet enforce them

@@ -77,6 +77,9 @@ create table public.task_runs (
 );
 ```
 
+The adapter also exposes bounded exact-subject discovery with optional lifecycle-status filtering;
+authorization and projection remain application-owned.
+
 Keeping the checkpoint in the same row as task status lets a new application process reconstruct a
 named-step execution after the browser or server disconnects. Task definitions remain application
 code and are registered again at startup; functions and runtime contexts are never serialized.

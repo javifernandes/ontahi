@@ -59,6 +59,10 @@ export {
   createTaskStorageAdapter,
   type TaskStorageAdapterOperations,
 } from './tasks/storage-adapter.js';
+export {
+  MAX_TASK_RUNS_BY_SUBJECT_LIMIT,
+  normalizeTaskRunsBySubjectQuery,
+} from './tasks/subject-discovery.js';
 export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
 export {
@@ -116,6 +120,7 @@ export type {
   TaskRunListItem,
   TaskRunRef,
   TaskRunSource,
+  TaskRunsBySubjectQuery,
   TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
   TaskPendingInteraction,

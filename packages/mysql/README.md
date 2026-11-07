@@ -44,9 +44,10 @@ const taskStorage = createMysqlTaskStorage({ pool });
 
 The host applies `createMysqlTaskSchemaSql()` through its migration system. The storage persists
 private execution checkpoints and public snapshots, supports actor-scoped listings and runtime
-references, and atomically claims pending Interaction and Event continuations with conditional
-InnoDB updates. It passes Core's provider-neutral Task Storage conformance proof and supports
-restart recovery when combined with the independently configured MySQL Event Runtime.
+references, provides bounded exact-subject discovery, and atomically claims pending Interaction and
+Event continuations with conditional InnoDB updates. It passes Core's provider-neutral Task Storage
+conformance proof and supports restart recovery when combined with the independently configured
+MySQL Event Runtime.
 
 Task writes are not automatically atomic with Data Graph mutations or Event acceptance. The host
 owns retention, migrations, grants, pool lifecycle, and any broader transaction composition.

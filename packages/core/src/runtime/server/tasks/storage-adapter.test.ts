@@ -36,6 +36,7 @@ describe('Task Storage adapter facade', () => {
       load: vi.fn(async () => persisted),
       listRecent: vi.fn(async () => [persisted]),
       listRecentForActor: vi.fn(async () => [persisted]),
+      listBySubject: vi.fn(async () => [persisted]),
     };
     const storage = createTaskStorageAdapter(operations);
     const ref = { taskId: persisted.taskId, runId: persisted.runId };
@@ -55,6 +56,9 @@ describe('Task Storage adapter facade', () => {
       { taskId: ref.taskId, trigger: persisted.trigger },
     ]);
     await Effect.runPromise(storage.listRecentForActor(persisted.trigger.actor!));
+    await Effect.runPromise(
+      storage.listBySubject({ subject: { type: 'fixture', id: 'subject-1' }, limit: 20 }),
+    );
 
     expect(operations.claim).toHaveBeenNthCalledWith(
       1,
@@ -87,6 +91,7 @@ describe('Task Storage adapter facade', () => {
       },
       listRecent: async () => [],
       listRecentForActor: async () => [],
+      listBySubject: async () => [],
     });
 
     await expect(

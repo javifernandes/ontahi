@@ -9,6 +9,7 @@ import {
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunSource,
+  type TaskRunsBySubjectQuery,
   type TaskStatus,
 } from '@ontahi/core/runtime/server/tasks';
 import type { Pool } from 'pg';
@@ -184,6 +185,20 @@ export const createPostgresTaskStorage = ({
       const result = await pool.query<PostgresTaskRow>(
         `SELECT * FROM ${table}
            WHERE trigger -> 'actor' ->> 'kind' = $1${idFilter}
+           ORDER BY created_at DESC LIMIT $${parameters.length}`,
+        parameters,
+      );
+      return result.rows.map(fromRow);
+    },
+    listBySubject: async ({ subject, statuses, limit }: TaskRunsBySubjectQuery) => {
+      const parameters: unknown[] = [subject.type, subject.id];
+      const statusFilter = statuses
+        ? ` AND status = ANY($${parameters.push(statuses)}::text[])`
+        : '';
+      parameters.push(limit);
+      const result = await pool.query<PostgresTaskRow>(
+        `SELECT * FROM ${table}
+           WHERE subject ->> 'type' = $1 AND subject ->> 'id' = $2${statusFilter}
            ORDER BY created_at DESC LIMIT $${parameters.length}`,
         parameters,
       );

@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { projectTaskRunListItem, projectTaskSnapshot } from './memory-store.js';
+import { normalizeTaskRunsBySubjectQuery } from './subject-discovery.js';
 import type {
   TaskActor,
   TaskExecutionCheckpoint,
@@ -11,6 +12,7 @@ import type {
   TaskRuntimeRef,
   TaskSnapshot,
   TaskStorage,
+  TaskRunsBySubjectQuery,
 } from './types.js';
 
 export type TaskStorageAdapterOperations = {
@@ -31,6 +33,7 @@ export type TaskStorageAdapterOperations = {
   load(ref: TaskRunIdentity): Promise<TaskRunSource>;
   listRecent(limit: number): Promise<TaskRunSource[]>;
   listRecentForActor(actor: TaskActor, limit: number): Promise<TaskRunSource[]>;
+  listBySubject(query: TaskRunsBySubjectQuery): Promise<TaskRunSource[]>;
 };
 
 const operationFailure = (message: string, cause: unknown): TaskFailure => {
@@ -94,6 +97,12 @@ export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperation
     listRecentForActor: (actor, limit = 20) =>
       attempt('Failed to list task runs for actor.', async () =>
         (await operations.listRecentForActor(actor, limit)).map(projectTaskRunListItem),
+      ),
+    listBySubject: query =>
+      attempt('Failed to list task runs by subject.', async () =>
+        (await operations.listBySubject(normalizeTaskRunsBySubjectQuery(query))).map(
+          projectTaskRunListItem,
+        ),
       ),
   };
 };
