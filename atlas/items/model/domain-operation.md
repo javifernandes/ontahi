@@ -63,6 +63,13 @@ declared Entity definition; relation reception combines portable relation identi
 Ref in input. The effective receiver is derived only after validation and is never itself an
 authority grant, trusted Resource scope, or execution-placement instruction.
 
+A Resource implementation may select configuration from invocation identity without making that
+configuration part of domain input. The first implemented model-backed seam lets application code
+resolve a provider from validated Operation input after context assembly. A future Resource use may
+declare a receiver-rooted scope projection, but no universal `self` or Relation-path algebra is yet
+part of the Operation contract. Configuration lookup still grants neither Operation authority nor
+Resource admission.
+
 The preferred authoring direction is an explicit receiver descriptor inside the Operation
 declaration. An input receiver names one top-level schema position; Ref versus Selection type,
 Entity identity, cardinality, and existence requirements remain derived from that schema rather

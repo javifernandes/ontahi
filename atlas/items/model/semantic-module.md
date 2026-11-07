@@ -57,6 +57,12 @@ authorization policy. Reuse does not require Core to own a universal `Workspace`
 raw credentials part of the graph. Different scope instances are applications of one composed
 Module, not separate authored Modules.
 
+A future reusable configuration Module may declare a named owner role rather than an
+application-specific Entity. Current evidence does not yet decide whether the consuming Application
+fills that role with a receiver projection, an explicit resolver, or another semantic binding. Any
+eventual form must keep the Module portable while leaving tenancy, Relation topology, secret
+storage, and authority policy application-owned.
+
 The completed Plan 71c used entity modules as a two-phase compatibility protocol while establishing
 `ontahi()` as the single composition root. That implementation is narrower and remains historical.
 The Semantic Module described here groups and composes several semantic subjects; it must not be

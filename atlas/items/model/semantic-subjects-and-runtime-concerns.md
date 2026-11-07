@@ -88,6 +88,13 @@ The resolved provider, endpoint, or credential remains host-owned unless a delib
 identity is projected. Governance admits and accounts for the resolved Resource attempt without
 owning secret storage or binding selection. Plan 165 is the first contextual proof of this split.
 
+There is no single ambient scope inherent in an Entity or Operation receiver. Different Resource
+uses in one invocation may need configuration owned by a Workspace, Organization, Principal, or
+the Application itself. The first model-backed evidence keeps that choice in an application-owned
+provider resolver fed by validated input after context assembly. Receiver-derived projections and
+reusable Module roles remain candidate declarative forms, not a settled portable algebra. Whatever
+form earns adoption must not grant Operation authority, Resource use, or Governance admission.
+
 These identities remain distinct. Two browser tabs may share an authenticated Session while having
 different client-instance context. One CLI login may initiate several unrelated command sessions.
 One Session may contain several concurrent Program Runs, and one Operation Run may contain several

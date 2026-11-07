@@ -143,8 +143,8 @@ runtime implements it in one environment.
 
 ## Receiver, Scope, Resources, And Governance
 
-Receiver-derived scope should be an explicit composition, not an automatic traversal of arbitrary
-Relations:
+Receiver-derived scope is one candidate explicit composition; it must never become an automatic
+traversal of arbitrary Relations:
 
 ```text
 receiver
@@ -153,7 +153,7 @@ receiver
   -> governed Resource attempt
 ```
 
-For example:
+Candidate examples are:
 
 1. `workspace.askPlans(...)` can project its Workspace receiver directly to model configuration;
 2. `plan.draftPR(...)` can use a declared `Plan -> Workspace` scope projection;
@@ -169,8 +169,8 @@ Principal may invoke the Operation or use/configure the Resource. These are rela
 one concept.
 
 Plan 165's low-level `InvocationContext` binding registry and cache remain useful infrastructure.
-Its higher-level authoring form and general scope contract wait for this plan to decide how an
-Operation exposes its receiver and declared scope projections.
+Its higher-level authoring form waits for consumer evidence to show whether Operations should
+expose declared scope projections or leave configuration lookup behind application resolvers.
 
 ## Impact Inventory
 
@@ -328,8 +328,10 @@ facts. Permission checks and execution must derive the same receiver from the sa
 and Operation version.
 
 This boundary is also why receiver-derived Resource scope cannot mean copying a Ref locator into
-`resourceBindingScope`. A future scope projection must be declared by the application, evaluated
-after validation under authority, and produce only a lookup key; it never grants access by itself.
+`resourceBindingScope`. If a future scope projection is adopted, it must be declared by the
+application, evaluated after validation under authority, and produce only a lookup key; it never
+grants access by itself. The current explicit resolver carries the same responsibility without
+claiming portable projection metadata.
 
 ### Durable execution, identity, and evidence
 
@@ -742,12 +744,145 @@ If export contacts an external service per thread, `ExportBatchResult` must stat
 per-thread outcomes and the implementation must own concurrency, provider idempotency, and
 ambiguous failures. Receiver binding contributes neither a loop nor exactly-once behavior.
 
+## Receiver-Derived Resource Scope Hypothesis — revised 2026-11-08
+
+There is no single universal “scope of a receiver”. One invocation may use a model configured per
+Workspace, a paid API billed per Organization, and a global search index. Scope therefore belongs
+to each configured Resource use. The declared receiver is only the typed root from which that use
+may derive a lookup identity.
+
+```text
+validated invocation
+  -> derive the declared receiver
+  -> evaluate the Resource use's declared scope projection
+  -> obtain one canonical semantic scope identity
+  -> resolve the configured Resource binding for (Resource, scope)
+  -> admit and account for the governed Resource attempt
+```
+
+The first proposal considered a deliberately small portable algebra:
+
+```text
+ResourceUse = Resource identity + ScopeRequirement
+
+ScopeRequirement =
+  | application-static
+  | receiver-self       (Ref receiver already has the target scope Entity)
+  | receiver-relation   (declared exact-one Relation path from a Ref receiver)
+```
+
+Its directional syntax looked approximately like:
+
+```ts
+const workspaceScope = resourceScope({
+  id: 'application.workspace',
+  from: Plan,
+  through: ['workspace'],
+  target: Workspace,
+  cardinality: 'one',
+});
+
+bindImplementation(Plan.draftPR, {
+  resources: {
+    model: analysisModel.scopedBy(workspaceScope.fromReceiver()),
+  },
+  run: draftPRWithModel,
+});
+```
+
+This is not an accepted API or a prerequisite for the first consumer. PR #304 established a
+smaller executable seam: `modelOperation` may resolve a provider from validated input through a
+typed Effect after context assembly. Atlas can therefore prove `Workspace -> ModelConfiguration ->
+SecretRef -> ModelProvider` in application code before Ontahi decides whether projection identity
+or Relation paths belong in portable metadata. Provider names, credentials, and resolved
+configuration remain non-portable regardless of that outcome.
+
+### Placement and ownership
+
+The Resource dependency normally belongs to the implementation binding because a code, model,
+external-service, and remote implementation of the same Operation may consume different Resources.
+An Operation declaration may own a Resource requirement only when every compatible implementation
+must preserve that semantic dependency. Neither placement changes the Operation input or lets a
+caller select infrastructure.
+
+A reusable Module might eventually declare a role such as `configurationOwner` without declaring
+`Workspace`. Current evidence does not decide whether the host fills it with an Entity projection,
+an explicit resolver, or another binding form. Reuse still requires application tenancy and
+topology to remain outside Core.
+
+### Candidate projection constraints
+
+If a later slice adopts declarative receiver projections, the following constraints are candidates
+rather than settled behavior:
+
+1. `receiver-self` would accept a Ref receiver whose Entity is the declared scope Entity.
+2. `receiver-relation` would start from a Ref receiver and traverse only a declared Relation path;
+   every hop would be checked during composition and execution would resolve exactly one target Ref.
+3. A Relation receiver may project from its declared source Ref. The Relation itself does not make
+   its target or source a Resource scope automatically.
+4. An Entity-type receiver has no instance identity. An application-static binding needs neither a
+   receiver Ref nor projection identity; a future Module/Application scope remains open.
+5. A one-cardinality Selection could eventually be resolved and projected like one Ref, but the
+   first slice should reject Selection-derived scope rather than add an implicit read.
+6. A many-cardinality Selection cannot be used as one binding scope merely because its members may
+   currently converge on one target. A future explicit `convergesToOne` projection would need
+   bounded evaluation, mixed-authority behavior, disclosure rules, and stable retry semantics.
+7. Application callbacks are valid current resolver seams but are not portable scope metadata.
+   Ambient React/CLI selection and undeclared Relation search must not silently become authority.
+
+If declarative projection is implemented, refusing Selection scope initially would be a capability
+boundary rather than a claim that collective scope is impossible. It would prevent binding
+resolution from secretly becoming a bulk Graph Read or leaking whether denied members share a
+configuration owner.
+
+### Trust, authority, and failure
+
+A validated Ref locator is still caller-originated data. The current application resolver must use
+authorized context or reads before treating it as configuration identity. A future declared
+projection would likewise require authoritative evaluation. Successful lookup does not authorize
+the Operation, configure every Resource, or admit an attempt; those decisions remain separate.
+
+The current typed seams can preserve distinct safe failures; a later declarative API may standardize
+only the categories that prove portable:
+
+| Failure                   | Meaning                                                               |
+| ------------------------- | --------------------------------------------------------------------- |
+| receiver invalid          | complete input cannot supply the declared receiver                    |
+| scope unavailable         | projection is unsupported, denied, missing, or not exactly one target |
+| binding not configured    | no configured instance exists for the Resource and trusted scope      |
+| binding resolution failed | the host resolver failed without disclosing its secret cause          |
+| Resource exhausted        | Governance rejected an otherwise resolved attempt                     |
+| provider failure          | admitted external work failed                                         |
+
+Public diagnostics need not distinguish denied from nonexistent scope membership. Trusted
+Devtools may show safe projection and scope identities under disclosure policy, never credentials,
+endpoints, raw resolver errors, or hidden Relation members.
+
+### Runtime lowering and cache identity remain open
+
+Plan 165's `InvocationContext` registry remains the low-level host seam. Its ambient
+`resourceBindingScope` and Resource-only cache are not promoted into the final declarative API.
+Before introducing a broader cache, consumer evidence must identify which Resource, Principal,
+resolver, projection, configuration revision, and target identities affect reuse. An
+application-static binding has no projected Ref or projection identity; receiver-derived bindings
+may require both if that design is later adopted. Principal and registry replacement continue to
+isolate the existing cache.
+
+### Consequences for the implementation plan
+
+The receiver implementation need only reflect and derive the receiver; it does not need to solve
+Resource scope now. Plan 165 first rehearses explicit application resolution through the dynamic
+provider seam. Governance continues to wrap each actual Resource attempt after configuration
+resolution. Receiver binding, scope lookup, implementation dispatch, Authorization, and Governance
+remain independently replaceable while evidence accumulates.
+
 ## Evidence Scenarios
 
 1. `Workspace.create` uses the Workspace definition as receiver and returns a new Ref.
 2. Atlas `workspace.askPlans({ question })` removes the redundant Workspace field from input.
-3. `plan.draftPR({ instructions })` derives a Workspace-scoped model Resource through one declared
-   relation without accepting provider configuration from the caller.
+3. `plan.draftPR({ instructions })` resolves Workspace model configuration without accepting
+   provider configuration from the caller, then tests whether a declared Relation projection would
+   improve the application-owned lookup.
 4. `selectionOf(Plan).archive(...)` states cardinality, authority, partial-failure, and evidence
    semantics honestly.
 5. A generated client and React hook expose bound affordances while sending one canonical request.
@@ -785,8 +920,8 @@ ambiguous failures. Receiver binding contributes neither a loop nor exactly-once
    and define Changeset and release gates.
 5. **Selection and lifecycle pressure test** — cover bulk behavior, retries, durability,
    interactions, identity, and evidence.
-6. **Resource composition** — refine Plan 165 using declared receiver-to-scope projection and prove
-   that Governance remains independent.
+6. **Resource composition** — rehearse Plan 165 through explicit application resolution, then decide
+   whether a receiver-to-scope projection pays rent while keeping Governance independent.
 7. **Implementation proposal** — only after the prior decisions, extract a bounded executable plan
    with compatibility and release strategy.
 
@@ -809,5 +944,6 @@ ambiguous failures. Receiver binding contributes neither a loop nor exactly-once
 - [x] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
 - [x] Todo, Classroom, Atlas, and BookOps evidence define executable, consumer, ontology, Changeset, and release gates without premature host migration.
 - [x] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
-- [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
+- [x] Resource configuration is distinct from receiver identity, authority, and Governance.
+- [ ] Consumer evidence determines whether receiver-derived scope merits portable metadata.
 - [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.
