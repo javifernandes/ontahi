@@ -293,10 +293,12 @@ placement suggests UI-only metadata.
 ### Why the wire should not duplicate the receiver
 
 The current dispatcher resolves the Operation by `operationId`, validates its whole input schema,
-and passes the resulting value to both permission checks and execution. Server execution then
-materializes declared existing Refs, evaluates requirements, and starts durable work from that
-same input. A parallel request field would create two candidate truths and require rules for
-receiver/input mismatch, duplicate validation, signing, caching, idempotency, and migration.
+and passes the resulting value to both permission checks and execution. On the immediate path,
+authored requirements run before supported declared `existingRef` participants are materialized
+for the implementation. On the durable path, requirements and task start use the complete input,
+but `existingRef` remains rejected until deferred execution has its own resolution lifecycle. A
+parallel request field would create two candidate truths and require rules for receiver/input
+mismatch, duplicate validation, signing, caching, idempotency, and migration.
 
 The authoritative receiver is therefore derived only after Operation resolution and input
 validation. Bound JavaScript methods, React hooks, CLI `use` state, generated clients, and model
@@ -443,11 +445,14 @@ operation({
 });
 ```
 
-An input receiver's Ref versus Selection kind, Entity type, cardinality, optionality, and existence
-requirement should be derived from the schema at `path`, not repeated in receiver metadata. A
-relation receiver adds semantic information the input schema alone cannot carry, but its source
-path must still resolve to a compatible Ref. Entity-type metadata compiles to a stable Entity
-identity; the live `self` object is only TypeScript authoring syntax.
+An input receiver's Ref versus Selection kind, Entity type, cardinality, and existence requirement
+should be derived from the schema at `path`, not repeated in receiver metadata. Composition must
+reject an optional or nullable Ref receiver path: an invocation cannot have an absent semantic
+receiver. A Selection receiver is different; an empty but present Selection remains a receiver,
+and its zero-cardinality lifecycle semantics belong to the Selection pressure test. A relation
+receiver adds semantic information the input schema alone cannot carry, but its source path must be
+a required compatible Ref. Entity-type metadata compiles to a stable Entity identity; the live
+`self` object is only TypeScript authoring syntax.
 
 Receiver paths should initially be top-level names. Nested paths create awkward omission types,
 partial object reconstruction, validation messages, and binding semantics without a demonstrated

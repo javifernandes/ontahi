@@ -66,10 +66,12 @@ authority grant, trusted Resource scope, or execution-placement instruction.
 The preferred authoring direction is an explicit receiver descriptor inside the Operation
 declaration. An input receiver names one top-level schema position; Ref versus Selection type,
 Entity identity, cardinality, and existence requirements remain derived from that schema rather
-than duplicated. Entity-type and relation receivers use distinct descriptor forms. Entity
-placement and unique-compatible-input matching may remain conveniences, but cannot define
-canonical meaning. Binding omits only the receiver position from the projected callable while the
-complete input remains the functional invocation and transport contract.
+than duplicated. A Ref receiver path must be required and non-nullable so every invocation has a
+receiver; an empty but present Selection is not the same as an absent receiver. Entity-type and
+relation receivers use distinct descriptor forms. Entity placement and unique-compatible-input
+matching may remain conveniences, but cannot define canonical meaning. Binding omits only the
+receiver position from the projected callable while the complete input remains the functional
+invocation and transport contract.
 
 Domain operations connect product intentions, input/result contracts, authorization requirements,
 client invocation, server execution, and evidence. They are not mandatory transport wrappers for

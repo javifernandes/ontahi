@@ -55,11 +55,14 @@ value on every request; it must fail closed when that meaning or its required gu
 unavailable.
 
 Receiver binding and a closed invocation are different values. A bound Operation callable accepts
-the remaining arguments and injects its Ref, Selection, type, or relation source into the declared
-position. A closed invocation already contains complete input and can be sent or executed. Server
-facades, generated clients, React hooks, CLI session conveniences, Explorer, and model proposals
-should project one of those forms and always lower to the same closed invocation; full explicit
-input remains the permanent functional and interoperability API.
+the remaining arguments. Ref and Selection receivers inject their value into the declared input
+position, and relation receivers inject their source Ref while retaining declared relation
+identity. An Entity-type receiver is bound separately from input through the Operation declaration;
+it never adds a field or changes the input contract. A closed invocation already contains complete
+input and can be sent or executed. Server facades, generated clients, React hooks, CLI session
+conveniences, Explorer, and model proposals should project one of those forms and always lower to
+the same closed invocation; full explicit input remains the permanent functional and
+interoperability API.
 
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 
