@@ -1,5 +1,17 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.19
+
+### Patch Changes
+
+- Updated dependencies [246da5d]
+- Updated dependencies [cc8e4e1]
+- Updated dependencies [3029e2d]
+  - @ontahi/core@1.0.0-alpha.19
+  - @ontahi/language@1.0.0-alpha.19
+  - @ontahi/react@1.0.0-alpha.19
+  - @ontahi/language-codemirror@1.0.0-alpha.19
+
 ## 1.0.0-alpha.18
 
 ### Patch Changes
