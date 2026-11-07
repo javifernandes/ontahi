@@ -607,10 +607,13 @@ The implementation PR must update both examples in the same change:
    durable Operation, generated client, React hook, Explorer, Devtools, and Runtime Protocol.
 2. Classroom remains the compact domain proof for type-level creation, an existing Ref receiver,
    a receiver with other same-domain participants, atomic execution, and relation behavior.
-3. Tests must assert both bound affordances and the unchanged complete-input invocation.
-4. Example READMEs must explain owner versus receiver, bound versus closed invocation, and the
+3. Tests must assert bound affordances, the unchanged complete-input invocation, and the complete
+   reconstructed input received by lifecycle callbacks after a bound call.
+4. Bound query tests must use two different receiver Refs with identical remaining input in one
+   shared cache and prove distinct query keys and results.
+5. Example READMEs must explain owner versus receiver, bound versus closed invocation, and the
    functional escape hatch rather than only display the new syntax.
-5. The canonical developer guide must link to those executable proofs and match the packed public
+6. The canonical developer guide must link to those executable proofs and match the packed public
    API before release.
 
 ### Atlas and Changeset contract

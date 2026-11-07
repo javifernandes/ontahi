@@ -112,7 +112,7 @@ The trust can be inspected or restored with npm CLI 11.15 or newer and an intera
 
 ```sh
 for package in codegen core devtools explorer-react language language-codemirror mysql opentelemetry postgres react \
-  runtime-express runtime-http runtime-nextjs runtime-vercel-workflows sql supabase; do
+  runtime-express runtime-http runtime-langgraph runtime-nextjs runtime-vercel-workflows sql supabase; do
   npm trust github "@ontahi/$package" \
     --file release.yml \
     --repo javifernandes/ontahi \

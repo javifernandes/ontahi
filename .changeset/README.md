@@ -9,7 +9,7 @@ pnpm changeset
 
 Select only the packages directly affected by the change and write the release note from the
 consumer's perspective. Ontahi's public packages form one fixed group, so Changesets will version
-and publish all seventeen at the same exact version.
+and publish all seventeen at the same version.
 
 Documentation, CI, examples, and repository-only tooling normally need no changeset. Use `patch`
 for compatible fixes, `minor` for new public capabilities, and `major` only for an intentional
