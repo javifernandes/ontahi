@@ -39,7 +39,16 @@ alone does not imply receiver mode. That form can preserve the current `{ operat
 request instead of duplicating receiver identity in a parallel wire field. Reflection and remote
 runtimes would still need portable receiver-kind and receiver-position metadata. The
 receiver remains distinct from Principal, ambient Invocation Context, implementation binding, and
-Resource scope; protocol compatibility and multi-runtime conformance remain research questions.
+Resource scope.
+
+The protocol and authority inventory found no current guarantee that requires a second receiver
+field. A receiver-aware frontend closes an invocation by binding the declared receiver position,
+then sends the existing `{ operationId, input }` request. The receiving runtime resolves compatible
+Operation metadata, validates the complete input once, and derives the effective receiver from the
+descriptor plus validated input. Client-supplied receiver metadata cannot grant authority, choose
+a privileged placement, or select a Resource binding. A remote runtime needs the versioned
+receiver descriptor in the semantic program, not a duplicate value on every request; it must fail
+closed when that meaning or its required guarantees are unavailable.
 
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 

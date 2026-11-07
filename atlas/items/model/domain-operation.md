@@ -56,6 +56,13 @@ one-cardinality Selection participants as instance actions. These mechanisms do 
 contract. In particular, Operation owner and receiver may differ, relation-bound behavior adds
 association pressure, and ambiguous same-type participants must never be guessed.
 
+Receiver meaning belongs to portable Operation metadata. Ref and Selection receiver values remain
+inside the ordinary input schema so validation, permission checks, execution, durable starts, and
+remote runtimes consume one closed invocation. Entity-type reception is represented by the
+declared Entity definition; relation reception combines portable relation identity with a source
+Ref in input. The effective receiver is derived only after validation and is never itself an
+authority grant, trusted Resource scope, or execution-placement instruction.
+
 Domain operations connect product intentions, input/result contracts, authorization requirements,
 client invocation, server execution, and evidence. They are not mandatory transport wrappers for
 ordinary [[ontahi.model.query|Queries]] or [[ontahi.model.command|Commands]].

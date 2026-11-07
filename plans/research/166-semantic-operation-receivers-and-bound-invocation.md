@@ -256,6 +256,129 @@ location make it look like Explorer metadata rather than Operation semantics.
 4. genuinely Module/Application-wide behavior;
 5. a many-Selection receiver where authorization or effects succeed for only part of the set.
 
+## Protocol And Authority Checkpoint — 2026-11-07
+
+The second inventory slice followed an invocation through request parsing, Operation resolution,
+schema validation, permission checking, Ref materialization, ordinary and durable execution,
+Runtime Protocol dispatch, task identity, and trusted Invocation Context. No current guarantee
+requires a second receiver value beside the Operation input. The preferred protocol contract is:
+
+```text
+open invocation
+  Operation identity + receiver binding + remaining arguments
+    -> bind the declared receiver position
+    -> closed invocation { operationId, input }
+    -> resolve Operation metadata
+    -> validate the complete input once
+    -> derive the effective receiver from metadata + validated input
+```
+
+The receiver declaration belongs to the portable Operation definition, not to caller-authored
+request metadata. A conceptual reflected descriptor must distinguish at least:
+
+1. an Entity-type receiver supplied by the Operation definition;
+2. an input receiver at a declared Ref or Selection path, including Entity type and cardinality;
+3. a relation receiver described by its source path and relation identity;
+4. a Module/Application receiver if later evidence justifies that algebra member.
+
+This is conceptual metadata, not yet a proposed TypeScript shape. It may refine or replace the
+current `graphOps.receiver`, whose semantics are already close to an input receiver path but whose
+placement suggests UI-only metadata.
+
+### Why the wire should not duplicate the receiver
+
+The current dispatcher resolves the Operation by `operationId`, validates its whole input schema,
+and passes the resulting value to both permission checks and execution. Server execution then
+materializes declared existing Refs, evaluates requirements, and starts durable work from that
+same input. A parallel request field would create two candidate truths and require rules for
+receiver/input mismatch, duplicate validation, signing, caching, idempotency, and migration.
+
+The authoritative receiver is therefore derived only after Operation resolution and input
+validation. Bound JavaScript methods, React hooks, CLI `use` state, generated clients, and model
+proposals are projections that construct the same closed request; none can grant receiver status
+by adding untrusted metadata.
+
+Entity-type reception is the exception only in representation, not semantics: its value is the
+declared Entity definition already named by portable Operation metadata, so no instance value is
+added to input. Relation reception similarly needs portable relation metadata, while the concrete
+source Ref remains at its validated input path.
+
+### Trust and authority boundary
+
+Receiver identity is caller-selectable domain input and therefore untrusted until validation and
+authorization. Declaring one input path as receiver:
+
+1. does not authenticate the Principal;
+2. does not prove ownership, tenancy, membership, or Relation reachability;
+3. does not select a privileged runtime, Resource binding, cache scope, or account;
+4. does not bypass existing Ref materialization or Operation requirements;
+5. does not make a client-supplied scope trustworthy.
+
+The host continues to own Principal, Resource bindings, execution placement, evidence disclosure,
+and other Invocation Context capabilities. Authorization may use the derived receiver as a typed
+policy subject, but must evaluate it with the authenticated Principal and authoritative graph
+facts. Permission checks and execution must derive the same receiver from the same validated input
+and Operation version.
+
+This boundary is also why receiver-derived Resource scope cannot mean copying a Ref locator into
+`resourceBindingScope`. A future scope projection must be declared by the application, evaluated
+after validation under authority, and produce only a lookup key; it never grants access by itself.
+
+### Durable execution, identity, and evidence
+
+Durable Operations currently derive `subject`, trigger, requirements, and task input from the
+complete Operation input. Receiver-aware Operations should keep that property:
+
+1. persist the closed, validated input and Operation identity as the semantic start request;
+2. derive durable subject or future idempotency keys from declared functions over that input;
+3. never persist a second authoritative receiver value that can drift from task input;
+4. optionally project a safe receiver summary into Activity, audit, or indexes as derived evidence;
+5. re-derive and re-authorize the receiver at lifecycle boundaries where authority must be
+   rechecked rather than trusting old display evidence.
+
+Plan 132 still owns request, delivery, idempotency, run, and attempt identity. Receiver identity may
+participate in an idempotency key because it is already part of validated input; it is not another
+invocation identity category. Immediate retry, implementation variants, Event waits, and resumed
+Interactions likewise do not change the semantic receiver.
+
+### Remote runtimes and routing
+
+A remote or alternate-language runtime does not need the originating TypeScript facade. It needs
+the same versioned semantic program metadata that defines the Operation input and receiver
+descriptor. The invocation remains `{ operationId, input }`; after resolving the compatible
+Operation definition, the receiving runtime derives the same receiver.
+
+Routing remains a trusted evaluation decision:
+
+```text
+operationId
+  -> resolve semantic Operation and required guarantees
+  -> use trusted placement policy and, where declared, receiver-derived partition identity
+  -> dispatch the unchanged closed invocation
+  -> receiving authority validates and authorizes again
+```
+
+The receiver may influence locality or partition routing, but raw caller input must not choose an
+execution authority. Plan 142h owns placement and partition policy; Plan 146i owns version and
+capability negotiation. A runtime that lacks the compatible receiver descriptor or cannot preserve
+its guarantees must fail closed rather than reinterpret the input heuristically.
+
+### Compatibility decision
+
+Plan 166 therefore retains Runtime Protocol's existing request shape for the implementation
+proposal unless a later Selection or Module pressure test disproves it. Compatibility work is
+metadata evolution:
+
+1. legacy Operations have no canonical receiver until explicitly declared or safely migrated;
+2. a unique Ref match may remain authoring sugar but never becomes remote semantic inference;
+3. receiver-aware clients may bind ergonomically while older clients keep sending explicit input;
+4. reflection must version the receiver descriptor before generated or remote consumers rely on
+   it;
+5. closed requests remain interoperable because the receiver value was never removed from input.
+
+This preserves the functional Operation protocol while allowing object-like affordances at every
+frontend.
+
 ## Evidence Scenarios
 
 1. `Workspace.create` uses the Workspace definition as receiver and returns a new Ref.
@@ -316,7 +439,7 @@ location make it look like Explorer metadata rather than Operation semantics.
 - [x] Current Operation shapes are classified against the candidate receiver algebra, including genuine counterexamples.
 - [x] Receiver, Principal, input participant, ambient context, implementation, Resource, and scope have non-overlapping meanings.
 - [x] One canonical functional semantics explains entity-type, instance, Selection, and bound method projections.
-- [ ] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
+- [x] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
 - [ ] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
 - [ ] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
