@@ -10,6 +10,7 @@ supports:
   - ontahi.model.applied-mutation-outcome
   - ontahi.runtime-capability-model
 relatedPlans:
+  - ontahi://plans/167-durable-task-subject-discovery-and-lifecycle-reactions
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
   - ontahi://plans/146l-event-brokers-egress-and-processing
   - ontahi://plans/146m-managed-http-event-egress

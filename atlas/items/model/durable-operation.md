@@ -11,6 +11,7 @@ supports:
 typeOf:
   - ontahi.model.domain-operation
 relatedPlans:
+  - ontahi://plans/167-durable-task-subject-discovery-and-lifecycle-reactions
   - ontahi://plans/132-durable-invocation-identity-and-idempotency
   - ontahi://plans/146d-versioned-durable-operation-observation-protocol
   - ontahi://plans/146e-runtime-transport-durable-observation
