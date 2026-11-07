@@ -194,6 +194,19 @@ A `Ref` identifies one stable entity. It can construct a singleton selection, bu
 
 A query adds read shape and execution to a selection. A Command adds a state transition over the same membership. The bound runtime decides whether either program executes directly through a storage adapter or crosses a [[ontahi.data-graph-execution-routing|Data Graph Execution Routing]] boundary. A domain operation may accept a selection as its target and add behavior, validation, authority, and effects. Cardinality requirements belong primarily to the consumer, while the number of matching entities is a fact of evaluating the selection.
 
+When a Selection is the declared receiver of a Domain Operation, it remains one deferred semantic
+participant. Binding the receiver creates one [[ontahi.model.operation-invocation|Operation
+Invocation]] over the expression; it does not implicitly invoke the Operation once per matching
+Entity. `one` requires exactly one authorized member when consumed. `many` permits zero or more,
+including an empty but present receiver. Neither cardinality snapshots membership, grants
+authority, implies atomicity, or defines partial-failure behavior.
+
+The Operation may aggregate over the set, issue one set-wise Command, or explicitly declare a
+business result containing item outcomes. Per-member invocations would require a separate
+orchestration contract with child identities, concurrency, cancellation, retry, and evidence
+semantics. Retries of the ordinary collective invocation re-evaluate the expression when consumed;
+stable membership must be modeled explicitly by resolving and persisting bounded Refs.
+
 The consequence is that one operation can support multiple use cases without multiplying its API surface:
 
 ```ts
