@@ -527,6 +527,113 @@ the implementation or deployment.
 This direction does not yet choose public names, compatibility release timing, or Selection
 lifecycle semantics. Those belong to the implementation proposal and the next pressure-test slice.
 
+## Consumer Rehearsal And Release Gate — 2026-11-07
+
+Because receivers reshape Operation authoring, reflection, generated clients, React, and discovery,
+the implementation cannot be judged only from Core tests. Before publishing it, Ontahí must keep
+its two executable examples current, reconcile the durable Atlas ontology, emit traceable
+Changesets, and rehearse representative host applications without migrating those hosts in the
+framework PR.
+
+### Atlas rehearsal
+
+Atlas currently defines `AtlasWorkspace.askPlans` with a structural `{ id }` workspace object and
+repeats that participant at every React execution:
+
+```ts
+const askPlans = useOperation(AtlasWorkspaceAssistantClient.domain.askPlans);
+await askPlans.executeAsync({ workspace: { id: workspaceId }, question });
+```
+
+The candidate receiver API would require the complete Operation schema to use a canonical
+Workspace Ref, then permit a bound projection:
+
+```ts
+const workspace = AtlasWorkspaceAssistantClient.ref({ id: workspaceId });
+const askPlans = useOperation(workspace.askPlans);
+await askPlans.executeAsync({ question });
+```
+
+This is positive evidence for the receiver model, but it reveals a real migration requirement:
+receiver binding cannot bless arbitrary `{ id }` value objects as Entity identity. Atlas must
+upgrade its shared server/client schema to `graphSchema.ref(AtlasWorkspace)` or an equivalent
+generated Ref contract before binding. The implementation must preserve the complete unbound form
+for staged migration and tests.
+
+Atlas also contains type-level `AtlasWorkspace.create`, candidate instance-received administration
+such as `updateVisibility` and `registerSource` that currently use structural `{ id }` values, and
+durable reconciliation behavior. After canonicalizing those participants to Refs, it can prove
+type, Ref, model-backed, resource-scoped, atomic, and durable projections without inventing a
+synthetic sample. No Atlas source is migrated during Plan 166 research; the rehearsal records the
+target and required compatibility only.
+
+### BookOps rehearsal
+
+BookOps supplies counterexamples that prevent the API from overfitting Workspace:
+
+1. `Book.fetchBookInfo({ book })` is a straightforward Ref-received query and should admit a bound
+   `useOperationQuery` form, not only mutation-oriented `useOperation`.
+2. `Book.fetchChapter({ chapter, language })` is owned by Book but naturally received by a content
+   node Ref. This proves again that owner and receiver differ and that generated methods cannot be
+   limited to the owner Entity.
+3. `CommentThread.replyThread({ thread, body })` is an ordinary instance receiver.
+4. `CommentThread.createThread({ book, ... })` has no thread yet. Its likely receiver is the Book
+   Ref or a Book–threads relation even though the Operation is owned by CommentThread. The rehearsal
+   must compare both projections rather than forcing a type receiver from declaration placement.
+5. Conversation callbacks inspect the complete invocation input after success. Bound hooks must
+   keep exposing the reconstructed complete input to lifecycle callbacks, cache invalidation, and
+   evidence even when callers pass only remaining arguments.
+
+Candidate read syntax is intentionally provisional:
+
+```ts
+const book = Book.ref({ slug: bookSlug });
+const info = useOperationQuery(book.fetchBookInfo, {}, options);
+
+const chapter = ContentNode.ref({ id: chapterId });
+const fetchChapter = useOperation(chapter.fetchChapter);
+await fetchChapter.executeAsync({ language });
+```
+
+The first line pressures hook overloads for zero remaining input; the second pressures cross-owner
+discovery and cache keys. The migration should occur only after a released Ontahí version proves
+those contracts in Todo and Classroom.
+
+### Executable example contract
+
+The implementation PR must update both examples in the same change:
+
+1. Todo remains the end-to-end browser/runtime proof for a Ref receiver, model-backed Operation,
+   durable Operation, generated client, React hook, Explorer, Devtools, and Runtime Protocol.
+2. Classroom remains the compact domain proof for type-level creation, an existing Ref receiver,
+   a receiver with other same-domain participants, atomic execution, and relation behavior.
+3. Tests must assert both bound affordances and the unchanged complete-input invocation.
+4. Example READMEs must explain owner versus receiver, bound versus closed invocation, and the
+   functional escape hatch rather than only display the new syntax.
+5. The canonical developer guide must link to those executable proofs and match the packed public
+   API before release.
+
+### Atlas and Changeset contract
+
+The implementation must update the smallest durable Atlas items for Domain Operation, Operation
+Invocation, and Semantic Program Kernel, plus any new receiver item justified by the final model.
+The Atlas README should provide a navigable ontology map explaining how Entity, Ref, Selection,
+Relation, Operation owner, receiver, invocation, implementation, Principal, Resource, and Module
+relate; it must not become a duplicate speculative taxonomy.
+
+Every consumer-visible package Changeset for this API must:
+
+1. name the bound receiver capability and compatibility behavior from a consumer perspective;
+2. identify the directly changed packages only;
+3. reference Plan 166 and the durable Atlas item IDs that define the released semantics;
+4. state whether the change is additive, deprecated, or breaking for existing explicit-input
+   callers;
+5. remain consistent with example code and migration guidance in the same release candidate.
+
+Atlas and BookOps migration PRs happen after publication and pin the exact released version. They
+are consumer evidence for the next compatibility checkpoint, not hidden prerequisites inside the
+framework implementation PR.
+
 ## Evidence Scenarios
 
 1. `Workspace.create` uses the Workspace definition as receiver and returns a new Ref.
@@ -565,11 +672,14 @@ lifecycle semantics. Those belong to the implementation proposal and the next pr
    remote-runtime behavior without changing the current wire contract.
 3. **API comparison** — compare explicit receiver declarations, placement-derived declarations,
    facade binding, and functional invocation across server, browser, React, CLI, and generated code.
-4. **Selection and lifecycle pressure test** — cover bulk behavior, retries, durability,
+4. **Consumer and release rehearsal** — keep Todo and Classroom as executable specifications,
+   compare candidate use in Atlas and BookOps without migrating them, map Atlas ontology updates,
+   and define Changeset and release gates.
+5. **Selection and lifecycle pressure test** — cover bulk behavior, retries, durability,
    interactions, identity, and evidence.
-5. **Resource composition** — refine Plan 165 using declared receiver-to-scope projection and prove
+6. **Resource composition** — refine Plan 165 using declared receiver-to-scope projection and prove
    that Governance remains independent.
-6. **Implementation proposal** — only after the prior decisions, extract a bounded executable plan
+7. **Implementation proposal** — only after the prior decisions, extract a bounded executable plan
    with compatibility and release strategy.
 
 ## Non-Goals
@@ -589,6 +699,7 @@ lifecycle semantics. Those belong to the implementation proposal and the next pr
 - [x] One canonical functional semantics explains entity-type, instance, Selection, and bound method projections.
 - [x] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
 - [x] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
+- [x] Todo, Classroom, Atlas, and BookOps evidence define executable, consumer, ontology, Changeset, and release gates without premature host migration.
 - [ ] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
 - [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.

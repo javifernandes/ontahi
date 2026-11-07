@@ -94,6 +94,13 @@ merging the generated release pull request:
 5. Do not merge the release pull request until package notes, durable design records, executable
    examples, and developer documentation describe the same shipped surface.
 
+For a cross-cutting semantic API change, also require one read-only consumer rehearsal before its
+first release. Record how the candidate API would map onto representative Atlas and BookOps
+call-sites without migrating those repositories in the framework PR. After publication, consumer
+PRs must pin the exact released version and perform the real migration separately. This keeps the
+framework release gate evidence-driven without coupling its source branch to unreleased consumer
+changes.
+
 ## Trusted publishing
 
 Every package authorizes the same GitHub Actions workflow through npm trusted publishing. The
