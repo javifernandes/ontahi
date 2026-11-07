@@ -127,8 +127,10 @@ names the Operation owner and can supply a type receiver when the declaration se
 mode; it does not prove that every Operation on the Entity namespace is type-received. Bound Entity
 Ref methods lower the Ref into its declared input position before producing the existing request. A
 Selection can use the same lowering. The canonical closed request may therefore remain
-`{ operationId, input }`; portable Operation metadata and open Program applications retain receiver
-kind and position, while the wire carries no duplicate identity.
+`{ kind: 'invoke', operationId, input?, view? }`; portable Operation metadata and open Program
+applications retain receiver kind and position, while the wire carries no duplicate identity. The
+versioned Operation Runtime Protocol body adds `version: 1` and preserves the optional result View
+so the receiving dispatcher applies the requested projection.
 
 Research must compare both projections explicitly. A separate wire receiver is justified only if
 routing, authority, or evaluation cannot recover the same unambiguous meaning from portable
@@ -193,21 +195,23 @@ binding, relation Operations, Explorer reflection, React hooks, and Runtime Prot
 
 ### Existing mechanisms
 
-| Existing mechanism                        | Current meaning                                   | Receiver evidence                                                      | Missing boundary                                                  |
-| ----------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `Entity.domain.operation(input)`          | Entity-qualified Operation owner namespace        | Can project a type receiver when declared                              | Namespace access and type reception are indistinguishable         |
-| `Entity.ref(locator).operation(args)`     | Bound Ref facade                                  | Ref proxy injects the Ref into one matching input position             | Matching is heuristic unless metadata disambiguates               |
-| `graphOps: { receiver: 'path' }`          | Reflected distinguished input path                | Explorer exposes only explicit receiver Operations as instance actions | Server invocation and wire still treat it as ordinary input       |
-| one-cardinality Selection input           | One selected Entity participant                   | Explorer can bind an Entity Ref as a one-item Selection                | Selection receiver is not declared or transported distinctly      |
-| many-cardinality Selection input          | Explicit bulk participant                         | Portable Selection already survives input serialization                | No receiver binding, bulk lifecycle, or partial-failure semantics |
-| relation Operation facade                 | `book.collaborators.invite(...)`-style affordance | Source Ref is injected under the relation's receiver name              | Relation/association is absent from the initial receiver algebra  |
-| React `useOperation(Operation)`           | Functional runner                                 | Call site supplies the receiver Ref inside input                       | No receiver-bound hook projection                                 |
-| Runtime Protocol `{ operationId, input }` | Closed portable invocation                        | Carries every current bound invocation after desugaring                | Receiver position is not part of the request or required metadata |
+| Existing mechanism                                       | Current meaning                                   | Receiver evidence                                                      | Missing boundary                                                           |
+| -------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `Entity.domain.operation(input)`                         | Entity-qualified Operation owner namespace        | Can project a type receiver when declared                              | Namespace access and type reception are indistinguishable                  |
+| `Entity.ref(locator).operation(args)`                    | Bound Ref facade                                  | Ref proxy injects the Ref into one uniquely matching input position    | It ignores `graphOps.receiver`; ambiguity needs an adapter or unbound call |
+| `graphOps: { receiver: 'path' }`                         | Reflected distinguished input path                | Explorer exposes only explicit receiver Operations as instance actions | Server invocation and wire still treat it as ordinary input                |
+| one-cardinality Selection input                          | One selected Entity participant                   | Explorer can bind an Entity Ref as a one-item Selection                | Selection receiver is not declared or transported distinctly               |
+| many-cardinality Selection input                         | Explicit bulk participant                         | Portable Selection already survives input serialization                | No receiver binding, bulk lifecycle, or partial-failure semantics          |
+| relation Operation facade                                | `book.collaborators.invite(...)`-style affordance | Source Ref is injected under the relation's receiver name              | Relation/association is absent from the initial receiver algebra           |
+| React `useOperation(Operation)`                          | Functional runner                                 | Call site supplies the receiver Ref inside input                       | No receiver-bound hook projection                                          |
+| Operation request `{ kind, operationId, input?, view? }` | Closed portable invocation                        | Carries bound input and optional result projection after desugaring    | Receiver position is not part of the request or required metadata          |
 
 Core's Ref binder already refuses to guess when two inputs reference the same Entity type. That is
 important evidence: placement under an Entity namespace does not identify which participant is the
-receiver. `graphOps.receiver` is the existing explicit escape from that ambiguity, but its name and
-location make it look like Explorer metadata rather than Operation semantics.
+receiver. `graphOps.receiver` disambiguates Explorer instance actions only; the default Core Ref
+facade does not consume it and still throws. Core callers must currently supply an explicit binding
+input adapter or use the unbound Operation with complete participant input. This split is precisely
+why `graphOps.receiver` should evolve into Operation semantics rather than remain Explorer metadata.
 
 ### Representative Operation classification
 
@@ -267,7 +271,8 @@ requires a second receiver value beside the Operation input. The preferred proto
 open invocation
   Operation identity + receiver binding + remaining arguments
     -> bind the declared receiver position
-    -> closed invocation { operationId, input }
+    -> closed invocation { kind: 'invoke', operationId, input?, view? }
+    -> versioned protocol body adds { version: 1 }
     -> resolve Operation metadata
     -> validate the complete input once
     -> derive the effective receiver from metadata + validated input
@@ -345,8 +350,10 @@ Interactions likewise do not change the semantic receiver.
 
 A remote or alternate-language runtime does not need the originating TypeScript facade. It needs
 the same versioned semantic program metadata that defines the Operation input and receiver
-descriptor. The invocation remains `{ operationId, input }`; after resolving the compatible
-Operation definition, the receiving runtime derives the same receiver.
+descriptor. The versioned invocation remains
+`{ version: 1, kind: 'invoke', operationId, input?, view? }`; after resolving the compatible
+Operation definition, the receiving runtime derives the same receiver and preserves any requested
+result projection.
 
 Routing remains a trusted evaluation decision:
 

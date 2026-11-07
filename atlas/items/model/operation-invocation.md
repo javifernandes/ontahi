@@ -35,20 +35,24 @@ Plan 166 investigates a typed semantic receiver while preserving one transport-i
 invocation. Repository evidence now favors receiver binding as partial application of a
 distinguished input position: Entity Ref and Selection receivers lower into validated input, while
 the Entity-qualified Operation identity can supply a declared type receiver. Namespace ownership
-alone does not imply receiver mode. That form can preserve the current `{ operationId, input }`
-request instead of duplicating receiver identity in a parallel wire field. Reflection and remote
+alone does not imply receiver mode. That form can preserve the current invocation request —
+`kind: 'invoke'`, Operation identity, input, and optional result View — instead of duplicating
+receiver identity in a parallel wire field. Forwarding preserves the View so the dispatcher
+applies the caller's requested projection without giving it receiver meaning. Reflection and remote
 runtimes would still need portable receiver-kind and receiver-position metadata. The
 receiver remains distinct from Principal, ambient Invocation Context, implementation binding, and
 Resource scope.
 
 The protocol and authority inventory found no current guarantee that requires a second receiver
 field. A receiver-aware frontend closes an invocation by binding the declared receiver position,
-then sends the existing `{ operationId, input }` request. The receiving runtime resolves compatible
-Operation metadata, validates the complete input once, and derives the effective receiver from the
-descriptor plus validated input. Client-supplied receiver metadata cannot grant authority, choose
-a privileged placement, or select a Resource binding. A remote runtime needs the versioned
-receiver descriptor in the semantic program, not a duplicate value on every request; it must fail
-closed when that meaning or its required guarantees are unavailable.
+then sends the existing `{ kind: 'invoke', operationId, input?, view? }` request. Its versioned
+Runtime Protocol body adds `version: 1`. The receiving runtime resolves compatible Operation
+metadata, validates the complete input once, derives the effective receiver from the descriptor
+plus validated input, and applies any requested View independently. Client-supplied receiver
+metadata cannot grant authority, choose a privileged placement, or select a Resource binding. A
+remote runtime needs the versioned receiver descriptor in the semantic program, not a duplicate
+value on every request; it must fail closed when that meaning or its required guarantees are
+unavailable.
 
 Receiver binding and a closed invocation are different values. A bound Operation callable accepts
 the remaining arguments and injects its Ref, Selection, type, or relation source into the declared
