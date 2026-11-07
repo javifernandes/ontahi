@@ -52,6 +52,12 @@ definition, Entity Ref, Selection, or other declared semantic subject can be bou
 the Operation's functional and effectful meaning. It does not make ambient session state or an
 authenticated Principal an implicit argument.
 
+The first repository inventory supports lowering a bound receiver through the existing application
+input rather than creating a second closed request shape. Entity Ref facades already insert a Ref
+into one participant position, and portable Selections already survive input serialization. Open
+applications and reflection still need to preserve which position is distinguished; a closed
+application may continue lowering to the current Operation Invocation protocol.
+
 The first internal proof represents an open Operation application as one argument tree containing
 value and named Hole terms. Hole types come from their positions in the Operation's existing input
 schema rather than copied metadata. A substitution is validated against that same schema, and only

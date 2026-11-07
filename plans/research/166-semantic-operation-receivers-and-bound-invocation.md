@@ -64,6 +64,7 @@ should not become an implicit global namespace.
 | Entity type           | One registered Entity definition               | `Workspace.create({ name })`                    |
 | Entity Ref            | One identified Entity instance                 | `workspace.askPlans({ question })`              |
 | Selection             | A typed set or deferred selection              | `overduePlans.archive({ reason })`              |
+| Relation/association  | A relation surface rooted at participants      | `book.collaborators.invite({ user })`           |
 | Module or Application | Behavior owned by a composed semantic boundary | Candidate for genuinely system-level Operations |
 
 The receiver is a distinguished semantic participant, not:
@@ -104,8 +105,8 @@ not be smuggled into receiver identity.
 ## Canonical Invocation And Runtime Protocol
 
 The protocol thesis survives. Transport-independent invocation still carries one semantic request
-across Fetch, WebSocket, queues, workflows, and runtime bridges. The candidate closed request makes
-the receiver explicit:
+across Fetch, WebSocket, queues, workflows, and runtime bridges. The initial hypothesis considered
+a parallel receiver field:
 
 ```ts
 type OperationReceiver =
@@ -121,11 +122,20 @@ type OperationInvokeRequest = {
 };
 ```
 
-This is provisional wire vocabulary. Research must determine whether current Entity-qualified
-Operation identities already imply an Entity-type receiver, how existing Ref-in-input Operations
-migrate, which receiver forms are portable, and whether a protocol version gate is required. A
-remote runtime receives the same receiver identity and either evaluates, routes, or rejects it; it
-does not need the originating TypeScript facade.
+The inventory checkpoint makes that shape less likely. Current Entity-qualified Operation identity
+names the Operation owner and can supply a type receiver when the declaration selects that receiver
+mode; it does not prove that every Operation on the Entity namespace is type-received. Bound Entity
+Ref methods lower the Ref into its declared input position before producing the existing request. A
+Selection can use the same lowering. The canonical closed request may therefore remain
+`{ kind: 'invoke', operationId, input?, view? }`; portable Operation metadata and open Program
+applications retain receiver kind and position, while the wire carries no duplicate identity. The
+versioned Operation Runtime Protocol body adds `version: 1` and preserves the optional result View
+so the receiving dispatcher applies the requested projection.
+
+Research must compare both projections explicitly. A separate wire receiver is justified only if
+routing, authority, or evaluation cannot recover the same unambiguous meaning from portable
+Operation metadata plus validated input. A remote runtime never needs the originating TypeScript
+facade, but it may need the receiver-position declaration in reflected Operation metadata.
 
 Receiver dispatch and implementation dispatch are orthogonal. The receiver says what semantic
 subject receives the request. Plan 163's binding says which code, model, external service, or remote
@@ -176,6 +186,346 @@ Research must trace the receiver through:
 8. Interactions, model proposals, partial applications, and resumed invocations;
 9. Activity, Devtools, audit evidence, trace origin, and disclosure policy;
 10. Modules, cross-Module Relations, and distributed execution topology.
+
+## Inventory Checkpoint — 2026-11-07
+
+The repository already implements several pieces of receiver behavior without one canonical model.
+The inventory covered executable Todo and Classroom examples, generated client Entities, Core Ref
+binding, relation Operations, Explorer reflection, React hooks, and Runtime Protocol.
+
+### Existing mechanisms
+
+| Existing mechanism                                       | Current meaning                                   | Receiver evidence                                                      | Missing boundary                                                           |
+| -------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `Entity.domain.operation(input)`                         | Entity-qualified Operation owner namespace        | Can project a type receiver when declared                              | Namespace access and type reception are indistinguishable                  |
+| `Entity.ref(locator).operation(args)`                    | Bound Ref facade                                  | Ref proxy injects the Ref into one uniquely matching input position    | It ignores `graphOps.receiver`; ambiguity needs an adapter or unbound call |
+| `graphOps: { receiver: 'path' }`                         | Reflected distinguished input path                | Explorer exposes only explicit receiver Operations as instance actions | Server invocation and wire still treat it as ordinary input                |
+| one-cardinality Selection input                          | One selected Entity participant                   | Explorer can bind an Entity Ref as a one-item Selection                | Selection receiver is not declared or transported distinctly               |
+| many-cardinality Selection input                         | Explicit bulk participant                         | Portable Selection already survives input serialization                | No receiver binding, bulk lifecycle, or partial-failure semantics          |
+| relation Operation facade                                | `book.collaborators.invite(...)`-style affordance | Source Ref is injected under the relation's receiver name              | Relation/association is absent from the initial receiver algebra           |
+| React `useOperation(Operation)`                          | Functional runner                                 | Call site supplies the receiver Ref inside input                       | No receiver-bound hook projection                                          |
+| Operation request `{ kind, operationId, input?, view? }` | Closed portable invocation                        | Carries bound input and optional result projection after desugaring    | Receiver position is not part of the request or required metadata          |
+
+Core's Ref binder already refuses to guess when two inputs reference the same Entity type. That is
+important evidence: placement under an Entity namespace does not identify which participant is the
+receiver. `graphOps.receiver` disambiguates Explorer instance actions only; the default Core Ref
+facade does not consume it and still throws. Core callers must currently supply an explicit binding
+input adapter or use the unbound Operation with complete participant input. This split is precisely
+why `graphOps.receiver` should evolve into Operation semantics rather than remain Explorer metadata.
+
+### Representative Operation classification
+
+| Operation or shape                                          | Candidate receiver                                              | Evidence and tension                                                                                                     |
+| ----------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Enrollment.enroll(input)`                                  | Enrollment Entity definition                                    | Factory/type behavior creates a new Enrollment; no instance exists yet                                                   |
+| `Enrollment.activate({ enrollment })`                       | Enrollment Ref                                                  | The existing participant is the natural instance receiver                                                                |
+| `Enrollment.cancel({ enrollment, endedAt })`                | Enrollment Ref                                                  | Remaining fields are ordinary arguments                                                                                  |
+| `Student.transfer({ student, previousCourse, nextCourse })` | Student Ref                                                     | One Student and two Course participants are unambiguous, but declaration does not mark the receiver                      |
+| `TodoList.suggestNextItem({ list })`                        | TodoList Ref                                                    | Explicit `graphOps.receiver`; model-backed implementation is orthogonal                                                  |
+| `TodoList.completeAll({ list })`                            | TodoList Ref                                                    | Explicit receiver; durable execution does not change receiver identity                                                   |
+| `TodoList.export({ list, requestId })`                      | TodoList Ref                                                    | Explicit receiver remains stable across an Event wait                                                                    |
+| `TodoItem.addItem({ list, title })`                         | likely TodoList Ref or its `items` relation                     | Operation namespace says TodoItem, but the existing aggregate receiving “add” is the list; ownership and receiver differ |
+| `TodoItem.deleteFromNamedList({ listName })`                | unresolved: TodoItem type, TodoList type, or Module/Application | No Ref/Selection target exists; a name is resolved during durable execution                                              |
+| `Invite.merge({ source, target })` test shape               | no receiver without declaration                                 | Two symmetric Refs correctly cause current binding to reject inference                                                   |
+| `Book.deleteBooks({ books: Selection<Book> })` test shape   | Book Selection                                                  | Proves portable bulk input, not yet receiver lifecycle semantics                                                         |
+| `BookCollaborators.invite(...)` relation shape              | Book–collaborators association rooted at Book Ref               | Shows relation-bound behavior cannot always be reduced to the target Entity type                                         |
+
+### Findings
+
+1. **Receiver and Operation owner are separate axes.** `TodoItem.addItem` may be owned/named with
+   TodoItem while being received by a TodoList or its `items` relation. Entity-qualified identity
+   remains useful without forcing receiver type to equal owner type.
+2. **A receiver is a distinguished participant position.** Binding should partially apply that
+   position; the closed invocation can retain the current input contract. Removing the receiver
+   from input would create a second validation and serialization path.
+3. **Entity-type reception is the zero-instance case, not no receiver.** The Operation's semantic
+   owner can supply this receiver through its qualified identity only when metadata declares the
+   type-receiver mode; namespace ownership alone is insufficient.
+4. **Inference is an authoring convenience, not canonical meaning.** A unique matching Ref can
+   preserve today's terse API, but ambiguous or cross-owner behavior needs an explicit receiver
+   declaration.
+5. **Relation receivers deserve first-class pressure testing.** They may be a bound path over a
+   source Ref rather than a new wire value, but they are not merely a target Entity Ref.
+6. **Lifecycle choices are orthogonal.** Model-backed, code-backed, immediate, durable, atomic, and
+   Event-waiting Operations retain the same candidate receiver.
+7. **Protocol compatibility may be nearly free.** Receiver-aware authoring, reflection, React, and
+   remote metadata can lower to the existing `OperationInvokeRequest` if the receiver remains in
+   validated input. This is now the preferred hypothesis to disprove.
+
+### Counterexamples that remain open
+
+1. symmetric participants such as merge, compare, or transfer between two values of the same type;
+2. behavior resolved from a human name or external key rather than an existing Ref;
+3. relation/association behavior whose semantic subject is neither endpoint alone;
+4. genuinely Module/Application-wide behavior;
+5. a many-Selection receiver where authorization or effects succeed for only part of the set.
+
+## Protocol And Authority Checkpoint — 2026-11-07
+
+The second inventory slice followed an invocation through request parsing, Operation resolution,
+schema validation, permission checking, Ref materialization, ordinary and durable execution,
+Runtime Protocol dispatch, task identity, and trusted Invocation Context. No current guarantee
+requires a second receiver value beside the Operation input. The preferred protocol contract is:
+
+```text
+open invocation
+  Operation identity + receiver binding + remaining arguments
+    -> bind the declared receiver position
+    -> closed invocation { kind: 'invoke', operationId, input?, view? }
+    -> versioned protocol body adds { version: 1 }
+    -> resolve Operation metadata
+    -> validate the complete input once
+    -> derive the effective receiver from metadata + validated input
+```
+
+The receiver declaration belongs to the portable Operation definition, not to caller-authored
+request metadata. A conceptual reflected descriptor must distinguish at least:
+
+1. an Entity-type receiver supplied by the Operation definition;
+2. an input receiver at a declared Ref or Selection path, including Entity type and cardinality;
+3. a relation receiver described by its source path and relation identity;
+4. a Module/Application receiver if later evidence justifies that algebra member.
+
+This is conceptual metadata, not yet a proposed TypeScript shape. It may refine or replace the
+current `graphOps.receiver`, whose semantics are already close to an input receiver path but whose
+placement suggests UI-only metadata.
+
+### Why the wire should not duplicate the receiver
+
+The current dispatcher resolves the Operation by `operationId`, validates its whole input schema,
+and passes the resulting value to both permission checks and execution. On the immediate path,
+authored requirements run before supported declared `existingRef` participants are materialized
+for the implementation. On the durable path, requirements and task start use the complete input,
+but `existingRef` remains rejected until deferred execution has its own resolution lifecycle. A
+parallel request field would create two candidate truths and require rules for receiver/input
+mismatch, duplicate validation, signing, caching, idempotency, and migration.
+
+The authoritative receiver is therefore derived only after Operation resolution and input
+validation. Bound JavaScript methods, React hooks, CLI `use` state, generated clients, and model
+proposals are projections that construct the same closed request; none can grant receiver status
+by adding untrusted metadata.
+
+Entity-type reception is the exception only in representation, not semantics: its value is the
+declared Entity definition already named by portable Operation metadata, so no instance value is
+added to input. Relation reception similarly needs portable relation metadata, while the concrete
+source Ref remains at its validated input path.
+
+### Trust and authority boundary
+
+Receiver identity is caller-selectable domain input and therefore untrusted until validation and
+authorization. Declaring one input path as receiver:
+
+1. does not authenticate the Principal;
+2. does not prove ownership, tenancy, membership, or Relation reachability;
+3. does not select a privileged runtime, Resource binding, cache scope, or account;
+4. does not bypass existing Ref materialization or Operation requirements;
+5. does not make a client-supplied scope trustworthy.
+
+The host continues to own Principal, Resource bindings, execution placement, evidence disclosure,
+and other Invocation Context capabilities. Authorization may use the derived receiver as a typed
+policy subject, but must evaluate it with the authenticated Principal and authoritative graph
+facts. Permission checks and execution must derive the same receiver from the same validated input
+and Operation version.
+
+This boundary is also why receiver-derived Resource scope cannot mean copying a Ref locator into
+`resourceBindingScope`. A future scope projection must be declared by the application, evaluated
+after validation under authority, and produce only a lookup key; it never grants access by itself.
+
+### Durable execution, identity, and evidence
+
+Durable Operations currently derive `subject`, trigger, requirements, and task input from the
+complete Operation input. Receiver-aware Operations should keep that property:
+
+1. persist the closed, validated input and Operation identity as the semantic start request;
+2. derive durable subject or future idempotency keys from declared functions over that input;
+3. never persist a second authoritative receiver value that can drift from task input;
+4. optionally project a safe receiver summary into Activity, audit, or indexes as derived evidence;
+5. re-derive and re-authorize the receiver at lifecycle boundaries where authority must be
+   rechecked rather than trusting old display evidence.
+
+Plan 132 still owns request, delivery, idempotency, run, and attempt identity. Receiver identity may
+participate in an idempotency key because it is already part of validated input; it is not another
+invocation identity category. Immediate retry, implementation variants, Event waits, and resumed
+Interactions likewise do not change the semantic receiver.
+
+### Remote runtimes and routing
+
+A remote or alternate-language runtime does not need the originating TypeScript facade. It needs
+the same versioned semantic program metadata that defines the Operation input and receiver
+descriptor. The versioned invocation remains
+`{ version: 1, kind: 'invoke', operationId, input?, view? }`; after resolving the compatible
+Operation definition, the receiving runtime derives the same receiver and preserves any requested
+result projection.
+
+Routing remains a trusted evaluation decision:
+
+```text
+operationId
+  -> resolve semantic Operation and required guarantees
+  -> use trusted placement policy and, where declared, receiver-derived partition identity
+  -> dispatch the unchanged closed invocation
+  -> receiving authority validates and authorizes again
+```
+
+The receiver may influence locality or partition routing, but raw caller input must not choose an
+execution authority. Plan 142h owns placement and partition policy; Plan 146i owns version and
+capability negotiation. A runtime that lacks the compatible receiver descriptor or cannot preserve
+its guarantees must fail closed rather than reinterpret the input heuristically.
+
+### Compatibility decision
+
+Plan 166 therefore retains Runtime Protocol's existing request shape for the implementation
+proposal unless a later Selection or Module pressure test disproves it. Compatibility work is
+metadata evolution:
+
+1. legacy Operations have no canonical receiver until explicitly declared or safely migrated;
+2. a unique Ref match may remain authoring sugar but never becomes remote semantic inference;
+3. receiver-aware clients may bind ergonomically while older clients keep sending explicit input;
+4. reflection must version the receiver descriptor before generated or remote consumers rely on
+   it;
+5. closed requests remain interoperable because the receiver value was never removed from input.
+
+This preserves the functional Operation protocol while allowing object-like affordances at every
+frontend.
+
+## API Comparison Checkpoint — 2026-11-07
+
+The third inventory slice compared Operation authoring, Ref and relation proxies, legacy derived
+input Refs, reflection, generated client Entities, React hooks, Explorer, and model-proposed
+applications. The repository currently has three partial ways to express receiver meaning:
+
+1. `defineEntityRefInput(Entity).receiver()` marks one legacy derived input Ref;
+2. `graphOps: { receiver: 'path' }` marks one reflected input path for Explorer;
+3. the Entity Ref proxy searches the input schema for one compatible Ref and injects it, rejecting
+   ambiguous same-Entity participants.
+
+These are evidence for one first-class declaration, not three APIs to preserve indefinitely. The
+legacy builder couples reception to flat-input Ref derivation, `graphOps` makes semantic meaning
+look like Graph UI metadata, and schema matching cannot represent type, Selection, relation, or
+cross-owner receivers reliably.
+
+### Declaration alternatives
+
+| Alternative                        | Example                                           | Strength                                                | Failure                                                                |
+| ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| infer from Entity placement        | `Workspace.operations.askPlans`                   | Minimal syntax                                          | Confuses owner with receiver; fails `TodoItem.addItem` and symmetry    |
+| infer unique compatible input      | input has one `Workspace` Ref                     | Preserves current Ref convenience                       | Meaning changes when another same-type participant is added            |
+| annotate the input schema node     | `ref(Workspace).receiver()`                       | Receiver sits beside participant type                   | Pollutes reusable schemas and cannot naturally express type reception  |
+| metadata path on Operation         | `receiver: { input: 'workspace' }`                | Explicit, portable, type-checkable, wire-compatible     | Needs distinct forms for type and relation reception                   |
+| separate receiver/input signatures | `operation.receiver(ref).input(args)`             | Pure canonical function is visually explicit            | Creates a second authored contract and complicates schema/codegen      |
+| declaration helper DSL             | `receiver: operation.receiver.input('workspace')` | Can validate kinds while compiling to portable metadata | More ceremony and couples data to a TypeScript-only builder vocabulary |
+
+The preferred authoring direction is an explicit `receiver` property in the same Operation
+declaration object as `input`, with a small discriminated algebra. Exact spelling remains open,
+but the conceptual forms are:
+
+```ts
+operation({
+  receiver: { kind: 'entity-type', entity: self },
+  input: CreateWorkspaceInput,
+  run: createWorkspace,
+});
+
+operation({
+  receiver: { kind: 'input', path: 'workspace' },
+  input: graphSchema.object({
+    workspace: graphSchema.ref(self),
+    question: graphSchema.string(),
+  }),
+  run: askPlans,
+});
+
+operation({
+  receiver: { kind: 'relation', source: 'book', relation: 'collaborators' },
+  input: graphSchema.object({
+    book: graphSchema.ref(Book),
+    user: graphSchema.ref(User),
+  }),
+  run: inviteCollaborator,
+});
+```
+
+An input receiver's Ref versus Selection kind, Entity type, cardinality, and existence requirement
+should be derived from the schema at `path`, not repeated in receiver metadata. Composition must
+reject an optional or nullable Ref receiver path: an invocation cannot have an absent semantic
+receiver. A Selection receiver is different; an empty but present Selection remains a receiver,
+and its zero-cardinality lifecycle semantics belong to the Selection pressure test. A relation
+receiver adds semantic information the input schema alone cannot carry, but its source path must be
+a required compatible Ref. Entity-type metadata compiles to a stable Entity identity; the live
+`self` object is only TypeScript authoring syntax.
+
+Receiver paths should initially be top-level names. Nested paths create awkward omission types,
+partial object reconstruction, validation messages, and binding semantics without a demonstrated
+use case. A later value-object receiver can justify general paths independently.
+
+### Canonical and projected APIs
+
+One Operation must retain one complete input type. Binding produces another callable by omitting
+only the receiver position from its public arguments:
+
+```text
+Operation<R, I, O, F>
+  unbound: invoke(operation, completeInput)
+  bound:   bindReceiver(operation, receiver)(remainingInput)
+  method:  receiver.operation(remainingInput)
+```
+
+This gives each surface an idiomatic projection without changing the request:
+
+| Surface                  | Candidate projection                                               | Lowers to                                  |
+| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------ |
+| server/functional        | `invoke(Workspace.askPlans, { workspace, question })`              | complete validated input                   |
+| Entity type              | `Workspace.create({ name })`                                       | declared type receiver + ordinary input    |
+| Entity Ref               | `workspace.askPlans({ question })`                                 | inject `workspace` at the declared path    |
+| Selection                | `plans.archive({ reason })`                                        | inject Selection at the declared path      |
+| relation                 | `book.collaborators.invite({ user })`                              | inject source Ref plus relation descriptor |
+| React                    | `const ask = useOperation(workspace.askPlans); ask.execute(input)` | same bound callable and complete request   |
+| generated/dynamic client | `bindReceiver(operation, workspace)`                               | reflected descriptor + complete request    |
+| CLI                      | `use workspace acme`; then `ask-plans ...`                         | session-side partial application only      |
+| model application        | proposal names Operation and complete participant input            | server validates and derives receiver      |
+
+The exact direct-method syntax is an affordance, not the canonical semantic API. A runtime that
+cannot generate methods can always expose `invoke` and `bindReceiver`. React should consume a
+bound Operation value rather than invent hook-only receiver options; component state may retain a
+Ref or Selection, while execution still sends an ordinary invocation. CLI `use` state is equally
+frontend-local and must never become ambient server scope.
+
+Current `operation(input)` already constructs a closed `DomainOperationInvocation`, and
+`useOperation(operation(input))` executes that closed value. Receiver binding should introduce a
+distinct typed bound callable rather than overload a closed invocation with missing arguments.
+That avoids confusing “prepared invocation” with “partially applied Operation”.
+
+### Ownership, discovery, and collisions
+
+The declaration site still owns the stable Operation identity and implementation organization.
+Receiver metadata controls where the behavior is additionally discoverable and bindable:
+
+1. `TodoItem.addItem` may remain owned by TodoItem but appear on a TodoList Ref or `items` relation;
+2. an Operation should not appear as a method on every compatible participant in its input;
+3. a receiver method name collision with a Ref, Selection, relation, or structural command member
+   must fail composition or require an explicit projection name;
+4. generated clients and Explorer must use the declared receiver, never repeat schema heuristics;
+5. changing the receiver while preserving input is a reflected API compatibility change even when
+   the wire request remains valid.
+
+This separation lets Modules organize and version behavior without pretending the receiver owns
+the implementation or deployment.
+
+### Migration direction
+
+1. Introduce portable receiver metadata on resolved and reflected Domain Operations.
+2. Validate input receiver paths and relation sources during graph composition.
+3. Compile existing `graphOps.receiver` and legacy `inputRef.receiver()` into the descriptor with
+   deprecation diagnostics when unambiguous.
+4. Let unique-schema matching remain a temporary local fallback for Operations without metadata;
+   never reflect or federate that guess as canonical meaning.
+5. Update Ref, Selection, relation, generated-client, Explorer, React, and model application
+   projections to consume the descriptor.
+6. Keep full explicit-input invocation available permanently as the functional escape hatch and
+   interoperability form.
+
+This direction does not yet choose public names, compatibility release timing, or Selection
+lifecycle semantics. Those belong to the implementation proposal and the next pressure-test slice.
 
 ## Evidence Scenarios
 
@@ -234,11 +584,11 @@ Research must trace the receiver through:
 
 ## Acceptance
 
-- [ ] Current Operations are classified against the candidate receiver algebra, including genuine counterexamples.
-- [ ] Receiver, Principal, input participant, ambient context, implementation, Resource, and scope have non-overlapping meanings.
-- [ ] One canonical functional semantics explains entity-type, instance, Selection, and bound method projections.
-- [ ] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
-- [ ] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
+- [x] Current Operation shapes are classified against the candidate receiver algebra, including genuine counterexamples.
+- [x] Receiver, Principal, input participant, ambient context, implementation, Resource, and scope have non-overlapping meanings.
+- [x] One canonical functional semantics explains entity-type, instance, Selection, and bound method projections.
+- [x] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
+- [x] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
 - [ ] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
 - [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.

@@ -31,12 +31,38 @@ sourceCommit: 67713696
 
 An [[ontahi.model.operation-invocation|Operation Invocation]] is a semantic message requesting that an Ontahi operation be interpreted.
 
-Plan 166 investigates carrying a typed semantic receiver alongside Operation identity and ordinary
-input. The receiver would make entity-type, entity-instance, Selection, and bound method
-projections explicit while preserving one transport-independent invocation. It must remain
-distinct from Principal, ambient Invocation Context, implementation binding, and Resource scope.
-The current request shape remains canonical until compatibility and multi-runtime conformance are
-specified.
+Plan 166 investigates a typed semantic receiver while preserving one transport-independent
+invocation. Repository evidence now favors receiver binding as partial application of a
+distinguished input position: Entity Ref and Selection receivers lower into validated input, while
+the Entity-qualified Operation identity can supply a declared type receiver. Namespace ownership
+alone does not imply receiver mode. That form can preserve the current invocation request —
+`kind: 'invoke'`, Operation identity, input, and optional result View — instead of duplicating
+receiver identity in a parallel wire field. Forwarding preserves the View so the dispatcher
+applies the caller's requested projection without giving it receiver meaning. Reflection and remote
+runtimes would still need portable receiver-kind and receiver-position metadata. The
+receiver remains distinct from Principal, ambient Invocation Context, implementation binding, and
+Resource scope.
+
+The protocol and authority inventory found no current guarantee that requires a second receiver
+field. A receiver-aware frontend closes an invocation by binding the declared receiver position,
+then sends the existing `{ kind: 'invoke', operationId, input?, view? }` request. Its versioned
+Runtime Protocol body adds `version: 1`. The receiving runtime resolves compatible Operation
+metadata, validates the complete input once, derives the effective receiver from the descriptor
+plus validated input, and applies any requested View independently. Client-supplied receiver
+metadata cannot grant authority, choose a privileged placement, or select a Resource binding. A
+remote runtime needs the versioned receiver descriptor in the semantic program, not a duplicate
+value on every request; it must fail closed when that meaning or its required guarantees are
+unavailable.
+
+Receiver binding and a closed invocation are different values. A bound Operation callable accepts
+the remaining arguments. Ref and Selection receivers inject their value into the declared input
+position, and relation receivers inject their source Ref while retaining declared relation
+identity. An Entity-type receiver is bound separately from input through the Operation declaration;
+it never adds a field or changes the input contract. A closed invocation already contains complete
+input and can be sent or executed. Server facades, generated clients, React hooks, CLI session
+conveniences, Explorer, and model proposals should project one of those forms and always lower to
+the same closed invocation; full explicit input remains the permanent functional and
+interoperability API.
 
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 

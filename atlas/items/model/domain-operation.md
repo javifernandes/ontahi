@@ -49,6 +49,30 @@ subject. Method-like syntax would be receiver binding over the canonical functio
 than an accepted public API; existing Operations and Ref input contracts remain authoritative until
 the protocol, authority, lifecycle, and migration consequences are proven.
 
+The first inventory found partial receiver semantics already present. Entity definitions namespace
+type-level Operations; bound Entity Refs inject themselves into a matching input participant;
+`graphOps.receiver` marks an explicit reflected receiver path; and Explorer can project Ref and
+one-cardinality Selection participants as instance actions. These mechanisms do not yet form one
+contract. In particular, Operation owner and receiver may differ, relation-bound behavior adds
+association pressure, and ambiguous same-type participants must never be guessed.
+
+Receiver meaning belongs to portable Operation metadata. Ref and Selection receiver values remain
+inside the ordinary input schema so validation, permission checks, execution, durable starts, and
+remote runtimes consume one closed invocation. Entity-type reception is represented by the
+declared Entity definition; relation reception combines portable relation identity with a source
+Ref in input. The effective receiver is derived only after validation and is never itself an
+authority grant, trusted Resource scope, or execution-placement instruction.
+
+The preferred authoring direction is an explicit receiver descriptor inside the Operation
+declaration. An input receiver names one top-level schema position; Ref versus Selection type,
+Entity identity, cardinality, and existence requirements remain derived from that schema rather
+than duplicated. A Ref receiver path must be required and non-nullable so every invocation has a
+receiver; an empty but present Selection is not the same as an absent receiver. Entity-type and
+relation receivers use distinct descriptor forms. Entity placement and unique-compatible-input
+matching may remain conveniences, but cannot define canonical meaning. Binding omits only the
+receiver position from the projected callable while the complete input remains the functional
+invocation and transport contract.
+
 Domain operations connect product intentions, input/result contracts, authorization requirements,
 client invocation, server execution, and evidence. They are not mandatory transport wrappers for
 ordinary [[ontahi.model.query|Queries]] or [[ontahi.model.command|Commands]].
