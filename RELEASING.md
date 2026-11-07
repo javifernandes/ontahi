@@ -94,6 +94,13 @@ merging the generated release pull request:
 5. Do not merge the release pull request until package notes, durable design records, executable
    examples, and developer documentation describe the same shipped surface.
 
+For a cross-cutting semantic API change, also require one read-only consumer rehearsal before its
+first release. Record how the candidate API would map onto representative Atlas and BookOps
+call-sites without migrating those repositories in the framework PR. After publication, consumer
+PRs must pin the exact released version and perform the real migration separately. This keeps the
+framework release gate evidence-driven without coupling its source branch to unreleased consumer
+changes.
+
 ## Trusted publishing
 
 Every package authorizes the same GitHub Actions workflow through npm trusted publishing. The
@@ -105,7 +112,7 @@ The trust can be inspected or restored with npm CLI 11.15 or newer and an intera
 
 ```sh
 for package in codegen core devtools explorer-react language language-codemirror mysql opentelemetry postgres react \
-  runtime-express runtime-http runtime-nextjs runtime-vercel-workflows sql supabase; do
+  runtime-express runtime-http runtime-langgraph runtime-nextjs runtime-vercel-workflows sql supabase; do
   npm trust github "@ontahi/$package" \
     --file release.yml \
     --repo javifernandes/ontahi \
