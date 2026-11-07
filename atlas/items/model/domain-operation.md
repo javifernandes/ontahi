@@ -91,6 +91,13 @@ or make effects idempotent.
 
 When an operation concerns existing entities, a [[ontahi.model.selection|Selection]] can describe its target independently from the behavior, cardinality requirements, authority, and effects the operation adds.
 
+A Selection receiver still denotes one Operation application. It does not implicitly map the
+Operation over current members. Aggregate reads, native set-wise Commands, and explicitly modeled
+item outcomes are valid implementation choices with different guarantees; receiver binding adds
+none of those guarantees by itself. In particular, collective reception does not imply atomicity,
+snapshot membership, partial success, or retry safety. A future per-member orchestration primitive
+would create separately identified child invocations rather than overload receiver semantics.
+
 An operation whose implementation is entirely a graph read may return that read directly. This
 includes ordinary selections and reads rooted through a declared relation; the selected runtime
 interprets either form as the operation result.

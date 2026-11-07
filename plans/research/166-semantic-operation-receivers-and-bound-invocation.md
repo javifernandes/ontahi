@@ -637,6 +637,111 @@ Atlas and BookOps migration PRs happen after publication and pin the exact relea
 are consumer evidence for the next compatibility checkpoint, not hidden prerequisites inside the
 framework implementation PR.
 
+## Selection Receiver And Lifecycle Decision — 2026-11-07
+
+A Selection receiver is one semantic participant whose value is a deferred membership expression.
+Binding it closes one receiver position and creates one Operation Invocation. It does **not** mean
+“invoke this Operation once per currently matching Entity”. This distinction keeps the existing
+Selection algebra, invocation identity, retry policy, Resource evidence, and result contract
+composable without inventing a hidden bulk workflow.
+
+Cardinality remains a consumer requirement derived from the receiver input schema:
+
+1. a `one` Selection must resolve to exactly one authorized member when consumed, but remains a
+   Selection rather than becoming a Ref or materialized Entity;
+2. a `many` Selection may resolve to zero or more authorized members, and an empty Selection is a
+   valid present receiver unless the Operation declares a separate non-empty precondition;
+3. receiver binding captures the portable expression, not a snapshot of matching Refs;
+4. the Entity kind and cardinality are reflected from the input schema and are not repeated in the
+   receiver descriptor.
+
+The Operation runs once against that Selection. Its implementation chooses an honest behavior:
+
+| Behavior               | Meaning                                                             | Existing primitive                                       | Lifecycle consequence                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| aggregate              | inspect or compute over the set as one input                        | Selection/Graph Read                                     | one invocation and one result                                                                                                |
+| set-wise mutation      | issue one Command over the membership expression                    | Graph Command; optionally `operation.atomic`             | provider mutation guarantees apply to the command; Operation atomicity covers the complete local boundary only when required |
+| explicit item outcomes | intentionally process members and return per-member success/failure | ordinary Operation code plus an explicit output contract | ordering, concurrency, partial results, compensation, and retry safety belong to that Operation                              |
+| per-member invocation  | start a distinct child invocation for each member                   | not currently modeled                                    | requires a future orchestration primitive with child identities, bounded concurrency, evidence, and cancellation             |
+
+The first receiver API must support the first three only as ordinary single invocations. It must
+not project a generic `.each`, silently loop, or synthesize partial-failure semantics. A bulk
+Operation that needs item outcomes declares them in its result contract; an ordinary failure still
+fails the single invocation. Native set-wise Commands remain preferable when one provider can
+apply the transition directly.
+
+### Authority and effects
+
+Receiver metadata is not an authority grant. Operation permission is checked for the complete
+invocation, while every Selection read or Command is still constrained by the authoritative Data
+Graph policy. A receiver declaration must not pre-materialize members in a client, leak denied
+membership, or treat the caller's predicate as a trusted row scope.
+
+For effectful bulk Operations, policy intersection must not silently turn “archive this requested
+set” into “archive whichever requested members happen to be authorized” unless that narrowing is
+the Operation's explicit domain contract. The safe default is to let the authoritative consumer
+validate and execute the complete requested target or return a typed rejection. Read-oriented
+Operations may intentionally return the authorized intersection because that is already the Data
+Graph read contract. The later Authorization research must define mixed-authority set behavior;
+Plan 166 does not disguise that decision as receiver binding.
+
+`operation.atomic` remains an independent guarantee. A many-Selection receiver does not imply
+atomicity, and one provider's set-wise atomic Command does not make additional external effects
+atomic. When the Operation requires atomic local Data Graph execution, the existing runner opens a
+fresh boundary per retry and publishes only successful effects. Distributed, durable, and external
+side effects remain outside that claim.
+
+### Retries, durability, and identity
+
+One collective invocation has one invocation identity and may contain several attempts under the
+existing resilience contract. Each attempt re-runs the complete Operation and ordinarily
+re-evaluates the Selection when it is consumed. Membership may therefore change between attempts;
+retry eligibility does not freeze it and does not make effects idempotent.
+
+An Operation that requires stable membership must explicitly resolve and persist a bounded set of
+Refs before the relevant retry or durable boundary. The snapshot identity and limits become part
+of that Operation's contract or future orchestration state; they are not hidden inside `Selection`
+or receiver metadata. Conversely, an Operation that intentionally targets “all members matching
+at execution time” retains the expression and accepts live re-evaluation. Durable invocation
+identity and idempotency must distinguish these two meanings when Plan 132 is implemented.
+
+Evidence attributes the receiver kind, Entity, cardinality, and safe Selection summary to the one
+invocation. Attempts, Commands, Resource usage, and any explicitly modeled item outcomes remain
+separate child evidence. Raw predicates, selected Refs, population counts, and denied membership
+follow the host's disclosure policy rather than becoming public merely because the Selection is a
+receiver.
+
+### Pressure-test examples
+
+```ts
+archivePlans: operation.atomic({
+  receiver: { kind: 'input', path: 'plans' },
+  input: graphSchema.object({
+    plans: Plan.many(),
+    reason: graphSchema.string(),
+  }),
+  run: ({ plans, reason }) => plans.update({ status: 'archived', reason }),
+});
+```
+
+`plans.archive({ reason })` is one invocation and one set-wise Command. Empty membership is a
+successful no-op unless the Operation adds a non-empty precondition. A cardinality or policy
+rejection occurs before the command reports success; there is no fabricated array of per-Plan
+results.
+
+```ts
+exportThreads: operation({
+  receiver: { kind: 'input', path: 'threads' },
+  input: graphSchema.object({ threads: CommentThread.many(), format: ExportFormat }),
+  output: ExportBatchResult,
+  run: exportThreadsWithExplicitOutcomes,
+});
+```
+
+If export contacts an external service per thread, `ExportBatchResult` must state the intended
+per-thread outcomes and the implementation must own concurrency, provider idempotency, and
+ambiguous failures. Receiver binding contributes neither a loop nor exactly-once behavior.
+
 ## Evidence Scenarios
 
 1. `Workspace.create` uses the Workspace definition as receiver and returns a new Ref.
@@ -657,8 +762,8 @@ framework implementation PR.
    or both with one canonical lowering?
 2. Is an Entity Ref transported directly, materialized before execution, or available through a
    receiver API analogous to `existingRef`?
-3. What does Selection receiver cardinality mean for atomicity, authorization, partial failure,
-   retries, and idempotency?
+3. Which future orchestration contract, if any, should turn one Selection into separately
+   identified child invocations? Selection receiver binding itself does not do so.
 4. Which semantic owner receives behavior that has several symmetric participants or no natural
    Entity owner?
 5. Can Module/Application receivers remain stable across composition and federation?
@@ -703,6 +808,6 @@ framework implementation PR.
 - [x] Runtime Protocol representation, trust boundary, compatibility, and multi-runtime routing are specified.
 - [x] Server, generated-client, React, CLI, reflection, Devtools, durable, and model-backed impacts are mapped.
 - [x] Todo, Classroom, Atlas, and BookOps evidence define executable, consumer, ontology, Changeset, and release gates without premature host migration.
-- [ ] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
+- [x] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [ ] Receiver-derived scope composes with Resource binding without granting authority or hiding relation traversal.
 - [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.

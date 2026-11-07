@@ -64,6 +64,12 @@ conveniences, Explorer, and model proposals should project one of those forms an
 the same closed invocation; full explicit input remains the permanent functional and
 interoperability API.
 
+Binding a many-cardinality Selection creates one closed invocation, not one invocation per member.
+The receiver value is the portable deferred expression; evaluation may produce different members
+across attempts or durable steps unless the Operation explicitly snapshots bounded Refs. Any
+per-member child identities, partial outcomes, ordering, or concurrency require an orchestration
+contract and cannot be inferred from cardinality.
+
 The invocation carries an operation identity and opaque input independently from Fetch, Next.js, Express, webhooks, queues, CLI commands, workflows, or future transports. A canonical dispatcher resolves the operation and applies input validation, authority, execution, and result semantics before delegating to an implementation such as code, an LLM, an external system, or a durable runtime.
 
 Operation invocations are requests or intentions and may produce a canonical result. They remain distinct from events, which state facts and may support fan-out or replay without one request/result relationship.
