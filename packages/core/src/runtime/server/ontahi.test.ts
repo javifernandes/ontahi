@@ -91,7 +91,7 @@ describe('ontahi application composition root', () => {
     expect(() => application.registerEntity(Owner)).toThrow(
       'receiver Entity "DynamicExternalReceiver" is not registered',
     );
-    expect(application.graph.getEntity('DynamicReceiverOwner')).toBeUndefined();
+    expect(application.graph.listEntities()).toEqual([]);
     expect(application.graph.getDomainOperation('DynamicReceiverOwner.inspect')).toBeUndefined();
     expect(() => application.registerEntity(Owner)).toThrow(
       'receiver Entity "DynamicExternalReceiver" is not registered',
