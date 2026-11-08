@@ -530,6 +530,7 @@ export {
   type ModelOperationExecutionRequest,
   type ModelOperationExecutor,
   type ModelOperationOptions,
+  type ModelProviderResolver,
 } from './model/operation-executor.js';
 export {
   createModelCommandRuntime,

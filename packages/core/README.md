@@ -986,6 +986,15 @@ application still owns the explicit model-visible `context`. Core owns dispatche
 cancellation checks, and canonical execution through the same policies used by other callers.
 Command dispatch remains internal to the runtime so context construction cannot mutate the graph.
 
+`modelOperation(...)` accepts either one static `ModelProvider` or an input-aware resolver returning
+`Effect<ModelProvider, Failure>`. Context assembly completes first, so authorization or bounded
+context rejection prevents credential and provider resolution. A dynamic resolver runs for every
+Operation execution attempt, allowing an application to select persisted Workspace- or
+purpose-specific configuration and observe credential rotation without moving provider details into
+Operation input. Resolver failures remain typed application failures; the resolved provider still
+uses the ordinary model executor, structured-output validation, Resource admission, usage evidence,
+and cancellation path.
+
 For local development, `createOllamaModelProvider({model, baseUrl?, ...})` implements
 `ModelProvider` with Ollama's structured `/api/chat` endpoint using `fetch`. Provider configuration
 stays on the server and can be replaced without changing the model command runtime or application
