@@ -27,6 +27,8 @@ import {
   type DomainOperationDefaults,
   type DomainOperationGraphOpsMetadata,
   type DomainOperationMetadata,
+  type DomainOperationReceiverDeclaration,
+  type DomainOperationReceiverDescriptor,
   type ResolveDomainOperations,
 } from '../../data-graph/operations.js';
 import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
@@ -350,7 +352,7 @@ type ServerDomainOperationMetadata<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
 > = Omit<
   DomainOperationMetadata<TInput, DomainOperationCacheMetadata<TInput>, TResult>,
-  'authority' | 'exposure' | 'durable' | 'conditions' | 'implementation'
+  'authority' | 'exposure' | 'durable' | 'conditions' | 'implementation' | 'receiver'
 > &
   Partial<
     Pick<
@@ -359,6 +361,7 @@ type ServerDomainOperationMetadata<
     >
   > & {
     durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
+    receiver?: DomainOperationReceiverDeclaration;
   };
 
 export type DomainOperationDeclaration<
@@ -445,7 +448,7 @@ export type ResolvedDomainOperationDeclaration<
   TInfraError extends OperationRuntimeError = never,
 > = Omit<
   DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-  'run' | 'contracts'
+  'run' | 'contracts' | 'receiver'
 > & {
   id: string;
   entityName: string;
@@ -456,6 +459,7 @@ export type ResolvedDomainOperationDeclaration<
   layer: string;
   run: DomainOperationRun<any, TResult, TFailure, TInfraError>;
   conditions?: PortableOperationConditions;
+  receiver?: DomainOperationReceiverDescriptor;
 };
 
 type DefinedDomainOperation<

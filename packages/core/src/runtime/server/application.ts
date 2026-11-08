@@ -5,7 +5,10 @@ import type {
   ReflectedEntityDataReader,
   ReflectedRelatedEntityDataReader,
 } from '../../data-graph/index.js';
-import { defineGraphApi } from '../../data-graph/index.js';
+import {
+  assertRegisteredDomainOperationReceivers,
+  defineGraphApi,
+} from '../../data-graph/index.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 import type {
   TaskInteractionResponse,
@@ -81,6 +84,20 @@ export function defineOntahiApplication(
     | DefineOntahiApplicationFromEntitiesOptions<Record<string, AnyApplicationEntity>>,
 ): OntahiApplication {
   const graph = 'graph' in options ? options.graph : defineGraphApi({ entities: options.entities });
+  const registeredEntityNames = new Set(
+    graph
+      .listEntities()
+      .flatMap(entity =>
+        typeof entity === 'object' &&
+        entity !== null &&
+        'kind' in entity &&
+        entity.kind === 'entity'
+          ? [String('name' in entity ? entity.name : '')]
+          : [],
+      )
+      .filter(Boolean),
+  );
+  assertRegisteredDomainOperationReceivers(graph.listDomainOperations(), registeredEntityNames);
   const runtime = options.runtime as RuntimeWithReflectedEntityData;
   const reflectedEntityDataReader =
     options.reflectedEntityDataReader ??

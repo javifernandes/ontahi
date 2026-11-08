@@ -182,6 +182,172 @@ describe('data-graph operations', () => {
     });
   });
 
+  it('normalizes explicit and compatible legacy Operation receivers', () => {
+    const Book = entity('ReceiverBook', { id: field.id() });
+    const input = graphSchema.object({ book: graphSchema.ref(Book), title: field.string() });
+    const operations = resolveDomainOperations('ReceiverBook', {
+      create: defineDomainOperationMetadata({
+        receiver: { kind: 'entity-type', entity: Book },
+        input: graphSchema.object({ title: field.string() }),
+      }),
+      rename: defineDomainOperationMetadata({
+        receiver: { kind: 'input', path: 'book' },
+        input,
+      }),
+      legacyRename: defineDomainOperationMetadata({
+        graphOps: { receiver: 'book' },
+        input,
+      }),
+    });
+
+    expect(operations.create.receiver).toEqual({
+      kind: 'entity-type',
+      entityName: 'ReceiverBook',
+      source: 'declaration',
+    });
+    expect(operations.rename.receiver).toEqual({
+      kind: 'input',
+      path: 'book',
+      entityName: 'ReceiverBook',
+      participant: 'ref',
+      requirement: 'portable',
+      source: 'declaration',
+    });
+    expect(operations.legacyRename.receiver).toEqual({
+      ...operations.rename.receiver,
+      source: 'legacy-graph-ops',
+    });
+  });
+
+  it('rejects invalid canonical receiver declarations without rejecting legacy metadata', () => {
+    const Book = entity('ReceiverValidationBook', { id: field.id() });
+    const optionalInput = graphSchema.object({
+      book: graphSchema.optional(graphSchema.ref(Book)),
+    });
+
+    expect(() =>
+      resolveDomainOperations('ReceiverValidationBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'book' },
+          input: optionalInput,
+        }),
+      }),
+    ).toThrow('receiver path "book" must be required and non-nullable');
+
+    const legacy = resolveDomainOperations('ReceiverValidationBook', {
+      inspect: defineDomainOperationMetadata({
+        graphOps: { receiver: 'book' },
+        input: optionalInput,
+      }),
+    });
+    expect(legacy.inspect.receiver).toBeUndefined();
+    expect(legacy.inspect.graphOps).toEqual({ receiver: 'book' });
+
+    expect(() =>
+      resolveDomainOperations('ReceiverValidationBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'book' },
+          input: graphSchema.object({ book: field.optional(graphSchema.ref(Book)) }),
+        }),
+      }),
+    ).toThrow('receiver path "book" must be required and non-nullable');
+  });
+
+  it('rejects missing, non-Ref, conflicting, and malformed canonical receivers', () => {
+    const Book = entity('ReceiverFailureBook', { id: field.id() });
+    const scalarInput = graphSchema.object({ title: field.string() });
+
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'book' },
+          input: scalarInput,
+        }),
+      }),
+    ).toThrow('receiver path "book" is not a top-level input field');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'title' },
+          input: scalarInput,
+        }),
+      }),
+    ).toThrow('receiver path "title" is not a portable or existing Entity Ref participant');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'book' },
+          graphOps: { receiver: 'otherBook' },
+          input: graphSchema.object({
+            book: graphSchema.ref(Book),
+            otherBook: graphSchema.ref(Book),
+          }),
+        }),
+      }),
+    ).toThrow('conflicts with legacy graphOps.receiver "otherBook"');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'entity-type', entity: null as never },
+        }),
+      }),
+    ).toThrow('entity-type receiver must reference an Entity definition');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: {
+            kind: 'entity-type',
+            entity: { kind: 'relation', name: Book.name } as never,
+          },
+        }),
+      }),
+    ).toThrow('entity-type receiver must reference an Entity definition');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: {
+            kind: 'input',
+            path: 'book',
+            entityName: 'OtherBook',
+            participant: 'ref',
+            requirement: 'portable',
+            source: 'declaration',
+          },
+          input: graphSchema.object({ book: graphSchema.ref(Book) }),
+        }),
+      }),
+    ).toThrow('receiver descriptor does not match its input schema');
+  });
+
+  it('reflects normalized receiver metadata through application discovery', () => {
+    const Book = entity('ReceiverReflectionBook', { id: field.id() });
+    const receiver = {
+      kind: 'input',
+      path: 'book',
+      entityName: Book.name,
+      participant: 'ref',
+      requirement: 'existing',
+      source: 'declaration',
+    } as const;
+    const ClientBook = defineClientEntity(Book, {
+      domainOperations: {
+        inspect: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+          receiver,
+          input: value('InspectReceiverBook', {
+            book: graphSchema.existingRef(Book),
+          }),
+        }),
+      },
+    });
+    const graph = defineGraphApi({ entities: { ReceiverReflectionBook: ClientBook } });
+
+    expect(graph.describe().domainOperations[0]?.receiver).toEqual(receiver);
+    expect(ClientBook.domain.inspect.receiver).toEqual(receiver);
+  });
+
   it('resolves canonical operation ids for graph and domain operations', () => {
     const FetchBooksInputSchema = value('FetchBooksInput', {
       limit: field.number(),

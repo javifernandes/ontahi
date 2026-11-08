@@ -143,18 +143,18 @@ type operation. It adds no second wire value and no mutable class object.
 
 ## Implementation slices
 
-- [ ] Add declaration and normalized receiver types to Core.
-- [ ] Validate and normalize type and required Ref input receivers during Operation resolution.
-- [ ] Validate canonical receiver targets against the complete registered Entity catalog after
+- [x] Add declaration and normalized receiver types to Core.
+- [x] Validate and normalize type and required Ref input receivers during Operation resolution.
+- [x] Validate canonical receiver targets against the complete registered Entity catalog after
       application composition.
 - [ ] Reflect the descriptor in application discovery and generated client declarations.
-- [ ] Make Entity Ref binding consume canonical metadata before compatibility inference.
+- [x] Make Entity Ref binding consume canonical metadata before compatibility inference.
 - [ ] Make Explorer prefer the canonical descriptor while preserving tested legacy Ref and
       one-cardinality Selection projections.
-- [ ] Prove bound and complete-input calls reconstruct identical invocation input.
-- [ ] Prove bound calls reject an explicit receiver argument and a wrong-Entity bound Ref.
-- [ ] Prove legacy same-Ref arguments remain valid while different-Ref redirects fail.
-- [ ] Prove legacy cross-participant Ref inference remains callable without becoming canonical.
+- [x] Prove bound and complete-input calls reconstruct identical invocation input.
+- [x] Prove bound calls reject an explicit receiver argument and a wrong-Entity bound Ref.
+- [x] Prove legacy same-Ref arguments remain valid while different-Ref redirects fail.
+- [x] Prove legacy cross-participant Ref inference remains callable without becoming canonical.
 - [ ] Prove React lifecycle callbacks, invalidation, and cache keys receive complete input.
 - [ ] Migrate Todo type/Ref receivers and its generated client.
 - [ ] Migrate Classroom enrollment type/Ref receivers.
