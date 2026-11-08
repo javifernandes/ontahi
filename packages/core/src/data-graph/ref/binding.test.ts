@@ -198,6 +198,61 @@ describe('bound Entity Ref affordances', () => {
     expect(proxy.merge()).toEqual({ target: ref });
   });
 
+  it('enforces declared receivers after an explicit adapter maps the input', () => {
+    const ref = createEntityRef(Invite, { id: 'one' });
+    const other = createEntityRef(Invite, { id: 'two' });
+    const operation = {
+      receiver: {
+        kind: 'input',
+        path: 'invite',
+        entityName: Invite.name,
+        participant: 'ref',
+        requirement: 'portable',
+        source: 'declaration',
+      },
+      input: graphSchema.object({ invite: graphSchema.ref(Invite) }),
+    } as const;
+    const proxy = bindEntityRefOperationProxy(
+      ref,
+      { inspect: operation },
+      {
+        input: () => ({ invite: other }),
+        run: ({ input }) => input,
+      },
+    );
+
+    expect(() => proxy.inspect()).toThrow('must not supply receiver "invite"');
+  });
+
+  it('keeps Selection participants while binding a declared receiver', () => {
+    const Book = entity('SelectionBook', { id: field.id() });
+    const ref = createEntityRef(Invite, { id: 'one' });
+    const books = defineClientEntity(Book).selection(book => book.id.eq('one'));
+    const operation = {
+      receiver: {
+        kind: 'input',
+        path: 'invite',
+        entityName: Invite.name,
+        participant: 'ref',
+        requirement: 'portable',
+        source: 'declaration',
+      },
+      input: graphSchema.object({
+        invite: graphSchema.ref(Invite),
+        books: graphSchema.selection(Book),
+      }),
+    } as const;
+    const proxy = bindEntityRefOperationProxy(
+      ref,
+      { inspect: operation },
+      {
+        run: ({ input }) => input,
+      },
+    );
+
+    expect(proxy.inspect({ books })).toEqual({ invite: ref, books });
+  });
+
   it('does not reinterpret storage reference fields as native participants', () => {
     const proxy = bindEntityRefOperationProxy(
       createEntityRef(Invite, { token: 'one' }),
@@ -253,5 +308,31 @@ describe('bound Entity Ref affordances', () => {
       },
     });
     expect((relationResult.input as Record<string, unknown>).book).toBe(relationRef);
+  });
+
+  it('does not let relation arguments replace a declared receiver', () => {
+    const ref = createEntityRef('Book', { slug: 'one' });
+    const other = createEntityRef('Book', { slug: 'two' });
+    const relationRef = bindEntityRefRelationOperations(
+      ref,
+      'authors',
+      {
+        add: {
+          receiver: {
+            kind: 'input',
+            path: 'book',
+            entityName: 'Book',
+            participant: 'ref',
+            requirement: 'portable',
+            source: 'declaration',
+          },
+        },
+      },
+      { receiver: 'book', run: ({ input }) => input },
+    );
+
+    expect(() => relationRef.authors.add({ book: other })).toThrow(
+      'must not supply receiver "book"',
+    );
   });
 });

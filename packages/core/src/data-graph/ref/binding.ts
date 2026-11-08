@@ -255,10 +255,10 @@ const getDeclaredEntityRefOperationInput = (
   ref: AnyEntityRef,
   receiver: InputReceiverDescriptor,
   args: readonly unknown[],
-): EntityRefLocator => {
+): Record<string, unknown> => {
   const [input] = args;
   const remaining = input === undefined ? {} : input;
-  if (!isLocatorObject(remaining)) {
+  if (!isPlainObject(remaining)) {
     throw new TypeError(`Bound ${receiver.entityName} Operation arguments must be an object.`);
   }
   if (hasOwn(remaining, receiver.path)) {
@@ -280,7 +280,7 @@ const getEntityRefOperationInput = (
   ref: AnyEntityRef,
   operation: unknown,
   args: readonly unknown[],
-): EntityRefLocator => {
+): Record<string, unknown> => {
   const declaredReceiver = readInputReceiverDescriptor(operation);
   if (declaredReceiver) {
     if (declaredReceiver.entityName === ref.entityName) {
@@ -355,7 +355,11 @@ export const bindEntityRefOperationProxy = <
           operationName,
           operation: operations[operationName],
           input: options.input
-            ? options.input({ ref, operationName, args })
+            ? readInputReceiverDescriptor(operations[operationName])?.source === 'declaration'
+              ? getEntityRefOperationInput(ref, operations[operationName], [
+                  options.input({ ref, operationName, args }),
+                ])
+              : options.input({ ref, operationName, args })
             : getEntityRefOperationInput(ref, operations[operationName], args),
         });
     },
@@ -393,10 +397,10 @@ export const bindEntityRefRelationOperations = <
               relationName,
               operationName: operationName as keyof TOperations & string,
               operation: operation as TOperations[keyof TOperations],
-              input: {
-                [options.receiver]: ref,
-                ...input,
-              },
+              input:
+                readInputReceiverDescriptor(operation)?.source === 'declaration'
+                  ? getEntityRefOperationInput(ref, operation, [input])
+                  : { [options.receiver]: ref, ...input },
             }),
         ]),
       ),

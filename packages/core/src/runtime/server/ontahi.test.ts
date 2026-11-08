@@ -70,6 +70,34 @@ describe('ontahi application composition root', () => {
     );
   });
 
+  it('does not retain a dynamically registered Entity when receiver validation fails', () => {
+    const External = entity({ name: 'DynamicExternalReceiver', fields: { id: field.id() } });
+    const Owner = entity({
+      name: 'DynamicReceiverOwner',
+      fields: { id: field.id() },
+      operations: ({ operation }) => ({
+        inspect: operation({
+          receiver: { kind: 'input', path: 'external' },
+          input: graphSchema.object({ external: graphSchema.ref(External) }),
+          run: () => Effect.succeed(undefined),
+        }),
+      }),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: {} }),
+      entities: [],
+    });
+
+    expect(() => application.registerEntity(Owner)).toThrow(
+      'receiver Entity "DynamicExternalReceiver" is not registered',
+    );
+    expect(application.graph.getEntity('DynamicReceiverOwner')).toBeUndefined();
+    expect(application.graph.getDomainOperation('DynamicReceiverOwner.inspect')).toBeUndefined();
+    expect(() => application.registerEntity(Owner)).toThrow(
+      'receiver Entity "DynamicExternalReceiver" is not registered',
+    );
+  });
+
   it('enforces existing stored references before an Entity mutation reaches storage', async () => {
     const Parent = entity({ name: 'ExistingParent', fields: { id: field.id() } });
     const Child = entity({

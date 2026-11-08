@@ -597,7 +597,10 @@ export const ontahi = <
   }
   const semanticDeclarations = Array.isArray(declaredEntities)
     ? declaredEntities.flatMap(getOntahiSemanticEntities)
-    : [];
+    : Object.values(declaredEntities).filter(
+        (entity): entity is AnyEntityDefinition =>
+          isRecord(entity) && entity.kind === 'entity' && typeof entity.name === 'string',
+      );
   const semanticEntitiesByName = new Map<string, AnyEntityDefinition>();
   semanticDeclarations.forEach(entity => {
     const existing = semanticEntitiesByName.get(entity.name);
@@ -677,6 +680,23 @@ export const ontahi = <
     });
   registerDurableTasks();
   applicationForReactions = application;
+  const assertCandidateBoundEntityReceivers = (
+    candidates: ReadonlyArray<object>,
+    candidateEntities: ReadonlyArray<AnyEntityDefinition>,
+  ) => {
+    const candidateOperations = candidates.flatMap(candidate =>
+      isRecord(candidate) && isRecord(candidate.domain)
+        ? Object.values(candidate.domain).filter(
+            (operation): operation is { id: string } =>
+              isRecord(operation) && typeof operation.id === 'string',
+          )
+        : [],
+    );
+    assertRegisteredDomainOperationReceivers(
+      [...application.graph.listDomainOperations(), ...candidateOperations],
+      new Set([...semanticEntitiesByName.keys(), ...candidateEntities.map(entity => entity.name)]),
+    );
+  };
 
   const registerEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
     declaration: TDeclaration,
@@ -688,41 +708,58 @@ export const ontahi = <
     if (entityRegistry[declaration.name]) {
       throw new Error(`Entity ${declaration.name} is already registered.`);
     }
-    prepareOntahiEntity(declaration);
-    const nextReactions = getOntahiEntityReactions(declaration);
-    assertMutationReactionConfiguration([...registeredReactions, ...nextReactions]);
-    const nextSemanticEntities = getOntahiSemanticEntities(declaration);
-    nextSemanticEntities.forEach(entity => {
-      const existing = semanticEntitiesByName.get(entity.name);
-      if (existing && existing !== entity) {
-        throw new Error(`Semantic entity ${entity.name} is declared more than once.`);
-      }
-      semanticEntitiesByName.set(entity.name, entity);
-    });
-    resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
-    registeredReactions = [...registeredReactions, ...nextReactions];
-    materializeDerivedFieldDefinitions(nextSemanticEntities);
-    semanticEntities.push(...nextSemanticEntities);
-    options.storage.bindEntities?.(semanticEntities);
-    getOntahiSemanticEntities(declaration).forEach(entity => {
-      entityCommands[entity.name] = graph.defineEntity(entity);
-    });
-    const bound = bindOntahiEntity(
-      declaration,
-      registered.app as unknown as OntahiApplicationBuilder,
-      bindingContext,
-    );
-    entityRegistry[declaration.name] = bound;
-    assertRegisteredDomainOperationReceivers(
-      application.graph.listDomainOperations(),
-      new Set(semanticEntitiesByName.keys()),
-    );
-    registerDurableTasks();
-    return bound as unknown as BoundOntahiEntityDeclaration<
-      TDeclaration,
-      StorageRuntime<TStorage>,
-      RelationshipMutationResult
-    >;
+    const previousSemanticEntities = [...semanticEntities];
+    const previousSemanticEntitiesByName = new Map(semanticEntitiesByName);
+    const previousRegisteredReactions = registeredReactions;
+    const previousEntityCommands = { ...entityCommands };
+    try {
+      prepareOntahiEntity(declaration);
+      const nextReactions = getOntahiEntityReactions(declaration);
+      assertMutationReactionConfiguration([...registeredReactions, ...nextReactions]);
+      const nextSemanticEntities = getOntahiSemanticEntities(declaration);
+      nextSemanticEntities.forEach(entity => {
+        const existing = semanticEntitiesByName.get(entity.name);
+        if (existing && existing !== entity) {
+          throw new Error(`Semantic entity ${entity.name} is declared more than once.`);
+        }
+        semanticEntitiesByName.set(entity.name, entity);
+      });
+      resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
+      registeredReactions = [...registeredReactions, ...nextReactions];
+      materializeDerivedFieldDefinitions(nextSemanticEntities);
+      semanticEntities.push(...nextSemanticEntities);
+      getOntahiSemanticEntities(declaration).forEach(entity => {
+        entityCommands[entity.name] = graph.defineEntity(entity);
+      });
+      const bound = bindOntahiEntity(
+        declaration,
+        registered.app as unknown as OntahiApplicationBuilder,
+        bindingContext,
+      );
+      entityRegistry[declaration.name] = bound;
+      assertRegisteredDomainOperationReceivers(
+        application.graph.listDomainOperations(),
+        new Set(semanticEntitiesByName.keys()),
+      );
+      options.storage.bindEntities?.(semanticEntities);
+      registerDurableTasks();
+      return bound as unknown as BoundOntahiEntityDeclaration<
+        TDeclaration,
+        StorageRuntime<TStorage>,
+        RelationshipMutationResult
+      >;
+    } catch (error) {
+      semanticEntities.splice(0, semanticEntities.length, ...previousSemanticEntities);
+      semanticEntitiesByName.clear();
+      previousSemanticEntitiesByName.forEach((entity, name) =>
+        semanticEntitiesByName.set(name, entity),
+      );
+      registeredReactions = previousRegisteredReactions;
+      delete entityRegistry[declaration.name];
+      Object.keys(entityCommands).forEach(name => delete entityCommands[name]);
+      Object.assign(entityCommands, previousEntityCommands);
+      throw error;
+    }
   };
   const registerBoundEntity = <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
     entity: TEntity,
@@ -731,15 +768,12 @@ export const ontahi = <
     if (entityRegistry[entity.name]) {
       throw new Error(`Entity ${entity.name} is already registered.`);
     }
+    assertCandidateBoundEntityReceivers([boundEntity], [entity]);
     semanticEntitiesByName.set(entity.name, entity);
     materializeDerivedFieldDefinitions([entity]);
     semanticEntities.push(entity);
     options.storage.bindEntities?.(semanticEntities);
     entityRegistry[entity.name] = boundEntity;
-    assertRegisteredDomainOperationReceivers(
-      application.graph.listDomainOperations(),
-      new Set(semanticEntitiesByName.keys()),
-    );
     registerDurableTasks();
     return boundEntity;
   };
@@ -747,6 +781,14 @@ export const ontahi = <
     boundEntities: TBoundEntities,
   ): GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>> => {
     const nextSemanticEntities: AnyEntityDefinition[] = [];
+
+    const candidateSemanticEntities = Object.values(boundEntities).filter(
+      (boundEntity): boundEntity is AnyEntityDefinition =>
+        isRecord(boundEntity) &&
+        boundEntity.kind === 'entity' &&
+        typeof boundEntity.name === 'string',
+    );
+    assertCandidateBoundEntityReceivers(Object.values(boundEntities), candidateSemanticEntities);
 
     Object.entries(boundEntities).forEach(([registryName, boundEntity]) => {
       const existing = entityRegistry[registryName];
@@ -776,11 +818,6 @@ export const ontahi = <
       semanticEntities.push(...nextSemanticEntities);
       options.storage.bindEntities?.(semanticEntities);
     }
-
-    assertRegisteredDomainOperationReceivers(
-      application.graph.listDomainOperations(),
-      new Set(semanticEntitiesByName.keys()),
-    );
 
     registerDurableTasks();
 

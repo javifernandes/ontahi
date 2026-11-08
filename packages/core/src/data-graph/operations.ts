@@ -761,7 +761,11 @@ const operationReceiverRef = (
 
   if (!field) return invalid(`path "${path}" is not a top-level input field`);
   if (!isRecord(field)) return invalid(`path "${path}" is not an Entity Ref participant`);
-  if (field.kind === 'schema.optional' || field.kind === 'schema.nullable') {
+  if (
+    field.kind === 'schema.optional' ||
+    field.kind === 'schema.nullable' ||
+    (field.kind === 'field' && (field.optional === true || field.nullable === true))
+  ) {
     return invalid(`path "${path}" must be required and non-nullable`);
   }
   if (
@@ -797,10 +801,38 @@ const resolveOperationReceiver = (
       : undefined;
   }
 
-  if ('source' in declaration) return declaration;
+  if ('source' in declaration) {
+    if (declaration.kind === 'entity-type') return declaration;
+    const resolved = operationReceiverRef(
+      operationId,
+      operation.input,
+      declaration.path,
+      declaration.source,
+    );
+    if (
+      !resolved ||
+      resolved.entityName !== declaration.entityName ||
+      resolved.requirement !== declaration.requirement ||
+      resolved.participant !== declaration.participant
+    ) {
+      throw new Error(
+        `Domain operation "${operationId}" receiver descriptor does not match its input schema.`,
+      );
+    }
+    if (legacyPath && legacyPath !== declaration.path) {
+      throw new Error(
+        `Domain operation "${operationId}" receiver path "${declaration.path}" conflicts with legacy graphOps.receiver "${legacyPath}".`,
+      );
+    }
+    return declaration;
+  }
 
   if (declaration.kind === 'entity-type') {
-    if (!isRecord(declaration.entity) || typeof declaration.entity.name !== 'string') {
+    if (
+      !isRecord(declaration.entity) ||
+      declaration.entity.kind !== 'entity' ||
+      typeof declaration.entity.name !== 'string'
+    ) {
       throw new Error(
         `Domain operation "${operationId}" entity-type receiver must reference an Entity definition.`,
       );

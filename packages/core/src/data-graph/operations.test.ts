@@ -242,6 +242,15 @@ describe('data-graph operations', () => {
     });
     expect(legacy.inspect.receiver).toBeUndefined();
     expect(legacy.inspect.graphOps).toEqual({ receiver: 'book' });
+
+    expect(() =>
+      resolveDomainOperations('ReceiverValidationBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: { kind: 'input', path: 'book' },
+          input: graphSchema.object({ book: field.optional(graphSchema.ref(Book)) }),
+        }),
+      }),
+    ).toThrow('receiver path "book" must be required and non-nullable');
   });
 
   it('rejects missing, non-Ref, conflicting, and malformed canonical receivers', () => {
@@ -283,6 +292,31 @@ describe('data-graph operations', () => {
         }),
       }),
     ).toThrow('entity-type receiver must reference an Entity definition');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: {
+            kind: 'entity-type',
+            entity: { kind: 'relation', name: Book.name } as never,
+          },
+        }),
+      }),
+    ).toThrow('entity-type receiver must reference an Entity definition');
+    expect(() =>
+      resolveDomainOperations('ReceiverFailureBook', {
+        inspect: defineDomainOperationMetadata({
+          receiver: {
+            kind: 'input',
+            path: 'book',
+            entityName: 'OtherBook',
+            participant: 'ref',
+            requirement: 'portable',
+            source: 'declaration',
+          },
+          input: graphSchema.object({ book: graphSchema.ref(Book) }),
+        }),
+      }),
+    ).toThrow('receiver descriptor does not match its input schema');
   });
 
   it('reflects normalized receiver metadata through application discovery', () => {
