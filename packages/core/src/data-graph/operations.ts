@@ -1,4 +1,4 @@
-import { hasOwn } from '../value/object.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
 import type { InferGraphSchemaClientInput } from './client-input.js';
 import type {
@@ -172,6 +172,21 @@ export type DomainOperationGraphOpsMetadata = {
   inputRefs?: Record<string, OperationInputRefGraphOpsMetadata>;
 };
 
+export type DomainOperationReceiverDeclaration =
+  | { kind: 'entity-type'; entity: AnyEntityDefinition }
+  | { kind: 'input'; path: string };
+
+export type DomainOperationReceiverDescriptor =
+  | { kind: 'entity-type'; entityName: string; source: 'declaration' }
+  | {
+      kind: 'input';
+      path: string;
+      entityName: string;
+      participant: 'ref';
+      requirement: 'portable' | 'existing';
+      source: 'declaration' | 'legacy-graph-ops';
+    };
+
 export type HttpIngressMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export type HttpIngressMetadata<TPayload = unknown, TInput = unknown> = {
@@ -254,6 +269,7 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
   graphOps?: DomainOperationGraphOpsMetadata;
+  receiver?: DomainOperationReceiverDescriptor;
   execution?: DomainOperationExecutionMetadata;
   conditions?: PortableOperationConditions;
   cache?: TCache;
@@ -282,13 +298,14 @@ export type DomainOperationDeclarationMetadata<
   TResult = unknown,
 > = Omit<
   DomainOperationMetadata<TInput, TCache, TResult>,
-  'authority' | 'exposure' | 'bridge' | 'durable'
+  'authority' | 'exposure' | 'bridge' | 'durable' | 'receiver'
 > &
   Partial<
     Pick<DomainOperationMetadata<TInput, TCache, TResult>, 'authority' | 'exposure' | 'bridge'>
   > & {
     ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
     durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
+    receiver?: DomainOperationReceiverDeclaration | DomainOperationReceiverDescriptor;
   };
 
 export type HydratedGraphOperationInput<TInput> =
@@ -359,7 +376,7 @@ export type ResolveGraphOperation<TEntityName extends string, TName extends stri
 
 export type ResolveDomainOperation<TEntityName extends string, TName extends string, TOperation> =
   TOperation extends DomainOperationDeclarationMetadata<any, any, any>
-    ? TOperation & {
+    ? Omit<TOperation, 'receiver'> & {
         entityName: TEntityName;
         name: TName;
         id: `${TEntityName}.${TName}`;
@@ -367,6 +384,7 @@ export type ResolveDomainOperation<TEntityName extends string, TName extends str
         exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
         layer: string;
         conditions?: PortableOperationConditions;
+        receiver?: DomainOperationReceiverDescriptor;
       } & ((
           input: InferResolvedOperationInput<TOperation>,
         ) => DomainOperationInvocation<
@@ -553,6 +571,7 @@ type ResolvedDomainOperationLike = {
   clientCache?: DomainOperationClientCacheMetadata<any, any>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<any>>;
   graphOps?: DomainOperationGraphOpsMetadata;
+  receiver?: DomainOperationReceiverDescriptor;
   execution?: DomainOperationExecutionMetadata;
   conditions?: PortableOperationConditions;
   durable?: DurableOperationMetadata<any, any>;
@@ -633,6 +652,7 @@ type GraphApiSummary = {
     execution?: DomainOperationExecutionMetadata;
     conditions?: PortableOperationConditions;
     implementation?: DomainOperationImplementationMetadata;
+    receiver?: DomainOperationReceiverDescriptor;
     hasBridgeQuery: boolean;
     input?: GraphSchemaDescriptor;
   }>;
@@ -669,6 +689,24 @@ export type GraphApi<TEntities extends Record<string, AnyGraphApiEntity>> =
 export const resolveOperationId = (entityName: string, operationName: string) =>
   `${entityName}.${operationName}`;
 
+export const assertRegisteredDomainOperationReceivers = (
+  operations: ReadonlyArray<{
+    id: string;
+    receiver?: DomainOperationReceiverDescriptor;
+  }>,
+  registeredEntityNames: ReadonlySet<string>,
+) => {
+  for (const operation of operations) {
+    const receiver = operation.receiver;
+    if (receiver?.source !== 'declaration') continue;
+    if (!registeredEntityNames.has(receiver.entityName)) {
+      throw new Error(
+        `Domain operation "${operation.id}" receiver Entity "${receiver.entityName}" is not registered.`,
+      );
+    }
+  }
+};
+
 export const resolveGraphOperations = <
   TEntityName extends string,
   TOperations extends GraphOperationDeclarations,
@@ -700,6 +738,88 @@ export const resolveGraphOperations = <
     }),
   ) as ResolveGraphOperations<TEntityName, TOperations>;
 
+const operationInputFields = (schema: unknown): Record<string, unknown> | undefined => {
+  if (!isRecord(schema)) return undefined;
+  if (schema.kind === 'schema.named') return operationInputFields(schema.item);
+  return (schema.kind === 'value' || schema.kind === 'schema.object') && isRecord(schema.fields)
+    ? schema.fields
+    : undefined;
+};
+
+const operationReceiverRef = (
+  operationId: string,
+  input: unknown,
+  path: string,
+  source: 'declaration' | 'legacy-graph-ops',
+): Extract<DomainOperationReceiverDescriptor, { kind: 'input' }> | undefined => {
+  const fields = operationInputFields(input);
+  const field = fields?.[path];
+  const invalid = (message: string) => {
+    if (source === 'legacy-graph-ops') return undefined;
+    throw new Error(`Domain operation "${operationId}" receiver ${message}.`);
+  };
+
+  if (!field) return invalid(`path "${path}" is not a top-level input field`);
+  if (!isRecord(field)) return invalid(`path "${path}" is not an Entity Ref participant`);
+  if (field.kind === 'schema.optional' || field.kind === 'schema.nullable') {
+    return invalid(`path "${path}" must be required and non-nullable`);
+  }
+  if (
+    field.kind !== 'field' ||
+    field.fieldType !== 'reference' ||
+    (field.referenceRequirement !== 'portable' && field.referenceRequirement !== 'existing') ||
+    !isRecord(field.target) ||
+    typeof field.target.name !== 'string'
+  ) {
+    return invalid(`path "${path}" is not a portable or existing Entity Ref participant`);
+  }
+
+  return {
+    kind: 'input',
+    path,
+    entityName: field.target.name,
+    participant: 'ref',
+    requirement: field.referenceRequirement,
+    source,
+  };
+};
+
+const resolveOperationReceiver = (
+  operationId: string,
+  operation: DomainOperationDeclarationMetadata<any, any, any>,
+): DomainOperationReceiverDescriptor | undefined => {
+  const declaration = operation.receiver;
+  const legacyPath = operation.graphOps?.receiver;
+
+  if (!declaration) {
+    return legacyPath
+      ? operationReceiverRef(operationId, operation.input, legacyPath, 'legacy-graph-ops')
+      : undefined;
+  }
+
+  if ('source' in declaration) return declaration;
+
+  if (declaration.kind === 'entity-type') {
+    if (!isRecord(declaration.entity) || typeof declaration.entity.name !== 'string') {
+      throw new Error(
+        `Domain operation "${operationId}" entity-type receiver must reference an Entity definition.`,
+      );
+    }
+    return {
+      kind: 'entity-type',
+      entityName: declaration.entity.name,
+      source: 'declaration',
+    };
+  }
+
+  if (legacyPath && legacyPath !== declaration.path) {
+    throw new Error(
+      `Domain operation "${operationId}" receiver path "${declaration.path}" conflicts with legacy graphOps.receiver "${legacyPath}".`,
+    );
+  }
+  return operationReceiverRef(operationId, operation.input, declaration.path, 'declaration');
+};
+
 export const resolveDomainOperations = <
   TEntityName extends string,
   TOperations extends DomainOperationDeclarations,
@@ -711,6 +831,7 @@ export const resolveDomainOperations = <
   Object.fromEntries(
     Object.entries(operations).map(([name, operation]) => {
       const operationId = resolveOperationId(entityName, name);
+      const receiver = resolveOperationReceiver(operationId, operation);
 
       if (operation.input !== undefined && !isGraphSchemaDefinition(operation.input)) {
         throw new Error(`Domain operation "${operationId}" input must be an Ontahi schema.`);
@@ -770,6 +891,7 @@ export const resolveDomainOperations = <
         graphOutput: operation.graphOutput ?? getGraphOutputDescriptor(operation.output),
         ...(bridge ? { bridge } : {}),
         ...(durable ? { durable } : {}),
+        ...(receiver ? { receiver } : {}),
         entityName,
         id: operationId,
       });
@@ -1442,6 +1564,7 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         ...(operation.execution ? { execution: operation.execution } : {}),
         ...(operation.conditions ? { conditions: operation.conditions } : {}),
         ...(operation.implementation ? { implementation: operation.implementation } : {}),
+        ...(operation.receiver ? { receiver: operation.receiver } : {}),
         hasBridgeQuery: Boolean(operation.bridge?.query?.length),
         ...(isGraphSchemaDefinition(operation.input)
           ? { input: toGraphSchemaDescriptor(operation.input) }

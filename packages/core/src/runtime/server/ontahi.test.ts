@@ -46,6 +46,30 @@ import {
 } from './index.js';
 
 describe('ontahi application composition root', () => {
+  it('rejects canonical Operation receivers whose Entity is not registered', () => {
+    const External = entity({ name: 'UnregisteredReceiver', fields: { id: field.id() } });
+    const Owner = entity({
+      name: 'ReceiverOwner',
+      fields: { id: field.id() },
+      operations: ({ operation }) => ({
+        inspect: operation({
+          receiver: { kind: 'input', path: 'external' },
+          input: graphSchema.object({ external: graphSchema.ref(External) }),
+          run: () => Effect.succeed(undefined),
+        }),
+      }),
+    });
+
+    expect(() =>
+      ontahi({
+        storage: createInMemoryDataGraphStorage({ dataset: { ReceiverOwner: [] } }),
+        entities: [Owner],
+      }),
+    ).toThrow(
+      'Domain operation "ReceiverOwner.inspect" receiver Entity "UnregisteredReceiver" is not registered.',
+    );
+  });
+
   it('enforces existing stored references before an Entity mutation reaches storage', async () => {
     const Parent = entity({ name: 'ExistingParent', fields: { id: field.id() } });
     const Child = entity({

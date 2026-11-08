@@ -12,6 +12,7 @@ import {
   query,
   safeParseGraphSchema,
   selectionAll,
+  assertRegisteredDomainOperationReceivers,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
@@ -657,6 +658,10 @@ export const ontahi = <
     entities,
     runtime: registered.app,
   });
+  assertRegisteredDomainOperationReceivers(
+    application.graph.listDomainOperations(),
+    new Set(semanticEntitiesByName.keys()),
+  );
   const applicationGraph = Object.assign(
     application.graph,
     createApplicationGraphReadApi(graph, registered),
@@ -708,6 +713,10 @@ export const ontahi = <
       bindingContext,
     );
     entityRegistry[declaration.name] = bound;
+    assertRegisteredDomainOperationReceivers(
+      application.graph.listDomainOperations(),
+      new Set(semanticEntitiesByName.keys()),
+    );
     registerDurableTasks();
     return bound as unknown as BoundOntahiEntityDeclaration<
       TDeclaration,
@@ -722,10 +731,15 @@ export const ontahi = <
     if (entityRegistry[entity.name]) {
       throw new Error(`Entity ${entity.name} is already registered.`);
     }
+    semanticEntitiesByName.set(entity.name, entity);
     materializeDerivedFieldDefinitions([entity]);
     semanticEntities.push(entity);
     options.storage.bindEntities?.(semanticEntities);
     entityRegistry[entity.name] = boundEntity;
+    assertRegisteredDomainOperationReceivers(
+      application.graph.listDomainOperations(),
+      new Set(semanticEntitiesByName.keys()),
+    );
     registerDurableTasks();
     return boundEntity;
   };
@@ -757,10 +771,16 @@ export const ontahi = <
     });
 
     if (nextSemanticEntities.length > 0) {
+      nextSemanticEntities.forEach(entity => semanticEntitiesByName.set(entity.name, entity));
       materializeDerivedFieldDefinitions(nextSemanticEntities);
       semanticEntities.push(...nextSemanticEntities);
       options.storage.bindEntities?.(semanticEntities);
     }
+
+    assertRegisteredDomainOperationReceivers(
+      application.graph.listDomainOperations(),
+      new Set(semanticEntitiesByName.keys()),
+    );
 
     registerDurableTasks();
 
