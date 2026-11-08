@@ -143,6 +143,24 @@ describe('model-backed Operation executor', () => {
     });
   });
 
+  it('treats a callable provider with generate as a static provider', async () => {
+    const generate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
+      title: 'Use the callable provider',
+    });
+    const provider = Object.assign(vi.fn(), { generate });
+    const run = modelOperation({
+      provider,
+      operation: request.operation,
+      context: () => Effect.succeed({ plans: [] }),
+    });
+
+    await expect(Effect.runPromise(run(request.input))).resolves.toEqual({
+      title: 'Use the callable provider',
+    });
+    expect(provider).not.toHaveBeenCalled();
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
   it('resolves a model provider from each invocation input after context succeeds', async () => {
     const firstGenerate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
       title: 'Use the first Workspace model',

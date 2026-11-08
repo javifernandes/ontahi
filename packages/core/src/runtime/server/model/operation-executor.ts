@@ -53,6 +53,10 @@ export type ModelProviderResolver<TInput, TFailure = never> = (
   input: TInput,
 ) => Effect.Effect<ModelProvider, TFailure>;
 
+const isModelProvider = <TInput, TFailure>(
+  provider: ModelProvider | ModelProviderResolver<TInput, TFailure>,
+): provider is ModelProvider => 'generate' in provider && typeof provider.generate === 'function';
+
 export type ModelOperationOptions<
   TInput,
   TOutput extends GraphSchemaDefinition,
@@ -193,14 +197,14 @@ export const modelOperation = <
   TOutputValue,
   ModelOperationExecutionFailure | TContextFailure | TValidationFailure | TProviderFailure
 >) => {
-  const staticExecutor =
-    typeof provider === 'function'
-      ? undefined
-      : createModelOperationExecutor({ provider, reportUsage });
-  const resolveProvider: ModelProviderResolver<TInput, TProviderFailure> =
-    typeof provider === 'function'
-      ? provider
-      : () => Effect.succeed(provider) as Effect.Effect<ModelProvider, TProviderFailure>;
+  const providerBinding = isModelProvider(provider)
+    ? {
+        staticExecutor: createModelOperationExecutor({ provider, reportUsage }),
+        resolveProvider: () =>
+          Effect.succeed(provider) as Effect.Effect<ModelProvider, TProviderFailure>,
+      }
+    : { staticExecutor: undefined, resolveProvider: provider };
+  const { staticExecutor, resolveProvider } = providerBinding;
   return input => {
     const executeWithContext = (boundedContext: TContext) =>
       Effect.flatMap(resolveProvider(input), resolvedProvider => {
