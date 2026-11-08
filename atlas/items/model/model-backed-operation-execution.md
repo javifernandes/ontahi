@@ -86,6 +86,14 @@ Operation/application concerns and provider selection remains composition policy
 context, authorization hardening, resource
 governance, and simultaneous rollout variants remain separate work.
 
+Provider selection may now remain static or be resolved from each invocation input through a typed
+Effect. The application context assembler must succeed, including any authorization it owns, before
+Core asks it to resolve a provider. The result then passes through the same governed executor,
+validation, usage-evidence, and cancellation path. Resolution repeats for each resilience attempt,
+so persisted configuration and credential rotation can take effect without exposing configuration
+or secrets as semantic Operation input. The application still owns how domain identity maps to
+provider configuration; generic scope derivation and secret storage remain later concerns.
+
 Provider portability is now exercised by four server adapters behind the same `ModelProvider`
 contract: local Ollama, DeepSeek's Responses-compatible API, Anthropic Messages, and OpenAI
 Responses. Anthropic and OpenAI receive the same reflected JSON Schema through their native

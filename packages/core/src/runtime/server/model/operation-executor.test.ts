@@ -53,8 +53,11 @@ describe('model-backed Operation executor', () => {
         });
         return { title: 'Set the table' };
       });
+    const resolveProvider = vi.fn((_input: InferGraphSchemaValue<typeof Input>) =>
+      Effect.succeed({ generate }),
+    );
     const run = modelOperation({
-      provider: { generate },
+      provider: resolveProvider,
       operation: request.operation,
       context: ({ goal }: InferGraphSchemaValue<typeof Input>) =>
         Effect.succeed({ currentGoal: goal }),
@@ -100,6 +103,7 @@ describe('model-backed Operation executor', () => {
     );
 
     expect(generate).toHaveBeenCalledTimes(3);
+    expect(resolveProvider).toHaveBeenCalledTimes(3);
   });
 
   it('builds an ordinary Operation run function from declarative context and instructions', async () => {
@@ -136,6 +140,70 @@ describe('model-backed Operation executor', () => {
       provider: 'anthropic',
       model: 'claude-test',
       totalTokens: 42,
+    });
+  });
+
+  it('resolves a model provider from each invocation input after context succeeds', async () => {
+    const firstGenerate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
+      title: 'Use the first Workspace model',
+    });
+    const secondGenerate = vi.fn<ModelProvider['generate']>().mockResolvedValue({
+      title: 'Use the second Workspace model',
+    });
+    const resolveProvider = vi.fn((input: InferGraphSchemaValue<typeof Input>) =>
+      Effect.succeed({
+        generate: input.goal === 'First Workspace' ? firstGenerate : secondGenerate,
+      }),
+    );
+    const context = vi.fn((input: InferGraphSchemaValue<typeof Input>) =>
+      Effect.succeed({ currentGoal: input.goal }),
+    );
+    const run = modelOperation({
+      provider: resolveProvider,
+      operation: request.operation,
+      context,
+    });
+
+    await expect(Effect.runPromise(run({ goal: 'First Workspace' }))).resolves.toEqual({
+      title: 'Use the first Workspace model',
+    });
+    await expect(Effect.runPromise(run({ goal: 'Second Workspace' }))).resolves.toEqual({
+      title: 'Use the second Workspace model',
+    });
+
+    expect(resolveProvider).toHaveBeenNthCalledWith(1, { goal: 'First Workspace' });
+    expect(resolveProvider).toHaveBeenNthCalledWith(2, { goal: 'Second Workspace' });
+    expect(firstGenerate).toHaveBeenCalledOnce();
+    expect(secondGenerate).toHaveBeenCalledOnce();
+    expect(context).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not resolve a dynamic provider when context assembly rejects the invocation', async () => {
+    const resolveProvider = vi.fn((_input: InferGraphSchemaValue<typeof Input>) =>
+      Effect.succeed({ generate: vi.fn<ModelProvider['generate']>() }),
+    );
+    const run = modelOperation({
+      provider: resolveProvider,
+      operation: request.operation,
+      context: () => Effect.fail('workspace_unauthorized' as const),
+    });
+
+    await expect(Effect.runPromise(Effect.either(run(request.input)))).resolves.toEqual({
+      left: 'workspace_unauthorized',
+    });
+    expect(resolveProvider).not.toHaveBeenCalled();
+  });
+
+  it('preserves a typed dynamic-provider resolution failure', async () => {
+    const run = modelOperation({
+      provider: (_input: InferGraphSchemaValue<typeof Input>) =>
+        Effect.fail('model_configuration_missing' as const),
+      operation: request.operation,
+      context: () => Effect.succeed({ plans: [] }),
+    });
+
+    await expect(Effect.runPromise(Effect.either(run(request.input)))).resolves.toEqual({
+      left: 'model_configuration_missing',
     });
   });
 

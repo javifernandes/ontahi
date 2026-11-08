@@ -49,6 +49,10 @@ export type CreateModelOperationExecutorOptions = {
   readonly reportUsage?: (usage: ModelResourceUsage) => void;
 };
 
+export type ModelProviderResolver<TInput, TFailure = never> = (
+  input: TInput,
+) => Effect.Effect<ModelProvider, TFailure>;
+
 export type ModelOperationOptions<
   TInput,
   TOutput extends GraphSchemaDefinition,
@@ -56,8 +60,9 @@ export type ModelOperationOptions<
   TContextFailure,
   TValidationFailure,
   TOutputValue = GraphSchemaValue<TOutput>,
+  TProviderFailure = never,
 > = {
-  readonly provider: ModelProvider;
+  readonly provider: ModelProvider | ModelProviderResolver<TInput, TProviderFailure>;
   readonly operation: ModelOperationContract<TOutput>;
   readonly instructions?: string;
   readonly reportUsage?: (usage: ModelResourceUsage) => void;
@@ -166,6 +171,7 @@ export const modelOperation = <
   TContextFailure = never,
   TValidationFailure = never,
   TOutputValue = GraphSchemaValue<TOutput>,
+  TProviderFailure = never,
 >({
   provider,
   operation,
@@ -179,28 +185,41 @@ export const modelOperation = <
   TContext,
   TContextFailure,
   TValidationFailure,
-  TOutputValue
+  TOutputValue,
+  TProviderFailure
 >): ((
   input: TInput,
 ) => Effect.Effect<
   TOutputValue,
-  ModelOperationExecutionFailure | TContextFailure | TValidationFailure
+  ModelOperationExecutionFailure | TContextFailure | TValidationFailure | TProviderFailure
 >) => {
-  const executor = createModelOperationExecutor({ provider, reportUsage });
-  const executeRequest = executor.execute as (
-    request: ModelOperationExecutionRequest<TInput, GraphSchemaDefinition>,
-  ) => Effect.Effect<unknown, ModelOperationExecutionFailure>;
+  const staticExecutor =
+    typeof provider === 'function'
+      ? undefined
+      : createModelOperationExecutor({ provider, reportUsage });
+  const resolveProvider: ModelProviderResolver<TInput, TProviderFailure> =
+    typeof provider === 'function'
+      ? provider
+      : () => Effect.succeed(provider) as Effect.Effect<ModelProvider, TProviderFailure>;
   return input => {
     const executeWithContext = (boundedContext: TContext) =>
-      Effect.flatMap(
-        executeRequest({ operation, input, context: boundedContext, instructions }),
-        output => {
-          const typedOutput = output as never;
-          return validate
-            ? validate(typedOutput, boundedContext, input)
-            : Effect.succeed(typedOutput);
-        },
-      ) as Effect.Effect<TOutputValue, ModelOperationExecutionFailure | TValidationFailure>;
+      Effect.flatMap(resolveProvider(input), resolvedProvider => {
+        const executor =
+          staticExecutor ??
+          createModelOperationExecutor({ provider: resolvedProvider, reportUsage });
+        const executeRequest = executor.execute as (
+          request: ModelOperationExecutionRequest<TInput, GraphSchemaDefinition>,
+        ) => Effect.Effect<unknown, ModelOperationExecutionFailure>;
+        return Effect.flatMap(
+          executeRequest({ operation, input, context: boundedContext, instructions }),
+          output => {
+            const typedOutput = output as never;
+            return validate
+              ? validate(typedOutput, boundedContext, input)
+              : Effect.succeed(typedOutput);
+          },
+        ) as Effect.Effect<TOutputValue, ModelOperationExecutionFailure | TValidationFailure>;
+      });
     return Effect.flatMap(context(input), executeWithContext);
   };
 };
