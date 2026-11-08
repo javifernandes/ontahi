@@ -149,11 +149,72 @@ This checkpoint intentionally uses an explicit resolver call inside Operation co
 UI, vault adapters, and Authorization remain later slices. The primitive must earn that broader
 authoring form through consumer use first.
 
-The low-level registry, resolver, invocation-local cache, and isolation rules remain valid. Further
-higher-level scope and authoring work pauses behind Plan 166: a receiver may be the semantic root
-from which an application declares a scope projection, while Resource binding remains responsible
-only for resolving the configured instance. Do not promote the current generic binding-scope value
-into the final domain API before that separation is tested.
+The low-level registry, resolver, invocation-local cache, and isolation rules remain valid. A
+receiver may eventually become the semantic root of a declared scope projection, but the first
+consumer should use the explicit dynamic resolver seam and test whether that extra metadata pays
+rent. Resource binding remains responsible only for resolving the configured instance. Do not
+promote the current generic binding-scope value into the final domain API before that separation is
+tested.
+
+## Dynamic Model Provider Checkpoint
+
+The model-backed Operation seam now accepts either one static `ModelProvider` or an input-aware
+resolver returning a typed Effect. Context assembly succeeds first, including any application
+authorization performed there, and the provider is resolved again for every resilience attempt.
+The resolved provider still uses the ordinary governed executor, structured-output validation,
+usage evidence, and cancellation path.
+
+This gives a multi-workspace application a deliberately manual first implementation without
+inventing generic Resource scope syntax:
+
+```ts
+const askPlans = modelOperation({
+  operation: Workspace.askPlans,
+  context: input => assembleAuthorizedWorkspaceContext(input.workspaceId),
+  provider: input =>
+    Effect.gen(function* () {
+      const configuration = yield* readWorkspaceModelConfiguration(input.workspaceId);
+      const apiKey = yield* secretResolver.resolve(configuration.secretRef);
+      return createModelProvider({
+        provider: configuration.provider,
+        model: configuration.model,
+        apiKey,
+      });
+    }),
+});
+```
+
+The application persists non-secret `ModelConfiguration` data associated with its `Workspace` and
+stores only an opaque `SecretRef`; the secret value remains behind a host adapter. The Operation
+contract does not accept provider, model, endpoint, or credential selection. Provider resolution
+failure stays typed separately from context rejection and model execution failure.
+
+This example is directional rather than an Atlas migration commitment. Its purpose is to obtain
+consumer evidence for the sequence `workspace identity -> configuration -> secret -> provider`
+before Core standardizes how application identity reaches arbitrary Resources.
+
+## Scope Generalization Hypotheses
+
+One durable boundary survives the concrete checkpoint: scope belongs to a particular Resource use,
+not globally to an Operation or receiver. One invocation might use a Workspace model, an
+Organization-billed API, and an application-static search service.
+
+The former proposed algebra—application-static, receiver-self, and receiver-relation—is therefore
+retained only as a candidate. Evidence must still answer whether:
+
+1. scope should be declared as portable receiver projection metadata or remain an application
+   resolver;
+2. a reusable Module should name a configuration-owner role and how an Application fills it;
+3. Relation traversal belongs in scope resolution or in ordinary authorized application reads;
+4. a generic cache is safe, and which Resource, Principal, resolver, projection, and target
+   identities belong in its key;
+5. static bindings need any semantic scope identity beyond Resource plus application binding;
+6. scoped lookup failures warrant a portable taxonomy beyond the typed application failures
+   already supported by the dynamic resolver.
+
+Do not promote the current ambient `resourceBindingScope`, the candidate projection algebra, or an
+illustrative Module role into public declarative API until the Atlas rehearsal and at least one
+non-model Resource demonstrate the repeated shape.
 
 ## Non-Goals
 
@@ -174,7 +235,9 @@ into the final domain API before that separation is tested.
 - [ ] Governance observes the stable Resource identity and effective attempt without owning binding.
 - [x] The lifecycle and memoization scope of each resolved instance are explicit and tested.
 - [x] A static application binding remains the simplest supported case.
-- [ ] A reusable model-configuration Module sketch accepts an application-owned scope contract.
+- [x] Model-backed Operations can resolve a provider dynamically from validated application input.
+- [ ] A concrete multi-workspace consumer proves configuration and opaque secret resolution.
+- [ ] A reusable model-configuration Module shape earns an application-owned scope contract.
 - [ ] Consumer evidence validates the API through packed or released package artifacts.
 
 ## Deferred Questions
