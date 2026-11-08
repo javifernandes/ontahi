@@ -922,8 +922,10 @@ remain independently replaceable while evidence accumulates.
    interactions, identity, and evidence.
 6. **Resource composition** — rehearse Plan 165 through explicit application resolution, then decide
    whether a receiver-to-scope projection pays rent while keeping Governance independent.
-7. **Implementation proposal** — only after the prior decisions, extract a bounded executable plan
-   with compatibility and release strategy.
+7. **Implementation proposal** — extracted as
+   [166a. Operation Receiver Metadata And Bound Ref Invocation](../current/166a-operation-receiver-metadata-and-bound-ref-invocation.md),
+   with type and required Ref input receivers, compatibility boundaries, executable examples, and
+   release gates. Selection, Relation, Module, and Resource composition remain later slices.
 
 ## Non-Goals
 
@@ -946,4 +948,4 @@ remain independently replaceable while evidence accumulates.
 - [x] Selection receiver semantics are honest about cardinality, authority, effects, retries, and partial failure.
 - [x] Resource configuration is distinct from receiver identity, authority, and Governance.
 - [ ] Consumer evidence determines whether receiver-derived scope merits portable metadata.
-- [ ] A bounded implementation plan is extracted only after the architectural decisions are recorded.
+- [x] A bounded implementation plan is extracted only after the architectural decisions are recorded.
