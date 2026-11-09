@@ -85,6 +85,14 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {},
+      receiver: {
+        kind: 'input',
+        path: 'list',
+        entityName: 'TodoList',
+        participant: 'ref',
+        requirement: 'portable',
+        source: 'declaration',
+      },
       input: graphSchema.object({ list: graphSchema.ref(TodoListSchema) }),
       output: graphSchema.object({
         title: field.nonEmptyString({ trim: true }),
@@ -95,6 +103,14 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {},
+      receiver: {
+        kind: 'input',
+        path: 'list',
+        entityName: 'TodoList',
+        participant: 'ref',
+        requirement: 'portable',
+        source: 'declaration',
+      },
       input: graphSchema.object({
         list: graphSchema.ref(TodoListSchema),
       }),
@@ -107,6 +123,14 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {},
+      receiver: {
+        kind: 'input',
+        path: 'list',
+        entityName: 'TodoList',
+        participant: 'ref',
+        requirement: 'portable',
+        source: 'declaration',
+      },
       input: graphSchema.object({
         list: graphSchema.ref(TodoListSchema),
         requestId: graphSchema.string(),

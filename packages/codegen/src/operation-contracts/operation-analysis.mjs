@@ -21,6 +21,118 @@ import { projectVariantInputs } from './variant-inputs.mjs';
 
 const getNodeText = node => node.getText();
 
+const parseOperationReceiver = ({ operationName, receiverNode, entityContext, schemaContext }) => {
+  if (!receiverNode) return { receiver: undefined, diagnostics: [] };
+  if (!ts.isObjectLiteralExpression(receiverNode)) {
+    return {
+      receiver: undefined,
+      diagnostics: [`${operationName}.receiver must be an object literal.`],
+    };
+  }
+
+  const config = new Map();
+  for (const item of receiverNode.properties) {
+    if (ts.isPropertyAssignment(item) && ts.isIdentifier(item.name)) {
+      config.set(item.name.text, item.initializer);
+    }
+  }
+  const kind = config.get('kind');
+  if (!kind || !ts.isStringLiteral(kind)) {
+    return {
+      receiver: undefined,
+      diagnostics: [`${operationName}.receiver.kind must be a string literal.`],
+    };
+  }
+  if (kind.text === 'input') {
+    const path = config.get('path');
+    return path && ts.isStringLiteral(path)
+      ? { receiver: { kind: 'input', path: path.text }, diagnostics: [] }
+      : {
+          receiver: undefined,
+          diagnostics: [`${operationName}.receiver.path must be a string literal.`],
+        };
+  }
+  if (kind.text === 'entity-type') {
+    const entity = config.get('entity');
+    if (!entity || !ts.isIdentifier(entity)) {
+      return {
+        receiver: undefined,
+        diagnostics: [`${operationName}.receiver.entity must reference an Entity identifier.`],
+      };
+    }
+    return {
+      receiver: {
+        kind: 'entity-type',
+        entityName:
+          entity.text === 'self'
+            ? entityContext.entityName
+            : (resolveEntitySchemaProjection(entity.text, schemaContext)?.name ?? entity.text),
+        source: 'declaration',
+      },
+      diagnostics: [],
+    };
+  }
+  return {
+    receiver: undefined,
+    diagnostics: [`${operationName}.receiver.kind must be "input" or "entity-type".`],
+  };
+};
+
+const resolveReceiverInputFields = node => {
+  const expression = unwrapExpression(node);
+  if (!expression || !ts.isCallExpression(expression)) return undefined;
+  if (
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'named'
+  ) {
+    return resolveReceiverInputFields(expression.expression.expression);
+  }
+  if (
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'object'
+  ) {
+    return expression.arguments[0];
+  }
+  if (ts.isIdentifier(expression.expression) && expression.expression.text === 'value') {
+    return expression.arguments[1];
+  }
+  return undefined;
+};
+
+const resolveInputReceiverDescriptor = ({
+  receiver,
+  inputNode,
+  entityContext,
+  declarations,
+  schemaContext,
+}) => {
+  const resolvedInput = resolveExpressionInitializer(inputNode, declarations) ?? inputNode;
+  const fields = resolveReceiverInputFields(resolvedInput);
+  if (!fields || !ts.isObjectLiteralExpression(fields)) return undefined;
+  const field = fields.properties.find(
+    property =>
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === receiver.path) ||
+        (ts.isStringLiteral(property.name) && property.name.text === receiver.path)),
+  );
+  if (!field || !ts.isPropertyAssignment(field)) return undefined;
+  const participant = unwrapInputRefSchemaCall(field.initializer);
+  if (!participant || !ts.isPropertyAccessExpression(participant.expression)) return undefined;
+  const target = participant.arguments[0];
+  const entityName = target
+    ? resolveInputRefEntityName(target, schemaContext, entityContext)
+    : undefined;
+  if (!entityName) return undefined;
+  return {
+    kind: 'input',
+    path: receiver.path,
+    entityName,
+    participant: 'ref',
+    requirement: participant.expression.name.text === 'existingRef' ? 'existing' : 'portable',
+    source: 'declaration',
+  };
+};
+
 const isAtomicOperationReceiver = expression =>
   (ts.isIdentifier(expression) &&
     ['defineDomainOperation', 'operation'].includes(expression.text)) ||
@@ -615,6 +727,7 @@ export const parseOperationDefinition = (
   const graphOutputNode = config.get('graphOutput');
   const clientCacheNode = config.get('clientCache');
   const contractsNode = config.get('contracts');
+  const receiverNode = config.get('receiver');
   const execution = isAtomicOperationCall(initializer.expression)
     ? { atomicity: 'required' }
     : undefined;
@@ -630,6 +743,16 @@ export const parseOperationDefinition = (
         `${operationName} must declare string literal authority and exposure, or inherit them from domainOperationDefaults.`,
       ],
     };
+  }
+
+  const parsedReceiver = parseOperationReceiver({
+    operationName,
+    receiverNode,
+    entityContext,
+    schemaContext,
+  });
+  if (parsedReceiver.diagnostics.length > 0) {
+    return { diagnostics: parsedReceiver.diagnostics };
   }
 
   let durableRuntime;
@@ -703,6 +826,7 @@ export const parseOperationDefinition = (
   });
   const helperDeclarations = new Map();
   let resolvedInputNode;
+  let receiver = parsedReceiver.receiver;
 
   if (inputNode) {
     const resolvedInput = resolveProjectionValueNode(inputNode, schemaContext);
@@ -832,6 +956,22 @@ export const parseOperationDefinition = (
       }
     }
   }
+  if (receiver?.kind === 'input') {
+    receiver = resolveInputReceiverDescriptor({
+      receiver,
+      inputNode: resolvedInputNode ?? inputNode,
+      entityContext,
+      declarations,
+      schemaContext,
+    });
+    if (!receiver) {
+      return {
+        diagnostics: [
+          `${operationName}.receiver path must identify an inline graphSchema.ref or graphSchema.existingRef input.`,
+        ],
+      };
+    }
+  }
   if (bridgeNode) {
     if (!ts.isObjectLiteralExpression(bridgeNode)) {
       return {
@@ -917,6 +1057,7 @@ export const parseOperationDefinition = (
     authority,
     exposure,
     execution,
+    receiver,
     conditions: parsedConditions.conditions,
     bridgeQueryText,
     bridgeInvalidateText,

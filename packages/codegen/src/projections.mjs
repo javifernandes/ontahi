@@ -154,6 +154,16 @@ ${relationDefinitions
 
       lines.push('      },');
 
+      if (operation.receiver?.kind === 'input') {
+        lines.push(
+          `      receiver: { kind: 'input', path: '${operation.receiver.path}', entityName: '${operation.receiver.entityName}', participant: 'ref', requirement: '${operation.receiver.requirement}', source: '${operation.receiver.source}' },`,
+        );
+      } else if (operation.receiver?.kind === 'entity-type') {
+        lines.push(
+          `      receiver: { kind: 'entity-type', entityName: '${operation.receiver.entityName}', source: 'declaration' },`,
+        );
+      }
+
       if (shouldRenderInputContract(operation, operationContracts)) {
         if (operation.inputSchemaProjection?.serverProcessing?.length)
           lines.push(

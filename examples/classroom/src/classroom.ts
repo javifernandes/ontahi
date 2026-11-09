@@ -99,6 +99,7 @@ export const Student = entity({
     return {
       transfer: operation.atomic({
         exposure: 'bridge',
+        receiver: { kind: 'input', path: 'student' },
         input: graphSchema.object({
           student: graphSchema.existingRef(self),
           previousCourse: graphSchema.existingRef(Course),
@@ -130,6 +131,7 @@ export const Enrollment = entity({
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation }) => ({
     enroll: operation({
+      receiver: { kind: 'entity-type', entity: self },
       input: graphSchema
         .pick(self, ['id', 'student', 'course', 'startedAt', 'credits'])
         .named('EnrollStudentInput'),
@@ -145,10 +147,11 @@ export const Enrollment = entity({
         ),
     }),
     activate: operation({
-      input: graphSchema.object({ enrollment: field.ref(self) }),
+      receiver: { kind: 'input', path: 'enrollment' },
+      input: graphSchema.object({ enrollment: graphSchema.existingRef(self) }),
       output: self,
       *run({ enrollment }) {
-        const current = yield* enrollment.resolve();
+        const current = enrollment;
 
         if (!current) {
           return yield* failOperation('enrollment_not_found', 'Enrollment does not exist.', {
@@ -177,13 +180,14 @@ export const Enrollment = entity({
       },
     }),
     cancel: operation({
+      receiver: { kind: 'input', path: 'enrollment' },
       input: graphSchema.object({
-        enrollment: field.ref(self),
+        enrollment: graphSchema.existingRef(self),
         endedAt: self.fields.endedAt,
       }),
       output: self,
       *run({ enrollment, endedAt }) {
-        const current = yield* enrollment.resolve();
+        const current = enrollment;
 
         if (!current) {
           return yield* failOperation('enrollment_not_found', 'Enrollment does not exist.', {

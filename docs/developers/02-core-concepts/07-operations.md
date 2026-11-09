@@ -102,6 +102,57 @@ if (!deleted.ok) throw new Error(`TodoItem.deleteList failed: ${deleted.kind}`);
 The caller uses the entity, its locator, and its operations. It does not construct transport URLs,
 write a storage query, or manually turn the Ref into a Selection.
 
+## Declare receivers without changing the functional contract
+
+An Operation's owner determines its stable name and namespace. Its receiver determines which
+semantic value may bind that Operation as an instance- or type-qualified affordance. They are
+related, but they are not the same concept.
+
+Use an Entity-type receiver for a type-level call:
+
+```ts
+create: operation({
+  receiver: { kind: 'entity-type', entity: self },
+  input: CreateWorkspaceInput,
+  output: self,
+  run: createWorkspace,
+}),
+```
+
+Use a required Entity Ref participant for an instance-level call:
+
+```ts
+askPlans: operation({
+  receiver: { kind: 'input', path: 'workspace' },
+  input: graphSchema.object({
+    workspace: graphSchema.existingRef(self),
+    question: graphSchema.string(),
+  }),
+  output: Answer,
+  run: askPlans,
+}),
+```
+
+Binding is partial application over the ordinary complete input. Both forms remain valid:
+
+```ts
+workspace.askPlans({ question: 'What should we tackle next?' });
+
+Workspace.askPlans({
+  workspace,
+  question: 'What should we tackle next?',
+});
+```
+
+They lower to the same Operation invocation. The receiver stays inside `input`, so contracts,
+authorization, callbacks, cache keys, invalidation, retries, Tasks, and implementations observe the
+same complete value. The functional form is the permanent escape hatch for explicit composition;
+the bound form cannot redirect its receiver by supplying the receiver field again.
+
+Generated clients preserve the normalized portable receiver descriptor. `graphOps.receiver`
+remains a compatibility path for older applications and Explorer projections; new Operations
+should declare `receiver` on the Operation contract.
+
 ## Shape a Selection result
 
 An Operation may own membership while leaving result shape to its caller. Declare a Selection

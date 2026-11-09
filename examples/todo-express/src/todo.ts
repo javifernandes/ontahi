@@ -232,12 +232,14 @@ export const TodoList = entity({
       suggestNextItem: operation({
         description:
           'Suggest one useful next item from the selected Todo List and its current items.',
+        receiver: { kind: 'input', path: 'list' },
         input: graphSchema.object({ list: graphSchema.ref(self) }),
         graphOps: { receiver: 'list' },
         output: TodoItemSuggestion,
         run: runSuggestion,
       }),
       completeAll: operation({
+        receiver: { kind: 'input', path: 'list' },
         input: graphSchema.object({
           list: graphSchema.ref(self),
         }),
@@ -264,6 +266,7 @@ export const TodoList = entity({
       }),
       export: operation({
         description: 'Request a Todo List export and wait for an external worker callback.',
+        receiver: { kind: 'input', path: 'list' },
         input: graphSchema.object({
           list: graphSchema.ref(self),
           requestId: graphSchema.string(),

@@ -24,6 +24,7 @@ import { createNextActionOperationBridgeAdapter } from '../actions/index.js';
 
 import {
   OntahiGraphProvider,
+  getOperationQueryKey,
   useDurableOperation,
   useOperation,
   useOperationQuery,
@@ -133,6 +134,78 @@ describe('operation hooks', () => {
     });
     expect(result.current.value).toEqual({ completed: 2 });
     expectTypeOf(result.current.value).toEqualTypeOf<{ completed: number } | undefined>();
+  });
+
+  it('keeps the canonical receiver in bound React lifecycle, cache, and invalidation input', async () => {
+    const TodoListSchema = entity('ReceiverTodoList', { id: field.id() });
+    const queryReceiver = vi.fn((input: { list: unknown }) => input.list);
+    const invalidationReceiver = vi.fn((input: { list: unknown }) => input.list);
+    const TodoList = defineClientEntity(TodoListSchema, {
+      domainOperations: {
+        rename: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          receiver: {
+            kind: 'input',
+            path: 'list',
+            entityName: TodoListSchema.name,
+            participant: 'ref',
+            requirement: 'portable',
+            source: 'declaration',
+          },
+          bridge: {
+            query: [queryReceiver],
+            invalidate: [['ReceiverTodoList', invalidationReceiver]],
+          },
+          input: graphSchema.object({
+            list: graphSchema.ref(TodoListSchema),
+            name: graphSchema.string(),
+          }),
+          output: graphSchema.string(),
+        }),
+      },
+    });
+    const list = TodoList.ref({ id: 'list-1' });
+    const invocation = list.rename({ name: 'Reading' });
+    const onExecute = vi.fn();
+    const onSuccess = vi.fn();
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const bridgeAction = vi.fn().mockResolvedValue({ data: 'renamed' });
+    const { Wrapper } = createWrapper(bridgeAction, createGraphClientCache(), queryClient);
+    const { result } = renderHook(() => useOperation(invocation, { onExecute, onSuccess }), {
+      wrapper: Wrapper,
+    });
+
+    expect(getOperationQueryKey(TodoList.domain.rename, invocation.input)).toEqual([
+      'ReceiverTodoList',
+      'rename',
+      list,
+    ]);
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    const completeInput = { list, name: 'Reading' };
+    expect(bridgeAction).toHaveBeenCalledWith({
+      operationId: 'ReceiverTodoList.rename',
+      input: completeInput,
+    });
+    expect(onExecute).toHaveBeenCalledWith({ input: completeInput });
+    expect(onSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ input: completeInput, value: 'renamed' }),
+    );
+    expect(queryReceiver).toHaveBeenCalledWith(
+      completeInput,
+      expect.objectContaining({ input: completeInput }),
+    );
+    expect(invalidationReceiver).toHaveBeenCalledWith(
+      completeInput,
+      expect.objectContaining({ input: completeInput }),
+    );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['ReceiverTodoList', list],
+    });
   });
 
   it('manages and validates one operation input before executing it', async () => {

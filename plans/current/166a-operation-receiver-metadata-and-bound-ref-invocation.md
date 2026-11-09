@@ -147,7 +147,7 @@ type operation. It adds no second wire value and no mutable class object.
 - [x] Validate and normalize type and required Ref input receivers during Operation resolution.
 - [x] Validate canonical receiver targets against the complete registered Entity catalog after
       application composition.
-- [ ] Reflect the descriptor in application discovery and generated client declarations.
+- [x] Reflect the descriptor in application discovery and generated client declarations.
 - [x] Make Entity Ref binding consume canonical metadata before compatibility inference.
 - [ ] Make Explorer prefer the canonical descriptor while preserving tested legacy Ref and
       one-cardinality Selection projections.
@@ -155,11 +155,12 @@ type operation. It adds no second wire value and no mutable class object.
 - [x] Prove bound calls reject an explicit receiver argument and a wrong-Entity bound Ref.
 - [x] Prove legacy same-Ref arguments remain valid while different-Ref redirects fail.
 - [x] Prove legacy cross-participant Ref inference remains callable without becoming canonical.
-- [ ] Prove React lifecycle callbacks, invalidation, and cache keys receive complete input.
-- [ ] Migrate Todo type/Ref receivers and its generated client.
-- [ ] Migrate Classroom enrollment type/Ref receivers.
-- [ ] Document owner versus receiver and the functional escape hatch.
-- [ ] Add traceable Core, React, Explorer, and Codegen Changesets.
+- [x] Prove React lifecycle callbacks, invalidation, and cache keys receive complete input.
+- [x] Migrate Todo type/Ref receivers and its generated client.
+- [x] Migrate Classroom enrollment type/Ref receivers.
+- [x] Document owner versus receiver and the functional escape hatch.
+- [ ] Add traceable Core, React, Explorer, and Codegen Changesets. Core landed in the first slice;
+      React and Codegen land in this slice; Explorer remains in the final slice.
 - [ ] Rehearse packed packages and consumer typechecking before alpha.20.
 
 ## Non-goals
