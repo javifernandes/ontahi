@@ -78,23 +78,78 @@ const parseOperationReceiver = ({ operationName, receiverNode, entityContext, sc
   };
 };
 
-const resolveReceiverInputFields = node => {
-  const expression = unwrapExpression(node);
+const resolveEntityInputFields = (node, context, entityContext) => {
+  const resolved = resolveProjectionValueNode(node, context);
+  const expression = resolved.expression;
+  if (ts.isIdentifier(expression) && expression.text === 'self') {
+    for (const [name] of resolved.context?.declarations ?? []) {
+      const projection = resolveEntitySchemaProjection(name, resolved.context);
+      if (projection?.name !== entityContext?.entityName) continue;
+      const declaration = resolved.context.declarations.get(name);
+      const call = declaration?.initializer && unwrapExpression(declaration.initializer);
+      const config = ts.isCallExpression(call) ? call.arguments[0] : undefined;
+      const fields =
+        config && ts.isObjectLiteralExpression(config)
+          ? config.properties.find(
+              property =>
+                ts.isPropertyAssignment(property) &&
+                ts.isIdentifier(property.name) &&
+                property.name.text === 'fields',
+            )
+          : undefined;
+      return fields && ts.isPropertyAssignment(fields)
+        ? resolveReceiverInputFields(fields.initializer, resolved.context, entityContext)
+        : undefined;
+    }
+  }
+  if (!ts.isCallExpression(expression)) return undefined;
+  const config = expression.arguments[0];
+  if (!config || !ts.isObjectLiteralExpression(config)) return undefined;
+  const fields = config.properties.find(
+    property =>
+      ts.isPropertyAssignment(property) &&
+      ts.isIdentifier(property.name) &&
+      property.name.text === 'fields',
+  );
+  return fields && ts.isPropertyAssignment(fields)
+    ? resolveReceiverInputFields(fields.initializer, resolved.context, entityContext)
+    : undefined;
+};
+
+const resolveReceiverInputFields = (node, context, entityContext) => {
+  const resolved = resolveProjectionValueNode(node, context);
+  const expression = resolved.expression;
+  if (ts.isObjectLiteralExpression(expression)) {
+    return { fields: expression, context: resolved.context };
+  }
   if (!expression || !ts.isCallExpression(expression)) return undefined;
   if (
     ts.isPropertyAccessExpression(expression.expression) &&
     expression.expression.name.text === 'named'
   ) {
-    return resolveReceiverInputFields(expression.expression.expression);
+    return resolveReceiverInputFields(
+      expression.expression.expression,
+      resolved.context,
+      entityContext,
+    );
   }
   if (
     ts.isPropertyAccessExpression(expression.expression) &&
     expression.expression.name.text === 'object'
   ) {
-    return expression.arguments[0];
+    return { fields: expression.arguments[0], context: resolved.context };
   }
   if (ts.isIdentifier(expression.expression) && expression.expression.text === 'value') {
-    return expression.arguments[1];
+    return { fields: expression.arguments[1], context: resolved.context };
+  }
+  if (graphSchemaCallName(expression) === 'pick') {
+    const [source, keys] = expression.arguments;
+    if (!source || !keys || !ts.isArrayLiteralExpression(keys)) return undefined;
+    const selected = new Set(keys.elements.filter(ts.isStringLiteral).map(element => element.text));
+    const sourceFields =
+      resolveReceiverInputFields(source, resolved.context, entityContext) ??
+      resolveEntityInputFields(source, resolved.context, entityContext);
+    return sourceFields ? { ...sourceFields, selected } : undefined;
   }
   return undefined;
 };
@@ -107,20 +162,26 @@ const resolveInputReceiverDescriptor = ({
   schemaContext,
 }) => {
   const resolvedInput = resolveExpressionInitializer(inputNode, declarations) ?? inputNode;
-  const fields = resolveReceiverInputFields(resolvedInput);
-  if (!fields || !ts.isObjectLiteralExpression(fields)) return undefined;
-  const field = fields.properties.find(
+  const resolvedFields = resolveReceiverInputFields(resolvedInput, schemaContext, entityContext);
+  if (!resolvedFields || !ts.isObjectLiteralExpression(resolvedFields.fields)) return undefined;
+  if (resolvedFields.selected && !resolvedFields.selected.has(receiver.path)) return undefined;
+  const field = resolvedFields.fields.properties.find(
     property =>
       ts.isPropertyAssignment(property) &&
       ((ts.isIdentifier(property.name) && property.name.text === receiver.path) ||
         (ts.isStringLiteral(property.name) && property.name.text === receiver.path)),
   );
   if (!field || !ts.isPropertyAssignment(field)) return undefined;
-  const participant = unwrapInputRefSchemaCall(field.initializer);
+  const participant = unwrapExpression(field.initializer);
+  if (
+    !ts.isCallExpression(participant) ||
+    !['ref', 'existingRef'].includes(graphSchemaCallName(participant))
+  )
+    return undefined;
   if (!participant || !ts.isPropertyAccessExpression(participant.expression)) return undefined;
   const target = participant.arguments[0];
   const entityName = target
-    ? resolveInputRefEntityName(target, schemaContext, entityContext)
+    ? resolveInputRefEntityName(target, resolvedFields.context, entityContext)
     : undefined;
   if (!entityName) return undefined;
   return {
@@ -413,6 +474,22 @@ const resolveInputRefEntityName = (target, schemaContext, entityContext) => {
   const expression = unwrapExpression(target);
   if (!ts.isIdentifier(expression)) return undefined;
   if (expression.text === 'self') return entityContext?.entityName;
+  const resolved = resolveProjectionValueNode(expression, schemaContext).expression;
+  if (ts.isCallExpression(resolved)) {
+    const config = resolved.arguments[0];
+    const name =
+      config && ts.isObjectLiteralExpression(config)
+        ? config.properties.find(
+            property =>
+              ts.isPropertyAssignment(property) &&
+              ts.isIdentifier(property.name) &&
+              property.name.text === 'name',
+          )
+        : undefined;
+    if (name && ts.isPropertyAssignment(name) && ts.isStringLiteral(name.initializer)) {
+      return name.initializer.text;
+    }
+  }
   return resolveEntitySchemaProjection(expression.text, schemaContext)?.name ?? expression.text;
 };
 
@@ -826,6 +903,7 @@ export const parseOperationDefinition = (
   });
   const helperDeclarations = new Map();
   let resolvedInputNode;
+  let resolvedInputContext = schemaContext;
   let receiver = parsedReceiver.receiver;
 
   if (inputNode) {
@@ -833,6 +911,7 @@ export const parseOperationDefinition = (
     const localInputNode = resolvedInput.expression;
     const inputContext = resolvedInput.context;
     resolvedInputNode = localInputNode;
+    resolvedInputContext = inputContext;
 
     if (
       exposure !== 'server-only' &&
@@ -962,7 +1041,7 @@ export const parseOperationDefinition = (
       inputNode: resolvedInputNode ?? inputNode,
       entityContext,
       declarations,
-      schemaContext,
+      schemaContext: resolvedInputContext,
     });
     if (!receiver) {
       return {

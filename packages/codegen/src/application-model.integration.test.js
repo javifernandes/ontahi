@@ -468,9 +468,9 @@ describe('Ontahi application declaration analysis', () => {
               run: () => [],
             }),
             rename: operation({
-              receiver: { kind: 'input', path: 'note' },
+              receiver: { kind: 'input', path: "note'sOwner" },
               input: graphSchema.object({
-                note: graphSchema.existingRef(self),
+                "note'sOwner": graphSchema.existingRef(self),
                 title: graphSchema.string(),
               }),
               run: () => undefined,
@@ -511,13 +511,15 @@ describe('Ontahi application declaration analysis', () => {
           name: 'rename',
           receiver: {
             kind: 'input',
-            path: 'note',
+            path: "note'sOwner",
             entityName: 'Note',
             participant: 'ref',
             requirement: 'existing',
             source: 'declaration',
           },
-          inputSchemaText: expect.stringContaining('note: graphSchema.existingRef(NoteSchema)'),
+          inputSchemaText: expect.stringContaining(
+            '"note\'sOwner": graphSchema.existingRef(NoteSchema)',
+          ),
         },
         {
           name: 'archive',
@@ -548,14 +550,14 @@ describe('Ontahi application declaration analysis', () => {
     });
     expect(generated.Note.domain.rename.receiver).toEqual({
       kind: 'input',
-      path: 'note',
+      path: "note'sOwner",
       entityName: 'Note',
       participant: 'ref',
       requirement: 'existing',
       source: 'declaration',
     });
     expect(generated.Note.ref({ id: 'note-1' }).rename({ title: 'Renamed' }).input).toEqual({
-      note: { kind: 'entity-ref', entityName: 'Note', locator: { id: 'note-1' } },
+      "note'sOwner": { kind: 'entity-ref', entityName: 'Note', locator: { id: 'note-1' } },
       title: 'Renamed',
     });
     expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });

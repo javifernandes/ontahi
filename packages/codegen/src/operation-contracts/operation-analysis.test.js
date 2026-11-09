@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { parseOperationDefinition } from './operation-analysis.mjs';
+import { createSchemaContext } from './source-resolution.mjs';
 
 const operationPropertyFrom = sourceText => {
   const sourceFile = ts.createSourceFile(
@@ -25,6 +26,31 @@ const parseReceiverOperation = sourceText =>
     undefined,
     { entityName: 'Book' },
   );
+
+const parseReceiverOperationWithContext = (sourceText, entityName = 'Book') => {
+  const sourceFile = ts.createSourceFile(
+    '/virtual/operations.ts',
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const schemaContext = createSchemaContext({ sourceFile, sourcePath: sourceFile.fileName });
+  const operations = sourceFile.statements
+    .filter(ts.isVariableStatement)
+    .flatMap(statement => [...statement.declarationList.declarations])
+    .find(
+      declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'operations',
+    );
+  return parseOperationDefinition(
+    operations.initializer.properties[0],
+    schemaContext.declarations,
+    schemaContext.importMap,
+    { authority: 'server', exposure: 'bridge' },
+    schemaContext,
+    { entityName },
+  );
+};
 
 describe('Operation declaration analysis', () => {
   it('derives portable input and Entity-type receiver metadata', () => {
@@ -101,6 +127,114 @@ describe('Operation declaration analysis', () => {
       diagnostics: [
         'inspect.receiver path must identify an inline graphSchema.ref or graphSchema.existingRef input.',
       ],
+    });
+  });
+
+  it.each(['optional', 'nullable'])('rejects a receiver wrapped in graphSchema.%s', wrapper => {
+    expect(
+      parseReceiverOperation(`
+          const operations = {
+            inspect: operation({
+              receiver: { kind: 'input', path: 'book' },
+              input: graphSchema.object({
+                book: graphSchema.${wrapper}(graphSchema.existingRef(self)),
+              }),
+              run: () => undefined,
+            }),
+          };
+        `),
+    ).toEqual({
+      diagnostics: [
+        'inspect.receiver path must identify an inline graphSchema.ref or graphSchema.existingRef input.',
+      ],
+    });
+  });
+
+  it('derives a receiver retained by graphSchema.pick', () => {
+    expect(
+      parseReceiverOperationWithContext(`
+        const Author = entity({ name: 'Author', fields: { id: field.id() } });
+        const Book = entity({
+          name: 'Book',
+          fields: { id: field.id(), author: graphSchema.existingRef(Author) },
+        });
+        const operations = {
+          inspect: operation({
+            receiver: { kind: 'input', path: 'author' },
+            input: graphSchema.pick(self, ['author']).named('InspectInput'),
+            run: () => undefined,
+          }),
+        };
+      `),
+    ).toMatchObject({
+      receiver: {
+        kind: 'input',
+        path: 'author',
+        entityName: 'Author',
+        requirement: 'existing',
+      },
+      diagnostics: [],
+    });
+  });
+
+  it('resolves an imported Entity alias in an imported Value receiver', () => {
+    const operationSource = `
+      import { InspectInput } from './input';
+      const operations = {
+        inspect: operation({
+          receiver: { kind: 'input', path: 'author' },
+          input: InspectInput,
+          run: () => undefined,
+        }),
+      };
+    `;
+    const sourceFile = ts.createSourceFile(
+      '/virtual/operations.ts',
+      operationSource,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const sources = new Map([
+      [
+        './input',
+        {
+          sourcePath: '/virtual/input.ts',
+          sourceText: `
+            import { Author as Writer } from './author';
+            export const InspectInput = value('InspectInput', {
+              author: graphSchema.existingRef(Writer),
+            });
+          `,
+        },
+      ],
+      [
+        './author',
+        {
+          sourcePath: '/virtual/author.ts',
+          sourceText: `export const Author = entity({ name: 'Author', fields: {} });`,
+        },
+      ],
+    ]);
+    const schemaContext = createSchemaContext({
+      sourceFile,
+      sourcePath: sourceFile.fileName,
+      resolveImportSource: (_sourcePath, importPath) => sources.get(importPath),
+    });
+    const operations = schemaContext.declarations.get('operations');
+
+    expect(
+      parseOperationDefinition(
+        operations.initializer.properties[0],
+        schemaContext.declarations,
+        schemaContext.importMap,
+        { authority: 'server', exposure: 'bridge' },
+        schemaContext,
+        { entityName: 'Book' },
+      ),
+    ).toMatchObject({
+      receiver: { entityName: 'Author', path: 'author' },
+      diagnostics: [],
     });
   });
 

@@ -335,4 +335,25 @@ describe('bound Entity Ref affordances', () => {
       'must not supply receiver "book"',
     );
   });
+
+  it('rejects Entity-type Operations bound through a relation', () => {
+    const relationRef = bindEntityRefRelationOperations(
+      createEntityRef('Book', { slug: 'one' }),
+      'authors',
+      {
+        add: {
+          receiver: {
+            kind: 'entity-type',
+            entityName: 'Author',
+            source: 'declaration',
+          },
+        },
+      },
+      { receiver: 'book', run: ({ input }) => input },
+    );
+
+    expect(() => relationRef.authors.add()).toThrow(
+      'Entity-type Operations cannot be bound to an Entity Ref.',
+    );
+  });
 });

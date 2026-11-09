@@ -1,5 +1,6 @@
 ---
 '@ontahi/codegen': minor
+'@ontahi/core': patch
 '@ontahi/react': patch
 ---
 
