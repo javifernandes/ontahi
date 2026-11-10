@@ -177,6 +177,60 @@ describe('Operation declaration analysis', () => {
     });
   });
 
+  it('derives a receiver from an explicitly named Entity picked input', () => {
+    expect(
+      parseReceiverOperationWithContext(`
+        const Author = entity({ name: 'Author', fields: { id: field.id() } });
+        const Book = entity({
+          name: 'Book',
+          fields: { id: field.id(), author: graphSchema.ref(Author) },
+        });
+        const operations = {
+          inspect: operation({
+            receiver: { kind: 'input', path: 'author' },
+            input: graphSchema.pick(Book, ['author']).named('InspectInput'),
+            run: () => undefined,
+          }),
+        };
+      `),
+    ).toMatchObject({
+      receiver: {
+        kind: 'input',
+        path: 'author',
+        entityName: 'Author',
+        requirement: 'portable',
+      },
+      diagnostics: [],
+    });
+  });
+
+  it.each([
+    ["graphSchema.pick(Book, ['id']).named('InspectInput')", 'receiver field is not selected'],
+    ["graphSchema.pick(Book, selected).named('InspectInput')", 'pick keys are not literal'],
+    ['graphSchema.array(graphSchema.existingRef(Book))', 'input is not object-shaped'],
+  ])('rejects a picked receiver when %s', (input, _reason) => {
+    expect(
+      parseReceiverOperationWithContext(`
+        const Book = entity({
+          name: 'Book',
+          fields: { id: field.id(), author: graphSchema.ref(self) },
+        });
+        const selected = ['author'];
+        const operations = {
+          inspect: operation({
+            receiver: { kind: 'input', path: 'author' },
+            input: ${input},
+            run: () => undefined,
+          }),
+        };
+      `),
+    ).toEqual({
+      diagnostics: [
+        'inspect.receiver path must identify an inline graphSchema.ref or graphSchema.existingRef input.',
+      ],
+    });
+  });
+
   it('resolves an imported Entity alias in an imported Value receiver', () => {
     const operationSource = `
       import { InspectInput } from './input';
