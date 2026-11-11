@@ -165,8 +165,8 @@ Explorer unmount or page reload. Restoring a collapsed node re-reads its authori
 
 Executable Operations live with their context instead of requiring a separate catalog section on
 the data canvas. The collection node exposes Operations owned by its Entity. An instance window or
-row exposes an Operation owned anywhere in the application only when its `graphOps.receiver`
-explicitly names a compatible Entity Ref or one-cardinality Entity Selection input. Explorer binds
+row exposes an Operation owned anywhere in the application only when its canonical `receiver`
+explicitly names a compatible Entity Ref input. Explorer binds
 that receiver and asks only for the remaining inputs. Merely accepting the Entity as context does
 not make an Operation an instance action, and a many-cardinality receiver remains a future bulk
 action rather than being projected onto one row. This is a UI projection over the ordinary
@@ -177,10 +177,10 @@ Declare the receiver on the Operation contract rather than teaching Explorer ope
 
 ```ts
 deleteList: operation.atomic({
+  receiver: { kind: 'input', path: 'list' },
   input: graphSchema.object({
     list: graphSchema.existingRef(TodoList),
   }),
-  graphOps: { receiver: 'list' },
   // delete the list, its composed items, and their links
   run: ({ list }) => deleteTodoList(list),
 }),

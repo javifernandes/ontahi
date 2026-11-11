@@ -168,7 +168,6 @@ export type OperationInputRefGraphOpsMetadata = {
 };
 
 export type DomainOperationGraphOpsMetadata = {
-  receiver?: string;
   inputRefs?: Record<string, OperationInputRefGraphOpsMetadata>;
 };
 
@@ -184,7 +183,7 @@ export type DomainOperationReceiverDescriptor =
       entityName: string;
       participant: 'ref';
       requirement: 'portable' | 'existing';
-      source: 'declaration' | 'legacy-graph-ops';
+      source: 'declaration';
     };
 
 export type HttpIngressMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -750,12 +749,10 @@ const operationReceiverRef = (
   operationId: string,
   input: unknown,
   path: string,
-  source: 'declaration' | 'legacy-graph-ops',
 ): Extract<DomainOperationReceiverDescriptor, { kind: 'input' }> | undefined => {
   const fields = operationInputFields(input);
   const field = fields?.[path];
   const invalid = (message: string) => {
-    if (source === 'legacy-graph-ops') return undefined;
     throw new Error(`Domain operation "${operationId}" receiver ${message}.`);
   };
 
@@ -784,7 +781,7 @@ const operationReceiverRef = (
     entityName: field.target.name,
     participant: 'ref',
     requirement: field.referenceRequirement,
-    source,
+    source: 'declaration',
   };
 };
 
@@ -793,22 +790,11 @@ const resolveOperationReceiver = (
   operation: DomainOperationDeclarationMetadata<any, any, any>,
 ): DomainOperationReceiverDescriptor | undefined => {
   const declaration = operation.receiver;
-  const legacyPath = operation.graphOps?.receiver;
-
-  if (!declaration) {
-    return legacyPath
-      ? operationReceiverRef(operationId, operation.input, legacyPath, 'legacy-graph-ops')
-      : undefined;
-  }
+  if (!declaration) return undefined;
 
   if ('source' in declaration) {
     if (declaration.kind === 'entity-type') return declaration;
-    const resolved = operationReceiverRef(
-      operationId,
-      operation.input,
-      declaration.path,
-      declaration.source,
-    );
+    const resolved = operationReceiverRef(operationId, operation.input, declaration.path);
     if (
       !resolved ||
       resolved.entityName !== declaration.entityName ||
@@ -817,11 +803,6 @@ const resolveOperationReceiver = (
     ) {
       throw new Error(
         `Domain operation "${operationId}" receiver descriptor does not match its input schema.`,
-      );
-    }
-    if (legacyPath && legacyPath !== declaration.path) {
-      throw new Error(
-        `Domain operation "${operationId}" receiver path "${declaration.path}" conflicts with legacy graphOps.receiver "${legacyPath}".`,
       );
     }
     return declaration;
@@ -844,12 +825,7 @@ const resolveOperationReceiver = (
     };
   }
 
-  if (legacyPath && legacyPath !== declaration.path) {
-    throw new Error(
-      `Domain operation "${operationId}" receiver path "${declaration.path}" conflicts with legacy graphOps.receiver "${legacyPath}".`,
-    );
-  }
-  return operationReceiverRef(operationId, operation.input, declaration.path, 'declaration');
+  return operationReceiverRef(operationId, operation.input, declaration.path);
 };
 
 export const resolveDomainOperations = <

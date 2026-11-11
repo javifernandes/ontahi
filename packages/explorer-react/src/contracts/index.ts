@@ -149,7 +149,6 @@ export type ExplorerSchemaDescriptor = {
 export type ExplorerOperationInputRefDescriptor = {
   path: string;
   entityName: string;
-  receiver: boolean;
   optional: boolean;
   resolution?: 'existing';
   locators: Array<{

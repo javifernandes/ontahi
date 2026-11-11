@@ -205,7 +205,7 @@ type InputReceiverDescriptor = {
   kind: 'input';
   path: string;
   entityName: string;
-  source: 'declaration' | 'legacy-graph-ops';
+  source: 'declaration';
 };
 
 const readInputReceiverDescriptor = (operation: unknown): InputReceiverDescriptor | undefined => {
@@ -215,7 +215,7 @@ const readInputReceiverDescriptor = (operation: unknown): InputReceiverDescripto
     receiver.kind === 'input' &&
     typeof receiver.path === 'string' &&
     typeof receiver.entityName === 'string' &&
-    (receiver.source === 'declaration' || receiver.source === 'legacy-graph-ops')
+    receiver.source === 'declaration'
     ? (receiver as InputReceiverDescriptor)
     : undefined;
 };
@@ -225,31 +225,6 @@ const hasNonInputReceiverDescriptor = (operation: unknown): boolean => {
   const receiver = (operation as { receiver?: unknown }).receiver;
   return isRecord(receiver) && receiver.kind !== 'input';
 };
-
-const sameLocatorValue = (left: unknown, right: unknown): boolean => {
-  if (Object.is(left, right)) return true;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => sameLocatorValue(value, right[index]))
-    );
-  }
-  if (!isPlainObject(left) || !isPlainObject(right)) return false;
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(key => hasOwn(right, key) && sameLocatorValue(left[key], right[key]))
-  );
-};
-
-const sameEntityRef = (left: AnyEntityRef, right: unknown): boolean =>
-  isRecord(right) &&
-  right.kind === 'entity-ref' &&
-  right.entityName === left.entityName &&
-  sameLocatorValue(right.locator, left.locator);
 
 const getDeclaredEntityRefOperationInput = (
   ref: AnyEntityRef,
@@ -262,16 +237,9 @@ const getDeclaredEntityRefOperationInput = (
     throw new TypeError(`Bound ${receiver.entityName} Operation arguments must be an object.`);
   }
   if (hasOwn(remaining, receiver.path)) {
-    if (receiver.source === 'declaration') {
-      throw new TypeError(
-        `Bound ${receiver.entityName} Operation arguments must not supply receiver "${receiver.path}".`,
-      );
-    }
-    if (!sameEntityRef(ref, remaining[receiver.path])) {
-      throw new TypeError(
-        `Legacy bound ${receiver.entityName} Operation receiver "${receiver.path}" cannot redirect to another Entity Ref.`,
-      );
-    }
+    throw new TypeError(
+      `Bound ${receiver.entityName} Operation arguments must not supply receiver "${receiver.path}".`,
+    );
   }
   return { ...remaining, [receiver.path]: ref };
 };
@@ -286,13 +254,9 @@ const getEntityRefOperationInput = (
     if (declaredReceiver.entityName === ref.entityName) {
       return getDeclaredEntityRefOperationInput(ref, declaredReceiver, args);
     }
-    if (declaredReceiver.source === 'declaration') {
-      throw new TypeError(
-        `Cannot bind ${ref.entityName} Ref to ${declaredReceiver.entityName} receiver "${declaredReceiver.path}".`,
-      );
-    }
-    // A legacy graphOps receiver may have described Explorer projection while callers historically
-    // used another uniquely matching participant through the Ref facade. Preserve that inference.
+    throw new TypeError(
+      `Cannot bind ${ref.entityName} Ref to ${declaredReceiver.entityName} receiver "${declaredReceiver.path}".`,
+    );
   } else if (hasNonInputReceiverDescriptor(operation)) {
     throw new TypeError(`Entity-type Operations cannot be bound to an Entity Ref.`);
   }
@@ -355,7 +319,7 @@ export const bindEntityRefOperationProxy = <
           operationName,
           operation: operations[operationName],
           input: options.input
-            ? readInputReceiverDescriptor(operations[operationName])?.source === 'declaration'
+            ? readInputReceiverDescriptor(operations[operationName])
               ? getEntityRefOperationInput(ref, operations[operationName], [
                   options.input({ ref, operationName, args }),
                 ])
@@ -400,10 +364,9 @@ export const bindEntityRefRelationOperations = <
               relationName,
               operationName: operationName as keyof TOperations & string,
               operation: operation as TOperations[keyof TOperations],
-              input:
-                readInputReceiverDescriptor(operation)?.source === 'declaration'
-                  ? getEntityRefOperationInput(ref, operation, [input])
-                  : { [options.receiver]: ref, ...input },
+              input: readInputReceiverDescriptor(operation)
+                ? getEntityRefOperationInput(ref, operation, [input])
+                : { [options.receiver]: ref, ...input },
             });
           },
         ]),

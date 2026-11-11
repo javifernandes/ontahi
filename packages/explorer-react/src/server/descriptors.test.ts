@@ -224,7 +224,6 @@ describe('explorer descriptor builder', () => {
           {
             path: 'book',
             entityName: 'Book',
-            receiver: false,
             optional: false,
             resolution: 'portable',
             locators: [
@@ -243,7 +242,6 @@ describe('explorer descriptor builder', () => {
           {
             path: 'otherBook',
             entityName: 'Book',
-            receiver: false,
             optional: false,
             resolution: 'portable',
             locators: [
@@ -317,7 +315,6 @@ describe('explorer descriptor builder', () => {
       {
         path: 'book',
         entityName: 'Book',
-        receiver: false,
         optional: true,
         locators: [
           {
@@ -344,14 +341,21 @@ describe('explorer descriptor builder', () => {
           input: graphSchema.object({
             book: graphSchema.existingRef(Book),
           }),
-          graphOps: { receiver: 'book' },
+          receiver: {
+            kind: 'input',
+            path: 'book',
+            entityName: 'ReceiverBook',
+            participant: 'ref',
+            requirement: 'existing',
+            source: 'declaration',
+          },
         },
       ],
     });
 
     expect(snapshot.operations[0]).toMatchObject({
       receiverPath: 'book',
-      inputRefs: [{ path: 'book', entityName: 'ReceiverBook', receiver: true }],
+      inputRefs: [{ path: 'book', entityName: 'ReceiverBook' }],
     });
   });
 

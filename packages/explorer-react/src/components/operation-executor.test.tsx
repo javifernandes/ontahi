@@ -53,7 +53,6 @@ const buildOperation = (
 const bookInputRef = {
   path: 'book',
   entityName: 'Book',
-  receiver: false,
   optional: false,
   locators: [
     {
@@ -67,7 +66,6 @@ const bookInputRef = {
 const chapterInputRef = {
   path: 'chapter',
   entityName: 'ContentNode',
-  receiver: false,
   optional: false,
   locators: [
     {
@@ -129,7 +127,6 @@ describe('useExplorerOperationExecutor helpers', () => {
             {
               path: 'invitee',
               entityName: 'Profile',
-              receiver: false,
               optional: true,
               locators: [
                 {
@@ -325,7 +322,6 @@ describe('useExplorerOperationExecutor helpers', () => {
         {
           path: 'invitee',
           entityName: 'Profile',
-          receiver: false,
           optional: true,
           locators: [
             {

@@ -149,9 +149,8 @@ authorization, callbacks, cache keys, invalidation, retries, Tasks, and implemen
 same complete value. The functional form is the permanent escape hatch for explicit composition;
 the bound form cannot redirect its receiver by supplying the receiver field again.
 
-Generated clients preserve the normalized portable receiver descriptor. `graphOps.receiver`
-remains a compatibility path for older applications and Explorer projections; new Operations
-should declare `receiver` on the Operation contract.
+Generated clients and Explorer preserve and consume the normalized portable receiver descriptor.
+There is no separate Explorer receiver declaration: declare `receiver` on the Operation contract.
 
 ## Shape a Selection result
 
