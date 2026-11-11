@@ -46,13 +46,13 @@ observed repository participation from explicit access and records the complete 
 
 ## Operations
 
-| Operation | Actor                   | Applies when                                                                          | Transition            | Effects                                            |
-| --------- | ----------------------- | ------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------- |
-| `Invite`  | `Owner or Collaborator` | actor has a managing Enrollment and no equivalent Pending invitation exists           | `none -> Pending`     | persist the proposal and notify the recipient      |
-| `Accept`  | `Recipient`             | status is Pending, recipient identity matches, and current time is before `expiresAt` | `Pending -> Accepted` | create exactly one Enrollment and set `resolvedAt` |
-| `Decline` | `Recipient`             | status is Pending and recipient identity matches                                      | `Pending -> Declined` | set `resolvedAt`                                   |
-| `Revoke`  | `Inviter`               | status is Pending and actor is the inviter                                            | `Pending -> Revoked`  | set `resolvedAt` and withdraw availability         |
-| `Expire`  | `System`                | status is Pending and current time is at or after `expiresAt`                         | `Pending -> Expired`  | set `resolvedAt` and withdraw availability         |
+| Operation                                     | Actor                   | Applies when                                                                          | Transition            | Effects                                            |
+| --------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------- |
+| `Invite`                                      | `Owner or Collaborator` | actor has a managing Enrollment and no equivalent Pending invitation exists           | `none -> Pending`     | persist the proposal and notify the recipient      |
+| [`Accept`](./accept-enrollment-invitation.md) | `Recipient`             | status is Pending, recipient identity matches, and current time is before `expiresAt` | `Pending -> Accepted` | create exactly one Enrollment and set `resolvedAt` |
+| `Decline`                                     | `Recipient`             | status is Pending and recipient identity matches                                      | `Pending -> Declined` | set `resolvedAt`                                   |
+| `Revoke`                                      | `Inviter`               | status is Pending and actor is the inviter                                            | `Pending -> Revoked`  | set `resolvedAt` and withdraw availability         |
+| `Expire`                                      | `System`                | status is Pending and current time is at or after `expiresAt`                         | `Pending -> Expired`  | set `resolvedAt` and withdraw availability         |
 
 ## Invariants
 
