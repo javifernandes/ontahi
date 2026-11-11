@@ -391,8 +391,11 @@ export const bindEntityRefRelationOperations = <
       ...Object.fromEntries(
         Object.entries(operations).map(([operationName, operation]) => [
           operationName,
-          (input: Record<string, unknown> = {}) =>
-            options.run({
+          (input: Record<string, unknown> = {}) => {
+            if (hasNonInputReceiverDescriptor(operation)) {
+              throw new TypeError(`Entity-type Operations cannot be bound to an Entity Ref.`);
+            }
+            return options.run({
               ref,
               relationName,
               operationName: operationName as keyof TOperations & string,
@@ -401,7 +404,8 @@ export const bindEntityRefRelationOperations = <
                 readInputReceiverDescriptor(operation)?.source === 'declaration'
                   ? getEntityRefOperationInput(ref, operation, [input])
                   : { [options.receiver]: ref, ...input },
-            }),
+            });
+          },
         ]),
       ),
     },

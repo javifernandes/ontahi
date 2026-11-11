@@ -461,10 +461,19 @@ describe('Ontahi application declaration analysis', () => {
           },
           operations: ({ self, operation }) => ({
             list: operation.atomic({
+              receiver: { kind: 'entity-type', entity: self },
               input: graphSchema.object({ notes: self.many() }),
               output: self.array(),
               bridge: { query: [() => 'all'] },
               run: () => [],
+            }),
+            rename: operation({
+              receiver: { kind: 'input', path: "note'sOwner" },
+              input: graphSchema.object({
+                "note'sOwner": graphSchema.existingRef(self),
+                title: graphSchema.string(),
+              }),
+              run: () => undefined,
             }),
             archive: defineDomainOperation.atomic({
               run: () => undefined,
@@ -490,8 +499,27 @@ describe('Ontahi application declaration analysis', () => {
           authority: 'server',
           exposure: 'bridge',
           execution: { atomicity: 'required' },
+          receiver: {
+            kind: 'entity-type',
+            entityName: 'Note',
+            source: 'declaration',
+          },
           inputSchemaText: 'graphSchema.object({ notes: NoteSchema.many() })',
           outputSchemaText: 'NoteSchema.array()',
+        },
+        {
+          name: 'rename',
+          receiver: {
+            kind: 'input',
+            path: "note'sOwner",
+            entityName: 'Note',
+            participant: 'ref',
+            requirement: 'existing',
+            source: 'declaration',
+          },
+          inputSchemaText: expect.stringContaining(
+            '"note\'sOwner": graphSchema.existingRef(NoteSchema)',
+          ),
         },
         {
           name: 'archive',
@@ -515,6 +543,23 @@ describe('Ontahi application declaration analysis', () => {
     const generated = await importGeneratedModule({ directory, source });
 
     expect(generated.Note.domain.list.execution).toEqual({ atomicity: 'required' });
+    expect(generated.Note.domain.list.receiver).toEqual({
+      kind: 'entity-type',
+      entityName: 'Note',
+      source: 'declaration',
+    });
+    expect(generated.Note.domain.rename.receiver).toEqual({
+      kind: 'input',
+      path: "note'sOwner",
+      entityName: 'Note',
+      participant: 'ref',
+      requirement: 'existing',
+      source: 'declaration',
+    });
+    expect(generated.Note.ref({ id: 'note-1' }).rename({ title: 'Renamed' }).input).toEqual({
+      "note'sOwner": { kind: 'entity-ref', entityName: 'Note', locator: { id: 'note-1' } },
+      title: 'Renamed',
+    });
     expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });
   }, 30_000);
 
