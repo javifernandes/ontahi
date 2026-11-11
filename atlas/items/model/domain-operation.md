@@ -13,8 +13,10 @@ supports:
   - ontahi.model.operation-implementation-binding
   - bookops.semantic-editorial-experience
 typeOf:
-  - spec-workstream-atlas.atlas-model.model-item
+  - spec-workstream-atlas.atlas-model.operation
 relatedPlans:
+  - ontahi://plans/168-atlas-semantic-item-type-reconciliation
+  - atlas://plans/146-package-manifest-and-classroom-model
   - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
   - ontahi://plans/71c-ontahi-application-module-composition
   - bookops://plans/59-authority-scoped-domain-operations-over-the-data-graph
@@ -40,6 +42,52 @@ sourceCommit: 67713696
 ---
 
 A [[ontahi.model.domain-operation|Domain Operation]] is an application action expressed in domain language rather than transport, UI, or database language.
+
+## Receiver
+
+Every Domain Operation applies to an explicit semantic receiver. The receiver may be an Entity
+definition, an Entity Ref, a Selection, a Relation-bound source, or another justified semantic
+subject. Receiver binding may provide method-like authoring, but the canonical invocation remains
+a closed functional input rather than mutable object dispatch.
+
+## Actor
+
+The actor is the authenticated Principal interpreted by the Operation's authority policy. Receiver
+identity, caller identity, implementation placement, and Resource scope remain separate concerns;
+none grants another implicitly.
+
+## Inputs And Output
+
+| Direction | Value                               | Meaning                                                                           |
+| --------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| input     | Graph Schema value                  | Complete validated invocation data, including any Ref or Selection receiver value |
+| output    | Graph Schema value or Effect result | Typed semantic result independent from transport and implementation binding       |
+
+## Availability
+
+An Operation is available only when its declared input conditions, authority policy, execution
+requirements, and runtime capabilities hold. Portable conditions are model meaning; arbitrary
+server callbacks remain explicit implementation concerns.
+
+## Transition And Effects
+
+An immediate implementation may read the Data Graph, produce Effects, or execute atomically when
+the runtime proves the required boundary. Durable execution schedules the same semantic Operation
+under a later task lifecycle and cannot claim one transaction spanning scheduling and execution.
+
+## Failures
+
+Typed failures describe expected domain or execution-unavailable outcomes. Defects, transport
+errors, and provider exceptions do not become domain failures merely because an implementation can
+throw them.
+
+## Invariants Preserved
+
+Validation, authority, declared contracts, receiver identity, result shape, and required atomicity
+remain invariant across local execution, bridge invocation, implementation bindings, and durable
+lifecycle choices.
+
+## Current framework semantics
 
 Plan 166 investigates a stronger uniform model in which every Domain Operation is applied to an
 explicit semantic receiver: an Entity definition for type-level behavior, an Entity Ref for
