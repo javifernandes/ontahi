@@ -1043,7 +1043,6 @@ describe('ExplorerOperationExecutePanel', () => {
             {
               path: 'book',
               entityName: 'Book',
-              receiver: true,
               optional: false,
               locators: [
                 {
@@ -1112,7 +1111,6 @@ describe('ExplorerOperationExecutePanel', () => {
               {
                 path: 'book',
                 entityName: 'Book',
-                receiver: true,
                 optional: false,
                 locators: [
                   {
@@ -1205,7 +1203,6 @@ describe('ExplorerOperationExecutePanel', () => {
             {
               path: 'chapter',
               entityName: 'ContentNode',
-              receiver: false,
               optional: false,
               locators: [
                 {

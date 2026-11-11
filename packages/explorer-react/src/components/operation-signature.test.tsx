@@ -46,7 +46,6 @@ const buildOperation = (
     {
       path: 'book',
       entityName: 'Book',
-      receiver: true,
       optional: false,
       locators: [
         {
@@ -181,7 +180,6 @@ describe('ExplorerOperationSignature', () => {
             {
               path: 'book',
               entityName: 'Book',
-              receiver: false,
               optional: false,
               resolution: 'existing',
               locators: [],

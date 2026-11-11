@@ -234,7 +234,6 @@ export const TodoList = entity({
           'Suggest one useful next item from the selected Todo List and its current items.',
         receiver: { kind: 'input', path: 'list' },
         input: graphSchema.object({ list: graphSchema.ref(self) }),
-        graphOps: { receiver: 'list' },
         output: TodoItemSuggestion,
         run: runSuggestion,
       }),
@@ -243,7 +242,6 @@ export const TodoList = entity({
         input: graphSchema.object({
           list: graphSchema.ref(self),
         }),
-        graphOps: { receiver: 'list' },
         output: CompleteAllOutput,
         ingress: [
           ingress.http({
@@ -271,7 +269,6 @@ export const TodoList = entity({
           list: graphSchema.ref(self),
           requestId: graphSchema.string(),
         }),
-        graphOps: { receiver: 'list' },
         output: graphSchema.object({ url: graphSchema.string() }),
         durable: {
           runtime: 'in-process',

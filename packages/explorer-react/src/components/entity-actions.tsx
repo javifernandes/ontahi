@@ -80,10 +80,10 @@ export const getExplorerInstanceOperationBinding = (
     ...candidates,
     ...selectionCandidates,
   ];
-  const receiverCandidates = resolvedCandidates.filter(binding =>
-    binding.kind === 'reference'
-      ? binding.inputRef.receiver || binding.inputRef.path === operation.receiverPath
-      : binding.field.path === operation.receiverPath,
+  const receiverCandidates = resolvedCandidates.filter(
+    binding =>
+      (binding.kind === 'reference' ? binding.inputRef.path : binding.field.path) ===
+      operation.receiverPath,
   );
   if (receiverCandidates.length > 0) {
     return receiverCandidates.length === 1 ? receiverCandidates[0]! : null;
@@ -109,9 +109,7 @@ export const getExplorerInstanceReceiverOperationBinding = (
   if (!binding) return null;
 
   const bindingPath = binding.kind === 'reference' ? binding.inputRef.path : binding.field.path;
-  const isReceiver =
-    bindingPath === operation.receiverPath ||
-    (binding.kind === 'reference' && binding.inputRef.receiver);
+  const isReceiver = bindingPath === operation.receiverPath;
 
   return isReceiver ? binding : null;
 };

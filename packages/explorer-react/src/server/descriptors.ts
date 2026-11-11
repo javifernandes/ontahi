@@ -125,7 +125,6 @@ export type ExplorerOperationLike = {
     invalidate?: readonly (readonly unknown[])[];
   };
   graphOps?: {
-    receiver?: string;
     inputRefs?: Record<
       string,
       {
@@ -150,6 +149,16 @@ export type ExplorerOperationLike = {
       }
     >;
   };
+  receiver?:
+    | { kind: 'entity-type'; entityName: string; source: 'declaration' }
+    | {
+        kind: 'input';
+        path: string;
+        entityName: string;
+        participant: 'ref';
+        requirement: 'portable' | 'existing';
+        source: 'declaration';
+      };
   durable?: {
     runtime?: string;
     taskId?: string;
@@ -490,7 +499,6 @@ const describeOperationInputRefs = (
       {
         path,
         entityName: inputRef.target.name,
-        receiver: operation.graphOps?.receiver === path,
         optional: inputRef.optional,
         ...(inputRef.resolution ? { resolution: inputRef.resolution } : {}),
         locators: describeSchemaRefLocators(path, inputRef.target, operation),
@@ -739,7 +747,6 @@ const describeGraphOperation = (
   exposure: operation.exposure,
   ingressRoutes: ingressRoutesByOperationId.get(operation.id),
   inputSchema: operation.input ? describeRuntimeSchema(operation.input) : undeclaredInputSchema(),
-  receiverPath: operation.graphOps?.receiver,
   inputRefs: describeOperationInputRefs(operation),
   resultSchema: operation.output
     ? describeRuntimeSchema(operation.output, { io: 'output' })
@@ -786,7 +793,7 @@ const describeDomainOperation = (
     : undefined,
   ingressRoutes: ingressRoutesByOperationId.get(operation.id),
   inputSchema: describeRuntimeSchema(operation.input),
-  receiverPath: operation.graphOps?.receiver,
+  receiverPath: operation.receiver?.kind === 'input' ? operation.receiver.path : undefined,
   inputRefs: describeOperationInputRefs(operation),
   resultSchema: operation.output
     ? describeRuntimeSchema(operation.output, { io: 'output' })

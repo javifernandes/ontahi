@@ -182,7 +182,7 @@ describe('data-graph operations', () => {
     });
   });
 
-  it('normalizes explicit and compatible legacy Operation receivers', () => {
+  it('normalizes explicit Operation receivers', () => {
     const Book = entity('ReceiverBook', { id: field.id() });
     const input = graphSchema.object({ book: graphSchema.ref(Book), title: field.string() });
     const operations = resolveDomainOperations('ReceiverBook', {
@@ -192,10 +192,6 @@ describe('data-graph operations', () => {
       }),
       rename: defineDomainOperationMetadata({
         receiver: { kind: 'input', path: 'book' },
-        input,
-      }),
-      legacyRename: defineDomainOperationMetadata({
-        graphOps: { receiver: 'book' },
         input,
       }),
     });
@@ -213,13 +209,9 @@ describe('data-graph operations', () => {
       requirement: 'portable',
       source: 'declaration',
     });
-    expect(operations.legacyRename.receiver).toEqual({
-      ...operations.rename.receiver,
-      source: 'legacy-graph-ops',
-    });
   });
 
-  it('rejects invalid canonical receiver declarations without rejecting legacy metadata', () => {
+  it('rejects invalid canonical receiver declarations', () => {
     const Book = entity('ReceiverValidationBook', { id: field.id() });
     const optionalInput = graphSchema.object({
       book: graphSchema.optional(graphSchema.ref(Book)),
@@ -234,15 +226,6 @@ describe('data-graph operations', () => {
       }),
     ).toThrow('receiver path "book" must be required and non-nullable');
 
-    const legacy = resolveDomainOperations('ReceiverValidationBook', {
-      inspect: defineDomainOperationMetadata({
-        graphOps: { receiver: 'book' },
-        input: optionalInput,
-      }),
-    });
-    expect(legacy.inspect.receiver).toBeUndefined();
-    expect(legacy.inspect.graphOps).toEqual({ receiver: 'book' });
-
     expect(() =>
       resolveDomainOperations('ReceiverValidationBook', {
         inspect: defineDomainOperationMetadata({
@@ -253,7 +236,7 @@ describe('data-graph operations', () => {
     ).toThrow('receiver path "book" must be required and non-nullable');
   });
 
-  it('rejects missing, non-Ref, conflicting, and malformed canonical receivers', () => {
+  it('rejects missing, non-Ref, and malformed canonical receivers', () => {
     const Book = entity('ReceiverFailureBook', { id: field.id() });
     const scalarInput = graphSchema.object({ title: field.string() });
 
@@ -273,18 +256,6 @@ describe('data-graph operations', () => {
         }),
       }),
     ).toThrow('receiver path "title" is not a portable or existing Entity Ref participant');
-    expect(() =>
-      resolveDomainOperations('ReceiverFailureBook', {
-        inspect: defineDomainOperationMetadata({
-          receiver: { kind: 'input', path: 'book' },
-          graphOps: { receiver: 'otherBook' },
-          input: graphSchema.object({
-            book: graphSchema.ref(Book),
-            otherBook: graphSchema.ref(Book),
-          }),
-        }),
-      }),
-    ).toThrow('conflicts with legacy graphOps.receiver "otherBook"');
     expect(() =>
       resolveDomainOperations('ReceiverFailureBook', {
         inspect: defineDomainOperationMetadata({
@@ -371,7 +342,6 @@ describe('data-graph operations', () => {
         reindexBookSearch: defineDomainOperationMetadata({
           authority: 'server',
           exposure: 'server-only',
-          graphOps: { receiver: 'book' },
           durable: {
             finalOutput: ReindexBookSearchResultSchema,
           },
@@ -402,7 +372,6 @@ describe('data-graph operations', () => {
       name: 'reindexBookSearch',
       authority: 'server',
       exposure: 'server-only',
-      graphOps: { receiver: 'book' },
       durable: {
         runtime: 'vercel-workflow',
         finalOutput: ReindexBookSearchResultSchema,

@@ -124,42 +124,6 @@ describe('bound Entity Ref affordances', () => {
     );
   });
 
-  it('preserves legacy same-Ref and cross-participant binding without allowing redirects', () => {
-    const Actor = entity('LegacyActor', { id: field.id() });
-    const invite = createEntityRef(Invite, { id: 'invite' });
-    const actor = createEntityRef(Actor, { id: 'actor' });
-    const otherActor = createEntityRef(Actor, { id: 'other' });
-    const operation = {
-      receiver: {
-        kind: 'input',
-        path: 'actor',
-        entityName: 'LegacyActor',
-        source: 'legacy-graph-ops',
-      },
-      input: graphSchema.object({
-        invite: graphSchema.ref(Invite),
-        actor: graphSchema.ref(Actor),
-      }),
-    } as const;
-
-    const actorProxy = bindEntityRefOperationProxy(
-      actor,
-      { accept: operation },
-      { run: ({ input }) => input },
-    );
-    expect(actorProxy.accept({ actor, invite })).toEqual({ actor, invite });
-    expect(() => actorProxy.accept({ actor: otherActor, invite })).toThrow(
-      'cannot redirect to another Entity Ref',
-    );
-
-    const inviteProxy = bindEntityRefOperationProxy(
-      invite,
-      { accept: operation },
-      { run: ({ input }) => input },
-    );
-    expect(inviteProxy.accept({ actor })).toEqual({ invite, actor });
-  });
-
   it('matches by target entity and preserves an explicit participant override', () => {
     const Actor = entity('Actor', { id: field.id() });
     const ref = createEntityRef(Invite, { token: 'one' });

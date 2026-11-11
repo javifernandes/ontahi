@@ -56,7 +56,7 @@ type OperationReceiverDescriptor =
       entityName: string;
       participant: 'ref';
       requirement: 'portable' | 'existing';
-      source: 'declaration' | 'legacy-graph-ops';
+      source: 'declaration';
     };
 ```
 
@@ -72,13 +72,10 @@ Composition rejects a new canonical receiver declaration when:
 3. the field is optional or nullable;
 4. the field is not a portable or existing Entity Ref participant;
 5. the Ref target is absent from the composed application's registered Entity catalog;
-6. legacy `graphOps.receiver` and canonical `receiver` disagree when both identify Ref participants;
-7. the declaration attempts a Selection, nested path, Relation, Module, or Application receiver in
+6. the declaration attempts a Selection, nested path, Relation, Module, or Application receiver in
    this slice.
 
-The normalized Entity name is derived from the schema. Authors do not repeat it. Legacy metadata
-that cannot satisfy these rules remains on the compatibility path below; upgrading must not turn an
-already composed application into a startup failure.
+The normalized Entity name is derived from the schema. Authors do not repeat it.
 
 ## Invocation semantics
 
@@ -108,12 +105,6 @@ is equal to the bound Ref; `workspaceA.askPlans({ workspace: workspaceB, questio
 never redirect the invocation. Binding must also reject a bound Entity Ref whose Entity does not
 match the descriptor. Complete-input functional calls remain the explicit way to supply a receiver.
 
-The strict no-receiver-field rule applies to descriptors whose source is `declaration`. A descriptor
-derived from legacy `graphOps.receiver` preserves an existing same-Ref argument: it accepts the
-receiver path only when its normalized Entity and locator equal the bound Ref, and rejects any
-redirect to another Ref. This exception is migration behavior, not the contract for newly authored
-receivers.
-
 An Entity-type declaration documents and reflects why the existing Entity-qualified callable is a
 type operation. It adds no second wire value and no mutable class object.
 
@@ -121,24 +112,14 @@ type operation. It adds no second wire value and no mutable class object.
 
 1. Complete-input invocation is unchanged.
 2. Operations without a receiver remain valid and callable through the functional API.
-3. `graphOps.receiver` is accepted temporarily and normalized as an input receiver only when it
-   identifies a required Ref participant that satisfies the canonical rules. Its descriptor retains
-   `source: 'legacy-graph-ops'`; provenance is not erased by normalization.
-4. Optional, nullable, and one-cardinality Selection receivers expressed only through
-   `graphOps.receiver` remain composable and retain their existing Explorer instance actions. They
-   are reflected as legacy receiver metadata, not widened into the first canonical descriptor.
-5. Ref facade binding uses this precedence:
-   1. an explicit canonical declaration binds only its declared receiver and disables inference;
-   2. a compatible Ref matching a legacy normalized descriptor binds the legacy receiver path;
-   3. a Ref of another Entity falls back to the historical unique schema match, preserving
-      source-bound calls when legacy `graphOps.receiver` names a destination participant;
-   4. legacy metadata that could not normalize uses the historical inference unchanged.
-      None of the fallback results is reflected as canonical meaning.
-6. Canonical metadata controls new bound projection. Explorer additionally consumes the isolated
-   legacy projection until Selection and migration semantics have their own executable slice.
-7. Todo, Classroom, generated clients, React hooks, Explorer, and codegen migrate in the same
+3. `graphOps` remains available for locator traversal metadata, but no longer declares receivers.
+4. Ref facade binding uses an explicit canonical declaration before historical unique-schema
+   inference for Operations that do not declare a receiver. Inference is not reflected as canonical meaning.
+5. Optional, nullable, and one-cardinality Selection inputs remain ordinary explicit inputs until
+   Selection receiver semantics have their own executable slice.
+6. Todo, Classroom, generated clients, React hooks, Explorer, and codegen migrate in the same
    release before consumer applications do.
-8. Removing either compatibility path requires inventory, migration evidence, a breaking-change
+7. Removing either compatibility path requires inventory, migration evidence, a breaking-change
    plan, and release notes.
 
 ## Implementation slices
@@ -149,19 +130,15 @@ type operation. It adds no second wire value and no mutable class object.
       application composition.
 - [x] Reflect the descriptor in application discovery and generated client declarations.
 - [x] Make Entity Ref binding consume canonical metadata before compatibility inference.
-- [ ] Make Explorer prefer the canonical descriptor while preserving tested legacy Ref and
-      one-cardinality Selection projections.
+- [x] Make Explorer consume only the canonical descriptor and remove `graphOps.receiver`.
 - [x] Prove bound and complete-input calls reconstruct identical invocation input.
 - [x] Prove bound calls reject an explicit receiver argument and a wrong-Entity bound Ref.
-- [x] Prove legacy same-Ref arguments remain valid while different-Ref redirects fail.
-- [x] Prove legacy cross-participant Ref inference remains callable without becoming canonical.
 - [x] Prove React lifecycle callbacks, invalidation, and cache keys receive complete input.
 - [x] Migrate Todo type/Ref receivers and its generated client.
 - [x] Migrate Classroom enrollment type/Ref receivers.
 - [x] Document owner versus receiver and the functional escape hatch.
-- [ ] Add traceable Core, React, Explorer, and Codegen Changesets. Core landed in the first slice;
-      React and Codegen land in this slice; Explorer remains in the final slice.
-- [ ] Rehearse packed packages and consumer typechecking before alpha.20.
+- [x] Add traceable Core, React, Explorer, and Codegen Changesets across the implementation slices.
+- [x] Rehearse packed packages and consumer typechecking before alpha.20.
 
 ## Non-goals
 
@@ -174,16 +151,14 @@ type operation. It adds no second wire value and no mutable class object.
 
 ## Acceptance
 
-- [ ] Every migrated Operation reflects one stable portable receiver descriptor.
-- [ ] Ambiguous same-Entity participants bind through the declared path without schema guessing.
-- [ ] Invalid, optional, nullable, or mismatched receiver declarations fail during composition.
-- [ ] Canonical input receiver targets must be registered in the composed Entity catalog.
-- [ ] Bound server, generated-client, and React use lower to the unchanged complete invocation.
-- [ ] Bound calls reject a supplied receiver field and a Ref whose Entity differs from the receiver
+- [x] Every migrated Operation reflects one stable portable receiver descriptor.
+- [x] Ambiguous same-Entity participants bind through the declared path without schema guessing.
+- [x] Invalid, optional, nullable, or mismatched receiver declarations fail during composition.
+- [x] Canonical input receiver targets must be registered in the composed Entity catalog.
+- [x] Bound server, generated-client, and React use lower to the unchanged complete invocation.
+- [x] Bound calls reject a supplied receiver field and a Ref whose Entity differs from the receiver
       descriptor.
-- [ ] Legacy normalized bound calls accept a supplied identical Ref but reject receiver redirects.
-- [ ] Legacy optional/nullable Ref and one-cardinality Selection receiver actions remain available
-      in Explorer, and legacy cross-participant Ref calls retain their prior binding behavior.
-- [ ] Runtime Protocol compatibility tests prove no new receiver field is transported.
-- [ ] Todo and Classroom retain their existing behavior with both bound and functional calls.
-- [ ] Package tests, typechecks, artifact verification, Changesets, and packed-consumer rehearsal pass.
+- [x] Explorer instance actions consume only canonical required-Ref receiver descriptors.
+- [x] Runtime Protocol compatibility tests prove no new receiver field is transported.
+- [x] Todo and Classroom retain their existing behavior with both bound and functional calls.
+- [x] Package tests, typechecks, artifact verification, Changesets, and packed-consumer rehearsal pass.

@@ -1391,6 +1391,7 @@ describe('ExplorerEntityBrowser', () => {
       kind: 'domain',
       authority: 'server',
       exposure: 'bridge',
+      receiverPath: 'book',
       inputSchema: {
         source: 'ontahi',
         summary: 'object',
@@ -1403,7 +1404,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -1489,6 +1489,7 @@ describe('ExplorerEntityBrowser', () => {
       kind: 'domain',
       authority: 'server',
       exposure: 'bridge',
+      receiverPath: 'book',
       inputSchema: {
         source: 'ontahi',
         summary: 'object',
@@ -1498,7 +1499,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -1511,9 +1511,9 @@ describe('ExplorerEntityBrowser', () => {
       entityName: 'Chapter',
       name: 'create',
       resultEntityName: 'Chapter',
+      receiverPath: undefined,
       inputRefs: deleteOperation.inputRefs?.map(inputRef => ({
         ...inputRef,
-        receiver: false,
       })),
     };
 
@@ -1598,6 +1598,7 @@ describe('ExplorerEntityBrowser', () => {
       kind: 'domain',
       authority: 'server',
       exposure: 'bridge',
+      receiverPath: 'book',
       inputSchema: {
         source: 'ontahi',
         summary: 'object',
@@ -1607,7 +1608,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -1665,6 +1665,7 @@ describe('ExplorerEntityBrowser', () => {
       kind: 'domain',
       authority: 'server',
       exposure: 'bridge',
+      receiverPath: 'book',
       inputSchema: {
         source: 'ontahi',
         summary: 'object',
@@ -1674,7 +1675,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -2387,7 +2387,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: false,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -2401,6 +2400,7 @@ describe('ExplorerEntityBrowser', () => {
       kind: 'domain',
       authority: 'server',
       exposure: 'bridge',
+      receiverPath: 'profile',
       inputSchema: {
         source: 'ontahi',
         summary: 'object',
@@ -2410,7 +2410,6 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'profile',
           entityName: 'Profile',
-          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['profile'], sourceFields: ['id'] }],
         },

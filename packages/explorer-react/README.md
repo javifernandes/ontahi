@@ -53,9 +53,9 @@ without a reflected reader continue to open on the reflected Entity structure. E
 The collection header now owns its Entity-scoped operation and Task affordance instead of sending
 the user to a separate Actions page. An instance window and each collection row derive a narrower
 action menu from Operations that explicitly declare the current identity as their receiver through
-`graphOps.receiver`. The receiver may be an Entity Ref or a one-cardinality Entity Selection; it
+the canonical Operation `receiver`. The receiver is a required Entity Ref input in this slice; it
 stays visible as context but disappears from the mini form, which asks only for the remaining
-inputs. A compatible input that is merely contextual does not become an instance action. This
+inputs. A compatible Ref or one-cardinality Selection that is merely contextual does not become an instance action. This
 keeps operations such as `TodoItem.createItem` on the `TodoList -> TodoItem` relation while
 projecting `TodoItem.deleteList` onto each TodoList. Execution still depends on the registered
 reflected invoker and the runtime remains authoritative; receiver projection does not add

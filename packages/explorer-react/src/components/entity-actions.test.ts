@@ -31,7 +31,6 @@ const operation = (
     {
       path: 'tag',
       entityName: 'Tag',
-      receiver: false,
       optional: false,
       locators: [{ name: 'refById', fields: ['tag'], sourceFields: ['id'] }],
     },
@@ -74,9 +73,10 @@ describe('Explorer instance operation bindings', () => {
   });
 
   it('uses an explicit receiver to disambiguate compatible references', () => {
-    const receiver = { ...operation().inputRefs![0]!, receiver: true };
+    const receiver = operation().inputRefs![0]!;
     const resolved = operation({
-      inputRefs: [receiver, { ...receiver, path: 'otherTag', receiver: false }],
+      receiverPath: 'tag',
+      inputRefs: [receiver, { ...receiver, path: 'otherTag' }],
     });
 
     const binding = getExplorerInstanceOperationBinding(resolved, tagRef);
@@ -89,7 +89,7 @@ describe('Explorer instance operation bindings', () => {
     const contextual = operation();
     const receiver = operation({
       receiverPath: 'tag',
-      inputRefs: contextual.inputRefs?.map(inputRef => ({ ...inputRef, receiver: true })),
+      inputRefs: contextual.inputRefs,
     });
 
     expect(getExplorerInstanceReceiverOperationBinding(contextual, tagRef)).toBeNull();
@@ -102,14 +102,13 @@ describe('Explorer instance operation bindings', () => {
     ).toHaveLength(1);
   });
 
-  it('recognizes a one-cardinality Selection receiver by its reflected path', () => {
+  it('does not promote a one-cardinality Selection to a receiver action', () => {
     const listRef: AnyEntityRef = {
       kind: 'entity-ref',
       entityName: 'TodoList',
       locator: { id: 'list-1' },
     };
     const rename = operation({
-      receiverPath: 'list',
       inputRefs: [],
       inputSchema: {
         source: 'ontahi',
@@ -125,10 +124,7 @@ describe('Explorer instance operation bindings', () => {
       },
     });
 
-    expect(getExplorerInstanceReceiverOperationBinding(rename, listRef)).toMatchObject({
-      kind: 'selection',
-      field: { path: 'list' },
-    });
+    expect(getExplorerInstanceReceiverOperationBinding(rename, listRef)).toBeNull();
   });
 
   it('binds one-cardinality Entity selections but leaves many selections explicit', () => {
@@ -212,7 +208,6 @@ describe('Explorer instance operation bindings', () => {
     const listInput = {
       path: 'list',
       entityName: 'TodoList',
-      receiver: false,
       optional: false,
       locators: [{ name: 'refById', fields: ['list'], sourceFields: ['id'] }],
     };

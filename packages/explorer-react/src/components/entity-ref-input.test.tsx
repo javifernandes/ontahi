@@ -13,7 +13,6 @@ import { ExplorerEntityRefInput } from './index.js';
 const inputRef: ExplorerOperationInputRefDescriptor = {
   path: 'book',
   entityName: 'Book',
-  receiver: true,
   optional: false,
   locators: [
     {
