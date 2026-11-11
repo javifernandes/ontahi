@@ -88,6 +88,20 @@ describe('Operation declaration analysis', () => {
       receiver: { kind: 'entity-type', entityName: 'Book', source: 'declaration' },
       diagnostics: [],
     });
+    expect(
+      parseReceiverOperationWithContext(`
+        const Author = entity({ name: 'Author', fields: {} });
+        const operations = {
+          create: operation({
+            receiver: { kind: 'entity-type', entity: Author },
+            run: () => undefined,
+          }),
+        };
+      `),
+    ).toMatchObject({
+      receiver: { kind: 'entity-type', entityName: 'Author', source: 'declaration' },
+      diagnostics: [],
+    });
   });
 
   it.each([
@@ -208,6 +222,10 @@ describe('Operation declaration analysis', () => {
     ["graphSchema.pick(Book, ['id']).named('InspectInput')", 'receiver field is not selected'],
     ["graphSchema.pick(Book, selected).named('InspectInput')", 'pick keys are not literal'],
     ['graphSchema.array(graphSchema.existingRef(Book))', 'input is not object-shaped'],
+    [
+      "graphSchema.pick(graphSchema.string(), ['author']).named('InspectInput')",
+      'source has no fields',
+    ],
   ])('rejects a picked receiver when %s', (input, _reason) => {
     expect(
       parseReceiverOperationWithContext(`

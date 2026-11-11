@@ -97,7 +97,7 @@ const resolveEntityInputFields = (node, context, entityContext) => {
                 property.name.text === 'fields',
             )
           : undefined;
-      return fields && ts.isPropertyAssignment(fields)
+      return fields
         ? resolveReceiverInputFields(fields.initializer, resolved.context, entityContext)
         : undefined;
     }
@@ -111,7 +111,7 @@ const resolveEntityInputFields = (node, context, entityContext) => {
       ts.isIdentifier(property.name) &&
       property.name.text === 'fields',
   );
-  return fields && ts.isPropertyAssignment(fields)
+  return fields
     ? resolveReceiverInputFields(fields.initializer, resolved.context, entityContext)
     : undefined;
 };
@@ -171,14 +171,13 @@ const resolveInputReceiverDescriptor = ({
       ((ts.isIdentifier(property.name) && property.name.text === receiver.path) ||
         (ts.isStringLiteral(property.name) && property.name.text === receiver.path)),
   );
-  if (!field || !ts.isPropertyAssignment(field)) return undefined;
+  if (!field) return undefined;
   const participant = unwrapExpression(field.initializer);
   if (
     !ts.isCallExpression(participant) ||
     !['ref', 'existingRef'].includes(graphSchemaCallName(participant))
   )
     return undefined;
-  if (!participant || !ts.isPropertyAccessExpression(participant.expression)) return undefined;
   const target = participant.arguments[0];
   const entityName = target
     ? resolveInputRefEntityName(target, resolvedFields.context, entityContext)
@@ -486,7 +485,7 @@ const resolveInputRefEntityName = (target, schemaContext, entityContext) => {
               property.name.text === 'name',
           )
         : undefined;
-    if (name && ts.isPropertyAssignment(name) && ts.isStringLiteral(name.initializer)) {
+    if (name && ts.isStringLiteral(name.initializer)) {
       return name.initializer.text;
     }
   }
