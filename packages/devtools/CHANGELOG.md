@@ -1,5 +1,17 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.20
+
+### Patch Changes
+
+- Updated dependencies [4541444]
+- Updated dependencies [70cba55]
+- Updated dependencies [ce12994]
+  - @ontahi/core@1.0.0-alpha.20
+  - @ontahi/react@1.0.0-alpha.20
+  - @ontahi/language@1.0.0-alpha.20
+  - @ontahi/language-codemirror@1.0.0-alpha.20
+
 ## 1.0.0-alpha.19
 
 ### Minor Changes
