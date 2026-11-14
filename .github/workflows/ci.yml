@@ -18,8 +18,42 @@ env:
   PNPM_VERSION: '10.33.0'
 
 jobs:
+  changes:
+    name: Classify pull request changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          code=true
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            code=false
+
+            while IFS= read -r path; do
+              if [[ "$path" != *.md ]]; then
+                code=true
+                break
+              fi
+            done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          fi
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Quality and package artifacts
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,22 +92,29 @@ jobs:
         run: pnpm format:check
 
       - name: Lint
+        if: needs.changes.outputs.code == 'true'
         run: pnpm lint
 
       - name: Build framework and website
+        if: needs.changes.outputs.code == 'true'
         run: pnpm build
 
       - name: Typecheck
+        if: needs.changes.outputs.code == 'true'
         run: pnpm typecheck
 
       - name: Build Todo Express example
+        if: needs.changes.outputs.code == 'true'
         run: pnpm todo:build
 
       - name: Verify publishable artifacts
+        if: needs.changes.outputs.code == 'true'
         run: pnpm verify:artifacts -- --skip-build
 
   tests:
     name: Tests (Node ${{ matrix.node-version }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
