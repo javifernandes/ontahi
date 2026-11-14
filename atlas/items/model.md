@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/116-ontahi-selection-model
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
+  - ontahi://plans/168-atlas-semantic-item-type-reconciliation
 migratedFrom: bookops://atlas/model
 sourceCommit: 67713696
 ---
@@ -23,6 +24,23 @@ sourceCommit: 67713696
 Ontahi Model names the framework language independently from BookOps. Its core separates semantic
 things, identity, membership, data programs, application behavior, and execution topology instead
 of collapsing them into transport endpoints or provider APIs.
+
+## Item typing
+
+Atlas Item metadata keeps three concerns distinct:
+
+1. `kind` describes the durable document shape, such as `concept`, rather than the runtime thing it
+   explains.
+2. `typeOf` names the most specific semantic Item type or specialization established by the
+   concept.
+3. broader membership follows that type chain. For example, Durable Operation is directly a Domain
+   Operation, while Domain Operation is directly an Atlas Operation; Durable Operation therefore
+   inherits Atlas Operation meaning without repeating it.
+
+Placement under another Item expresses navigation and ownership, not semantic typing. A concept
+living below Domain Operation is not automatically an executable Operation: invocation, binding,
+resilience, and interaction concepts keep their own meaning until evidence supports a narrower
+type.
 
 The first developer book and executable Todo application are now the canonical narrative and
 pressure test for this model. Atlas preserves the durable distinctions as APIs continue to evolve.

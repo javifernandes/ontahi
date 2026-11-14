@@ -9,8 +9,10 @@ supports:
   - ontahi.domain-topology-graphos
   - bookops.model
 typeOf:
-  - spec-workstream-atlas.atlas-model.model-item
+  - spec-workstream-atlas.atlas-model.entity
 relatedPlans:
+  - ontahi://plans/168-atlas-semantic-item-type-reconciliation
+  - atlas://plans/146-package-manifest-and-classroom-model
   - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
   - ontahi://plans/71a-ontahi-relations-model-research
   - bookops://plans/71b-unified-entity-capability-lift
