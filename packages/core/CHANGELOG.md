@@ -1,5 +1,28 @@
 # @ontahi/core
 
+## 1.0.0-alpha.20
+
+### Minor Changes
+
+- 4541444: Let Domain Operations declare Entity-type or required Entity Ref input receivers, normalize them to
+  portable reflected metadata, validate canonical receiver targets during application composition,
+  and bind Entity Ref calls through the declared participant. Preserve legacy `graphOps.receiver` and
+  unique-schema binding behavior with explicit precedence while rejecting canonical receiver
+  redirection and unregistered targets.
+- ce12994: Remove the legacy `graphOps.receiver` declaration and its normalized descriptor provenance. Migrate
+  input receivers to the canonical Operation declaration, for example
+  `receiver: { kind: 'input', path: 'list' }`. Explorer instance actions now consume only canonical
+  receiver metadata, so Selection inputs no longer produce instance actions unless a future canonical
+  receiver kind models them. Bound calls supply the receiver through the bound Ref and must omit its
+  field from the invocation input. `graphOps.inputRefs` remains available for locator traversal
+  metadata.
+
+### Patch Changes
+
+- 70cba55: Preserve canonical Operation receiver metadata in generated client declarations, and document and
+  verify that bound React invocation lifecycle, cache keys, and invalidation receive the same complete
+  Operation input as functional invocation.
+
 ## 1.0.0-alpha.19
 
 ### Minor Changes
