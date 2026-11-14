@@ -2,7 +2,7 @@
 id: ontahi.model.reaction
 kind: concept
 title: Reaction
-parent: ontahi.model.applied-mutation-outcome
+parent: ontahi.model.application
 status: active
 horizon: now
 supports:

@@ -2,7 +2,8 @@
 id: ontahi.model.applied-mutation-outcome
 kind: concept
 title: Applied Mutation Outcome
-parent: ontahi.model.command
+parent: ontahi.model.value
+typeOf: ontahi.model.value
 status: active
 horizon: now
 supports:
@@ -49,3 +50,18 @@ Outcome and runs no Reactions. When execution belongs to an outer Data Graph tra
 `applied` first describes transaction-local application rather than a premature commit claim.
 Registered Reactions are interpreted only after that transaction commits; rollback publishes
 neither their effects nor their execution evidence.
+
+## Variants
+
+Applied Mutation Outcome is a discriminated union rather than an Entity hierarchy. Every variant
+shares `kind: 'applied-mutation-outcome'`, causal identity, the exact semantic Command, and the
+resulting Delta. `mutationKind` selects the variant whose Command and Delta contracts apply.
+
+| Variant                                                                                       | Discriminator             | Command                 | Delta                                            |
+| --------------------------------------------------------------------------------------------- | ------------------------- | ----------------------- | ------------------------------------------------ |
+| [[ontahi.model.applied-relationship-mutation-outcome\|Applied Relationship Mutation Outcome]] | `relationship-command`    | Relationship Command    | Relationship Delta or Ordered Relationship Delta |
+| [[ontahi.model.applied-entity-mutation-outcome\|Applied Entity Mutation Outcome]]             | `entity-mutation-command` | Entity Mutation Command | Entity Mutation Delta                            |
+
+The variant Items are both contained components of this union and direct semantic specializations
+through `typeOf`. A [[ontahi.model.reaction|Reaction]] consumes the union but is not structurally
+contained by it; Reactions are registered as part of the Application model.
