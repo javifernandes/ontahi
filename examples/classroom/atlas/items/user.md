@@ -38,9 +38,9 @@ providers establish identities; the User preserves the domain identity across th
 
 ## Operations
 
-| Operation         | Actor  | Applies when       | Transition | Effects                                     |
-| ----------------- | ------ | ------------------ | ---------- | ------------------------------------------- |
-| `CreateClassroom` | `User` | actor is this User | `none`     | create a Classroom and one Owner Enrollment |
+| Operation                                   | Actor  | Applies when       | Transition | Effects                                     |
+| ------------------------------------------- | ------ | ------------------ | ---------- | ------------------------------------------- |
+| [`Create Classroom`](./create-classroom.md) | `User` | actor is this User | `none`     | create a Classroom and one Owner Enrollment |
 
 ## Invariants
 

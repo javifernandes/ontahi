@@ -39,10 +39,10 @@ membership boundary and the roles that authorize management and participation.
 
 ## Operations
 
-| Operation    | Actor                   | Applies when                                            | Transition           | Effects                                             |
-| ------------ | ----------------------- | ------------------------------------------------------- | -------------------- | --------------------------------------------------- |
-| `InviteUser` | `Owner or Collaborator` | Classroom is Active and actor has a managing Enrollment | `none`               | create a Pending Enrollment Invitation              |
-| `Archive`    | `Owner`                 | Classroom is Active                                     | `Active -> Archived` | revoke Pending invitations and freeze participation |
+| Operation                            | Actor                   | Applies when                                            | Transition           | Effects                                             |
+| ------------------------------------ | ----------------------- | ------------------------------------------------------- | -------------------- | --------------------------------------------------- |
+| [`Invite`](./invite-to-classroom.md) | `Owner or Collaborator` | Classroom is Active and actor has a managing Enrollment | `none`               | create a Pending Enrollment Invitation              |
+| [`Archive`](./archive-classroom.md)  | `Owner`                 | Classroom is Active and actor has an Owner Enrollment   | `Active -> Archived` | revoke Pending invitations and freeze participation |
 
 ## Invariants
 
