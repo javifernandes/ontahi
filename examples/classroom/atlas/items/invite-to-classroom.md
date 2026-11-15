@@ -52,7 +52,7 @@ exists for the recipient, Classroom, and proposed role, and `expiresAt` is after
 | `managing-enrollment-missing` | The actor cannot manage Classroom access                 |
 | `recipient-not-proven`        | The target identity does not resolve to a proven User    |
 | `pending-invitation-exists`   | An equivalent unresolved proposal already exists         |
-| `expiration-not-future`       | The expiration boundary is not after the current time     |
+| `expiration-not-future`       | The expiration boundary is not after the current time    |
 
 ## Invariants Preserved
 
