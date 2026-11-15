@@ -114,7 +114,6 @@ jobs:
   tests:
     name: Tests (Node ${{ matrix.node-version }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -143,43 +142,54 @@ jobs:
       matrix:
         node-version: ['20.19.0', '24']
     steps:
+      - name: Skip tests for documentation-only changes
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No executable code changed; preserving the required test check without running the test suite."
+
       - name: Checkout
+        if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup pnpm
+        if: needs.changes.outputs.code == 'true'
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Setup Node
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
 
       - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQLite test dependency
+        if: needs.changes.outputs.code == 'true'
         run: pnpm --filter @ontahi/runtime-langgraph rebuild better-sqlite3
 
       - name: Build package dependencies
+        if: needs.changes.outputs.code == 'true'
         run: pnpm build:packages
 
       - name: Test packages on minimum Node
-        if: matrix.node-version == '20.19.0'
+        if: needs.changes.outputs.code == 'true' && matrix.node-version == '20.19.0'
         run: pnpm test:packages
 
       - name: Test packages with coverage
-        if: matrix.node-version == '24'
+        if: needs.changes.outputs.code == 'true' && matrix.node-version == '24'
         run: pnpm test:coverage:packages
 
       - name: Test examples
+        if: needs.changes.outputs.code == 'true'
         run: pnpm test:examples
 
       - name: Upload test results to Codecov
-        if: matrix.node-version == '24' && !cancelled()
+        if: needs.changes.outputs.code == 'true' && matrix.node-version == '24' && !cancelled()
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
         with:
           use_oidc: true
@@ -188,7 +198,7 @@ jobs:
           name: ontahi-node-24
 
       - name: Upload coverage to Codecov
-        if: matrix.node-version == '24'
+        if: needs.changes.outputs.code == 'true' && matrix.node-version == '24'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
         with:
           use_oidc: true
