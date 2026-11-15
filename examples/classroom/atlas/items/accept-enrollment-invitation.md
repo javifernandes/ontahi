@@ -12,7 +12,7 @@ relatedPlans:
 ---
 
 Accept Enrollment Invitation lets the proven recipient turn one Pending invitation into an
-explicit Classroom Enrollment. It is the first standalone Operation Item in the Classroom model.
+explicit Classroom Enrollment.
 
 ## Receiver
 
