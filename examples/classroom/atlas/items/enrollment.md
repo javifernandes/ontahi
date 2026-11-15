@@ -40,10 +40,10 @@ authority-bearing membership record produced by creation or by accepting an invi
 
 ## Operations
 
-| Operation    | Actor             | Applies when                                           | Transition        | Effects                              |
-| ------------ | ----------------- | ------------------------------------------------------ | ----------------- | ------------------------------------ |
-| `ChangeRole` | `Owner`           | Enrollment is Active and target is not the last Owner  | `none`            | replace the granted role             |
-| `End`        | `Owner or Member` | Enrollment is Active and ending it preserves one Owner | `Active -> Ended` | set `endedAt` and withdraw authority |
+| Operation                                    | Actor             | Applies when                                           | Transition        | Effects                              |
+| -------------------------------------------- | ----------------- | ------------------------------------------------------ | ----------------- | ------------------------------------ |
+| [`Change Role`](./change-enrollment-role.md) | `Owner`           | Enrollment is Active and target is not the last Owner  | `none`            | replace the granted role             |
+| [`End`](./end-enrollment.md)                 | `Owner or Member` | Enrollment is Active and ending it preserves one Owner | `Active -> Ended` | set `endedAt` and withdraw authority |
 
 ## Invariants
 
