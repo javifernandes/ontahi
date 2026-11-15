@@ -1,5 +1,17 @@
 # @ontahi/react
 
+## 1.0.0-alpha.20
+
+### Patch Changes
+
+- 70cba55: Preserve canonical Operation receiver metadata in generated client declarations, and document and
+  verify that bound React invocation lifecycle, cache keys, and invalidation receive the same complete
+  Operation input as functional invocation.
+- Updated dependencies [4541444]
+- Updated dependencies [70cba55]
+- Updated dependencies [ce12994]
+  - @ontahi/core@1.0.0-alpha.20
+
 ## 1.0.0-alpha.19
 
 ### Patch Changes
