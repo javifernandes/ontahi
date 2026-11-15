@@ -33,8 +33,8 @@ It creates the Enrollment Invitation whose later Operations resolve the proposal
 
 ## Availability
 
-The Classroom is active, the actor has a managing Enrollment, and no equivalent Pending invitation
-exists for the recipient, Classroom, and proposed role.
+The Classroom is active, the actor has a managing Enrollment, no equivalent Pending invitation
+exists for the recipient, Classroom, and proposed role, and `expiresAt` is after the current time.
 
 ## Transition And Effects
 
@@ -52,6 +52,7 @@ exists for the recipient, Classroom, and proposed role.
 | `managing-enrollment-missing` | The actor cannot manage Classroom access                 |
 | `recipient-not-proven`        | The target identity does not resolve to a proven User    |
 | `pending-invitation-exists`   | An equivalent unresolved proposal already exists         |
+| `expiration-not-future`       | The expiration boundary is not after the current time     |
 
 ## Invariants Preserved
 
