@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+
+import { runGit, runPnpm } from './local-tool.mjs';
 
 const formattedExtensions = new Set([
   '.cjs',
@@ -22,7 +23,7 @@ const formattedExtensions = new Set([
 ]);
 
 const gitPaths = (...arguments_) => {
-  const result = spawnSync('git', arguments_, { encoding: 'buffer' });
+  const result = runGit(arguments_, { encoding: 'buffer' });
   if (result.status !== 0) process.exit(result.status ?? 1);
 
   return result.stdout.toString('utf8').split('\0').filter(Boolean);
@@ -48,11 +49,10 @@ if (partiallyStagedPaths.length > 0) {
   process.exit(1);
 }
 
-const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const formatted = spawnSync(packageManager, ['exec', 'oxfmt', '--write', ...stagedPaths], {
+const formatted = runPnpm(['exec', 'oxfmt', '--write', ...stagedPaths], {
   stdio: 'inherit',
 });
 if (formatted.status !== 0) process.exit(formatted.status ?? 1);
 
-const staged = spawnSync('git', ['add', '--', ...stagedPaths], { stdio: 'inherit' });
+const staged = runGit(['add', '--', ...stagedPaths], { stdio: 'inherit' });
 if (staged.status !== 0) process.exit(staged.status ?? 1);

@@ -1,12 +1,12 @@
-import { spawnSync } from 'node:child_process';
+import { runGit } from './local-tool.mjs';
 
-const git = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
+const git = runGit(['rev-parse', '--is-inside-work-tree'], {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'ignore'],
 });
 
 if (git.status === 0 && git.stdout.trim() === 'true') {
-  const configured = spawnSync('git', ['config', 'core.hooksPath', '.githooks'], {
+  const configured = runGit(['config', 'core.hooksPath', '.githooks'], {
     stdio: 'inherit',
   });
 
