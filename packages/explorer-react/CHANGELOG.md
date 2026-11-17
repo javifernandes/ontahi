@@ -1,5 +1,27 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.20
+
+### Minor Changes
+
+- ce12994: Remove the legacy `graphOps.receiver` declaration and its normalized descriptor provenance. Migrate
+  input receivers to the canonical Operation declaration, for example
+  `receiver: { kind: 'input', path: 'list' }`. Explorer instance actions now consume only canonical
+  receiver metadata, so Selection inputs no longer produce instance actions unless a future canonical
+  receiver kind models them. Bound calls supply the receiver through the bound Ref and must omit its
+  field from the invocation input. `graphOps.inputRefs` remains available for locator traversal
+  metadata.
+
+### Patch Changes
+
+- Updated dependencies [4541444]
+- Updated dependencies [70cba55]
+- Updated dependencies [ce12994]
+  - @ontahi/core@1.0.0-alpha.20
+  - @ontahi/react@1.0.0-alpha.20
+  - @ontahi/language@1.0.0-alpha.20
+  - @ontahi/language-codemirror@1.0.0-alpha.20
+
 ## 1.0.0-alpha.19
 
 ### Patch Changes

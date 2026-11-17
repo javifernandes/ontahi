@@ -1,5 +1,15 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.20
+
+### Patch Changes
+
+- Updated dependencies [4541444]
+- Updated dependencies [70cba55]
+- Updated dependencies [ce12994]
+  - @ontahi/core@1.0.0-alpha.20
+  - @ontahi/runtime-http@1.0.0-alpha.20
+
 ## 1.0.0-alpha.19
 
 ### Patch Changes
