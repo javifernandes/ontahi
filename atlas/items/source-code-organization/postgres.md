@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.postgres
 kind: artifact
-title: @ontahi/postgres
+title: '@ontahi/postgres'
 parent: ontahi.source-code-organization
 status: active
 horizon: now

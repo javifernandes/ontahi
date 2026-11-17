@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.runtime-langgraph
 kind: artifact
-title: @ontahi/runtime-langgraph
+title: '@ontahi/runtime-langgraph'
 parent: ontahi.source-code-organization
 status: experimental
 horizon: now
