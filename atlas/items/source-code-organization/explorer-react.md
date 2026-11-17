@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.explorer-react
 kind: artifact
-title: @ontahi/explorer-react
+title: '@ontahi/explorer-react'
 parent: ontahi.source-code-organization
 status: in-progress
 horizon: now
