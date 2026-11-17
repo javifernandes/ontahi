@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.runtime-vercel-workflows
 kind: artifact
-title: @ontahi/runtime-vercel-workflows
+title: '@ontahi/runtime-vercel-workflows'
 parent: ontahi.source-code-organization
 status: active
 horizon: now

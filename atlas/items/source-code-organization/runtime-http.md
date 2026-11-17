@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.runtime-http
 kind: artifact
-title: @ontahi/runtime-http
+title: '@ontahi/runtime-http'
 parent: ontahi.source-code-organization
 status: in-progress
 horizon: now

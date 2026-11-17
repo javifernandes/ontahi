@@ -1,7 +1,7 @@
 ---
 id: ontahi.source-code-organization.mysql
 kind: artifact
-title: @ontahi/mysql
+title: '@ontahi/mysql'
 parent: ontahi.source-code-organization
 status: active
 horizon: now
