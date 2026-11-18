@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/168-atlas-semantic-item-type-reconciliation
+  - ontahi://plans/169-replicated-versioned-models-kernel-and-materializer-spi
 migratedFrom: bookops://atlas/model
 sourceCommit: 67713696
 ---
@@ -72,6 +73,7 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 22. [`Semantic Module`](./model/semantic-module.md) (shaping)
 23. [`Operation Execution Resilience`](./model/operation-execution-resilience.md) (shaping)
 24. [`Operation Implementation Binding`](./model/operation-implementation-binding.md) (shaping)
+25. [`Replicated Versioned Model`](./model/replicated-versioned-model.md) (shaping)
 
 ## Adjacent Runtime Shapes
 

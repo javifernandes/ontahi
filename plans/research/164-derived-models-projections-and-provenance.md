@@ -12,6 +12,7 @@ Related plans:
 4. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
 5. [158. Semantic Execution Context, Governance And Evidence](158-semantic-execution-context-governance-and-evidence.md)
 6. [160. Semantic Modules, Composition And System Boundaries](160-semantic-modules-composition-and-system-boundaries.md)
+7. [169. Replicated Versioned Models Kernel And Materializer SPI](../next/169-replicated-versioned-models-kernel-and-materializer-spi.md)
 
 ## Summary
 
@@ -132,6 +133,13 @@ Use search as the first non-model Resource case and translation as the richer pr
 6. decide what belongs in Resource Governance, Operation execution, Events, Entity/Relation models,
    and a new derivation declaration;
 7. end with a continue/reshape/stop decision before introducing a public DSL.
+
+## Outcome
+
+Continue through Plan 169 with a behavior-first executable slice. Atlas incremental reconciliation
+is the first adoption and BookOps content derivation is the required second case. The two consumers
+must prove a provider-neutral kernel and Materializer SPI before Ontahí stabilizes a declarative
+Entity derivation API. Physical lifecycle policy and multi-master convergence remain separate work.
 
 ## Non-Goals
 
