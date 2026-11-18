@@ -99,6 +99,21 @@ describe('replicated versioned model kernel', () => {
     });
   });
 
+  it('captures derivation identity when the kernel is created', () => {
+    const options = { derivationId: 'atlas-markdown-projection' };
+    const kernel = createReplicatedVersionedModelKernel<ProjectionState>(options);
+    kernel.apply(rebuild());
+
+    options.derivationId = 'another-derivation';
+
+    expect(kernel.apply(incremental())).toMatchObject({
+      status: 'accepted',
+      snapshot: {
+        acceptance: { derivationId: 'atlas-markdown-projection' },
+      },
+    });
+  });
+
   it('requires a rebuild when incremental execution has no baseline or skips a source frontier', () => {
     const kernel = createReplicatedVersionedModelKernel<ProjectionState>({
       derivationId: 'atlas-markdown-projection',

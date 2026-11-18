@@ -110,6 +110,7 @@ const acceptanceFor = <TState extends JsonValue>(
 export const createReplicatedVersionedModelKernel = <TState extends JsonValue>(options: {
   derivationId: DerivationId;
 }): ReplicatedVersionedModelKernel<TState> => {
+  const derivationId = options.derivationId;
   let current: ReplicatedVersionedModelSnapshot<TState> | null = null;
 
   const accepted = (): ReplicatedVersionedModelAcceptance | null =>
@@ -127,7 +128,7 @@ export const createReplicatedVersionedModelKernel = <TState extends JsonValue>(o
       };
     }
 
-    const attempted = acceptanceFor(options.derivationId, attempt);
+    const attempted = acceptanceFor(derivationId, attempt);
 
     if (!current) {
       if (attempt.mode === 'incremental') {
