@@ -1,0 +1,160 @@
+# 171. Core Model And Runtime Boundaries
+
+Status: next
+
+Canonical ID: `ontahi://plans/171-core-model-and-runtime-boundaries`
+
+Related plans:
+
+1. [169. Replicated Versioned Models Kernel And Materializer SPI](../current/169-replicated-versioned-models-kernel-and-materializer-spi.md)
+2. [160. Semantic Modules, Composition And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
+
+## Summary
+
+Reorganize `@ontahi/core` around explicit conceptual boundaries between values, application models,
+computation, and runtime implementation. Replace `data-graph` as an oversized historical namespace
+with smaller model and runtime modules while preserving the public package API throughout the
+migration.
+
+The work begins by describing ownership and allowed dependencies, not by performing a repository-wide
+rename. Mechanical moves follow only after each group has a clear destination and compatibility
+surface.
+
+## Context
+
+`data-graph` began as a useful description of Ontahí's graph-oriented entity model. It now contains
+Entity and Field definitions, references, relations, selections, operations, reactions, protocols,
+dispatchers, planning, client cache behavior, remote execution, and an in-memory storage/runtime.
+The name no longer communicates which concepts are portable model semantics and which are concrete
+execution mechanisms.
+
+The imbalance is visible elsewhere: `model/` contains only small validation helpers while the
+identity-bearing domain model lives mostly under `data-graph`; `runtime/` already owns substantial
+client/server execution; and `data-graph/client/cache/index.ts` combines several independent cache
+responsibilities in one large module. Adding Replicated Versioned Models at the source root made the
+missing model boundary more obvious.
+
+## Architectural Lens
+
+Use four peer concepts unless implementation evidence proves a better hierarchy:
+
+1. `value`: data and constraints without identity;
+2. `model`: identity-bearing application concepts and their portable semantics;
+3. `computation`: reusable ways to produce, combine, and transform values;
+4. `runtime`: engines, protocols, caches, storage adapters, and environment-specific execution.
+
+`model` is not a replacement catch-all for Core. A module belongs there only when its meaning is
+independent of a particular client, server, transport, storage engine, or execution strategy.
+
+An indicative shape is:
+
+```text
+src/
+  value/
+  computation/
+  model/
+    entity/
+    operation/
+    query/
+    expression/
+    replication/
+  runtime/
+    client/
+    server/
+    protocol/
+    storage/
+      in-memory/
+```
+
+The exact directories are outputs of classification, not precommitted destinations.
+
+## Scope
+
+- Inventory `data-graph` and classify modules as portable model, runtime, adapter, compatibility
+  facade, or unresolved.
+- State allowed dependency directions and identify current cycles or inversions.
+- Establish narrow model boundaries for Entity identity, fields, references, relations,
+  invariants/preconditions, operations, selections/views, expressions, and replication.
+- Move concrete in-memory behavior behind a runtime/storage adapter boundary.
+- Split the graph client cache by responsibility without changing its observable behavior.
+- Determine whether the legacy Zod helpers remain a supported public compatibility surface,
+  should move to value validation, or should be deprecated in favor of Ontahí schemas.
+- Preserve package-root exports and add compatibility re-exports when internal paths move.
+- Retire the `data-graph` directory only after no concept depends on it as an architectural bucket.
+
+## Non-Goals
+
+- A single large rename or file-move PR.
+- Redesigning Entity, operation, query, cache, or storage semantics during mechanical extraction.
+- Treating every type as a model or nesting `value` and `computation` under `model` without evidence.
+- Breaking package-root imports or promising compatibility for undocumented internal paths.
+- Creating new packages before the in-package boundaries demonstrate that they are independently
+  useful.
+
+## Execution Slices
+
+1. Produce a module inventory, dependency map, classification rubric, and target boundary proposal.
+2. Extract the portable Entity kernel from `data-graph/definitions.ts` into cohesive model modules,
+   retaining compatibility exports and behavior-level tests.
+3. Separate portable operation, query/selection, relation, and expression semantics from their
+   dispatch and execution machinery.
+4. Move in-memory storage/runtime implementation under a concrete runtime adapter boundary.
+5. Split client cache records/events, normalization, entity storage, output storage, and
+   reconciliation into internal modules behind its current public factory.
+6. Audit `model/zod.ts` usage and either document, relocate, deprecate, or remove it through the
+   package's normal compatibility process.
+7. Migrate remaining consumers, measure dependency direction, and remove the obsolete
+   `data-graph` compatibility directory only when safe.
+
+Each slice should be its own PR unless a preceding analysis proves two adjacent slices are purely
+mechanical and low risk.
+
+## Acceptance Checklist
+
+- [ ] Every existing `data-graph` module has a recorded owner category and intended destination.
+- [ ] Model modules do not depend on client, server, transport, or concrete storage implementations.
+- [ ] Runtime modules consume portable models through explicit contracts.
+- [ ] The in-memory implementation is recognizable as a storage/runtime adapter rather than model
+      semantics.
+- [ ] Client cache responsibilities are split into reviewable modules without changing behavior.
+- [ ] The legacy Zod surface has an evidence-backed disposition and migration path.
+- [ ] Package-root consumers retain source compatibility through the migration.
+- [ ] Public API changes carry Changesets; mechanical internal moves do not manufacture API churn.
+- [ ] `data-graph` no longer serves as the default destination for unrelated Entity-adjacent work.
+
+## Verification
+
+- Add architecture tests or static dependency checks for accepted direction rules where they
+  provide durable value.
+- Run focused tests for every moved subsystem and the full `@ontahi/core` suite for each behavioral
+  extraction.
+- Run typecheck, lint, build, Changeset status when applicable, artifact verification for public
+  package changes, and `git diff --check`.
+- Use representative server, React/client, and adapter consumers to verify package-root compatibility.
+
+## Decisions
+
+1. `value`, `model`, `computation`, and `runtime` begin as peer concepts.
+2. Identity-bearing semantics belong to the model layer; persistence and execution do not.
+3. `data-graph` is a migration source and compatibility concern, not the proposed destination name.
+4. Public API stability is independent from internal file organization.
+5. Classification and dependency rules precede broad file movement.
+
+## Open Questions
+
+1. Is `entity` the root portable model abstraction, or does a smaller schema/value-object layer sit
+   between `value` and Entity?
+2. Which operation concepts are model declarations versus runtime invocation and dispatch?
+3. Are selections and views part of the Entity model, a query model, or a distinct semantic-program
+   boundary?
+4. Should the in-memory implementation remain in Core, become a test/reference adapter, or later
+   move to its own package?
+5. Which client cache records are generic Entity-model concepts and which are graph-read-specific?
+6. Does the current Ontahí schema fully replace the exported Zod helpers for supported use cases?
+
+## Closure / Evolution
+
+Ready for an inventory and dependency-direction slice. Replicated Versioned Models are already
+placed under `model/replication`, providing one narrow example of the intended distinction between
+portable model semantics and runtime/storage implementation. No broader directory move is implied
+until the inventory resolves ownership and compatibility constraints.

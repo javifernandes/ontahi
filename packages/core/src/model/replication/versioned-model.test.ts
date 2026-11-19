@@ -4,7 +4,7 @@ import {
   createReplicatedVersionedModelKernel,
   type ReplicatedVersionedModelAttempt,
   type ReplicatedVersionedModelResult,
-} from './replicated-versioned-model.js';
+} from './versioned-model.js';
 
 type ProjectionState = {
   readonly records: readonly { readonly id: string; readonly title: string }[];

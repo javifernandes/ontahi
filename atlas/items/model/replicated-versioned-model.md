@@ -45,6 +45,17 @@ dependencies, and diagnostics. It may express one-to-one, one-to-many, many-to-o
 or externally materialized derivations. Missing dependency evidence, source gaps, or incompatible
 implementation versions require a full rebuild rather than guessed partial publication.
 
+The reference runner asks the Materializer for an affected-output set before incremental
+derivation. `known` evidence is passed into behavior; `unknown` requests a rebuild without invoking
+that behavior. Dependency evidence returned by a successful derivation replaces the retained index
+only after the kernel accepts the candidate, so rejected frontiers cannot corrupt later
+invalidation. This first proof retains evidence in memory. A caller-owned persistence port should
+be introduced only when an adopter demonstrates its required atomic boundary.
+
+The portable contract belongs to the Core model layer under `model/replication`; it is not itself a
+storage or server runtime. Core continues to expose it from the package root so physical module
+organization does not become a consumer migration.
+
 Full rebuild, incremental update, validation, and repair are distinct operations over the same
 logical model. Full rebuild remains the recovery path and equivalence oracle after incremental
 maintenance becomes primary.

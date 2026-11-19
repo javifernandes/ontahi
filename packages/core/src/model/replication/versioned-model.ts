@@ -1,4 +1,4 @@
-import { cloneJson, type JsonValue } from './value/json.js';
+import { cloneJson, type JsonValue } from '../../value/json.js';
 
 export type DerivationId = string;
 export type MaterializerVersion = string;
@@ -45,10 +45,16 @@ export type ReplicatedVersionedModelFailure = {
   failure: unknown;
 };
 
+export type ReplicatedVersionedModelRebuildRequest = {
+  outcome: 'rebuild-required';
+  reason: 'unknown-dependency';
+};
+
 export type ReplicatedVersionedModelAttempt<TState extends JsonValue = JsonValue> =
   | ReplicatedVersionedModelRebuild<TState>
   | ReplicatedVersionedModelIncrement<TState>
-  | ReplicatedVersionedModelFailure;
+  | ReplicatedVersionedModelFailure
+  | ReplicatedVersionedModelRebuildRequest;
 
 export type ReplicatedVersionedModelAccepted<TState extends JsonValue = JsonValue> = {
   status: 'accepted';
@@ -58,7 +64,11 @@ export type ReplicatedVersionedModelAccepted<TState extends JsonValue = JsonValu
 
 export type ReplicatedVersionedModelRebuildRequired = {
   status: 'rebuild-required';
-  reason: 'missing-accepted-frontier' | 'source-frontier-gap' | 'materializer-version-changed';
+  reason:
+    | 'missing-accepted-frontier'
+    | 'source-frontier-gap'
+    | 'materializer-version-changed'
+    | 'unknown-dependency';
   accepted: ReplicatedVersionedModelAcceptance | null;
 };
 
@@ -119,6 +129,14 @@ export const createReplicatedVersionedModelKernel = <TState extends JsonValue>(o
   const apply = (
     attempt: ReplicatedVersionedModelAttempt<TState>,
   ): ReplicatedVersionedModelResult<TState> => {
+    if (attempt.outcome === 'rebuild-required') {
+      return {
+        status: 'rebuild-required',
+        reason: attempt.reason,
+        accepted: accepted(),
+      };
+    }
+
     if (attempt.outcome === 'failed') {
       return {
         status: 'rejected',
