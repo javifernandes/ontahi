@@ -18,6 +18,7 @@ Related plans:
 4. [`90. Event-Driven Architecture Runtime`](bookops://plans/90-event-driven-architecture-runtime)
 5. [`120. Ontahi Environment Resources And Semantic Bindings`](../next/120-ontahi-environment-resources-and-semantic-bindings.md)
 6. [`156. Model-Backed Domain Operation Executor`](../done/156-model-backed-domain-operation-executor.md)
+7. [`170. Model Tool Projection And Agentic Operation Execution`](../next/170-model-tool-projection-and-agentic-operation-execution.md)
 
 ## Summary
 
@@ -324,3 +325,13 @@ evidence supports a Core executor boundary but not a general executor registry o
 context DSL. Application composition owns provider and binding policy; the Operation owns its
 instructions and current explicit context assembly. Plans 125a, 153a, and 153b retain resource
 governance, security hardening, and declarative scope respectively.
+
+## Agentic Capability Projection Follow-Up — 2026-11-19
+
+[Plan 170](../next/170-model-tool-projection-and-agentic-operation-execution.md) owns the next
+executor boundary: a bounded model-backed Operation may dynamically request explicitly granted
+Ontahi capabilities while producing its typed result. Provider tools remain adapter projections of
+canonical Graph Reads, Graph Commands, Operation Invocations, and Interactions; they do not become
+a parallel application language. Its first proof is immediate and read-only, leaving durable
+agents, participant Interaction, effectful tools, conversation memory, and sandboxed repository
+work as separate follow-ups.

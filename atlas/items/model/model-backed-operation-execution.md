@@ -26,6 +26,7 @@ relatedPlans:
   - ontahi://plans/156-model-backed-domain-operation-executor
   - ontahi://plans/162-operation-execution-resilience
   - ontahi://plans/163-operation-implementation-bindings-and-variants
+  - ontahi://plans/170-model-tool-projection-and-agentic-operation-execution
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
@@ -51,6 +52,14 @@ budgets, trace and citation requirements, evaluation policy, and approval bounda
 agents may also receive private runtime resources such as a filesystem, object store, memory, or
 resumable workspace. Those resources have explicit scope and lifecycle; they are not authoritative
 Entity state.
+
+A model-visible tool is a provider-facing projection of an explicitly granted Ontahi capability,
+not a second application API. A provider tool call remains untrusted until the runtime maps it to a
+canonical Graph Read, Graph Command, Operation Invocation, or Interaction request; validates its
+arguments; rechecks Principal, receiver, contextual scope, and host policy; and dispatches it
+through the ordinary runtime. Provider tool names, call IDs, and message envelopes remain adapter
+details. A bounded agent loop may dynamically choose among those capabilities while the invoked
+parent Operation retains its identity and typed result.
 
 The design may support a progression from a soft semantic contract, through a prompt-backed
 implementation, toward a hardened implementation with stronger evidence or deterministic code.
