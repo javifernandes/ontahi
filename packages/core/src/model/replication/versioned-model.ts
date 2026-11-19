@@ -1,4 +1,4 @@
-import { cloneJson, type JsonValue } from './value/json.js';
+import { cloneJson, type JsonValue } from '../../value/json.js';
 
 export type DerivationId = string;
 export type MaterializerVersion = string;

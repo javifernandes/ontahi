@@ -4,7 +4,7 @@ import {
   createReplicatedVersionedMaterializerRunner,
   type Materializer,
   type MaterializerDependency,
-} from './replicated-versioned-materializer.js';
+} from './materializer.js';
 
 type Input = { readonly titles: Readonly<Record<string, string>> };
 type Delta = { readonly inputs: readonly string[] };

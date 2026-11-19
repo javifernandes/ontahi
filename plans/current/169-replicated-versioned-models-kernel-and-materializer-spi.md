@@ -198,6 +198,7 @@ rebuild; conflicting output identity and failed derivation do not advance accept
 second slice adds a behavior-first Materializer, explicit dependency and affected-output evidence,
 an in-memory runner, and unknown-dependency fallback before derivation. Dependency evidence advances
 only with kernel acceptance. One input can affect one or many outputs without imposing an Entity
-DSL. No persistence port was needed by this proof; Atlas Plan 156 should expose the first concrete
-storage boundary. Cooling, eviction, tiers, multi-master convergence, and a declarative Entity DSL
-require separate evidence and plans.
+DSL. The portable contracts live under `@ontahi/core`'s `model/replication` boundary while remaining
+available through the package root. No persistence port was needed by this proof; Atlas Plan 156
+should expose the first concrete storage boundary. Cooling, eviction, tiers, multi-master
+convergence, and a declarative Entity DSL require separate evidence and plans.

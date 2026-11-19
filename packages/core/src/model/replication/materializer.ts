@@ -1,3 +1,5 @@
+import { cloneJson, type JsonValue } from '../../value/json.js';
+
 import {
   createReplicatedVersionedModelKernel,
   type AcceptedFrontier,
@@ -6,8 +8,7 @@ import {
   type ReplicatedVersionedModelResult,
   type ReplicatedVersionedModelSnapshot,
   type SourceFrontier,
-} from './replicated-versioned-model.js';
-import { cloneJson, type JsonValue } from './value/json.js';
+} from './versioned-model.js';
 
 export type MaterializerDependency = {
   input: string;

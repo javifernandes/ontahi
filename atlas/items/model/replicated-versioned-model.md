@@ -52,6 +52,10 @@ only after the kernel accepts the candidate, so rejected frontiers cannot corrup
 invalidation. This first proof retains evidence in memory. A caller-owned persistence port should
 be introduced only when an adopter demonstrates its required atomic boundary.
 
+The portable contract belongs to the Core model layer under `model/replication`; it is not itself a
+storage or server runtime. Core continues to expose it from the package root so physical module
+organization does not become a consumer migration.
+
 Full rebuild, incremental update, validation, and repair are distinct operations over the same
 logical model. Full rebuild remains the recovery path and equivalence oracle after incremental
 maintenance becomes primary.
