@@ -127,9 +127,10 @@ custom behavior escape hatch.
 1. [x] Specify kernel values and invariants with executable examples for full rebuild, exact
        incremental application, duplicate replay, source gaps, version invalidation, frontier conflict,
        and failed acceptance.
-2. Extend the in-process reference kernel with the smallest behavioral Materializer SPI,
-   dependency/affected-set evidence, unknown-dependency fallback, and caller-owned persistence ports
-   required by those examples.
+2. [x] Extend the in-process reference kernel with the smallest behavioral Materializer SPI,
+       dependency/affected-set evidence, unknown-dependency fallback, and the in-memory evidence retained
+       by the first examples. Add caller-owned persistence ports only when a consumer proves they are
+       required.
 3. Integrate the SPI in Atlas Plan 156 for versioned parsed-record artifacts, affected Entity
    derivation, atomic Projection Revision publication, and full-rebuild comparison.
 4. Use Atlas evidence to narrow rather than expand the Ontahí surface; promote incremental execution
@@ -146,14 +147,14 @@ custom behavior escape hatch.
 - [x] An accepted target frontier identifies the exact source frontier and implementation version
       it incorporates.
 - [x] Duplicate incremental application is idempotent.
-- [ ] A source gap, unknown dependency, or incompatible artifact version requests full rebuild
+- [x] A source gap, unknown dependency, or incompatible Materializer version requests full rebuild
       instead of publishing a guessed partial result.
 - [x] Failed derivation cannot advance the accepted target frontier.
 - [ ] Incremental and full execution can be compared by logical output identity/content.
 - [ ] Atlas reuses unchanged record artifacts and derives affected Entities without coupling the
       Ontahí kernel to Git or Markdown.
 - [ ] BookOps proves a second topology before a declarative Entity API is stabilized.
-- [ ] A custom Materializer can express behavior outside any declarative subset.
+- [x] A custom Materializer can express behavior outside any declarative subset.
 
 ## Verification
 
@@ -193,7 +194,10 @@ custom behavior escape hatch.
 Current. The first executable slice defines opaque host-owned source/output frontier tokens,
 explicit derivation and Materializer versions, and an in-memory JSON acceptance kernel. Exact
 replay is idempotent; missing baselines, source gaps, and incremental version changes request a full
-rebuild; conflicting output identity and failed derivation do not advance accepted state. Dependency
-invalidation and the behavioral Materializer SPI remain in slice 2. Atlas Plan 156 is the first
-consumer adoption. Cooling, eviction, tiers, multi-master convergence, and a declarative Entity DSL
+rebuild; conflicting output identity and failed derivation do not advance accepted state. The
+second slice adds a behavior-first Materializer, explicit dependency and affected-output evidence,
+an in-memory runner, and unknown-dependency fallback before derivation. Dependency evidence advances
+only with kernel acceptance. One input can affect one or many outputs without imposing an Entity
+DSL. No persistence port was needed by this proof; Atlas Plan 156 should expose the first concrete
+storage boundary. Cooling, eviction, tiers, multi-master convergence, and a declarative Entity DSL
 require separate evidence and plans.
