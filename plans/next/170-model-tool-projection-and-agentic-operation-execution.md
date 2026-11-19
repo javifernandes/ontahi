@@ -276,16 +276,117 @@ deterministic fake that exercises multi-turn behavior and failure paths. Provide
 staged, but unsupported adapters must fail during composition or binding validation rather than at
 an arbitrary mid-run point.
 
+## Provider And Contract Inventory — 2026-11-19
+
+The current Core `ModelProvider` deliberately represents one structured generation:
+
+```ts
+type ModelProvider = {
+  generate(request: ModelRequest): Promise<unknown>;
+};
+```
+
+`ModelRequest` contains instructions, bounded context, one prompt, the final output schema,
+cancellation, the governed output ceiling, and a usage callback. OpenAI and DeepSeek implement it
+through their Responses endpoints, Anthropic through Messages structured output, and Ollama
+through structured chat. `createModelOperationExecutor(...)` treats the returned value as the final
+candidate and immediately validates the parent Operation output contract. There is no provider
+conversation, tool descriptor, intermediate outcome, or continuation state.
+
+Official provider contracts confirm a shared conceptual loop but materially different continuation
+formats:
+
+| Provider  | Tool request                                              | Continuation requirement                                                                                                                    |
+| --------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI    | Responses function-call output items                      | Continue with function-call results through Responses input items and provider response/conversation correlation.                           |
+| Anthropic | Messages `tool_use` blocks with `stop_reason: "tool_use"` | Return `tool_result` blocks associated with the original tool-use IDs; assistant content blocks remain part of the message exchange.        |
+| DeepSeek  | Responses or Chat Completion function calls               | Return correlated tool results; thinking mode may require preserving and returning provider `reasoning_content` across subsequent requests. |
+| Ollama    | Chat response `message.tool_calls`                        | Append the assistant tool-call message and tool result messages before the next chat request.                                               |
+
+Sources:
+
+1. [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
+2. [Anthropic tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
+3. [DeepSeek tool calls](https://api-docs.deepseek.com/guides/tool_calls/)
+4. [Ollama tool calling](https://docs.ollama.com/capabilities/tool-calling)
+
+All four can project function-like tools from JSON Schema and can return several calls. None of
+them executes application tools for the caller. The application remains responsible for argument
+validation, execution, result correlation, and continuation. Provider-side strict schema modes
+improve syntax but do not replace Ontahi validation or authority.
+
+### Contract decision
+
+Do not widen `ModelProvider.generate(...)` into a union of final values, provider messages, and tool
+calls. Existing Intent Resolution and model-backed Operations need one structured value and should
+not inherit session semantics, optional branches, or adapter history merely because another
+executor is agentic.
+
+Introduce a sibling immediate-exchange capability. Its precise exported names remain implementation
+work, but the minimum shape is:
+
+```ts
+type ModelExchangeProvider = {
+  open(request: ModelExchangeRequest): ModelExchangeSession;
+};
+
+type ModelExchangeSession = {
+  next(results?: readonly ModelToolResult[]): Promise<ModelExchangeOutcome>;
+};
+
+type ModelExchangeOutcome =
+  | { kind: 'output'; value: unknown }
+  | { kind: 'tool-calls'; calls: readonly ModelToolCall[] };
+```
+
+The session is adapter-owned, executor-private, immediate working state. It may retain a response
+ID, provider content blocks, reasoning content, or a message array without exposing those details
+to Core. `ModelToolCall` carries only the projected tool name, untrusted arguments, and the opaque
+correlation needed to return its result. The runtime creates its own semantic tool-attempt and
+nested-invocation identities; a provider call ID is never reused as canonical evidence identity.
+
+The exchange request retains the same instructions, context, prompt, output schema, cancellation,
+usage reporting, and governed generation ceiling as `ModelRequest`, and adds semantic tool
+descriptors. A descriptor contains a stable executor-local name, description, and Graph JSON input
+schema. It does not contain a callable function, provider SDK object, authority token, or ambient
+runtime capability.
+
+Tool results distinguish a successful bounded JSON projection from a canonical denied or failed
+result. The executor decides which failures may be shown to the model for recovery. Cancellation,
+provider transport failure, malformed provider envelopes, and exhausted runtime policy terminate
+through existing or explicitly extended model-execution failure vocabulary; they are not ordinary
+tool results by default.
+
+This session contract intentionally does not claim durability. A Durable Operation cannot persist a
+live adapter object. Later durable agent work must define checkpointable semantic exchange state or
+let a runtime adapter reconstruct provider-private state from an execution journal. That question
+must not inflate the first immediate read-only proof.
+
+### Adapter capability and compatibility
+
+Provider factories may return an object satisfying both `ModelProvider` and
+`ModelExchangeProvider`, while custom providers can implement only the capability they support.
+Existing `generate` callers remain source compatible. An agentic model binding requires the
+exchange capability during application composition or binding resolution and fails clearly before
+opening an execution when it is absent.
+
+The first implementation should add the contract and a deterministic fake before changing a remote
+adapter. OpenAI is the preferred first real proof because the existing adapter already uses the
+Responses API. Anthropic is the preferred second proof because its content-block continuation is
+structurally different and tests whether the abstraction is genuinely provider-neutral. DeepSeek
+and Ollama follow through the adapter capability matrix rather than being simulated as OpenAI
+aliases.
+
 ## Execution Slices
 
 ### Slice 1 — contract and adapter inventory
 
-- [ ] Inventory tool-call and multi-turn support in current OpenAI, Anthropic, DeepSeek, and Ollama
+- [x] Inventory tool-call and multi-turn support in current OpenAI, Anthropic, DeepSeek, and Ollama
       adapters using official provider contracts.
-- [ ] Separate semantic tool descriptors from provider schemas, messages, and call IDs.
-- [ ] Decide whether the existing `ModelProvider` evolves compatibly or an agentic exchange
+- [x] Separate semantic tool descriptors from provider schemas, messages, and call IDs.
+- [x] Decide whether the existing `ModelProvider` evolves compatibly or an agentic exchange
       capability composes beside it.
-- [ ] Specify final-output, tool-call, denial, exhaustion, cancellation, and provider-failure
+- [x] Specify final-output, tool-call, denial, exhaustion, cancellation, and provider-failure
       outcomes.
 
 ### Slice 2 — bounded read-only loop
