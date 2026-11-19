@@ -31,6 +31,14 @@ dependency/affected-set evidence, output compatibility, and atomic acceptance. A
 source observation, domain parsing and transformation, publication, authorization, and consistency
 policy.
 
+The first executable kernel treats source and accepted frontiers as opaque host-owned string tokens.
+Ontahí compares exact identity but does not invent ordering or causal meaning for them. An in-memory
+reference implementation retains a detached JSON snapshot and returns `accepted`,
+`rebuild-required`, or `rejected`: exact replay is idempotent; a missing baseline, source gap, or
+incremental Materializer version change requires rebuild; conflicting output identity or a failed
+derivation cannot advance accepted state. Persistence and publication ports remain outside this
+first slice.
+
 The first extension surface is a behavioral Materializer SPI. A Materializer is versioned behavior
 that consumes application input and derivation context, then returns artifacts, output changes,
 dependencies, and diagnostics. It may express one-to-one, one-to-many, many-to-one, cross-record,

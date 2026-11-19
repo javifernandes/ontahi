@@ -1,6 +1,6 @@
 # 169. Replicated Versioned Models Kernel And Materializer SPI
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/169-replicated-versioned-models-kernel-and-materializer-spi`
 
@@ -124,10 +124,12 @@ custom behavior escape hatch.
 
 ## Execution Slices
 
-1. Specify kernel values and invariants with executable examples for full rebuild, exact incremental
-   application, duplicate replay, version invalidation, unknown dependency, and failed acceptance.
-2. Implement an in-process reference kernel plus the smallest behavioral Materializer SPI and
-   caller-owned persistence ports required by those examples.
+1. [x] Specify kernel values and invariants with executable examples for full rebuild, exact
+       incremental application, duplicate replay, source gaps, version invalidation, frontier conflict,
+       and failed acceptance.
+2. Extend the in-process reference kernel with the smallest behavioral Materializer SPI,
+   dependency/affected-set evidence, unknown-dependency fallback, and caller-owned persistence ports
+   required by those examples.
 3. Integrate the SPI in Atlas Plan 156 for versioned parsed-record artifacts, affected Entity
    derivation, atomic Projection Revision publication, and full-rebuild comparison.
 4. Use Atlas evidence to narrow rather than expand the Ontahí surface; promote incremental execution
@@ -139,14 +141,14 @@ custom behavior escape hatch.
 
 ## Acceptance Checklist
 
-- [ ] Derivation and Materializer versions are stable, explicit values rather than implicit code
+- [x] Derivation and Materializer versions are stable, explicit values rather than implicit code
       deployment state.
-- [ ] An accepted target frontier identifies the exact source frontier and implementation version
+- [x] An accepted target frontier identifies the exact source frontier and implementation version
       it incorporates.
-- [ ] Duplicate incremental application is idempotent.
+- [x] Duplicate incremental application is idempotent.
 - [ ] A source gap, unknown dependency, or incompatible artifact version requests full rebuild
       instead of publishing a guessed partial result.
-- [ ] Failed derivation cannot advance the accepted target frontier.
+- [x] Failed derivation cannot advance the accepted target frontier.
 - [ ] Incremental and full execution can be compared by logical output identity/content.
 - [ ] Atlas reuses unchanged record artifacts and derives affected Entities without coupling the
       Ontahí kernel to Git or Markdown.
@@ -188,6 +190,10 @@ custom behavior escape hatch.
 
 ## Closure / Evolution
 
-Not started. This is the executable provider plan extracted from research Plan 164. Atlas Plan 156
-is the first consumer adoption. Cooling, eviction, tiers, multi-master convergence, and a
-declarative Entity DSL require separate evidence and plans.
+Current. The first executable slice defines opaque host-owned source/output frontier tokens,
+explicit derivation and Materializer versions, and an in-memory JSON acceptance kernel. Exact
+replay is idempotent; missing baselines, source gaps, and incremental version changes request a full
+rebuild; conflicting output identity and failed derivation do not advance accepted state. Dependency
+invalidation and the behavioral Materializer SPI remain in slice 2. Atlas Plan 156 is the first
+consumer adoption. Cooling, eviction, tiers, multi-master convergence, and a declarative Entity DSL
+require separate evidence and plans.
