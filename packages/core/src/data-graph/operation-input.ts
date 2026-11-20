@@ -10,9 +10,9 @@ import { safeParseUnknownGraphSchema, type GraphSchemaParseResult } from './sche
 export type OperationInputSchema<
   TSchema extends GraphSchemaLike = GraphSchemaLike,
   TInput = InferGraphSchemaClientInput<TSchema>,
-> = PortableOperationInputSchema<TSchema, TInput> & {
+> = {
   safeParse(draft: unknown): GraphSchemaParseResult<TInput>;
-};
+} & PortableOperationInputSchema<TSchema, TInput>;
 
 export type { PortableOperationInputSchema } from '../model/operation/input.js';
 
