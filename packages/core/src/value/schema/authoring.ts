@@ -1,3 +1,5 @@
+import { hasOwn } from '../object.js';
+
 import type {
   GraphLiteralDefinition,
   GraphSchemaLike,
@@ -52,9 +54,14 @@ export const pickValueFields = <
   source: TSource,
   keys: TKeys,
 ): ValueSchemaPickBuilder<TSource, TKeys, TValue> => {
+  const selectedKeys = [...keys];
+  const derivationSource = {
+    kind: source.kind === 'schema.object' ? ('object' as const) : source.kind,
+    ...(source.name ? { name: source.name } : {}),
+  };
   const fields = Object.fromEntries(
-    keys.map(key => {
-      if (!(key in source.fields)) {
+    selectedKeys.map(key => {
+      if (!hasOwn(source.fields, key)) {
         throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
       }
 
@@ -67,11 +74,8 @@ export const pickValueFields = <
       defineValue<typeof name, typeof fields, TValue>(name, fields, {
         derivedFrom: {
           operation: 'pick',
-          source: {
-            kind: source.kind === 'schema.object' ? 'object' : source.kind,
-            ...(source.name ? { name: source.name } : {}),
-          },
-          fields: [...keys],
+          source: derivationSource,
+          fields: selectedKeys,
         },
       }),
   };

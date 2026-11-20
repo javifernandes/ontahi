@@ -24,6 +24,7 @@ import {
   valueUnion,
   valueObject,
 } from './authoring.js';
+import type { ValueSchemaFieldSource } from './definition.js';
 
 describe('value schema authoring', () => {
   it('authors literal and void schemas without model dependencies', () => {
@@ -137,10 +138,32 @@ describe('value schema authoring', () => {
   });
 
   it('rejects unknown fields at the portable value boundary', () => {
-    const source = valueObject({ ready: graphLiteral('ready') });
+    const source: ValueSchemaFieldSource = valueObject({ ready: graphLiteral('ready') });
 
-    expect(() =>
-      pickValueFields(source, ['missing' as keyof typeof source.fields & string]),
-    ).toThrow('Cannot pick unknown field missing from schema.object');
+    expect(() => pickValueFields(source, ['missing'])).toThrow(
+      'Cannot pick unknown field missing from schema.object',
+    );
+    expect(() => pickValueFields(source, ['toString'])).toThrow(
+      'Cannot pick unknown field toString from schema.object',
+    );
+  });
+
+  it('snapshots pick provenance before callers can mutate their inputs', () => {
+    const source = {
+      kind: 'value' as const,
+      name: 'SourceValue',
+      fields: { ready: graphLiteral('ready'), ignored: graphLiteral(false) },
+    };
+    const keys: (keyof typeof source.fields)[] = ['ready'];
+    const builder = pickValueFields<typeof source, typeof keys, { ready: 'ready' }>(source, keys);
+
+    keys[0] = 'ignored';
+    source.name = 'ChangedSource';
+
+    expect(builder.named('ReadyValue').derivedFrom).toEqual({
+      operation: 'pick',
+      source: { kind: 'value', name: 'SourceValue' },
+      fields: ['ready'],
+    });
   });
 });
