@@ -2,9 +2,19 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { field as legacyField } from '../../data-graph/definitions.js';
 
+import { field } from './field-authoring.js';
 import { scalarField } from './scalar-field-authoring.js';
 
 describe('scalar Field authoring', () => {
+  it('owns the complete Field facade', () => {
+    expect(legacyField).toBe(field);
+    expect(field.default(field.boolean(), false)).toEqual({
+      kind: 'field',
+      fieldType: 'boolean',
+      defaultValue: false,
+    });
+  });
+
   it('owns the scalar factories used by the compatibility facade', () => {
     expect(legacyField.string).toBe(scalarField.string);
     expect(legacyField.id).toBe(scalarField.id);

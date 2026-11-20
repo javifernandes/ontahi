@@ -1,14 +1,11 @@
 export * from '../computation/entity-mapping.js';
 
 import type { AnyEntityDefinition, EntityMapping } from '../model/entity/definition.js';
-import {
-  type AnyFieldDefinition,
-  type DefaultedFieldDefinition,
-  type DerivedFieldMetadata,
-  type FieldDefinitions,
-  type GeneratedFieldDefinition,
-  type InferEntityRecord,
-  type InferFieldValue,
+import { field } from '../model/entity/field-authoring.js';
+import type {
+  AnyFieldDefinition,
+  FieldDefinitions,
+  InferEntityRecord,
 } from '../model/entity/field.js';
 import {
   normalizeEntityLocatorDeclarations,
@@ -24,10 +21,8 @@ import type {
 } from '../model/entity/metadata.js';
 import {
   isReferenceFieldDefinition,
-  type DeferredEntityReference,
   type ReferenceFieldDefinition,
 } from '../model/entity/reference-field.js';
-import { scalarField } from '../model/entity/scalar-field-authoring.js';
 export type { StringFieldInputConstraints } from '../model/entity/scalar-field-authoring.js';
 import type { SemanticSelection } from '../model/query/selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
@@ -132,11 +127,6 @@ export {
 } from '../model/entity/reference-field.js';
 
 import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant.js';
-import {
-  assertModelExpressionProgram,
-  collectModelExpressionDependencies,
-  type ModelExpressionProgram,
-} from './model-expression/program.js';
 import {
   graphSchemaExistingReference,
   graphSchemaReference,
@@ -482,112 +472,7 @@ export type EntityDefinition<
   >;
 };
 
-export const field = {
-  ...scalarField,
-  ref: <TTarget extends AnyEntityDefinition>(
-    target: TTarget | DeferredEntityReference<TTarget>,
-  ): ReferenceFieldDefinition<TTarget> => ({
-    kind: 'field',
-    fieldType: 'reference',
-    target: target as TTarget,
-  }),
-  existingRef: <TTarget extends AnyEntityDefinition>(
-    target: TTarget | DeferredEntityReference<TTarget>,
-  ): ReferenceFieldDefinition<TTarget> & { mutationRequirement: 'existing' } => ({
-    kind: 'field',
-    fieldType: 'reference',
-    target: target as TTarget,
-    mutationRequirement: 'existing',
-  }),
-  derived: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    authoring:
-      | ModelExpressionProgram
-      | ((model: Record<string, any>) => InferFieldValue<TDefinition>),
-  ): TDefinition & { derived: DerivedFieldMetadata } => {
-    if (definition.fieldType === 'id' || definition.fieldType === 'reference') {
-      throw new TypeError('Derived Fields must use a non-identity scalar Field definition.');
-    }
-    if (typeof authoring === 'function') {
-      return { ...definition, derived: {} };
-    }
-
-    assertModelExpressionProgram(authoring);
-    return {
-      ...definition,
-      derived: {
-        expression: authoring,
-        dependencies: collectModelExpressionDependencies(authoring),
-      },
-    };
-  },
-  nullable: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-  ): Omit<TDefinition, '__value' | 'nullable'> & {
-    nullable: true;
-    __value?: InferFieldValue<TDefinition> | null;
-  } =>
-    ({
-      ...definition,
-      nullable: true,
-    }) as Omit<TDefinition, '__value' | 'nullable'> & {
-      nullable: true;
-      __value?: InferFieldValue<TDefinition> | null;
-    },
-  optional: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-  ): Omit<TDefinition, '__value' | 'optional'> & {
-    optional: true;
-    __value?: InferFieldValue<TDefinition> | undefined;
-  } =>
-    ({
-      ...definition,
-      optional: true,
-    }) as Omit<TDefinition, '__value' | 'optional'> & {
-      optional: true;
-      __value?: InferFieldValue<TDefinition> | undefined;
-    },
-  default: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    defaultValue: InferFieldValue<TDefinition>,
-  ): DefaultedFieldDefinition<TDefinition> => {
-    if (
-      definition.optional ||
-      definition.derived ||
-      definition.fieldType === 'id' ||
-      definition.fieldType === 'reference'
-    ) {
-      throw new TypeError(
-        'Stored Field defaults require a non-optional, non-derived scalar Field other than id.',
-      );
-    }
-    if (defaultValue === undefined) {
-      throw new TypeError('Stored Field defaults cannot be undefined.');
-    }
-
-    return { ...definition, defaultValue } as DefaultedFieldDefinition<TDefinition>;
-  },
-  generated: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    generator: string,
-  ): GeneratedFieldDefinition<TDefinition> => {
-    if (
-      definition.optional ||
-      definition.derived ||
-      Object.prototype.hasOwnProperty.call(definition, 'defaultValue') ||
-      definition.fieldType === 'reference'
-    ) {
-      throw new TypeError(
-        'Generated stored Fields require a non-optional, non-derived scalar Field without a default.',
-      );
-    }
-    if (generator.trim().length === 0) {
-      throw new TypeError('Generated stored Fields require a generator name.');
-    }
-
-    return { ...definition, generatedBy: generator } as GeneratedFieldDefinition<TDefinition>;
-  },
-};
+export { field } from '../model/entity/field-authoring.js';
 
 export const entity = <TName extends string, TFields extends FieldDefinitions>(
   name: TName,
