@@ -2,20 +2,23 @@ export * from '../computation/entity-mapping.js';
 
 import type { AnyEntityDefinition, EntityMapping } from '../model/entity/definition.js';
 import {
-  type AnyFieldDefinition,
-  type DefaultedFieldDefinition,
-  type DerivedFieldMetadata,
-  type FieldDefinition,
-  type FieldDefinitions,
-  type GeneratedFieldDefinition,
-  type IdFieldDefinition,
-  type InferEntityRecord,
-  type InferFieldValue,
-  type NumberFieldConstraints,
-  type StringFieldConstraints,
+  addEntityLocators,
+  addEntityRelation,
+  bindReferenceFieldSources,
+  createEntityDefinitionState,
+  setEntityDisplayMetadata,
+  setEntityFreshnessMetadata,
+  setEntityIdentity,
+  type ReferenceFieldRelations,
+} from '../model/entity/entity-authoring.js';
+export type { ReferenceFieldRelations } from '../model/entity/entity-authoring.js';
+import { field } from '../model/entity/field-authoring.js';
+import type {
+  AnyFieldDefinition,
+  FieldDefinitions,
+  InferEntityRecord,
 } from '../model/entity/field.js';
 import {
-  normalizeEntityLocatorDeclarations,
   type ConventionalEntityLocatorDeclarations,
   type EntityLocatorDeclarations,
   type EntityRefLocatorFactories,
@@ -26,15 +29,11 @@ import type {
   EntityFreshnessDescriptor,
   EntityFreshnessMetadata,
 } from '../model/entity/metadata.js';
-import {
-  isReferenceFieldDefinition,
-  type DeferredEntityReference,
-  type ReferenceFieldDefinition,
-} from '../model/entity/reference-field.js';
+import { type ReferenceFieldDefinition } from '../model/entity/reference-field.js';
+export type { StringFieldInputConstraints } from '../model/entity/scalar-field-authoring.js';
 import type { SemanticSelection } from '../model/query/selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
 import {
-  assertPortableRelationConstraints,
   type RelationDefinition,
   type RelationKind,
   type RelationOptions,
@@ -134,11 +133,6 @@ export {
 } from '../model/entity/reference-field.js';
 
 import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant.js';
-import {
-  assertModelExpressionProgram,
-  collectModelExpressionDependencies,
-  type ModelExpressionProgram,
-} from './model-expression/program.js';
 import {
   graphSchemaExistingReference,
   graphSchemaReference,
@@ -325,24 +319,6 @@ export type EntityViewConfig<
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
 
-export type ReferenceFieldRelations<TFields extends FieldDefinitions> = {
-  [TFieldName in keyof TFields as TFields[TFieldName] extends {
-    fieldType: 'reference';
-    target: AnyEntityDefinition;
-  }
-    ? TFieldName
-    : never]: TFields[TFieldName] extends {
-    fieldType: 'reference';
-    target: infer TTarget extends AnyEntityDefinition;
-  }
-    ? RelationDefinition<
-        'belongsTo',
-        TTarget,
-        TFields[TFieldName] extends { nullable: true } | { optional: true } ? true : false
-      >
-    : never;
-};
-
 export type EntityRelationsFromFields<
   TFields extends FieldDefinitions,
   TRelations extends RelationDefinitions = {},
@@ -484,248 +460,7 @@ export type EntityDefinition<
   >;
 };
 
-const identifierStringConstraints = {
-  minLength: 1,
-  maxLength: 200,
-} satisfies StringFieldConstraints;
-
-export type StringFieldInputConstraints = Omit<StringFieldConstraints, 'pattern'> & {
-  pattern?: RegExp | StringFieldConstraints['pattern'];
-};
-
-const normalizeStringConstraints = (
-  constraints?: StringFieldInputConstraints,
-): StringFieldConstraints | undefined => {
-  if (!constraints) {
-    return undefined;
-  }
-
-  const { pattern, ...rest } = constraints;
-
-  return {
-    ...rest,
-    ...(pattern instanceof RegExp
-      ? {
-          pattern: {
-            source: pattern.source,
-            ...(pattern.flags ? { flags: pattern.flags } : {}),
-          },
-        }
-      : pattern
-        ? { pattern }
-        : {}),
-  };
-};
-
-export const field = {
-  named: <const TName extends string, TDefinition extends AnyFieldDefinition>(
-    name: TName,
-    definition: TDefinition,
-  ): TDefinition & { valueType: TName } => {
-    const valueType = name.trim();
-
-    if (!valueType) {
-      throw new TypeError('Named Field value types require a non-empty name.');
-    }
-    if (valueType !== name) {
-      throw new TypeError('Named Field value types cannot have surrounding whitespace.');
-    }
-    if (definition.fieldType === 'reference') {
-      throw new TypeError('Named Field value types must wrap a scalar Field definition.');
-    }
-
-    return { ...definition, valueType } as TDefinition & { valueType: TName };
-  },
-  id: (): IdFieldDefinition => ({
-    kind: 'field',
-    fieldType: 'id',
-    stringConstraints: identifierStringConstraints,
-  }),
-  slug: (): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: identifierStringConstraints,
-  }),
-  string: (constraints?: StringFieldInputConstraints): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    ...(constraints ? { stringConstraints: normalizeStringConstraints(constraints) } : {}),
-  }),
-  nonEmptyString: (
-    constraints?: Omit<StringFieldInputConstraints, 'minLength'>,
-  ): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: normalizeStringConstraints({ minLength: 1, ...constraints }),
-  }),
-  email: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'email' }),
-  }),
-  url: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'url' }),
-  }),
-  uuid: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'uuid' }),
-  }),
-  datetime: (
-    constraints?: Omit<StringFieldInputConstraints, 'format'>,
-  ): FieldDefinition<string> => ({
-    kind: 'field',
-    fieldType: 'string',
-    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'datetime' }),
-  }),
-  number: (constraints?: NumberFieldConstraints): FieldDefinition<number> => ({
-    kind: 'field',
-    fieldType: 'number',
-    ...(constraints ? { numberConstraints: constraints } : {}),
-  }),
-  integer: (constraints?: Omit<NumberFieldConstraints, 'integer'>): FieldDefinition<number> => ({
-    kind: 'field',
-    fieldType: 'number',
-    numberConstraints: {
-      integer: true,
-      ...constraints,
-    },
-  }),
-  nonNegativeInteger: (): FieldDefinition<number> => ({
-    kind: 'field',
-    fieldType: 'number',
-    numberConstraints: {
-      integer: true,
-      min: 0,
-    },
-  }),
-  positiveInteger: (
-    constraints?: Omit<NumberFieldConstraints, 'integer' | 'min'>,
-  ): FieldDefinition<number> => ({
-    kind: 'field',
-    fieldType: 'number',
-    numberConstraints: {
-      integer: true,
-      min: 1,
-      ...constraints,
-    },
-  }),
-  boolean: (): FieldDefinition<boolean> => ({ kind: 'field', fieldType: 'boolean' }),
-  date: (): FieldDefinition<Date> => ({ kind: 'field', fieldType: 'date' }),
-  json: <TValue = unknown>(): FieldDefinition<TValue> => ({ kind: 'field', fieldType: 'json' }),
-  enum: <const TValue extends readonly string[]>(
-    values: TValue,
-  ): FieldDefinition<TValue[number]> => ({
-    kind: 'field',
-    fieldType: 'enum',
-    enumValues: values,
-  }),
-  ref: <TTarget extends AnyEntityDefinition>(
-    target: TTarget | DeferredEntityReference<TTarget>,
-  ): ReferenceFieldDefinition<TTarget> => ({
-    kind: 'field',
-    fieldType: 'reference',
-    target: target as TTarget,
-  }),
-  existingRef: <TTarget extends AnyEntityDefinition>(
-    target: TTarget | DeferredEntityReference<TTarget>,
-  ): ReferenceFieldDefinition<TTarget> & { mutationRequirement: 'existing' } => ({
-    kind: 'field',
-    fieldType: 'reference',
-    target: target as TTarget,
-    mutationRequirement: 'existing',
-  }),
-  derived: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    authoring:
-      | ModelExpressionProgram
-      | ((model: Record<string, any>) => InferFieldValue<TDefinition>),
-  ): TDefinition & { derived: DerivedFieldMetadata } => {
-    if (definition.fieldType === 'id' || definition.fieldType === 'reference') {
-      throw new TypeError('Derived Fields must use a non-identity scalar Field definition.');
-    }
-    if (typeof authoring === 'function') {
-      return { ...definition, derived: {} };
-    }
-
-    assertModelExpressionProgram(authoring);
-    return {
-      ...definition,
-      derived: {
-        expression: authoring,
-        dependencies: collectModelExpressionDependencies(authoring),
-      },
-    };
-  },
-  nullable: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-  ): Omit<TDefinition, '__value' | 'nullable'> & {
-    nullable: true;
-    __value?: InferFieldValue<TDefinition> | null;
-  } =>
-    ({
-      ...definition,
-      nullable: true,
-    }) as Omit<TDefinition, '__value' | 'nullable'> & {
-      nullable: true;
-      __value?: InferFieldValue<TDefinition> | null;
-    },
-  optional: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-  ): Omit<TDefinition, '__value' | 'optional'> & {
-    optional: true;
-    __value?: InferFieldValue<TDefinition> | undefined;
-  } =>
-    ({
-      ...definition,
-      optional: true,
-    }) as Omit<TDefinition, '__value' | 'optional'> & {
-      optional: true;
-      __value?: InferFieldValue<TDefinition> | undefined;
-    },
-  default: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    defaultValue: InferFieldValue<TDefinition>,
-  ): DefaultedFieldDefinition<TDefinition> => {
-    if (
-      definition.optional ||
-      definition.derived ||
-      definition.fieldType === 'id' ||
-      definition.fieldType === 'reference'
-    ) {
-      throw new TypeError(
-        'Stored Field defaults require a non-optional, non-derived scalar Field other than id.',
-      );
-    }
-    if (defaultValue === undefined) {
-      throw new TypeError('Stored Field defaults cannot be undefined.');
-    }
-
-    return { ...definition, defaultValue } as DefaultedFieldDefinition<TDefinition>;
-  },
-  generated: <TDefinition extends AnyFieldDefinition>(
-    definition: TDefinition,
-    generator: string,
-  ): GeneratedFieldDefinition<TDefinition> => {
-    if (
-      definition.optional ||
-      definition.derived ||
-      Object.prototype.hasOwnProperty.call(definition, 'defaultValue') ||
-      definition.fieldType === 'reference'
-    ) {
-      throw new TypeError(
-        'Generated stored Fields require a non-optional, non-derived scalar Field without a default.',
-      );
-    }
-    if (generator.trim().length === 0) {
-      throw new TypeError('Generated stored Fields require a generator name.');
-    }
-
-    return { ...definition, generatedBy: generator } as GeneratedFieldDefinition<TDefinition>;
-  },
-};
+export { field } from '../model/entity/field-authoring.js';
 
 export const entity = <TName extends string, TFields extends FieldDefinitions>(
   name: TName,
@@ -736,39 +471,11 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
   ReferenceFieldRelations<TFields>,
   EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
 > => {
-  const entityFields = Object.fromEntries(
-    Object.entries(fields).map(([fieldName, definition]) => {
-      if (isReferenceFieldDefinition(definition) && definition.variant)
-        throw new TypeError(
-          'Variant references are supported as Operation inputs, not stored Reference Fields yet.',
-        );
-      return [fieldName, isReferenceFieldDefinition(definition) ? { ...definition } : definition];
-    }),
-  ) as TFields;
-  const hasConventionalId =
-    entityFields.id?.fieldType === 'id' && !entityFields.id.nullable && !entityFields.id.optional;
-  const conventionalLocators = normalizeEntityLocatorDeclarations<
-    TFields,
-    ConventionalEntityLocatorDeclarations<TFields>
-  >((hasConventionalId ? { refById: 'id' } : {}) as ConventionalEntityLocatorDeclarations<TFields>);
-  const referenceRelations = Object.fromEntries(
-    Object.entries(entityFields).flatMap(([fieldName, definition]) =>
-      isReferenceFieldDefinition(definition)
-        ? [
-            [
-              fieldName,
-              {
-                kind: 'relation' as const,
-                relationKind: 'belongsTo' as const,
-                target: definition.target,
-                sourceField: fieldName,
-                nullable: Boolean(definition.nullable || definition.optional),
-              },
-            ],
-          ]
-        : [],
-    ),
-  ) as ReferenceFieldRelations<TFields>;
+  const state = createEntityDefinitionState(name, fields);
+  const entityFields = state.fields;
+  const conventionalLocators = state.refLocators;
+  const referenceRelations = state.relations;
+  const hasConventionalId = state.identityLocatorName === 'refById';
   const entityDefinition = {
     kind: 'entity' as const,
     name,
@@ -794,28 +501,21 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return { kind: 'schema.array' as const, item: this };
     },
     display(displayMetadata: EntityDisplayMetadata<TFields>) {
-      this.displayMetadata = displayMetadata;
+      setEntityDisplayMetadata(this, displayMetadata);
       return this as never;
     },
     freshness(freshnessMetadata: EntityFreshnessMetadata<TFields>) {
-      this.freshnessMetadata = freshnessMetadata;
+      setEntityFreshnessMetadata(this, freshnessMetadata);
       return this as never;
     },
     locators<TLocatorDeclarations extends EntityLocatorDeclarations<TFields>>(
       locators: TLocatorDeclarations,
     ) {
-      this.refLocators = {
-        ...this.refLocators,
-        ...normalizeEntityLocatorDeclarations<TFields, TLocatorDeclarations>(locators),
-      };
+      addEntityLocators(this, locators);
       return this as never;
     },
     identity(locatorName: string) {
-      if (!(locatorName in this.refLocators)) {
-        throw new Error(`Unknown identity locator ${locatorName} on entity ${name}`);
-      }
-
-      this.identityLocatorName = locatorName;
+      setEntityIdentity(this, locatorName);
       return this as never;
     },
     view(viewName: string, config?: unknown) {
@@ -838,19 +538,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return viewDefinition;
     },
     hasMany(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
-      if (options?.onDelete && options.onDelete !== 'cascade') {
-        throw new Error('hasMany Relations only support onDelete: cascade.');
-      }
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'hasMany',
-        target,
-        ...(options?.via ? { targetField: options.via } : {}),
-        ...(options?.ordered ? { ordered: true as const } : {}),
-        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'hasMany', target, options);
       return this as never;
     },
     belongsTo(
@@ -858,14 +546,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       target: AnyEntityDefinition,
       options?: Omit<RelationOptions, 'ordered' | 'onDelete'>,
     ) {
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'belongsTo',
-        target,
-        ...(options?.via ? { sourceField: options.via } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'belongsTo', target, options);
       return this as never;
     },
     manyToMany(
@@ -875,28 +556,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         onDelete?: 'detach';
       },
     ) {
-      if (options?.onDelete && options.onDelete !== 'detach') {
-        throw new Error('manyToMany Relations only support onDelete: detach.');
-      }
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'manyToMany',
-        target,
-        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'manyToMany', target, options);
       return this as never;
     },
   };
 
-  Object.entries(entityFields).forEach(([fieldName, definition]) => {
-    if (!isReferenceFieldDefinition(definition)) return;
-    Object.defineProperties(definition, {
-      source: { configurable: true, value: entityDefinition },
-      fieldName: { configurable: true, value: fieldName },
-    });
-  });
+  bindReferenceFieldSources(entityFields, entityDefinition as unknown as AnyEntityDefinition);
 
   return entityDefinition as unknown as EntityDefinition<
     TName,

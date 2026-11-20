@@ -223,3 +223,17 @@ Entity and View sources.
 Lazy schema representation and construction also live in `value/schema`; the compatibility type
 continues to bind its resolver to the composite Graph schema union. Selection schemas and that
 composite union remain model-aware composition concerns rather than value-layer concepts.
+
+Field authoring now lives beside the portable Field contracts under `model/entity`. Scalar,
+reference, derived, nullable, optional, defaulted, and generated factories share one model-owned
+surface; `data-graph/definitions.ts` only re-exports the historical `field` binding. This removes
+the Field dependency seam before extracting the complete Entity builder.
+
+Portable Entity construction state now lives under `model/entity` too: Field validation and
+cloning, conventional identity locators, implicit belongs-to Relations, and Reference Field source
+binding no longer belong to the compatibility facade. The facade still composes Views, Selection
+schemas, variants, and fluent Relation methods around that model-owned state.
+
+Entity display/freshness metadata, locator extension, identity selection, and fluent Relation
+mutation now delegate to the same model-owned authoring module. The remaining facade-specific
+construction is limited to View, Selection, array-schema, and variant conveniences.
