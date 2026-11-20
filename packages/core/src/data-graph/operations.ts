@@ -1,4 +1,8 @@
 import type {
+  DomainOperationBridgeMetadata,
+  DomainOperationClientCacheMetadata,
+} from '../model/operation/client-metadata.js';
+import type {
   DomainOperationAuthority,
   DomainOperationGraphOpsMetadata,
   DomainOperationIngressMetadata,
@@ -19,8 +23,6 @@ import {
 } from '../model/operation/execution-policy.js';
 import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import { hasOwn, isRecord } from '../value/object.js';
-
-export * from '../model/operation/definition.js';
 
 import type { InferGraphSchemaClientInput } from './client-input.js';
 import type {
@@ -45,11 +47,9 @@ import {
   bindEntityRefOperationProxy,
   bindEntityRefRelationOperations,
   createEntityRef,
-  isEntityRef,
   type AnyEntityRef,
   type BoundEntityRefLocators,
   type EntityRef,
-  normalizeEntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from './ref/index.js';
@@ -81,74 +81,8 @@ import {
   type RecursiveEntityViewDefinition,
 } from './view.js';
 
-export type QueryKeySegmentContext<TInput> = {
-  input: TInput;
-  operation: object;
-};
-
-export type QueryKeySegment<TInput> =
-  | unknown
-  | ((input: TInput, context: QueryKeySegmentContext<TInput>) => unknown);
-
-export const queryRef =
-  <TInput = Record<string, unknown>>(inputRefName: string): QueryKeySegment<TInput> =>
-  (input: TInput) => {
-    if (typeof input !== 'object' || input === null) return null;
-
-    const directRef = (input as Record<string, unknown>)[inputRefName];
-    return isEntityRef(directRef) ? normalizeEntityRef(directRef) : null;
-  };
-
-export type DomainOperationBridgeMetadata<TInput> = {
-  query?: readonly QueryKeySegment<TInput>[];
-  invalidate?: readonly (readonly QueryKeySegment<TInput>[])[];
-};
-
-export type DomainOperationClientCacheInvalidationContext<TInput, TResult> = {
-  input: TInput;
-  value: TResult;
-  operation: {
-    readonly [key: string]: unknown;
-  };
-};
-
-export type DomainOperationClientCacheInvalidation<TInput = unknown, TResult = unknown> = (
-  context: DomainOperationClientCacheInvalidationContext<TInput, TResult>,
-) => AnyEntityRef | readonly AnyEntityRef[] | null | undefined;
-
-export type ClientCacheKeySegmentContext<TInput> = {
-  input: TInput;
-  operation: {
-    readonly [key: string]: unknown;
-  };
-  resolveRef?: (ref: AnyEntityRef) => AnyEntityRef;
-};
-
-export type ClientCacheKeySegment<TInput> =
-  | unknown
-  | ((input: TInput, context: ClientCacheKeySegmentContext<TInput>) => unknown);
-
-export const cacheRef =
-  <TInput = Record<string, unknown>>(inputRefName: string): ClientCacheKeySegment<TInput> =>
-  (input: TInput, context: ClientCacheKeySegmentContext<TInput>) => {
-    if (typeof input !== 'object' || input === null) {
-      return null;
-    }
-
-    const inputRecord = input as Record<string, unknown>;
-    const directRef = inputRecord[inputRefName];
-
-    if (isEntityRef(directRef)) {
-      return context.resolveRef?.(directRef) ?? directRef;
-    }
-
-    return null;
-  };
-
-export type DomainOperationClientCacheMetadata<TInput = unknown, TResult = unknown> = {
-  query?: readonly ClientCacheKeySegment<TInput>[];
-  invalidate?: readonly DomainOperationClientCacheInvalidation<TInput, TResult>[];
-};
+export * from '../model/operation/client-metadata.js';
+export * from '../model/operation/definition.js';
 
 export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult = unknown> = {
   kind: 'domain-operation';

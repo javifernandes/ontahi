@@ -255,3 +255,7 @@ portable descriptors through the model-owned constructors.
 The portable operation-input contract now lives in `model/operation/input`; graph-aware client
 normalization and schema parsing remain in the compatibility layer and attach that contract to
 composite Graph schemas.
+
+Portable bridge query keys, client-cache keys and invalidation declarations now live in
+`model/operation/client-metadata`. Their Ref helpers depend only on the portable Entity Ref model;
+runtime cache storage and reconciliation remain outside this boundary.
