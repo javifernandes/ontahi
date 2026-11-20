@@ -68,3 +68,13 @@ export type DomainOperationClientCacheMetadata<TInput = unknown, TResult = unkno
   query?: readonly ClientCacheKeySegment<TInput>[];
   invalidate?: readonly DomainOperationClientCacheInvalidation<TInput, TResult>[];
 };
+
+export type OperationBridgeBinding<TBinding = unknown, TAdapter extends string = string> = {
+  adapter: TAdapter;
+  callable: TBinding;
+};
+
+export const defineOperationBridgeBinding = <TBinding, TAdapter extends string = string>(
+  adapter: TAdapter,
+  callable: TBinding,
+): OperationBridgeBinding<TBinding, TAdapter> => ({ adapter, callable });

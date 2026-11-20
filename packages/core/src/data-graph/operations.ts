@@ -1,15 +1,14 @@
 import type {
   DomainOperationBridgeMetadata,
   DomainOperationClientCacheMetadata,
+  OperationBridgeBinding,
 } from '../model/operation/client-metadata.js';
+import { defineOperationBridgeBinding as definePortableOperationBridgeBinding } from '../model/operation/client-metadata.js';
 import type {
   DomainOperationAuthority,
   DomainOperationGraphOpsMetadata,
   DomainOperationIngressMetadata,
-  DomainOperationReceiverDeclaration,
   DomainOperationReceiverDescriptor,
-  DurableOperationDeclarationMetadata,
-  DurableOperationDefaults,
   DurableOperationIdempotencyPolicy,
   DurableOperationMetadata,
   DurableOperationRuntime,
@@ -23,8 +22,11 @@ import {
 } from '../model/operation/execution-policy.js';
 import type {
   DomainOperationImplementationMetadata,
+  PortableDomainOperationDeclarationMetadata,
+  PortableDomainOperationDefaults,
   PortableDomainOperationMetadata,
 } from '../model/operation/metadata.js';
+import { definePortableDomainOperationMetadata } from '../model/operation/metadata.js';
 import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
@@ -96,28 +98,21 @@ export type DomainOperationMetadata<
 
 export type { DomainOperationImplementationMetadata } from '../model/operation/metadata.js';
 
-export type DomainOperationDefaults<TInput = unknown, TCache = unknown> = Partial<
-  Pick<DomainOperationMetadata<TInput, TCache>, 'authority' | 'exposure' | 'bridge'>
-> & {
-  layer?: string;
-  durable?: DurableOperationDefaults;
-};
+export type DomainOperationDefaults<
+  TInput = unknown,
+  TCache = unknown,
+> = PortableDomainOperationDefaults<TInput, TCache>;
 
 export type DomainOperationDeclarationMetadata<
   TInput = unknown,
   TCache = unknown,
   TResult = unknown,
-> = Omit<
-  DomainOperationMetadata<TInput, TCache, TResult>,
-  'authority' | 'exposure' | 'bridge' | 'durable' | 'receiver'
-> &
-  Partial<
-    Pick<DomainOperationMetadata<TInput, TCache, TResult>, 'authority' | 'exposure' | 'bridge'>
-  > & {
-    ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
-    durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
-    receiver?: DomainOperationReceiverDeclaration | DomainOperationReceiverDescriptor;
-  };
+> = PortableDomainOperationDeclarationMetadata<
+  TInput,
+  TCache,
+  TResult,
+  PortableOperationConditions
+>;
 
 export type HydratedGraphOperationInput<TInput> =
   TInput extends SemanticSelection<any, infer TEntity>
@@ -159,10 +154,7 @@ export type DomainOperationInvocation<TInput = unknown, TData = unknown> = {
   _data?: TData;
 };
 
-export type OperationBridgeBinding<TBinding = unknown, TAdapter extends string = string> = {
-  adapter: TAdapter;
-  callable: TBinding;
-};
+export type { OperationBridgeBinding } from '../model/operation/client-metadata.js';
 
 export type GraphOperationDeclarations = Record<string, GraphOperationDeclaration<any, any>>;
 export type DomainOperationDeclarations = Record<
@@ -806,18 +798,16 @@ export const defineGraphOperation = <TInput, TResult>(
 
 export const defineDomainOperationMetadata = <TInput, TCache = unknown>(
   operation: Omit<DomainOperationDeclarationMetadata<TInput, TCache>, 'kind'>,
-): DomainOperationDeclarationMetadata<TInput, TCache> => ({
-  kind: 'domain-operation',
-  authority: 'server',
-  ...operation,
-});
+): DomainOperationDeclarationMetadata<TInput, TCache> =>
+  ({
+    ...definePortableDomainOperationMetadata(operation),
+  }) as DomainOperationDeclarationMetadata<TInput, TCache>;
 
 export const defineOperationBridgeBinding = <TBinding, TAdapter extends string = string>(
   adapter: TAdapter,
   callable: TBinding,
 ): OperationBridgeBinding<TBinding, TAdapter> => ({
-  adapter,
-  callable,
+  ...definePortableOperationBridgeBinding(adapter, callable),
 });
 
 type InferClientOperationInput<TOperation> = TOperation extends {

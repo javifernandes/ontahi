@@ -8,7 +8,10 @@ import type {
   DomainOperationAuthority,
   DomainOperationGraphOpsMetadata,
   DomainOperationIngressMetadata,
+  DomainOperationReceiverDeclaration,
   DomainOperationReceiverDescriptor,
+  DurableOperationDeclarationMetadata,
+  DurableOperationDefaults,
   DurableOperationMetadata,
   GraphEntityExposure,
 } from './definition.js';
@@ -47,3 +50,46 @@ export type PortableDomainOperationMetadata<
 export type DomainOperationImplementationMetadata = NonNullable<
   PortableDomainOperationMetadata['implementation']
 >;
+
+export type PortableDomainOperationDefaults<TInput = unknown, TCache = unknown> = Partial<
+  Pick<PortableDomainOperationMetadata<TInput, TCache>, 'authority' | 'exposure' | 'bridge'>
+> & {
+  layer?: string;
+  durable?: DurableOperationDefaults;
+};
+
+export type PortableDomainOperationDeclarationMetadata<
+  TInput = unknown,
+  TCache = unknown,
+  TResult = unknown,
+  TConditions = unknown,
+> = Omit<
+  PortableDomainOperationMetadata<TInput, TCache, TResult, TConditions>,
+  'authority' | 'exposure' | 'bridge' | 'durable' | 'receiver'
+> &
+  Partial<
+    Pick<
+      PortableDomainOperationMetadata<TInput, TCache, TResult, TConditions>,
+      'authority' | 'exposure' | 'bridge'
+    >
+  > & {
+    ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
+    durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
+    receiver?: DomainOperationReceiverDeclaration | DomainOperationReceiverDescriptor;
+  };
+
+export const definePortableDomainOperationMetadata = <
+  TInput,
+  TCache = unknown,
+  TResult = unknown,
+  TConditions = unknown,
+>(
+  operation: Omit<
+    PortableDomainOperationDeclarationMetadata<TInput, TCache, TResult, TConditions>,
+    'kind'
+  >,
+): PortableDomainOperationDeclarationMetadata<TInput, TCache, TResult, TConditions> => ({
+  kind: 'domain-operation',
+  authority: 'server',
+  ...operation,
+});

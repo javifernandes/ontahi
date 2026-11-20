@@ -263,3 +263,7 @@ runtime cache storage and reconciliation remain outside this boundary.
 The complete portable Domain Operation metadata shape now lives in `model/operation/metadata`,
 parameterized by its condition vocabulary. The historical `DomainOperationMetadata` alias supplies
 the existing model-expression conditions while preserving all established inference and exports.
+
+Domain Operation defaults and declaration metadata now share that portable owner, together with
+the basic metadata and bridge-binding factories. Graph-aware client inference, hydration,
+resolution, and entity binding remain in the composition layer by design.
