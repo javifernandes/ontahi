@@ -406,6 +406,17 @@ describe('data graph read protocol', () => {
       },
     },
     {
+      name: 'reference without locator fields',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'Trip', locator: {} }],
+        },
+      },
+    },
+    {
       name: 'malformed boolean operands',
       selection: {
         kind: 'selection',

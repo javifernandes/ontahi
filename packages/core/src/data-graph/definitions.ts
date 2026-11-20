@@ -1,202 +1,148 @@
-import { isJsonValue, type JsonValue } from '../value/json.js';
+export * from '../computation/entity-mapping.js';
 
+import type { AnyEntityDefinition, EntityMapping } from '../model/entity/definition.js';
 import {
-  EntityVariant,
-  type EntityVariantDescriptor,
-  type EntityVariantDiscriminator,
-} from './entity-variant.js';
+  type AnyFieldDefinition,
+  type DefaultedFieldDefinition,
+  type DerivedFieldMetadata,
+  type FieldDefinition,
+  type FieldDefinitions,
+  type GeneratedFieldDefinition,
+  type IdFieldDefinition,
+  type InferEntityRecord,
+  type InferFieldValue,
+  type NumberFieldConstraints,
+  type StringFieldConstraints,
+} from '../model/entity/field.js';
+import {
+  normalizeEntityLocatorDeclarations,
+  type ConventionalEntityLocatorDeclarations,
+  type EntityLocatorDeclarations,
+  type EntityRefLocatorFactories,
+} from '../model/entity/locator.js';
+import type {
+  EntityDisplayDescriptor,
+  EntityDisplayMetadata,
+  EntityFreshnessDescriptor,
+  EntityFreshnessMetadata,
+} from '../model/entity/metadata.js';
+import {
+  isReferenceFieldDefinition,
+  type DeferredEntityReference,
+  type ReferenceFieldDefinition,
+} from '../model/entity/reference-field.js';
+import type { SemanticSelection } from '../model/query/selection-ast.js';
+import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
+import {
+  assertPortableRelationConstraints,
+  type RelationDefinition,
+  type RelationKind,
+  type RelationOptions,
+} from '../model/relation/definition.js';
+import {
+  defineValue,
+  describeGraphSchema,
+  graphLiteral,
+  graphVoid,
+  presentGraphSchema,
+  valueArray,
+  valueDefault,
+  valueNamed,
+  valueNullable,
+  valueOptional,
+  valueRecord,
+  valueRefine,
+  valueTransform,
+  valueObject,
+  valueUnion,
+} from '../value/schema/authoring.js';
+import type {
+  GraphLiteralDefinition,
+  GraphSchemaLike,
+  GraphVoidDefinition,
+  PortableObjectDefinition,
+  PortableValueDefinition,
+  ValueArrayDefinition,
+  ValueDefaultDefinition,
+  ValueNamedDefinition,
+  ValueNullableDefinition,
+  ValueOptionalDefinition,
+  ValueRecordDefinition,
+  ValueRefinementDefinition,
+  ValueSchemaFields,
+  ValueTransformDefinition,
+  ValueUnionDefinition,
+} from '../value/schema/definition.js';
+
+export {
+  describeGraphSchema,
+  graphLiteral,
+  graphVoid,
+  presentGraphSchema,
+} from '../value/schema/authoring.js';
+export type {
+  GraphLiteralDefinition,
+  GraphSchemaDerivation,
+  GraphSchemaLike,
+  GraphVoidDefinition,
+} from '../value/schema/definition.js';
+
+export type { AnyEntityDefinition, EntityRefLocators } from '../model/entity/definition.js';
+export * from '../model/relation/definition.js';
+
+export type {
+  EntityDisplayDescriptor,
+  EntityDisplayMetadata,
+  EntityFreshnessDescriptor,
+  EntityFreshnessMetadata,
+} from '../model/entity/metadata.js';
+export {
+  isDerivedFieldDefinition,
+  type AnyFieldDefinition,
+  type DefaultedFieldDefinition,
+  type DerivedFieldDefinition,
+  type DerivedFieldMetadata,
+  type FieldDefinition,
+  type FieldDefinitions,
+  type GeneratedFieldDefinition,
+  type GraphSchemaPresentation,
+  type IdFieldDefinition,
+  type InferEntityMutationRecord,
+  type InferEntityRecord,
+  type InferFieldValue,
+  type NumberFieldConstraints,
+  type StoredFieldName,
+  type StringFieldConstraints,
+  type WritableStoredFieldName,
+} from '../model/entity/field.js';
+export type {
+  ConventionalEntityLocatorDeclarations,
+  EffectiveEntityLocatorDeclarations,
+  EntityLocatorDeclaration,
+  EntityLocatorDeclarations,
+  EntityRefLocatorFactories,
+} from '../model/entity/locator.js';
+export {
+  isReferenceFieldDefinition,
+  type AnyReferenceFieldDefinition,
+  type DeferredEntityReference,
+  type ReferenceFieldDefinition,
+} from '../model/entity/reference-field.js';
+
+import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant.js';
 import {
   assertModelExpressionProgram,
   collectModelExpressionDependencies,
-  type ModelExpressionDependency,
   type ModelExpressionProgram,
 } from './model-expression/program.js';
-import type { RelationNodeSpec } from './query.js';
 import {
-  getEntityIdentityLocator,
   graphSchemaExistingReference,
   graphSchemaReference,
-  type AnyEntityRef,
-  type EntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
-  type EntityRefLocatorFactory,
-  type EntityRefLocatorValue,
   type SchemaEntityRef,
 } from './ref/index.js';
-import type { SemanticSelection } from './selection-ast.js';
-import { createRecursiveEntityView, isRecursiveViewShape, type EntityViewFactory } from './view.js';
-
-export type DerivedFieldMetadata = {
-  expression?: ModelExpressionProgram;
-  dependencies?: readonly ModelExpressionDependency[];
-};
-
-export type FieldDefinition<TValue> = {
-  kind: 'field';
-  fieldType: 'id' | 'string' | 'number' | 'boolean' | 'date' | 'json' | 'enum' | 'reference';
-  valueType?: string;
-  enumValues?: readonly string[];
-  stringConstraints?: StringFieldConstraints;
-  numberConstraints?: NumberFieldConstraints;
-  nullable?: true;
-  optional?: true;
-  description?: string;
-  presentation?: GraphSchemaPresentation;
-  defaultValue?: TValue;
-  generatedBy?: string;
-  derived?: DerivedFieldMetadata;
-  __value?: TValue;
-};
-
-export type DefaultedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
-  TField,
-  'defaultValue' | 'optional' | '__value'
-> & {
-  defaultValue: InferFieldValue<TField>;
-  optional?: never;
-  __value?: InferFieldValue<TField>;
-};
-
-export type GeneratedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
-  TField,
-  'generatedBy' | 'optional' | '__value'
-> & {
-  generatedBy: string;
-  optional?: never;
-  __value?: InferFieldValue<TField>;
-};
-
-export type DerivedFieldDefinition<TValue> = FieldDefinition<TValue> & {
-  derived: DerivedFieldMetadata;
-};
-
-export type IdFieldDefinition = FieldDefinition<string> & {
-  fieldType: 'id';
-  nullable?: never;
-  optional?: never;
-};
-
-export type DeferredEntityReference<TEntity extends AnyEntityDefinition> = {
-  readonly kind: 'ontahi.entity-ref';
-  readonly __entity?: TEntity;
-};
-
-export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEntityDefinition> =
-  FieldDefinition<EntityRef<TTarget['name']>> & {
-    fieldType: 'reference';
-    target: TTarget;
-    source?: AnyEntityDefinition;
-    fieldName?: string;
-    referenceRequirement?: 'portable' | 'existing';
-    mutationRequirement?: 'existing';
-    /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
-    variant?: EntityVariantDescriptor;
-  };
-
-export type AnyReferenceFieldDefinition = ReferenceFieldDefinition<AnyEntityDefinition>;
-
-export type StringFieldConstraints = {
-  minLength?: number;
-  maxLength?: number;
-  trim?: true;
-  exclude?: {
-    values: readonly string[];
-    caseInsensitive?: true;
-  };
-  pattern?: {
-    source: string;
-    flags?: string;
-  };
-  format?: 'email' | 'url' | 'uuid' | 'datetime';
-  messages?: {
-    required?: string;
-    minLength?: string;
-    maxLength?: string;
-    exclude?: string;
-    pattern?: string;
-    format?: string;
-  };
-};
-
-export type NumberFieldConstraints = {
-  coerce?: true;
-  integer?: true;
-  min?: number;
-  max?: number;
-  multipleOf?: number;
-  messages?: {
-    required?: string;
-    integer?: string;
-    min?: string;
-    max?: string;
-    multipleOf?: string;
-  };
-};
-
-export type GraphSchemaPresentation = {
-  booleanLabels?: {
-    true?: string;
-    false?: string;
-    unset?: string;
-  };
-  control?: 'text' | 'textarea' | 'password' | 'email' | 'url';
-};
-
-export type FieldDefinitions = Record<string, FieldDefinition<unknown>>;
-export type AnyFieldDefinition = FieldDefinition<unknown>;
-
-export const isReferenceFieldDefinition = (
-  definition: AnyFieldDefinition,
-): definition is AnyReferenceFieldDefinition => definition.fieldType === 'reference';
-
-export const isDerivedFieldDefinition = (
-  definition: AnyFieldDefinition,
-): definition is DerivedFieldDefinition<unknown> => definition.derived !== undefined;
-
-export type InferFieldValue<TField extends AnyFieldDefinition> = TField extends {
-  __value?: infer TValue;
-}
-  ? TValue
-  : never;
-
-export type InferEntityRecord<TFields extends FieldDefinitions> = {
-  [TKey in keyof TFields]: InferFieldValue<TFields[TKey]>;
-};
-
-export type StoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in keyof TFields]: TFields[TKey] extends { derived: DerivedFieldMetadata } ? never : TKey;
-}[keyof TFields];
-
-export type WritableStoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { generatedBy: string } ? never : TKey;
-}[StoredFieldName<TFields>];
-
-type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in WritableStoredFieldName<TFields>]: TFields[TKey] extends
-    | { optional: true }
-    | { defaultValue: unknown }
-    ? TKey
-    : never;
-}[WritableStoredFieldName<TFields>];
-
-type RequiredStoredFieldName<TFields extends FieldDefinitions> = Exclude<
-  WritableStoredFieldName<TFields>,
-  OptionalStoredFieldName<TFields>
->;
-
-export type InferEntityMutationRecord<TFields extends FieldDefinitions> = Simplify<
-  {
-    [TKey in RequiredStoredFieldName<TFields>]: InferFieldValue<TFields[TKey]>;
-  } & {
-    [TKey in OptionalStoredFieldName<TFields>]?: Exclude<InferFieldValue<TFields[TKey]>, undefined>;
-  }
->;
-
-export type GraphSchemaLike<TValue = unknown> = {
-  kind: string;
-  __value?: TValue;
-};
+import type { EntityViewFactory } from './view.js';
 
 export type GraphSchemaDefinition =
   | AnyFieldDefinition
@@ -218,9 +164,7 @@ export type GraphSchemaDefinition =
   | GraphSelectionDefinition
   | GraphVoidDefinition;
 
-export interface GraphSchemaFields {
-  [fieldName: string]: GraphSchemaLike;
-}
+export interface GraphSchemaFields extends ValueSchemaFields {}
 
 type OptionalGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = {
   [TKey in keyof TFields]: TFields[TKey] extends { kind: 'schema.optional' } | { optional: true }
@@ -271,116 +215,56 @@ export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> =
       ? TValue
       : never;
 
-export type ValueDefinition<
+export interface ValueDefinition<
   TName extends string = string,
   TFields extends GraphSchemaFields = GraphSchemaFields,
   TValue = InferGraphSchemaFields<TFields>,
-> = {
-  kind: 'value';
-  name: TName;
-  fields: TFields;
-  unknownKeys?: 'strip' | 'strict' | 'passthrough';
-  derivedFrom?: GraphSchemaDerivation;
-  __value?: TValue;
-};
-
-export type GraphSchemaDerivation = {
-  operation: 'pick';
-  source: {
-    kind: 'entity' | 'entity-view' | 'value' | 'object';
-    name?: string;
-  };
-  fields: readonly string[];
-};
+> extends PortableValueDefinition<TName, TFields, TValue> {}
 
 export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields, unknown>;
 
-export type GraphObjectDefinition<
+export interface GraphObjectDefinition<
   TFields extends GraphSchemaFields = GraphSchemaFields,
   TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
-> = {
-  kind: 'schema.object';
-  fields: TFields;
-  unknownKeys: TUnknownKeys;
-  description?: string;
-  __value?: InferGraphSchemaFields<TFields>;
-};
+> extends PortableObjectDefinition<TFields, TUnknownKeys, InferGraphSchemaFields<TFields>> {}
 
 export type AnyGraphObjectDefinition = GraphObjectDefinition<
   GraphSchemaFields,
   'strip' | 'strict' | 'passthrough'
 >;
 
-export interface GraphArrayDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.array';
-  item: TItem;
-  minItems?: number;
-  maxItems?: number;
-  __value?: InferGraphSchemaValue<TItem>[];
-}
+export interface GraphArrayDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueArrayDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphNullableDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.nullable';
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem> | null;
-}
+export interface GraphNullableDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueNullableDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphOptionalDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.optional';
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem> | undefined;
-}
-
-export interface GraphLiteralDefinition<TValue = string | number | boolean | null> {
-  kind: 'schema.literal';
-  value: TValue;
-  description?: string;
-  __value?: TValue;
-}
+export interface GraphOptionalDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueOptionalDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphUnionDefinition<
   TOptions extends readonly GraphSchemaLike[] = readonly GraphSchemaDefinition[],
-> {
-  kind: 'schema.union';
-  options: TOptions;
-  discriminator?: string;
-  description?: string;
-  __value?: InferGraphSchemaValue<TOptions[number]>;
-}
+> extends ValueUnionDefinition<TOptions, InferGraphSchemaValue<TOptions[number]>> {}
 
-export interface GraphRecordDefinition<TValue extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.record';
-  value: TValue;
-  description?: string;
-  __value?: Record<string, InferGraphSchemaValue<TValue>>;
-}
+export interface GraphRecordDefinition<
+  TValue extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueRecordDefinition<TValue, InferGraphSchemaValue<TValue>> {}
 
-export interface GraphDefaultDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.default';
-  item: TItem;
-  defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>;
-  __value?: Exclude<InferGraphSchemaValue<TItem>, undefined>;
-}
+export interface GraphDefaultDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueDefaultDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphTransformDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
   TOutput = unknown,
-> {
-  kind: 'schema.transform';
-  item: TItem;
-  transform: (value: InferGraphSchemaValue<TItem>) => TOutput;
-  __value?: TOutput;
-}
+> extends ValueTransformDefinition<TItem, InferGraphSchemaValue<TItem>, TOutput> {}
 
-export interface GraphRefinementDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.refinement';
-  item: TItem;
-  predicate: (value: InferGraphSchemaValue<TItem>) => boolean;
-  message: string;
-  path?: readonly (string | number)[];
-  rule?: string;
-  __value?: InferGraphSchemaValue<TItem>;
-}
+export interface GraphRefinementDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueRefinementDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphLazyDefinition<TValue = unknown> {
   kind: 'schema.lazy';
@@ -389,17 +273,9 @@ export interface GraphLazyDefinition<TValue = unknown> {
   __value?: TValue;
 }
 
-export interface GraphNamedDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.named';
-  name: string;
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem>;
-}
-
-export interface GraphVoidDefinition {
-  kind: 'schema.void';
-  __value?: void;
-}
+export interface GraphNamedDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueNamedDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphSelectionDefinition<
   TEntity extends AnyEntityDefinition = AnyEntityDefinition,
@@ -443,205 +319,6 @@ export type EntityViewConfig<
 > = {
   fields?: TFields;
   omit?: TOmit;
-};
-
-export type RelationKind = 'hasMany' | 'belongsTo' | 'manyToMany';
-export type RelationMappingKind = 'one-to-many' | 'many-to-one' | 'many-to-many';
-
-type EntityMapping<TFields extends FieldDefinitions> = {
-  tableName: string;
-  fieldColumns: Partial<Record<keyof TFields & string, string>>;
-};
-
-export type EntityLocatorDeclaration<TFields extends FieldDefinitions = FieldDefinitions> =
-  | (keyof TFields & string)
-  | readonly (keyof TFields & string)[]
-  | EntityRefLocatorFactory;
-
-export type EntityLocatorDeclarations<TFields extends FieldDefinitions = FieldDefinitions> = Record<
-  string,
-  EntityLocatorDeclaration<TFields>
->;
-
-export type ConventionalEntityLocatorDeclarations<TFields extends FieldDefinitions> =
-  TFields extends { readonly id: IdFieldDefinition } ? { readonly refById: 'id' } : {};
-
-export type EffectiveEntityLocatorDeclarations<
-  TFields extends FieldDefinitions,
-  TLocators extends EntityLocatorDeclarations<TFields>,
-> = Omit<ConventionalEntityLocatorDeclarations<TFields>, keyof TLocators> & TLocators;
-
-export type EntityDisplayDescriptor = {
-  primary?: string;
-  secondary?: readonly string[];
-  search?: readonly string[];
-};
-
-type EntityDisplayFieldPath<TFields extends FieldDefinitions, TRelationPath extends string> =
-  | (keyof TFields & string)
-  | TRelationPath;
-
-export type EntityDisplayMetadata<
-  TFields extends FieldDefinitions = FieldDefinitions,
-  TRelationPath extends string = `${string}.${string}`,
-> = {
-  primary?: EntityDisplayFieldPath<TFields, TRelationPath>;
-  secondary?: readonly EntityDisplayFieldPath<TFields, TRelationPath>[];
-  search?: readonly EntityDisplayFieldPath<TFields, TRelationPath>[];
-};
-
-export type EntityFreshnessDescriptor = {
-  hash?: string;
-  updatedAt?: string;
-  version?: string;
-};
-
-export type EntityFreshnessMetadata<TFields extends FieldDefinitions = FieldDefinitions> = {
-  hash?: keyof TFields & string;
-  updatedAt?: keyof TFields & string;
-  version?: keyof TFields & string;
-};
-
-type FieldLocatorFactory<
-  TFields extends FieldDefinitions,
-  TField extends keyof TFields & string,
-> = ((
-  value: Extract<InferFieldValue<TFields[TField]>, EntityRefLocatorValue>,
-) => EntityRefLocator) & { fields: readonly [TField] };
-
-type CompositeFieldLocatorFactory<
-  TFields extends FieldDefinitions,
-  TFieldNames extends readonly (keyof TFields & string)[],
-> = ((
-  ...values: {
-    [TIndex in keyof TFieldNames]: TFieldNames[TIndex] extends keyof TFields
-      ? Extract<InferFieldValue<TFields[TFieldNames[TIndex]]>, EntityRefLocatorValue>
-      : never;
-  }
-) => EntityRefLocator) & { fields: TFieldNames };
-
-export type EntityRefLocatorFactories<
-  TFields extends FieldDefinitions,
-  TLocators extends EntityLocatorDeclarations<TFields>,
-> = {
-  [TName in keyof TLocators]: TLocators[TName] extends keyof TFields & string
-    ? FieldLocatorFactory<TFields, TLocators[TName]>
-    : TLocators[TName] extends readonly (keyof TFields & string)[]
-      ? CompositeFieldLocatorFactory<TFields, TLocators[TName]>
-      : TLocators[TName] extends EntityRefLocatorFactory
-        ? TLocators[TName]
-        : EntityRefLocatorFactory;
-};
-
-export type DirectRelationMapping = {
-  type: 'one-to-many' | 'many-to-one';
-  fromTable: string;
-  fromColumn: string;
-  toTable: string;
-  toColumn: string;
-  /** Provider-private position evidence for an ordered one-to-many Relation. */
-  orderColumn?: string;
-};
-
-export type ManyToManyRelationMapping = {
-  type: 'many-to-many';
-  fromTable: string;
-  fromColumn: string;
-  throughTable: string;
-  throughFromColumn: string;
-  throughToColumn: string;
-  toTable: string;
-  toColumn: string;
-};
-
-export type ParsedRelationMapping = DirectRelationMapping | ManyToManyRelationMapping;
-
-export type RelationConstraintRejection = {
-  readonly version: 1;
-  readonly code: string;
-  readonly message: string;
-  readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
-};
-
-export type PortableSelectionPredicate =
-  | {
-      readonly kind: 'predicate';
-      readonly operator: 'eq' | 'lte' | 'lt' | 'gte' | 'gt';
-      readonly fieldName: string;
-      readonly value: JsonValue;
-    }
-  | {
-      readonly kind: 'predicate';
-      readonly operator: 'in';
-      readonly fieldName: string;
-      readonly values: readonly JsonValue[];
-    }
-  | {
-      readonly kind: 'predicate';
-      readonly operator: 'isNull';
-      readonly fieldName: string;
-    };
-
-export type PortableSelectionExpression =
-  | PortableSelectionPredicate
-  | { readonly kind: 'all' }
-  | { readonly kind: 'none' }
-  | { readonly kind: 'references'; readonly refs: readonly AnyEntityRef[] }
-  | { readonly kind: 'and' | 'or'; readonly operands: readonly PortableSelectionExpression[] }
-  | { readonly kind: 'not'; readonly operand: PortableSelectionExpression };
-
-export type RelationParticipantSelectionConstraint = {
-  readonly kind: 'participant-selection';
-  /** Participant is relative to the Relation declaration, not storage orientation. */
-  readonly participant: 'source' | 'target';
-  readonly selection: PortableSelectionExpression;
-  readonly rejection: RelationConstraintRejection;
-};
-
-export type RelationCountAtMostFieldConstraint = {
-  readonly kind: 'relation-count-at-most-field';
-  /** Field on the Entity that declares the to-many Relation. */
-  readonly fieldName: string;
-  readonly enforcement: 'authority-serialized';
-  readonly rejection: RelationConstraintRejection;
-};
-
-export type RelationConstraint =
-  | RelationParticipantSelectionConstraint
-  | RelationCountAtMostFieldConstraint;
-
-export const assertPortableRelationConstraints = (
-  constraints: readonly RelationConstraint[] | undefined,
-) => {
-  if (constraints && !constraints.every(isJsonValue)) {
-    throw new Error('Relation constraints must be JSON-safe.');
-  }
-};
-
-export type RelationDeletePolicy = 'cascade' | 'detach';
-
-export type RelationOptions = {
-  via?: string;
-  constraints?: readonly RelationConstraint[];
-  ordered?: true;
-  onDelete?: RelationDeletePolicy;
-};
-
-export type RelationDefinition<
-  TKind extends RelationKind = RelationKind,
-  TTarget extends AnyEntityDefinition = AnyEntityDefinition,
-  TNullable extends boolean = boolean,
-> = {
-  kind: 'relation';
-  relationKind: TKind;
-  target: TTarget;
-  sourceField?: string;
-  targetField?: string;
-  nullable?: TNullable;
-  ordered?: true;
-  onDelete?: RelationDeletePolicy;
-  mapping?: ParsedRelationMapping;
-  constraints?: readonly RelationConstraint[];
 };
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
@@ -804,21 +481,6 @@ export type EntityDefinition<
     TLocators
   >;
 };
-
-export type AnyEntityDefinition = {
-  kind: 'entity';
-  name: string;
-  fields: FieldDefinitions;
-  __value?: Record<string, unknown>;
-  relations: Record<string, RelationDefinition<RelationKind, any>>;
-  refLocators: EntityRefLocatorDeclarations;
-  identityLocatorName?: string;
-  displayMetadata?: EntityDisplayDescriptor;
-  freshnessMetadata?: EntityFreshnessDescriptor;
-  mapping?: EntityMapping<any>;
-};
-
-export type EntityRefLocators<TEntity extends AnyEntityDefinition> = TEntity['refLocators'];
 
 const identifierStringConstraints = {
   minLength: 1,
@@ -1063,46 +725,6 @@ export const field = {
   },
 };
 
-const normalizeEntityLocatorDeclaration = <TFields extends FieldDefinitions>(
-  declaration: EntityLocatorDeclaration<TFields>,
-): EntityRefLocatorFactory => {
-  if (typeof declaration === 'function') {
-    return declaration;
-  }
-
-  if (Array.isArray(declaration)) {
-    return Object.assign(
-      (...values: readonly EntityRefLocatorValue[]): EntityRefLocator =>
-        Object.fromEntries(declaration.map((fieldName, index) => [fieldName, values[index]])),
-      {
-        fields: declaration,
-      },
-    );
-  }
-
-  return Object.assign(
-    (value: EntityRefLocatorValue): EntityRefLocator => ({
-      [declaration as string]: value,
-    }),
-    {
-      fields: [declaration as string],
-    },
-  );
-};
-
-const normalizeEntityLocatorDeclarations = <
-  TFields extends FieldDefinitions,
-  TLocators extends EntityLocatorDeclarations<TFields>,
->(
-  locators: TLocators,
-): EntityRefLocatorFactories<TFields, TLocators> =>
-  Object.fromEntries(
-    Object.entries(locators).map(([name, declaration]) => [
-      name,
-      normalizeEntityLocatorDeclaration(declaration),
-    ]),
-  ) as EntityRefLocatorFactories<TFields, TLocators>;
-
 export const entity = <TName extends string, TFields extends FieldDefinitions>(
   name: TName,
   fields: TFields,
@@ -1286,23 +908,15 @@ export const value = <TName extends string, TFields extends GraphSchemaFields>(
   name: TName,
   fields: TFields,
   options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
-): ValueDefinition<TName, TFields> => ({
-  kind: 'value',
-  name,
-  fields,
-  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
-});
+): ValueDefinition<TName, TFields> =>
+  defineValue<TName, TFields, InferGraphSchemaFields<TFields>>(name, fields, options);
 
 export const valueOf = <TValue>(
   name: string,
   fields: GraphSchemaFields,
   options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
-): ValueDefinition<string, GraphSchemaFields, TValue> => ({
-  kind: 'value',
-  name,
-  fields,
-  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
-});
+): ValueDefinition<string, GraphSchemaFields, TValue> =>
+  defineValue<string, GraphSchemaFields, TValue>(name, fields, options);
 
 type GraphSchemaFieldSource = {
   kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
@@ -1337,19 +951,21 @@ export const graphPick = <
   ) as Pick<TSource['fields'], TKeys[number]>;
 
   return {
-    named: name => ({
-      kind: 'value',
-      name,
-      fields,
-      derivedFrom: {
-        operation: 'pick',
-        source: {
-          kind: source.kind === 'schema.object' ? 'object' : source.kind,
-          ...(source.name ? { name: source.name } : {}),
+    named: name =>
+      defineValue<
+        typeof name,
+        Pick<TSource['fields'], TKeys[number]>,
+        InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
+      >(name, fields, {
+        derivedFrom: {
+          operation: 'pick',
+          source: {
+            kind: source.kind === 'schema.object' ? 'object' : source.kind,
+            ...(source.name ? { name: source.name } : {}),
+          },
+          fields: [...keys],
         },
-        fields: [...keys],
-      },
-    }),
+      }),
   };
 };
 
@@ -1359,97 +975,55 @@ export const graphObject = <
 >(
   fields: TFields,
   options?: { unknownKeys?: TUnknownKeys; description?: string },
-): GraphObjectDefinition<TFields, TUnknownKeys> => ({
-  kind: 'schema.object',
-  fields,
-  unknownKeys: options?.unknownKeys ?? ('strip' as TUnknownKeys),
-  ...(options?.description ? { description: options.description } : {}),
-});
+): GraphObjectDefinition<TFields, TUnknownKeys> =>
+  valueObject<TFields, TUnknownKeys, InferGraphSchemaFields<TFields>>(fields, options);
 
 export const graphArray = <TItem extends GraphSchemaLike>(
   item: TItem,
   options?: { minItems?: number; maxItems?: number },
-): GraphArrayDefinition<TItem> => ({
-  kind: 'schema.array',
-  item,
-  ...(options?.minItems === undefined ? {} : { minItems: options.minItems }),
-  ...(options?.maxItems === undefined ? {} : { maxItems: options.maxItems }),
-});
+): GraphArrayDefinition<TItem> => valueArray<TItem, InferGraphSchemaValue<TItem>>(item, options);
 
 export const graphNullable = <TItem extends GraphSchemaLike>(
   item: TItem,
-): GraphNullableDefinition<TItem> => ({
-  kind: 'schema.nullable',
-  item,
-});
+): GraphNullableDefinition<TItem> => valueNullable<TItem, InferGraphSchemaValue<TItem>>(item);
 
 export const graphOptional = <TItem extends GraphSchemaLike>(
   item: TItem,
-): GraphOptionalDefinition<TItem> => ({
-  kind: 'schema.optional',
-  item,
-});
-
-export const graphLiteral = <const TValue extends string | number | boolean | null>(
-  literalValue: TValue,
-): GraphLiteralDefinition<TValue> => ({
-  kind: 'schema.literal',
-  value: literalValue,
-});
+): GraphOptionalDefinition<TItem> => valueOptional<TItem, InferGraphSchemaValue<TItem>>(item);
 
 export const graphUnion = <const TOptions extends readonly GraphSchemaLike[]>(
   options: TOptions,
-): GraphUnionDefinition<TOptions> => ({
-  kind: 'schema.union',
-  options,
-});
+): GraphUnionDefinition<TOptions> =>
+  valueUnion<TOptions, InferGraphSchemaValue<TOptions[number]>>(options);
 
 export const graphDiscriminatedUnion = <const TOptions extends readonly GraphSchemaLike[]>(
   discriminator: string,
   options: TOptions,
-): GraphUnionDefinition<TOptions> => ({
-  kind: 'schema.union',
-  discriminator,
-  options,
-});
+): GraphUnionDefinition<TOptions> =>
+  valueUnion<TOptions, InferGraphSchemaValue<TOptions[number]>>(options, discriminator);
 
 export const graphRecord = <TValue extends GraphSchemaLike>(
   recordValue: TValue,
-): GraphRecordDefinition<TValue> => ({
-  kind: 'schema.record',
-  value: recordValue,
-});
+): GraphRecordDefinition<TValue> => valueRecord<TValue, InferGraphSchemaValue<TValue>>(recordValue);
 
 export const graphDefault = <TItem extends GraphSchemaLike>(
   item: TItem,
   defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>,
-): GraphDefaultDefinition<TItem> => ({
-  kind: 'schema.default',
-  item,
-  defaultValue,
-});
+): GraphDefaultDefinition<TItem> =>
+  valueDefault<TItem, InferGraphSchemaValue<TItem>>(item, defaultValue);
 
 export const graphTransform = <TItem extends GraphSchemaLike, TOutput>(
   item: TItem,
   transform: (value: InferGraphSchemaValue<TItem>) => TOutput,
-): GraphTransformDefinition<TItem, TOutput> => ({
-  kind: 'schema.transform',
-  item,
-  transform,
-});
+): GraphTransformDefinition<TItem, TOutput> =>
+  valueTransform<TItem, InferGraphSchemaValue<TItem>, TOutput>(item, transform);
 
 export const graphRefine = <TItem extends GraphSchemaLike>(
   item: TItem,
   predicate: (value: InferGraphSchemaValue<TItem>) => boolean,
   options: { message: string; path?: readonly (string | number)[]; rule?: string },
-): GraphRefinementDefinition<TItem> => ({
-  kind: 'schema.refinement',
-  item,
-  predicate,
-  message: options.message,
-  ...(options.path ? { path: options.path } : {}),
-  ...(options.rule ? { rule: options.rule } : {}),
-});
+): GraphRefinementDefinition<TItem> =>
+  valueRefine<TItem, InferGraphSchemaValue<TItem>>(item, predicate, options);
 
 export const graphLazy = <TValue>(
   name: string,
@@ -1463,13 +1037,7 @@ export const graphLazy = <TValue>(
 export const graphNamed = <TItem extends GraphSchemaLike>(
   name: string,
   item: TItem,
-): GraphNamedDefinition<TItem> => ({
-  kind: 'schema.named',
-  name,
-  item,
-});
-
-export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
+): GraphNamedDefinition<TItem> => valueNamed<TItem, InferGraphSchemaValue<TItem>>(name, item);
 
 export const graphSelection = <
   TEntity extends AnyEntityDefinition,
@@ -1483,16 +1051,6 @@ export const graphSelection = <
   cardinality: options?.cardinality ?? ('many' as TCardinality),
   ...(options?.entities ? { entities: options.entities } : {}),
 });
-
-export const describeGraphSchema = <TSchema extends object>(
-  schema: TSchema,
-  description: string,
-): TSchema => ({ ...schema, description });
-
-export const presentGraphSchema = <TSchema extends object>(
-  schema: TSchema,
-  presentation: GraphSchemaPresentation,
-): TSchema => ({ ...schema, presentation });
 
 export const graphSchema = {
   value,
@@ -1533,222 +1091,4 @@ export const graphSchema = {
   enum: field.enum,
   ref: graphSchemaReference,
   existingRef: graphSchemaExistingReference,
-};
-
-export const mapEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) => ({
-  toTable: (
-    tableName: string,
-    fieldColumns: Partial<Record<keyof TEntity['fields'] & string, string>> = {},
-  ) => {
-    entityDefinition.mapping = {
-      tableName,
-      fieldColumns,
-    };
-    return entityDefinition;
-  },
-});
-
-const parseTableColumnPath = (path: string) => {
-  const [tableName, columnName] = path.split('.');
-  if (!tableName || !columnName) {
-    throw new Error(`Invalid relation mapping path: ${path}`);
-  }
-
-  return { tableName, columnName };
-};
-
-export const mapRelation = <TEntity extends AnyEntityDefinition>(
-  entityDefinition: TEntity,
-  relationName: keyof TEntity['relations'] & string,
-  input:
-    | {
-        type: 'one-to-many' | 'many-to-one';
-        from: string;
-        to: string;
-        orderBy?: string;
-      }
-    | {
-        type: 'many-to-many';
-        from: string;
-        through: { table: string; fromColumn: string; toColumn: string };
-        to: string;
-      },
-) => {
-  const relation = entityDefinition.relations[relationName];
-  if (!relation) {
-    throw new Error(`Unknown relation ${relationName} on entity ${entityDefinition.name}`);
-  }
-
-  const from = parseTableColumnPath(input.from);
-  const to = parseTableColumnPath(input.to);
-  if (input.type === 'many-to-many') {
-    if (relation.relationKind !== 'manyToMany') {
-      throw new Error(
-        `Relation ${entityDefinition.name}.${relationName} is not declared many-to-many.`,
-      );
-    }
-    if (!input.through.table || !input.through.fromColumn || !input.through.toColumn) {
-      throw new Error(`Many-to-many relation ${relationName} requires complete through mapping.`);
-    }
-    relation.mapping = {
-      type: input.type,
-      fromTable: from.tableName,
-      fromColumn: from.columnName,
-      throughTable: input.through.table,
-      throughFromColumn: input.through.fromColumn,
-      throughToColumn: input.through.toColumn,
-      toTable: to.tableName,
-      toColumn: to.columnName,
-    };
-  } else {
-    if (relation.relationKind === 'manyToMany') {
-      throw new Error(
-        `Relation ${entityDefinition.name}.${relationName} requires a many-to-many mapping.`,
-      );
-    }
-    if (Boolean(relation.ordered) !== Boolean(input.orderBy)) {
-      throw new Error(
-        relation.ordered
-          ? `Ordered Relation ${entityDefinition.name}.${relationName} requires an orderBy mapping.`
-          : `Unordered Relation ${entityDefinition.name}.${relationName} cannot declare an orderBy mapping.`,
-      );
-    }
-    const order = input.orderBy ? parseTableColumnPath(input.orderBy) : undefined;
-    if (order && order.tableName !== getEntityMapping(relation.target).tableName) {
-      throw new Error(
-        `Ordered Relation ${entityDefinition.name}.${relationName} position must be stored on ${getEntityMapping(relation.target).tableName}.`,
-      );
-    }
-    relation.mapping = {
-      type: input.type,
-      fromTable: from.tableName,
-      fromColumn: from.columnName,
-      toTable: to.tableName,
-      toColumn: to.columnName,
-      ...(order ? { orderColumn: order.columnName } : {}),
-    };
-  }
-
-  return relation;
-};
-
-export const resolveColumnNameForEntity = (
-  entityDefinition: AnyEntityDefinition,
-  fieldName: string,
-) => entityDefinition.mapping?.fieldColumns[fieldName] ?? fieldName;
-
-export const resolveFieldNameForEntity = (
-  entityDefinition: AnyEntityDefinition,
-  columnName: string,
-) => {
-  const explicitField = Object.entries(entityDefinition.mapping?.fieldColumns ?? {}).find(
-    ([, mappedColumnName]) => mappedColumnName === columnName,
-  )?.[0];
-
-  return explicitField ?? columnName;
-};
-
-export const getEntityMapping = (entityDefinition: AnyEntityDefinition) => ({
-  tableName: entityDefinition.mapping?.tableName ?? entityDefinition.name,
-  columns: Object.fromEntries(
-    Object.entries(entityDefinition.fields)
-      .filter(([, fieldDefinition]) => !isDerivedFieldDefinition(fieldDefinition))
-      .map(([fieldName]) => [fieldName, resolveColumnNameForEntity(entityDefinition, fieldName)]),
-  ),
-});
-
-export const resolveHasManyTargetField = (
-  sourceEntity: AnyEntityDefinition,
-  relation: RelationDefinition,
-): string | undefined => {
-  if (relation.relationKind !== 'hasMany') return undefined;
-  if (relation.targetField) return relation.targetField;
-
-  const sourceMapping = getEntityMapping(sourceEntity);
-  const targetMapping = getEntityMapping(relation.target);
-  if (relation.mapping) {
-    if (
-      relation.mapping.fromTable === sourceMapping.tableName &&
-      relation.mapping.toTable === targetMapping.tableName
-    ) {
-      const targetField = resolveFieldNameForEntity(relation.target, relation.mapping.toColumn);
-      if (targetField in relation.target.fields) return targetField;
-    }
-    if (
-      relation.mapping.toTable === sourceMapping.tableName &&
-      relation.mapping.fromTable === targetMapping.tableName
-    ) {
-      const targetField = resolveFieldNameForEntity(relation.target, relation.mapping.fromColumn);
-      if (targetField in relation.target.fields) return targetField;
-    }
-  }
-
-  const candidates = [
-    ...new Set(
-      Object.values(relation.target.relations).flatMap(candidate => {
-        if (candidate.relationKind !== 'belongsTo' || candidate.target.name !== sourceEntity.name) {
-          return [];
-        }
-        const candidateFieldName = candidate.sourceField;
-        return candidateFieldName && candidateFieldName in relation.target.fields
-          ? [candidateFieldName]
-          : [];
-      }),
-    ),
-  ];
-  return candidates.length === 1 ? candidates[0] : undefined;
-};
-
-export const resolveRelationFields = (
-  sourceEntity: AnyEntityDefinition,
-  relationName: string,
-  relationNode: Pick<RelationNodeSpec, 'entity'>,
-) => {
-  const relationDefinition = sourceEntity.relations[relationName] as
-    | RelationDefinition<RelationKind, AnyEntityDefinition>
-    | undefined;
-  if (!relationDefinition) {
-    throw new Error(`Unknown relation ${sourceEntity.name}.${relationName}.`);
-  }
-  if (relationDefinition.relationKind === 'manyToMany') {
-    throw new Error(
-      `Many-to-many Relation ${sourceEntity.name}.${relationName} does not use direct Entity fields.`,
-    );
-  }
-
-  const singleIdentityField = (entityDefinition: AnyEntityDefinition) => {
-    const fields = getEntityIdentityLocator(entityDefinition)?.locator.fields;
-    return fields?.length === 1 ? fields[0] : undefined;
-  };
-  const semanticFields =
-    relationDefinition.relationKind === 'belongsTo'
-      ? {
-          sourceField: relationDefinition.sourceField,
-          targetField: singleIdentityField(relationDefinition.target),
-        }
-      : {
-          sourceField: singleIdentityField(sourceEntity),
-          targetField: resolveHasManyTargetField(sourceEntity, relationDefinition),
-        };
-
-  if (semanticFields.sourceField && semanticFields.targetField) {
-    return semanticFields as { sourceField: string; targetField: string };
-  }
-
-  const mapping = relationDefinition?.mapping;
-
-  if (!mapping) {
-    throw new Error(`Relation ${sourceEntity.name}.${relationName} is missing mapping metadata.`);
-  }
-
-  const fromEntity =
-    mapping.fromTable === getEntityMapping(sourceEntity).tableName
-      ? sourceEntity
-      : relationNode.entity;
-  const toEntity = fromEntity === sourceEntity ? relationNode.entity : sourceEntity;
-
-  return {
-    sourceField: resolveFieldNameForEntity(fromEntity, mapping.fromColumn),
-    targetField: resolveFieldNameForEntity(toEntity, mapping.toColumn),
-  };
 };

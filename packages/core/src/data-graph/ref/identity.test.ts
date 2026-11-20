@@ -1,27 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { entity, field } from '../definitions.js';
+import { getEntityIdentityLocator as getModelEntityIdentityLocator } from '../../model/entity/ref/identity.js';
 
-import { createEntityIdentityRef, getEntityIdentityLocator } from './identity.js';
-import { createEntityRef } from './model.js';
+import { getEntityIdentityLocator } from './identity.js';
 
-describe('Entity Ref identity', () => {
-  it('materializes the declared identity without carrying unrelated attributes', () => {
-    const Book = entity('Book', {
-      id: field.id(),
-      slug: field.string(),
-      title: field.string(),
-    })
-      .locators({ refBySlug: 'slug' })
-      .identity('refBySlug');
-
-    expect(getEntityIdentityLocator(Book)?.name).toBe('refBySlug');
-    expect(
-      createEntityIdentityRef(Book, {
-        id: 'book-1',
-        slug: 'progbook',
-        title: 'Programming Book',
-      }),
-    ).toEqual(createEntityRef(Book, { slug: 'progbook' }));
+describe('data-graph Entity identity compatibility facade', () => {
+  it('preserves the portable model implementation by identity', () => {
+    expect(getEntityIdentityLocator).toBe(getModelEntityIdentityLocator);
   });
 });

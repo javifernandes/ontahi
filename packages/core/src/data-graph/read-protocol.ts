@@ -409,6 +409,11 @@ export const validateGraphReadSelection = (
     if (value.refs.some(ref => ref.entityName !== entity.name)) {
       return selectionError(`Data graph read Selection references must target ${entity.name}.`);
     }
+    if (value.refs.some(ref => Object.keys(ref.locator).length === 0)) {
+      return selectionError(
+        `Data graph read Selection references must declare a locator for ${entity.name}.`,
+      );
+    }
     const unknownLocatorField = value.refs
       .flatMap(ref => Object.keys(ref.locator))
       .find(fieldName => !hasOwn(entity.fields, fieldName));

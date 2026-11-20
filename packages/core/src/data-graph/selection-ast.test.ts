@@ -4,10 +4,12 @@ import { applySelectionExpression } from './in-memory/query.js';
 
 import {
   compileSelectionExpression,
+  copySelectionExpression,
   createDeleteCommandSpec,
   entity,
   field,
   mapEntity,
+  lowerSelectionReferences,
   query,
   selectionAll,
   selectionAnd,
@@ -198,5 +200,26 @@ describe('selection AST', () => {
         selection.expression,
       ),
     ).toHaveLength(2);
+  });
+
+  it('copies and lowers relation-image predicates without cloning opaque values', () => {
+    const opaque = Symbol('opaque');
+    const image = {
+      kind: 'relation-image' as const,
+      relationName: 'books',
+      source: {
+        kind: 'selection' as const,
+        entityName: 'Owner',
+        expression: {
+          kind: 'predicate' as const,
+          operator: 'eq' as const,
+          fieldName: 'token',
+          value: opaque,
+        },
+      },
+    };
+
+    expect(copySelectionExpression(image)).toEqual(image);
+    expect(lowerSelectionReferences(image)).toEqual(image);
   });
 });

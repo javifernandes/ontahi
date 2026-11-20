@@ -342,7 +342,10 @@ const createRelationArguments = relation => {
     ts.factory.createStringLiteral(relation.name),
     relation.targetTypeLocalName
       ? ts.factory.createAsExpression(
-          ts.factory.createIdentifier(relation.targetLocalName),
+          ts.factory.createAsExpression(
+            ts.factory.createIdentifier(relation.targetLocalName),
+            ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword),
+          ),
           ts.factory.createTypeQueryNode(ts.factory.createIdentifier(relation.targetTypeLocalName)),
         )
       : ts.factory.createIdentifier(relation.targetLocalName),
