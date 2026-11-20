@@ -8,7 +8,6 @@ import {
   type FieldDefinition,
   type FieldDefinitions,
   type GeneratedFieldDefinition,
-  type GraphSchemaPresentation,
   type IdFieldDefinition,
   type InferEntityRecord,
   type InferFieldValue,
@@ -40,6 +39,29 @@ import {
   type RelationKind,
   type RelationOptions,
 } from '../model/relation/definition.js';
+import {
+  describeGraphSchema,
+  graphLiteral,
+  graphVoid,
+  presentGraphSchema,
+} from '../value/schema/authoring.js';
+import type {
+  GraphLiteralDefinition,
+  GraphSchemaLike,
+  GraphVoidDefinition,
+} from '../value/schema/definition.js';
+
+export {
+  describeGraphSchema,
+  graphLiteral,
+  graphVoid,
+  presentGraphSchema,
+} from '../value/schema/authoring.js';
+export type {
+  GraphLiteralDefinition,
+  GraphSchemaLike,
+  GraphVoidDefinition,
+} from '../value/schema/definition.js';
 
 export type { AnyEntityDefinition, EntityRefLocators } from '../model/entity/definition.js';
 export * from '../model/relation/definition.js';
@@ -97,11 +119,6 @@ import {
   type SchemaEntityRef,
 } from './ref/index.js';
 import type { EntityViewFactory } from './view.js';
-
-export type GraphSchemaLike<TValue = unknown> = {
-  kind: string;
-  __value?: TValue;
-};
 
 export type GraphSchemaDefinition =
   | AnyFieldDefinition
@@ -236,13 +253,6 @@ export interface GraphOptionalDefinition<TItem extends GraphSchemaLike = GraphSc
   __value?: InferGraphSchemaValue<TItem> | undefined;
 }
 
-export interface GraphLiteralDefinition<TValue = string | number | boolean | null> {
-  kind: 'schema.literal';
-  value: TValue;
-  description?: string;
-  __value?: TValue;
-}
-
 export interface GraphUnionDefinition<
   TOptions extends readonly GraphSchemaLike[] = readonly GraphSchemaDefinition[],
 > {
@@ -299,11 +309,6 @@ export interface GraphNamedDefinition<TItem extends GraphSchemaLike = GraphSchem
   name: string;
   item: TItem;
   __value?: InferGraphSchemaValue<TItem>;
-}
-
-export interface GraphVoidDefinition {
-  kind: 'schema.void';
-  __value?: void;
 }
 
 export interface GraphSelectionDefinition<
@@ -1041,13 +1046,6 @@ export const graphOptional = <TItem extends GraphSchemaLike>(
   item,
 });
 
-export const graphLiteral = <const TValue extends string | number | boolean | null>(
-  literalValue: TValue,
-): GraphLiteralDefinition<TValue> => ({
-  kind: 'schema.literal',
-  value: literalValue,
-});
-
 export const graphUnion = <const TOptions extends readonly GraphSchemaLike[]>(
   options: TOptions,
 ): GraphUnionDefinition<TOptions> => ({
@@ -1120,8 +1118,6 @@ export const graphNamed = <TItem extends GraphSchemaLike>(
   item,
 });
 
-export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
-
 export const graphSelection = <
   TEntity extends AnyEntityDefinition,
   const TCardinality extends 'one' | 'many' = 'many',
@@ -1134,16 +1130,6 @@ export const graphSelection = <
   cardinality: options?.cardinality ?? ('many' as TCardinality),
   ...(options?.entities ? { entities: options.entities } : {}),
 });
-
-export const describeGraphSchema = <TSchema extends object>(
-  schema: TSchema,
-  description: string,
-): TSchema => ({ ...schema, description });
-
-export const presentGraphSchema = <TSchema extends object>(
-  schema: TSchema,
-  presentation: GraphSchemaPresentation,
-): TSchema => ({ ...schema, presentation });
 
 export const graphSchema = {
   value,

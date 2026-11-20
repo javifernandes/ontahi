@@ -1,4 +1,7 @@
+import type { GraphSchemaPresentation } from '../../value/schema/presentation.js';
 import type { ModelExpressionDependency, ModelExpressionProgram } from '../expression/program.js';
+
+export type { GraphSchemaPresentation } from '../../value/schema/presentation.js';
 
 export type DerivedFieldMetadata = {
   expression?: ModelExpressionProgram;
@@ -41,15 +44,6 @@ export type NumberFieldConstraints = {
     max?: string;
     multipleOf?: string;
   };
-};
-
-export type GraphSchemaPresentation = {
-  booleanLabels?: {
-    true?: string;
-    false?: string;
-    unset?: string;
-  };
-  control?: 'text' | 'textarea' | 'password' | 'email' | 'url';
 };
 
 export type FieldDefinition<TValue> = {

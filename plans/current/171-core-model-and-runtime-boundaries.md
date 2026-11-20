@@ -196,3 +196,9 @@ Selection AST semantics and recursive Entity View construction now live under `m
 overload remains intentionally in place until portable value-schema declarations leave
 `definitions.ts`. The `entity(...)` builder now consumes recursive View behavior directly from the
 model boundary.
+
+Value-schema extraction has started with the dependency-free kernel: `GraphSchemaLike`, literal and
+void schemas, presentation metadata, and description/presentation authoring now live under
+`value/schema`. The composite Graph schema union remains at the compatibility boundary because it
+also includes Entity, View, Selection, and Reference forms; it must be decomposed rather than moved
+whole into `value`.

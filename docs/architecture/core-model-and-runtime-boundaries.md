@@ -245,3 +245,8 @@ Physical table/column mapping, Relation mapping, and field resolution now live i
 semantics merely because it was implemented in `definitions.ts`. Selection AST semantics and
 recursive View AST/inference/construction now live under `model/query`. The historical `view.ts`
 retains only the overload that composes Views with the still-mixed Graph schema declarations.
+The first value-schema extraction places `GraphSchemaLike`, literal and void definitions,
+presentation metadata, and their dependency-free authoring helpers under `value/schema`. The
+historical composite `GraphSchemaDefinition` remains in `definitions.ts` because it intentionally
+unites value schemas with Entity refs, Views, and Selections; moving that union into `value` would
+invert the accepted dependency direction.
