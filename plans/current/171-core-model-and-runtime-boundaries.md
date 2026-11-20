@@ -251,3 +251,7 @@ module is a compatibility facade; operation declaration assembly consumes the mo
 Portable graph-output descriptors and their authoring helpers now live in `model/operation/output`.
 Schema and query inspection remain at the compatibility/composition boundary and produce those
 portable descriptors through the model-owned constructors.
+
+The portable operation-input contract now lives in `model/operation/input`; graph-aware client
+normalization and schema parsing remain in the compatibility layer and attach that contract to
+composite Graph schemas.
