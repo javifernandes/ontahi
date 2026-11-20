@@ -1,11 +1,10 @@
+import type { EntityVariantDiscriminator, VariantReadEntity } from '../model/entity/variant.js';
 import { hasOwn } from '../value/object.js';
 
 import type {
   AnyEntityDefinition,
-  FieldDefinition,
   GraphSelectionDefinition,
   InferEntityRecord,
-  InferFieldValue,
 } from './definitions.js';
 import { contextualSelectionProperties, type SelectionProperties } from './entity-selections.js';
 import {
@@ -25,29 +24,7 @@ import { Selection, type SelectionBuilder } from './selection-value.js';
 
 export { isEntityVariantDescriptor } from './entity-variant-contract.js';
 export type { EntityVariantDescriptor, AnyEntityVariant } from './entity-variant-contract.js';
-
-/** Only finite string-valued fields can describe the initial, fixed enum classification. */
-export type EntityVariantDiscriminator<TEntity extends AnyEntityDefinition> = {
-  [K in keyof TEntity['fields']]: InferFieldValue<TEntity['fields'][K]> extends string
-    ? string extends InferFieldValue<TEntity['fields'][K]>
-      ? never
-      : { [P in K]: InferFieldValue<TEntity['fields'][K]> } & {
-          [P in Exclude<keyof TEntity['fields'], K>]?: never;
-        }
-    : never;
-}[keyof TEntity['fields']];
-
-/** A type projection for reads, not another Entity object or identity namespace. */
-export type VariantReadEntity<TEntity extends AnyEntityDefinition, TDiscriminator> = Omit<
-  TEntity,
-  'fields' | '__value'
-> & {
-  fields: {
-    [K in keyof TEntity['fields']]: K extends keyof TDiscriminator
-      ? FieldDefinition<TDiscriminator[K]>
-      : TEntity['fields'][K];
-  };
-};
+export type { EntityVariantDiscriminator, VariantReadEntity } from '../model/entity/variant.js';
 
 type FactoryInput<TEntity> = TEntity extends {
   selectionFactories: unknown;
@@ -63,6 +40,7 @@ export class EntityVariant<
   TDiscriminator extends EntityVariantDiscriminator<TEntity>,
 > {
   readonly kind = 'entity-variant';
+  declare readonly __discriminator: TDiscriminator;
   readonly #membership: Selection<TEntity>;
 
   constructor(

@@ -1,6 +1,6 @@
 # 171. Core Model And Runtime Boundaries
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/171-core-model-and-runtime-boundaries`
 
@@ -93,7 +93,8 @@ The exact directories are outputs of classification, not precommitted destinatio
 
 ## Execution Slices
 
-1. Produce a module inventory, dependency map, classification rubric, and target boundary proposal.
+1. [Completed: module inventory, dependency map, classification rubric, and target boundary
+   proposal](../../docs/architecture/core-model-and-runtime-boundaries.md).
 2. Extract the portable Entity kernel from `data-graph/definitions.ts` into cohesive model modules,
    retaining compatibility exports and behavior-level tests.
 3. Separate portable operation, query/selection, relation, and expression semantics from their
@@ -154,7 +155,44 @@ mechanical and low risk.
 
 ## Closure / Evolution
 
-Ready for an inventory and dependency-direction slice. Replicated Versioned Models are already
-placed under `model/replication`, providing one narrow example of the intended distinction between
-portable model semantics and runtime/storage implementation. No broader directory move is implied
-until the inventory resolves ownership and compatibility constraints.
+Slice 1 is complete. The inventory classifies all 87 non-test modules under `data-graph`, records
+the current model/runtime inversions, adopts allowed dependency directions, and proposes target
+boundaries. The next implementation slice is the compatibility-preserving extraction of the
+portable Entity kernel from `definitions.ts`; no broad directory move is implied.
+
+Slice 2 has started with the dependency-free Entity reference value kernel. Its implementation and
+behavior tests now live under `model/entity/ref`, while `data-graph/ref/model.ts` remains as a tested
+compatibility facade. Entity display and freshness metadata now live under `model/entity` as well,
+alongside portable Field contracts and Entity record/mutation inference, while their established
+exports remain available through `data-graph/definitions.ts`. The portable expression program now
+lives under `model/expression`, preventing derived Field metadata from depending back on the legacy
+namespace. Later steps preserve the same rule: no model module may depend back on the compatibility
+facade.
+
+Structural Entity identity and portable Relation contracts now cross that boundary as well.
+`AnyEntityDefinition` lives under `model/entity`; Relation definitions, mappings, constraints, and
+JSON-safety validation live under `model/relation`. Their recursive relationship is type-only, and
+the established `data-graph/definitions.ts` exports remain compatible.
+
+Entity locator declarations, inferred factories, and normalization now live under `model/entity`,
+which also lets selected identity lookup and identity Ref materialization live under
+`model/entity/ref`. Historical locator type exports and `data-graph/ref/identity.ts` remain
+compatible. This cleared the identity dependency needed by Reference Fields and schema references.
+
+Reference Field declarations and their guard now live under `model/entity`, and portable variant
+descriptor/type contracts are separated from variant query execution. Schema reference
+declarations, resolver attachment, and input validation therefore also live under
+`model/entity/ref`. Their `data-graph` paths remain tested compatibility facades; storage lowering
+in `data-graph/reference-field.ts` is deliberately deferred to the computation boundary.
+
+Physical Entity and Relation mapping has moved out of `definitions.ts` into
+`computation/entity-mapping.ts`. The established mapping exports remain identical, while the new
+owner makes table/column projection and relation-field resolution explicitly computational rather
+than portable Entity semantics. Entity view composition is the next dependency seam before moving
+the remaining `entity(...)` builder.
+
+Selection AST semantics and recursive Entity View construction now live under `model/query`.
+`data-graph/view.ts` is reduced to a compatibility export plus the Graph-schema View overload; that
+overload remains intentionally in place until portable value-schema declarations leave
+`definitions.ts`. The `entity(...)` builder now consumes recursive View behavior directly from the
+model boundary.
