@@ -259,3 +259,7 @@ composite Graph schemas.
 Portable bridge query keys, client-cache keys and invalidation declarations now live in
 `model/operation/client-metadata`. Their Ref helpers depend only on the portable Entity Ref model;
 runtime cache storage and reconciliation remain outside this boundary.
+
+The complete portable Domain Operation metadata shape now lives in `model/operation/metadata`,
+parameterized by its condition vocabulary. The historical `DomainOperationMetadata` alias supplies
+the existing model-expression conditions while preserving all established inference and exports.

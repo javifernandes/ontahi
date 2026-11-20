@@ -21,6 +21,10 @@ import {
   assertValidDomainOperationExecution,
   type DomainOperationExecutionMetadata,
 } from '../model/operation/execution-policy.js';
+import type {
+  DomainOperationImplementationMetadata,
+  PortableDomainOperationMetadata,
+} from '../model/operation/metadata.js';
 import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
@@ -84,33 +88,13 @@ import {
 export * from '../model/operation/client-metadata.js';
 export * from '../model/operation/definition.js';
 
-export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult = unknown> = {
-  kind: 'domain-operation';
-  authority: DomainOperationAuthority;
-  exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
-  description?: string;
-  input?: GraphSchemaLike<TInput>;
-  output?: GraphSchemaLike<TResult>;
-  graphOutput?: GraphOutputDescriptor;
-  bridge?: DomainOperationBridgeMetadata<TInput>;
-  clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
-  ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
-  graphOps?: DomainOperationGraphOpsMetadata;
-  receiver?: DomainOperationReceiverDescriptor;
-  execution?: DomainOperationExecutionMetadata;
-  conditions?: PortableOperationConditions;
-  cache?: TCache;
-  durable?: DurableOperationMetadata<TInput, TResult>;
-  implementation?: {
-    selected: string;
-    kind?: string;
-    selection: { kind: 'static' } | { kind: 'environment-binding'; binding: string };
-  };
-};
+export type DomainOperationMetadata<
+  TInput = unknown,
+  TCache = unknown,
+  TResult = unknown,
+> = PortableDomainOperationMetadata<TInput, TCache, TResult, PortableOperationConditions>;
 
-export type DomainOperationImplementationMetadata = NonNullable<
-  DomainOperationMetadata['implementation']
->;
+export type { DomainOperationImplementationMetadata } from '../model/operation/metadata.js';
 
 export type DomainOperationDefaults<TInput = unknown, TCache = unknown> = Partial<
   Pick<DomainOperationMetadata<TInput, TCache>, 'authority' | 'exposure' | 'bridge'>
