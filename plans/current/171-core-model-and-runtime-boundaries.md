@@ -228,3 +228,8 @@ Field authoring now lives beside the portable Field contracts under `model/entit
 reference, derived, nullable, optional, defaulted, and generated factories share one model-owned
 surface; `data-graph/definitions.ts` only re-exports the historical `field` binding. This removes
 the Field dependency seam before extracting the complete Entity builder.
+
+Portable Entity construction state now lives under `model/entity` too: Field validation and
+cloning, conventional identity locators, implicit belongs-to Relations, and Reference Field source
+binding no longer belong to the compatibility facade. The facade still composes Views, Selection
+schemas, variants, and fluent Relation methods around that model-owned state.

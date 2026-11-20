@@ -1,6 +1,12 @@
 export * from '../computation/entity-mapping.js';
 
 import type { AnyEntityDefinition, EntityMapping } from '../model/entity/definition.js';
+import {
+  bindReferenceFieldSources,
+  createEntityDefinitionState,
+  type ReferenceFieldRelations,
+} from '../model/entity/entity-authoring.js';
+export type { ReferenceFieldRelations } from '../model/entity/entity-authoring.js';
 import { field } from '../model/entity/field-authoring.js';
 import type {
   AnyFieldDefinition,
@@ -19,10 +25,7 @@ import type {
   EntityFreshnessDescriptor,
   EntityFreshnessMetadata,
 } from '../model/entity/metadata.js';
-import {
-  isReferenceFieldDefinition,
-  type ReferenceFieldDefinition,
-} from '../model/entity/reference-field.js';
+import { type ReferenceFieldDefinition } from '../model/entity/reference-field.js';
 export type { StringFieldInputConstraints } from '../model/entity/scalar-field-authoring.js';
 import type { SemanticSelection } from '../model/query/selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
@@ -313,24 +316,6 @@ export type EntityViewConfig<
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
 
-export type ReferenceFieldRelations<TFields extends FieldDefinitions> = {
-  [TFieldName in keyof TFields as TFields[TFieldName] extends {
-    fieldType: 'reference';
-    target: AnyEntityDefinition;
-  }
-    ? TFieldName
-    : never]: TFields[TFieldName] extends {
-    fieldType: 'reference';
-    target: infer TTarget extends AnyEntityDefinition;
-  }
-    ? RelationDefinition<
-        'belongsTo',
-        TTarget,
-        TFields[TFieldName] extends { nullable: true } | { optional: true } ? true : false
-      >
-    : never;
-};
-
 export type EntityRelationsFromFields<
   TFields extends FieldDefinitions,
   TRelations extends RelationDefinitions = {},
@@ -483,39 +468,11 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
   ReferenceFieldRelations<TFields>,
   EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
 > => {
-  const entityFields = Object.fromEntries(
-    Object.entries(fields).map(([fieldName, definition]) => {
-      if (isReferenceFieldDefinition(definition) && definition.variant)
-        throw new TypeError(
-          'Variant references are supported as Operation inputs, not stored Reference Fields yet.',
-        );
-      return [fieldName, isReferenceFieldDefinition(definition) ? { ...definition } : definition];
-    }),
-  ) as TFields;
-  const hasConventionalId =
-    entityFields.id?.fieldType === 'id' && !entityFields.id.nullable && !entityFields.id.optional;
-  const conventionalLocators = normalizeEntityLocatorDeclarations<
-    TFields,
-    ConventionalEntityLocatorDeclarations<TFields>
-  >((hasConventionalId ? { refById: 'id' } : {}) as ConventionalEntityLocatorDeclarations<TFields>);
-  const referenceRelations = Object.fromEntries(
-    Object.entries(entityFields).flatMap(([fieldName, definition]) =>
-      isReferenceFieldDefinition(definition)
-        ? [
-            [
-              fieldName,
-              {
-                kind: 'relation' as const,
-                relationKind: 'belongsTo' as const,
-                target: definition.target,
-                sourceField: fieldName,
-                nullable: Boolean(definition.nullable || definition.optional),
-              },
-            ],
-          ]
-        : [],
-    ),
-  ) as ReferenceFieldRelations<TFields>;
+  const state = createEntityDefinitionState(name, fields);
+  const entityFields = state.fields;
+  const conventionalLocators = state.refLocators;
+  const referenceRelations = state.relations;
+  const hasConventionalId = state.identityLocatorName === 'refById';
   const entityDefinition = {
     kind: 'entity' as const,
     name,
@@ -637,13 +594,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     },
   };
 
-  Object.entries(entityFields).forEach(([fieldName, definition]) => {
-    if (!isReferenceFieldDefinition(definition)) return;
-    Object.defineProperties(definition, {
-      source: { configurable: true, value: entityDefinition },
-      fieldName: { configurable: true, value: fieldName },
-    });
-  });
+  bindReferenceFieldSources(entityFields, entityDefinition as unknown as AnyEntityDefinition);
 
   return entityDefinition as unknown as EntityDefinition<
     TName,
