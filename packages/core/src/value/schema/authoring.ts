@@ -6,6 +6,7 @@ import type {
   PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
+  ValueLazyDefinition,
   ValueNamedDefinition,
   ValueNullableDefinition,
   ValueOptionalDefinition,
@@ -152,6 +153,11 @@ export const valueNamed = <TItem extends GraphSchemaLike, TValue>(
   name: string,
   item: TItem,
 ): ValueNamedDefinition<TItem, TValue> => ({ kind: 'schema.named', name, item });
+
+export const valueLazy = <TResolved extends GraphSchemaLike, TValue>(
+  name: string,
+  resolve: () => TResolved,
+): ValueLazyDefinition<TResolved, TValue> => ({ kind: 'schema.lazy', name, resolve });
 
 export const describeGraphSchema = <TSchema extends object>(
   schema: TSchema,

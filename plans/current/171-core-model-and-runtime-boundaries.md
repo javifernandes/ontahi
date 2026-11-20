@@ -219,3 +219,7 @@ Field picking now follows that same split. `value/schema` owns field selection, 
 derivation metadata, and portable named-value construction. The historical `graphSchema.pick`
 builder remains at the composition boundary only to inject model-aware inferred value types for
 Entity and View sources.
+
+Lazy schema representation and construction also live in `value/schema`; the compatibility type
+continues to bind its resolver to the composite Graph schema union. Selection schemas and that
+composite union remain model-aware composition concerns rather than value-layer concepts.

@@ -134,3 +134,10 @@ export interface ValueNamedDefinition<TItem extends GraphSchemaLike, TValue> {
   item: TItem;
   __value?: TValue;
 }
+
+export interface ValueLazyDefinition<TResolved extends GraphSchemaLike, TValue> {
+  kind: 'schema.lazy';
+  name: string;
+  resolve: () => TResolved;
+  __value?: TValue;
+}

@@ -14,6 +14,7 @@ import {
   presentGraphSchema,
   valueArray,
   valueDefault,
+  valueLazy,
   valueNamed,
   valueNullable,
   valueOptional,
@@ -85,6 +86,10 @@ describe('value schema authoring', () => {
       name: 'Status',
       item,
     });
+    const lazy = valueLazy<typeof item, 'ready'>('LazyStatus', () => item);
+    expect(lazy.kind).toBe('schema.lazy');
+    expect(lazy.resolve()).toBe(item);
+    expectTypeOf(lazy.__value).toEqualTypeOf<'ready' | undefined>();
   });
 
   it('authors value and object shapes without model dependencies', () => {

@@ -48,6 +48,7 @@ import {
   presentGraphSchema,
   valueArray,
   valueDefault,
+  valueLazy,
   valueNamed,
   valueNullable,
   valueOptional,
@@ -65,6 +66,7 @@ import type {
   PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
+  ValueLazyDefinition,
   ValueNamedDefinition,
   ValueNullableDefinition,
   ValueOptionalDefinition,
@@ -268,12 +270,10 @@ export interface GraphRefinementDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
 > extends ValueRefinementDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphLazyDefinition<TValue = unknown> {
-  kind: 'schema.lazy';
-  name: string;
-  resolve: () => GraphSchemaDefinition;
-  __value?: TValue;
-}
+export interface GraphLazyDefinition<TValue = unknown> extends ValueLazyDefinition<
+  GraphSchemaDefinition,
+  TValue
+> {}
 
 export interface GraphNamedDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
@@ -1004,11 +1004,7 @@ export const graphRefine = <TItem extends GraphSchemaLike>(
 export const graphLazy = <TValue>(
   name: string,
   resolve: () => GraphSchemaDefinition,
-): GraphLazyDefinition<TValue> => ({
-  kind: 'schema.lazy',
-  name,
-  resolve,
-});
+): GraphLazyDefinition<TValue> => valueLazy<GraphSchemaDefinition, TValue>(name, resolve);
 
 export const graphNamed = <TItem extends GraphSchemaLike>(
   name: string,
