@@ -223,3 +223,8 @@ Entity and View sources.
 Lazy schema representation and construction also live in `value/schema`; the compatibility type
 continues to bind its resolver to the composite Graph schema union. Selection schemas and that
 composite union remain model-aware composition concerns rather than value-layer concepts.
+
+Scalar Field authoring now lives beside the portable Field contracts under `model/entity`. The
+historical `field` facade composes those factories with reference, derived, default, and generated
+Field authoring; those model-expression and mutation-oriented capabilities remain the next seam
+before extracting the complete Entity builder.
