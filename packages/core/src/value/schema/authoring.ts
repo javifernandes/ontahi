@@ -11,7 +11,9 @@ import type {
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFieldSource,
   ValueSchemaFields,
+  ValueSchemaPickBuilder,
   ValueTransformDefinition,
   ValueUnionDefinition,
 } from './definition.js';
@@ -40,6 +42,39 @@ export const defineValue = <TName extends string, TFields extends ValueSchemaFie
   ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
   ...(options?.derivedFrom ? { derivedFrom: options.derivedFrom } : {}),
 });
+
+export const pickValueFields = <
+  TSource extends ValueSchemaFieldSource,
+  const TKeys extends readonly (keyof TSource['fields'] & string)[],
+  TValue,
+>(
+  source: TSource,
+  keys: TKeys,
+): ValueSchemaPickBuilder<TSource, TKeys, TValue> => {
+  const fields = Object.fromEntries(
+    keys.map(key => {
+      if (!(key in source.fields)) {
+        throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
+      }
+
+      return [key, source.fields[key]];
+    }),
+  ) as Pick<TSource['fields'], TKeys[number]>;
+
+  return {
+    named: name =>
+      defineValue<typeof name, typeof fields, TValue>(name, fields, {
+        derivedFrom: {
+          operation: 'pick',
+          source: {
+            kind: source.kind === 'schema.object' ? 'object' : source.kind,
+            ...(source.name ? { name: source.name } : {}),
+          },
+          fields: [...keys],
+        },
+      }),
+  };
+};
 
 export const valueObject = <
   TFields extends ValueSchemaFields,

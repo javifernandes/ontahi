@@ -44,6 +44,7 @@ import {
   describeGraphSchema,
   graphLiteral,
   graphVoid,
+  pickValueFields,
   presentGraphSchema,
   valueArray,
   valueDefault,
@@ -69,6 +70,7 @@ import type {
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFieldSource,
   ValueSchemaFields,
   ValueTransformDefinition,
   ValueUnionDefinition,
@@ -918,11 +920,7 @@ export const valueOf = <TValue>(
 ): ValueDefinition<string, GraphSchemaFields, TValue> =>
   defineValue<string, GraphSchemaFields, TValue>(name, fields, options);
 
-type GraphSchemaFieldSource = {
-  kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
-  name?: string;
-  fields: GraphSchemaFields;
-};
+type GraphSchemaFieldSource = ValueSchemaFieldSource & { fields: GraphSchemaFields };
 
 export type GraphSchemaPickBuilder<
   TSource extends GraphSchemaFieldSource,
@@ -940,33 +938,11 @@ export const graphPick = <
   source: TSource,
   keys: TKeys,
 ): GraphSchemaPickBuilder<TSource, TKeys> => {
-  const fields = Object.fromEntries(
-    keys.map(key => {
-      if (!(key in source.fields)) {
-        throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
-      }
-
-      return [key, source.fields[key]];
-    }),
-  ) as Pick<TSource['fields'], TKeys[number]>;
-
-  return {
-    named: name =>
-      defineValue<
-        typeof name,
-        Pick<TSource['fields'], TKeys[number]>,
-        InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
-      >(name, fields, {
-        derivedFrom: {
-          operation: 'pick',
-          source: {
-            kind: source.kind === 'schema.object' ? 'object' : source.kind,
-            ...(source.name ? { name: source.name } : {}),
-          },
-          fields: [...keys],
-        },
-      }),
-  };
+  return pickValueFields<
+    TSource,
+    TKeys,
+    InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
+  >(source, keys);
 };
 
 export const graphObject = <

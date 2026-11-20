@@ -214,3 +214,8 @@ constructors live in `value/schema`, while the historical `ValueDefinition` and
 `GraphObjectDefinition` interfaces add composite field inference in `data-graph`. Pick derivation
 metadata moved with the portable representation; the pick builder remains at the composition
 boundary because its sources include Entities and Entity Views.
+
+Field picking now follows that same split. `value/schema` owns field selection, validation,
+derivation metadata, and portable named-value construction. The historical `graphSchema.pick`
+builder remains at the composition boundary only to inject model-aware inferred value types for
+Entity and View sources.

@@ -10,6 +10,7 @@ import {
   describeGraphSchema,
   graphLiteral,
   graphVoid,
+  pickValueFields,
   presentGraphSchema,
   valueArray,
   valueDefault,
@@ -108,5 +109,33 @@ describe('value schema authoring', () => {
       unknownKeys: 'strict',
       description: 'Status object',
     });
+  });
+
+  it('derives portable named values from selected fields', () => {
+    const ready = graphLiteral('ready');
+    const source = valueObject({ ready, ignored: graphLiteral(false) });
+    const picked = pickValueFields<typeof source, readonly ['ready'], { ready: 'ready' }>(source, [
+      'ready',
+    ]).named('ReadyValue');
+
+    expect(picked).toEqual({
+      kind: 'value',
+      name: 'ReadyValue',
+      fields: { ready },
+      derivedFrom: {
+        operation: 'pick',
+        source: { kind: 'object' },
+        fields: ['ready'],
+      },
+    });
+    expectTypeOf(picked.__value).toEqualTypeOf<{ ready: 'ready' } | undefined>();
+  });
+
+  it('rejects unknown fields at the portable value boundary', () => {
+    const source = valueObject({ ready: graphLiteral('ready') });
+
+    expect(() =>
+      pickValueFields(source, ['missing' as keyof typeof source.fields & string]),
+    ).toThrow('Cannot pick unknown field missing from schema.object');
   });
 });
