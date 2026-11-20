@@ -1,3 +1,5 @@
+import { hasOwn } from '../object.js';
+
 import type {
   GraphLiteralDefinition,
   GraphSchemaLike,
@@ -6,12 +8,15 @@ import type {
   PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
+  ValueLazyDefinition,
   ValueNamedDefinition,
   ValueNullableDefinition,
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFieldSource,
   ValueSchemaFields,
+  ValueSchemaPickBuilder,
   ValueTransformDefinition,
   ValueUnionDefinition,
 } from './definition.js';
@@ -40,6 +45,41 @@ export const defineValue = <TName extends string, TFields extends ValueSchemaFie
   ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
   ...(options?.derivedFrom ? { derivedFrom: options.derivedFrom } : {}),
 });
+
+export const pickValueFields = <
+  TSource extends ValueSchemaFieldSource,
+  const TKeys extends readonly (keyof TSource['fields'] & string)[],
+  TValue,
+>(
+  source: TSource,
+  keys: TKeys,
+): ValueSchemaPickBuilder<TSource, TKeys, TValue> => {
+  const selectedKeys = [...keys];
+  const derivationSource = {
+    kind: source.kind === 'schema.object' ? ('object' as const) : source.kind,
+    ...(source.name ? { name: source.name } : {}),
+  };
+  const fields = Object.fromEntries(
+    selectedKeys.map(key => {
+      if (!hasOwn(source.fields, key)) {
+        throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
+      }
+
+      return [key, source.fields[key]];
+    }),
+  ) as Pick<TSource['fields'], TKeys[number]>;
+
+  return {
+    named: name =>
+      defineValue<typeof name, typeof fields, TValue>(name, fields, {
+        derivedFrom: {
+          operation: 'pick',
+          source: derivationSource,
+          fields: selectedKeys,
+        },
+      }),
+  };
+};
 
 export const valueObject = <
   TFields extends ValueSchemaFields,
@@ -117,6 +157,11 @@ export const valueNamed = <TItem extends GraphSchemaLike, TValue>(
   name: string,
   item: TItem,
 ): ValueNamedDefinition<TItem, TValue> => ({ kind: 'schema.named', name, item });
+
+export const valueLazy = <TResolved extends GraphSchemaLike, TValue>(
+  name: string,
+  resolve: () => TResolved,
+): ValueLazyDefinition<TResolved, TValue> => ({ kind: 'schema.lazy', name, resolve });
 
 export const describeGraphSchema = <TSchema extends object>(
   schema: TSchema,

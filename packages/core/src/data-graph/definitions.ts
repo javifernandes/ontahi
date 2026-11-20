@@ -44,9 +44,11 @@ import {
   describeGraphSchema,
   graphLiteral,
   graphVoid,
+  pickValueFields,
   presentGraphSchema,
   valueArray,
   valueDefault,
+  valueLazy,
   valueNamed,
   valueNullable,
   valueOptional,
@@ -64,11 +66,13 @@ import type {
   PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
+  ValueLazyDefinition,
   ValueNamedDefinition,
   ValueNullableDefinition,
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFieldSource,
   ValueSchemaFields,
   ValueTransformDefinition,
   ValueUnionDefinition,
@@ -266,12 +270,10 @@ export interface GraphRefinementDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
 > extends ValueRefinementDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphLazyDefinition<TValue = unknown> {
-  kind: 'schema.lazy';
-  name: string;
-  resolve: () => GraphSchemaDefinition;
-  __value?: TValue;
-}
+export interface GraphLazyDefinition<TValue = unknown> extends ValueLazyDefinition<
+  GraphSchemaDefinition,
+  TValue
+> {}
 
 export interface GraphNamedDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
@@ -918,11 +920,7 @@ export const valueOf = <TValue>(
 ): ValueDefinition<string, GraphSchemaFields, TValue> =>
   defineValue<string, GraphSchemaFields, TValue>(name, fields, options);
 
-type GraphSchemaFieldSource = {
-  kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
-  name?: string;
-  fields: GraphSchemaFields;
-};
+type GraphSchemaFieldSource = ValueSchemaFieldSource & { fields: GraphSchemaFields };
 
 export type GraphSchemaPickBuilder<
   TSource extends GraphSchemaFieldSource,
@@ -940,33 +938,11 @@ export const graphPick = <
   source: TSource,
   keys: TKeys,
 ): GraphSchemaPickBuilder<TSource, TKeys> => {
-  const fields = Object.fromEntries(
-    keys.map(key => {
-      if (!(key in source.fields)) {
-        throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
-      }
-
-      return [key, source.fields[key]];
-    }),
-  ) as Pick<TSource['fields'], TKeys[number]>;
-
-  return {
-    named: name =>
-      defineValue<
-        typeof name,
-        Pick<TSource['fields'], TKeys[number]>,
-        InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
-      >(name, fields, {
-        derivedFrom: {
-          operation: 'pick',
-          source: {
-            kind: source.kind === 'schema.object' ? 'object' : source.kind,
-            ...(source.name ? { name: source.name } : {}),
-          },
-          fields: [...keys],
-        },
-      }),
-  };
+  return pickValueFields<
+    TSource,
+    TKeys,
+    InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
+  >(source, keys);
 };
 
 export const graphObject = <
@@ -1028,11 +1004,7 @@ export const graphRefine = <TItem extends GraphSchemaLike>(
 export const graphLazy = <TValue>(
   name: string,
   resolve: () => GraphSchemaDefinition,
-): GraphLazyDefinition<TValue> => ({
-  kind: 'schema.lazy',
-  name,
-  resolve,
-});
+): GraphLazyDefinition<TValue> => valueLazy<GraphSchemaDefinition, TValue>(name, resolve);
 
 export const graphNamed = <TItem extends GraphSchemaLike>(
   name: string,

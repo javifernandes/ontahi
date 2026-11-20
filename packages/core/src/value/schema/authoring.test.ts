@@ -10,9 +10,11 @@ import {
   describeGraphSchema,
   graphLiteral,
   graphVoid,
+  pickValueFields,
   presentGraphSchema,
   valueArray,
   valueDefault,
+  valueLazy,
   valueNamed,
   valueNullable,
   valueOptional,
@@ -22,6 +24,7 @@ import {
   valueUnion,
   valueObject,
 } from './authoring.js';
+import type { ValueSchemaFieldSource } from './definition.js';
 
 describe('value schema authoring', () => {
   it('authors literal and void schemas without model dependencies', () => {
@@ -84,6 +87,10 @@ describe('value schema authoring', () => {
       name: 'Status',
       item,
     });
+    const lazy = valueLazy<typeof item, 'ready'>('LazyStatus', () => item);
+    expect(lazy.kind).toBe('schema.lazy');
+    expect(lazy.resolve()).toBe(item);
+    expectTypeOf(lazy.__value).toEqualTypeOf<'ready' | undefined>();
   });
 
   it('authors value and object shapes without model dependencies', () => {
@@ -107,6 +114,56 @@ describe('value schema authoring', () => {
       fields,
       unknownKeys: 'strict',
       description: 'Status object',
+    });
+  });
+
+  it('derives portable named values from selected fields', () => {
+    const ready = graphLiteral('ready');
+    const source = valueObject({ ready, ignored: graphLiteral(false) });
+    const picked = pickValueFields<typeof source, readonly ['ready'], { ready: 'ready' }>(source, [
+      'ready',
+    ]).named('ReadyValue');
+
+    expect(picked).toEqual({
+      kind: 'value',
+      name: 'ReadyValue',
+      fields: { ready },
+      derivedFrom: {
+        operation: 'pick',
+        source: { kind: 'object' },
+        fields: ['ready'],
+      },
+    });
+    expectTypeOf(picked.__value).toEqualTypeOf<{ ready: 'ready' } | undefined>();
+  });
+
+  it('rejects unknown fields at the portable value boundary', () => {
+    const source: ValueSchemaFieldSource = valueObject({ ready: graphLiteral('ready') });
+
+    expect(() => pickValueFields(source, ['missing'])).toThrow(
+      'Cannot pick unknown field missing from schema.object',
+    );
+    expect(() => pickValueFields(source, ['toString'])).toThrow(
+      'Cannot pick unknown field toString from schema.object',
+    );
+  });
+
+  it('snapshots pick provenance before callers can mutate their inputs', () => {
+    const source = {
+      kind: 'value' as const,
+      name: 'SourceValue',
+      fields: { ready: graphLiteral('ready'), ignored: graphLiteral(false) },
+    };
+    const keys: (keyof typeof source.fields)[] = ['ready'];
+    const builder = pickValueFields<typeof source, typeof keys, { ready: 'ready' }>(source, keys);
+
+    keys[0] = 'ignored';
+    source.name = 'ChangedSource';
+
+    expect(builder.named('ReadyValue').derivedFrom).toEqual({
+      operation: 'pick',
+      source: { kind: 'value', name: 'SourceValue' },
+      fields: ['ready'],
     });
   });
 });

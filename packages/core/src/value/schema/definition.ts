@@ -7,6 +7,12 @@ export interface ValueSchemaFields {
   [fieldName: string]: GraphSchemaLike;
 }
 
+export type ValueSchemaFieldSource = {
+  kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
+  name?: string;
+  fields: ValueSchemaFields;
+};
+
 export type GraphSchemaDerivation = {
   operation: 'pick';
   source: {
@@ -28,6 +34,16 @@ export interface PortableValueDefinition<
   derivedFrom?: GraphSchemaDerivation;
   __value?: TValue;
 }
+
+export type ValueSchemaPickBuilder<
+  TSource extends ValueSchemaFieldSource,
+  TKeys extends readonly (keyof TSource['fields'] & string)[],
+  TValue,
+> = {
+  named: <TName extends string>(
+    name: TName,
+  ) => PortableValueDefinition<TName, Pick<TSource['fields'], TKeys[number]>, TValue>;
+};
 
 export interface PortableObjectDefinition<
   TFields extends ValueSchemaFields,
@@ -116,5 +132,12 @@ export interface ValueNamedDefinition<TItem extends GraphSchemaLike, TValue> {
   kind: 'schema.named';
   name: string;
   item: TItem;
+  __value?: TValue;
+}
+
+export interface ValueLazyDefinition<TResolved extends GraphSchemaLike, TValue> {
+  kind: 'schema.lazy';
+  name: string;
+  resolve: () => TResolved;
   __value?: TValue;
 }
