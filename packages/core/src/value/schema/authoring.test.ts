@@ -6,6 +6,7 @@ import {
 } from '../../data-graph/definitions.js';
 
 import {
+  defineValue,
   describeGraphSchema,
   graphLiteral,
   graphVoid,
@@ -19,6 +20,7 @@ import {
   valueRefine,
   valueTransform,
   valueUnion,
+  valueObject,
 } from './authoring.js';
 
 describe('value schema authoring', () => {
@@ -81,6 +83,30 @@ describe('value schema authoring', () => {
       kind: 'schema.named',
       name: 'Status',
       item,
+    });
+  });
+
+  it('authors value and object shapes without model dependencies', () => {
+    const status = graphLiteral('ready');
+    const fields = { status };
+
+    expect(
+      defineValue<'StatusValue', typeof fields, { status: 'ready' }>('StatusValue', fields),
+    ).toEqual({
+      kind: 'value',
+      name: 'StatusValue',
+      fields,
+    });
+    expect(
+      valueObject<typeof fields, 'strict', { status: 'ready' }>(fields, {
+        unknownKeys: 'strict',
+        description: 'Status object',
+      }),
+    ).toEqual({
+      kind: 'schema.object',
+      fields,
+      unknownKeys: 'strict',
+      description: 'Status object',
     });
   });
 });

@@ -208,3 +208,9 @@ refinement, and named) now have dependency-free definitions and constructors in 
 Compatibility interfaces in `data-graph/definitions.ts` supply the model-aware inferred value type,
 so references wrapped by these containers retain their established static shape while dependency
 direction remains `data-graph -> value`.
+
+Named value and object schema shapes now follow the same split: portable representations and
+constructors live in `value/schema`, while the historical `ValueDefinition` and
+`GraphObjectDefinition` interfaces add composite field inference in `data-graph`. Pick derivation
+metadata moved with the portable representation; the pick builder remains at the composition
+boundary because its sources include Entities and Entity Views.

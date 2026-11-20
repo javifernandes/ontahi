@@ -3,6 +3,44 @@ export type GraphSchemaLike<TValue = unknown> = {
   __value?: TValue;
 };
 
+export interface ValueSchemaFields {
+  [fieldName: string]: GraphSchemaLike;
+}
+
+export type GraphSchemaDerivation = {
+  operation: 'pick';
+  source: {
+    kind: 'entity' | 'entity-view' | 'value' | 'object';
+    name?: string;
+  };
+  fields: readonly string[];
+};
+
+export interface PortableValueDefinition<
+  TName extends string,
+  TFields extends ValueSchemaFields,
+  TValue,
+> {
+  kind: 'value';
+  name: TName;
+  fields: TFields;
+  unknownKeys?: 'strip' | 'strict' | 'passthrough';
+  derivedFrom?: GraphSchemaDerivation;
+  __value?: TValue;
+}
+
+export interface PortableObjectDefinition<
+  TFields extends ValueSchemaFields,
+  TUnknownKeys extends 'strip' | 'strict' | 'passthrough',
+  TValue,
+> {
+  kind: 'schema.object';
+  fields: TFields;
+  unknownKeys: TUnknownKeys;
+  description?: string;
+  __value?: TValue;
+}
+
 export interface GraphLiteralDefinition<TValue = string | number | boolean | null> {
   kind: 'schema.literal';
   value: TValue;

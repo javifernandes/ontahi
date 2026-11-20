@@ -257,3 +257,9 @@ an explicit parameter, keeping this layer independent of Entity references. The 
 `Graph*Definition` interfaces and `graphSchema.*` builders remain at the compatibility boundary and
 inject `InferGraphSchemaValue`, preserving model-aware reference inference without making
 `value/schema` depend on `model/entity`.
+
+Portable named-value and object-schema structures, their derivation metadata, and their basic
+constructors now live in `value/schema` as well. `data-graph` retains the historical interfaces and
+supplies `InferGraphSchemaFields`; this keeps optional-field and Entity-reference inference at the
+composition boundary while moving the dependency-free runtime representation to its intended
+owner.

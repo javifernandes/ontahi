@@ -478,6 +478,20 @@ describe('data-graph schema DSL', () => {
     >();
   });
 
+  it('preserves model-aware Ref inference in value and object fields', () => {
+    const Book = entity('StructuredSchemaBook', { id: field.id() });
+    const book = graphSchema.ref(Book);
+    const object = graphSchema.object({ book });
+    const input = value('StructuredSchemaInput', { book });
+
+    expectTypeOf(object.__value).toEqualTypeOf<
+      { book: InferGraphSchemaValue<typeof book> } | undefined
+    >();
+    expectTypeOf(input.__value).toEqualTypeOf<
+      { book: InferGraphSchemaValue<typeof book> } | undefined
+    >();
+  });
+
   it('recognizes selections created by another loaded Ontahi entrypoint', () => {
     const Book = entity('CrossEntrypointBook', {
       id: field.id(),

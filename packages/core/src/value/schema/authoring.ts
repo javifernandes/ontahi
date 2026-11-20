@@ -2,6 +2,8 @@ import type {
   GraphLiteralDefinition,
   GraphSchemaLike,
   GraphVoidDefinition,
+  PortableObjectDefinition,
+  PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
   ValueNamedDefinition,
@@ -9,6 +11,7 @@ import type {
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFields,
   ValueTransformDefinition,
   ValueUnionDefinition,
 } from './definition.js';
@@ -22,6 +25,35 @@ export const graphLiteral = <const TValue extends string | number | boolean | nu
 });
 
 export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
+
+export const defineValue = <TName extends string, TFields extends ValueSchemaFields, TValue>(
+  name: TName,
+  fields: TFields,
+  options?: {
+    unknownKeys?: 'strip' | 'strict' | 'passthrough';
+    derivedFrom?: PortableValueDefinition<TName, TFields, TValue>['derivedFrom'];
+  },
+): PortableValueDefinition<TName, TFields, TValue> => ({
+  kind: 'value',
+  name,
+  fields,
+  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
+  ...(options?.derivedFrom ? { derivedFrom: options.derivedFrom } : {}),
+});
+
+export const valueObject = <
+  TFields extends ValueSchemaFields,
+  TUnknownKeys extends 'strip' | 'strict' | 'passthrough',
+  TValue,
+>(
+  fields: TFields,
+  options?: { unknownKeys?: TUnknownKeys; description?: string },
+): PortableObjectDefinition<TFields, TUnknownKeys, TValue> => ({
+  kind: 'schema.object',
+  fields,
+  unknownKeys: options?.unknownKeys ?? ('strip' as TUnknownKeys),
+  ...(options?.description ? { description: options.description } : {}),
+});
 
 export const valueArray = <TItem extends GraphSchemaLike, TValue>(
   item: TItem,

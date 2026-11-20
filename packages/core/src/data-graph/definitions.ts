@@ -40,6 +40,7 @@ import {
   type RelationOptions,
 } from '../model/relation/definition.js';
 import {
+  defineValue,
   describeGraphSchema,
   graphLiteral,
   graphVoid,
@@ -52,12 +53,15 @@ import {
   valueRecord,
   valueRefine,
   valueTransform,
+  valueObject,
   valueUnion,
 } from '../value/schema/authoring.js';
 import type {
   GraphLiteralDefinition,
   GraphSchemaLike,
   GraphVoidDefinition,
+  PortableObjectDefinition,
+  PortableValueDefinition,
   ValueArrayDefinition,
   ValueDefaultDefinition,
   ValueNamedDefinition,
@@ -65,6 +69,7 @@ import type {
   ValueOptionalDefinition,
   ValueRecordDefinition,
   ValueRefinementDefinition,
+  ValueSchemaFields,
   ValueTransformDefinition,
   ValueUnionDefinition,
 } from '../value/schema/definition.js';
@@ -77,6 +82,7 @@ export {
 } from '../value/schema/authoring.js';
 export type {
   GraphLiteralDefinition,
+  GraphSchemaDerivation,
   GraphSchemaLike,
   GraphVoidDefinition,
 } from '../value/schema/definition.js';
@@ -158,9 +164,7 @@ export type GraphSchemaDefinition =
   | GraphSelectionDefinition
   | GraphVoidDefinition;
 
-export interface GraphSchemaFields {
-  [fieldName: string]: GraphSchemaLike;
-}
+export interface GraphSchemaFields extends ValueSchemaFields {}
 
 type OptionalGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = {
   [TKey in keyof TFields]: TFields[TKey] extends { kind: 'schema.optional' } | { optional: true }
@@ -211,40 +215,18 @@ export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> =
       ? TValue
       : never;
 
-export type ValueDefinition<
+export interface ValueDefinition<
   TName extends string = string,
   TFields extends GraphSchemaFields = GraphSchemaFields,
   TValue = InferGraphSchemaFields<TFields>,
-> = {
-  kind: 'value';
-  name: TName;
-  fields: TFields;
-  unknownKeys?: 'strip' | 'strict' | 'passthrough';
-  derivedFrom?: GraphSchemaDerivation;
-  __value?: TValue;
-};
-
-export type GraphSchemaDerivation = {
-  operation: 'pick';
-  source: {
-    kind: 'entity' | 'entity-view' | 'value' | 'object';
-    name?: string;
-  };
-  fields: readonly string[];
-};
+> extends PortableValueDefinition<TName, TFields, TValue> {}
 
 export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields, unknown>;
 
-export type GraphObjectDefinition<
+export interface GraphObjectDefinition<
   TFields extends GraphSchemaFields = GraphSchemaFields,
   TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
-> = {
-  kind: 'schema.object';
-  fields: TFields;
-  unknownKeys: TUnknownKeys;
-  description?: string;
-  __value?: InferGraphSchemaFields<TFields>;
-};
+> extends PortableObjectDefinition<TFields, TUnknownKeys, InferGraphSchemaFields<TFields>> {}
 
 export type AnyGraphObjectDefinition = GraphObjectDefinition<
   GraphSchemaFields,
@@ -926,23 +908,15 @@ export const value = <TName extends string, TFields extends GraphSchemaFields>(
   name: TName,
   fields: TFields,
   options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
-): ValueDefinition<TName, TFields> => ({
-  kind: 'value',
-  name,
-  fields,
-  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
-});
+): ValueDefinition<TName, TFields> =>
+  defineValue<TName, TFields, InferGraphSchemaFields<TFields>>(name, fields, options);
 
 export const valueOf = <TValue>(
   name: string,
   fields: GraphSchemaFields,
   options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
-): ValueDefinition<string, GraphSchemaFields, TValue> => ({
-  kind: 'value',
-  name,
-  fields,
-  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
-});
+): ValueDefinition<string, GraphSchemaFields, TValue> =>
+  defineValue<string, GraphSchemaFields, TValue>(name, fields, options);
 
 type GraphSchemaFieldSource = {
   kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
@@ -977,19 +951,21 @@ export const graphPick = <
   ) as Pick<TSource['fields'], TKeys[number]>;
 
   return {
-    named: name => ({
-      kind: 'value',
-      name,
-      fields,
-      derivedFrom: {
-        operation: 'pick',
-        source: {
-          kind: source.kind === 'schema.object' ? 'object' : source.kind,
-          ...(source.name ? { name: source.name } : {}),
+    named: name =>
+      defineValue<
+        typeof name,
+        Pick<TSource['fields'], TKeys[number]>,
+        InferGraphSchemaFields<Pick<TSource['fields'], TKeys[number]>>
+      >(name, fields, {
+        derivedFrom: {
+          operation: 'pick',
+          source: {
+            kind: source.kind === 'schema.object' ? 'object' : source.kind,
+            ...(source.name ? { name: source.name } : {}),
+          },
+          fields: [...keys],
         },
-        fields: [...keys],
-      },
-    }),
+      }),
   };
 };
 
@@ -999,12 +975,8 @@ export const graphObject = <
 >(
   fields: TFields,
   options?: { unknownKeys?: TUnknownKeys; description?: string },
-): GraphObjectDefinition<TFields, TUnknownKeys> => ({
-  kind: 'schema.object',
-  fields,
-  unknownKeys: options?.unknownKeys ?? ('strip' as TUnknownKeys),
-  ...(options?.description ? { description: options.description } : {}),
-});
+): GraphObjectDefinition<TFields, TUnknownKeys> =>
+  valueObject<TFields, TUnknownKeys, InferGraphSchemaFields<TFields>>(fields, options);
 
 export const graphArray = <TItem extends GraphSchemaLike>(
   item: TItem,
