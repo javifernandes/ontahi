@@ -1,3 +1,10 @@
+import {
+  graphOutput,
+  type GraphOutputArrayDescriptor,
+  type GraphOutputDescriptor,
+  type GraphOutputEntityDescriptor,
+  type GraphOutputObjectFields,
+} from '../../model/operation/output.js';
 import { isRecord } from '../../value/object.js';
 import type {
   AnyEntityDefinition,
@@ -18,48 +25,7 @@ import type {
 import { resolveQuerySpec, type QueryOrView } from '../query.js';
 import type { ViewNode } from '../view.js';
 
-export type GraphOutputDescriptor =
-  | GraphOutputOpaqueDescriptor
-  | GraphOutputEntityDescriptor
-  | GraphOutputArrayDescriptor
-  | GraphOutputObjectDescriptor
-  | GraphOutputNullableDescriptor
-  | GraphOutputOptionalDescriptor;
-
-export interface GraphOutputObjectFields {
-  readonly [fieldName: string]: GraphOutputDescriptor;
-}
-
-export type GraphOutputOpaqueDescriptor = {
-  kind: 'graph-output.opaque';
-};
-
-export type GraphOutputEntityDescriptor<TEntity extends AnyEntityDefinition = AnyEntityDefinition> =
-  {
-    kind: 'graph-output.entity';
-    entity: TEntity;
-    fields?: GraphOutputObjectFields;
-  };
-
-export type GraphOutputArrayDescriptor = {
-  kind: 'graph-output.array';
-  item: GraphOutputDescriptor;
-};
-
-export type GraphOutputObjectDescriptor = {
-  kind: 'graph-output.object';
-  fields: GraphOutputObjectFields;
-};
-
-export type GraphOutputNullableDescriptor = {
-  kind: 'graph-output.nullable';
-  item: GraphOutputDescriptor;
-};
-
-export type GraphOutputOptionalDescriptor = {
-  kind: 'graph-output.optional';
-  item: GraphOutputDescriptor;
-};
+export * from '../../model/operation/output.js';
 
 const isEntityDefinition = (value: unknown): value is AnyEntityDefinition =>
   isRecord(value) && value.kind === 'entity' && typeof value.name === 'string';
@@ -188,49 +154,6 @@ const deriveGraphOutputDescriptor = (
 
 export const getGraphOutputDescriptor = (schema: unknown): GraphOutputDescriptor | undefined =>
   deriveGraphOutputDescriptor(schema, new WeakSet<object>());
-
-function graphOutputEntity<TEntity extends AnyEntityDefinition>(
-  entity: TEntity,
-): GraphOutputEntityDescriptor<TEntity>;
-function graphOutputEntity<TEntity extends AnyEntityDefinition>(
-  entity: TEntity,
-  fields: GraphOutputObjectFields,
-): GraphOutputEntityDescriptor<TEntity>;
-function graphOutputEntity<TEntity extends AnyEntityDefinition>(
-  entity: TEntity,
-  fields?: GraphOutputObjectFields,
-): GraphOutputEntityDescriptor<TEntity> {
-  return {
-    kind: 'graph-output.entity',
-    entity,
-    ...(fields ? { fields } : {}),
-  };
-}
-
-export const graphOutput = {
-  opaque: (): GraphOutputOpaqueDescriptor => ({
-    kind: 'graph-output.opaque',
-  }),
-  entity: graphOutputEntity,
-  array: (item: GraphOutputDescriptor): GraphOutputArrayDescriptor => ({
-    kind: 'graph-output.array',
-    item,
-  }),
-  object: <TFields extends GraphOutputObjectFields>(
-    fields: TFields,
-  ): GraphOutputObjectDescriptor => ({
-    kind: 'graph-output.object',
-    fields,
-  }),
-  nullable: (item: GraphOutputDescriptor): GraphOutputNullableDescriptor => ({
-    kind: 'graph-output.nullable',
-    item,
-  }),
-  optional: (item: GraphOutputDescriptor): GraphOutputOptionalDescriptor => ({
-    kind: 'graph-output.optional',
-    item,
-  }),
-};
 
 const graphReadEntityOutput = (
   entity: AnyEntityDefinition,

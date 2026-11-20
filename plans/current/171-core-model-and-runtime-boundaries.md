@@ -237,3 +237,33 @@ schemas, variants, and fluent Relation methods around that model-owned state.
 Entity display/freshness metadata, locator extension, identity selection, and fluent Relation
 mutation now delegate to the same model-owned authoring module. The remaining facade-specific
 construction is limited to View, Selection, array-schema, and variant conveniences.
+
+Slice 3 begins by extracting the dependency-free operation declaration vocabulary into
+`model/operation`: authority and exposure, receivers, graph-operation metadata, HTTP ingress, and
+durable-operation declarations. `data-graph/operations.ts` re-exports those contracts while its
+mixed factories, binding, resolution, cache helpers, and execution-facing behavior remain to be
+split at their own seams.
+
+Operation retry and atomicity policy, capability requirements, and execution affordance derivation
+now live in `model/operation/execution-policy`. The established `data-graph/operation-execution`
+module is a compatibility facade; operation declaration assembly consumes the model owner directly.
+
+Portable graph-output descriptors and their authoring helpers now live in `model/operation/output`.
+Schema and query inspection remain at the compatibility/composition boundary and produce those
+portable descriptors through the model-owned constructors.
+
+The portable operation-input contract now lives in `model/operation/input`; graph-aware client
+normalization and schema parsing remain in the compatibility layer and attach that contract to
+composite Graph schemas.
+
+Portable bridge query keys, client-cache keys and invalidation declarations now live in
+`model/operation/client-metadata`. Their Ref helpers depend only on the portable Entity Ref model;
+runtime cache storage and reconciliation remain outside this boundary.
+
+The complete portable Domain Operation metadata shape now lives in `model/operation/metadata`,
+parameterized by its condition vocabulary. The historical `DomainOperationMetadata` alias supplies
+the existing model-expression conditions while preserving all established inference and exports.
+
+Domain Operation defaults and declaration metadata now share that portable owner, together with
+the basic metadata and bridge-binding factories. Graph-aware client inference, hydration,
+resolution, and entity binding remain in the composition layer by design.

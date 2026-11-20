@@ -1,3 +1,33 @@
+import type {
+  DomainOperationBridgeMetadata,
+  DomainOperationClientCacheMetadata,
+  OperationBridgeBinding,
+} from '../model/operation/client-metadata.js';
+import { defineOperationBridgeBinding as definePortableOperationBridgeBinding } from '../model/operation/client-metadata.js';
+import type {
+  DomainOperationAuthority,
+  DomainOperationGraphOpsMetadata,
+  DomainOperationIngressMetadata,
+  DomainOperationReceiverDescriptor,
+  DurableOperationIdempotencyPolicy,
+  DurableOperationMetadata,
+  DurableOperationRuntime,
+  GraphEntityExposure,
+  GraphOperationAuthority,
+  HttpIngressMethod,
+} from '../model/operation/definition.js';
+import {
+  assertValidDomainOperationExecution,
+  type DomainOperationExecutionMetadata,
+} from '../model/operation/execution-policy.js';
+import type {
+  DomainOperationImplementationMetadata,
+  PortableDomainOperationDeclarationMetadata,
+  PortableDomainOperationDefaults,
+  PortableDomainOperationMetadata,
+} from '../model/operation/metadata.js';
+import { definePortableDomainOperationMetadata } from '../model/operation/metadata.js';
+import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
 import type { InferGraphSchemaClientInput } from './client-input.js';
@@ -16,22 +46,16 @@ import {
 } from './entity-mutation-authoring.js';
 import { reflectContextualSelections } from './entity-selections.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
-import {
-  assertValidDomainOperationExecution,
-  type DomainOperationExecutionMetadata,
-} from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
-import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
+import { getGraphOutputDescriptor } from './output/index.js';
 import { query } from './query.js';
 import {
   bindEntityRefOperationProxy,
   bindEntityRefRelationOperations,
   createEntityRef,
-  isEntityRef,
   type AnyEntityRef,
   type BoundEntityRefLocators,
   type EntityRef,
-  normalizeEntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from './ref/index.js';
@@ -63,249 +87,32 @@ import {
   type RecursiveEntityViewDefinition,
 } from './view.js';
 
-export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
-export type GraphOperationAuthority = 'client-safe' | 'server-required';
-export type DomainOperationAuthority = 'server';
-export type DurableOperationRuntime = string;
-export type DurableOperationIdempotencyPolicy =
-  | 'allow-concurrent'
-  | 'reuse-running'
-  | 'skip-if-completed'
-  | 'replace-running'
-  | 'queue-after-current';
+export * from '../model/operation/client-metadata.js';
+export * from '../model/operation/definition.js';
 
-export type QueryKeySegmentContext<TInput> = {
-  input: TInput;
-  operation: object;
-};
+export type DomainOperationMetadata<
+  TInput = unknown,
+  TCache = unknown,
+  TResult = unknown,
+> = PortableDomainOperationMetadata<TInput, TCache, TResult, PortableOperationConditions>;
 
-export type QueryKeySegment<TInput> =
-  | unknown
-  | ((input: TInput, context: QueryKeySegmentContext<TInput>) => unknown);
+export type { DomainOperationImplementationMetadata } from '../model/operation/metadata.js';
 
-export const queryRef =
-  <TInput = Record<string, unknown>>(inputRefName: string): QueryKeySegment<TInput> =>
-  (input: TInput) => {
-    if (typeof input !== 'object' || input === null) return null;
-
-    const directRef = (input as Record<string, unknown>)[inputRefName];
-    return isEntityRef(directRef) ? normalizeEntityRef(directRef) : null;
-  };
-
-export type DomainOperationBridgeMetadata<TInput> = {
-  query?: readonly QueryKeySegment<TInput>[];
-  invalidate?: readonly (readonly QueryKeySegment<TInput>[])[];
-};
-
-export type DomainOperationClientCacheInvalidationContext<TInput, TResult> = {
-  input: TInput;
-  value: TResult;
-  operation: {
-    readonly [key: string]: unknown;
-  };
-};
-
-export type DomainOperationClientCacheInvalidation<TInput = unknown, TResult = unknown> = (
-  context: DomainOperationClientCacheInvalidationContext<TInput, TResult>,
-) => AnyEntityRef | readonly AnyEntityRef[] | null | undefined;
-
-export type ClientCacheKeySegmentContext<TInput> = {
-  input: TInput;
-  operation: {
-    readonly [key: string]: unknown;
-  };
-  resolveRef?: (ref: AnyEntityRef) => AnyEntityRef;
-};
-
-export type ClientCacheKeySegment<TInput> =
-  | unknown
-  | ((input: TInput, context: ClientCacheKeySegmentContext<TInput>) => unknown);
-
-export const cacheRef =
-  <TInput = Record<string, unknown>>(inputRefName: string): ClientCacheKeySegment<TInput> =>
-  (input: TInput, context: ClientCacheKeySegmentContext<TInput>) => {
-    if (typeof input !== 'object' || input === null) {
-      return null;
-    }
-
-    const inputRecord = input as Record<string, unknown>;
-    const directRef = inputRecord[inputRefName];
-
-    if (isEntityRef(directRef)) {
-      return context.resolveRef?.(directRef) ?? directRef;
-    }
-
-    return null;
-  };
-
-export type DomainOperationClientCacheMetadata<TInput = unknown, TResult = unknown> = {
-  query?: readonly ClientCacheKeySegment<TInput>[];
-  invalidate?: readonly DomainOperationClientCacheInvalidation<TInput, TResult>[];
-};
-
-export type OperationInputRefPathStepMetadata = {
-  name: string;
-  entityName: string;
-  sourceField: string;
-  locator?: string;
-  relation?: string;
-  role?: string;
-  cardinality?: RelationKind;
-  optional?: boolean;
-};
-
-export type OperationInputRefPathMetadata = {
-  kind: 'relation-path';
-  steps: readonly OperationInputRefPathStepMetadata[];
-};
-
-export type OperationInputRefLocatorGraphOpsMetadata = {
-  path?: OperationInputRefPathMetadata;
-};
-
-export type OperationInputRefGraphOpsMetadata = {
-  locators?: Record<string, OperationInputRefLocatorGraphOpsMetadata>;
-};
-
-export type DomainOperationGraphOpsMetadata = {
-  inputRefs?: Record<string, OperationInputRefGraphOpsMetadata>;
-};
-
-export type DomainOperationReceiverDeclaration =
-  | { kind: 'entity-type'; entity: AnyEntityDefinition }
-  | { kind: 'input'; path: string };
-
-export type DomainOperationReceiverDescriptor =
-  | { kind: 'entity-type'; entityName: string; source: 'declaration' }
-  | {
-      kind: 'input';
-      path: string;
-      entityName: string;
-      participant: 'ref';
-      requirement: 'portable' | 'existing';
-      source: 'declaration';
-    };
-
-export type HttpIngressMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-
-export type HttpIngressMetadata<TPayload = unknown, TInput = unknown> = {
-  kind: 'http';
-  method: HttpIngressMethod;
-  route: string;
-  provider?: string;
-  channel?: string;
-  body?: TPayload;
-  map?: (payload: TPayload) => TInput;
-};
-
-export type DomainOperationIngressMetadata<TInput = unknown> = HttpIngressMetadata<any, TInput>;
-
-export type DurableOperationSubject = {
-  type: string;
-  id: string;
-};
-
-export type DurableOperationTrigger = {
-  cause: 'user_request' | 'schedule' | 'external_event' | 'internal_task' | 'system';
-  actor?: {
-    kind: 'user' | 'integration' | 'service' | 'system';
-    id?: string;
-  };
-  ingress?: {
-    kind: 'server_action' | 'http' | 'websocket' | 'cron' | 'queue' | 'workflow' | 'cli';
-    requestId?: string;
-    deliveryId?: string;
-    connectionId?: string;
-    scheduleId?: string;
-    parentRunId?: string;
-  };
-  source?: {
-    provider?: string;
-    event?: string;
-  };
-};
-
-export type DurableOperationStepDefinitionLike<TInput = unknown, TResult = unknown> = {
-  id: string;
-  input?: GraphSchemaLike<TInput>;
-  output?: GraphSchemaLike<TResult>;
-};
-
-export type DurableOperationIdempotencyMetadata<TInput = unknown> = {
-  policy: DurableOperationIdempotencyPolicy;
-  key?: (input: TInput) => string | readonly unknown[];
-};
-
-export type DurableOperationMetadata<TInput = unknown, TResult = unknown> = {
-  runtime: DurableOperationRuntime;
-  taskId?: string;
-  progress?: GraphSchemaLike<any>;
-  finalOutput?: GraphSchemaLike<TResult>;
-  subject?: (input: TInput) => DurableOperationSubject;
-  trigger?: DurableOperationTrigger | ((input: TInput) => DurableOperationTrigger);
-  source?: DurableOperationTrigger['source'];
-  steps?: ReadonlyArray<DurableOperationStepDefinitionLike<any, any>>;
-  idempotency?: DurableOperationIdempotencyMetadata<TInput>;
-};
-
-export type DurableOperationDefaults = Partial<Pick<DurableOperationMetadata<any, any>, 'runtime'>>;
-
-export type DurableOperationDeclarationMetadata<TInput = unknown, TResult = unknown> = Omit<
-  DurableOperationMetadata<TInput, TResult>,
-  'runtime'
-> &
-  Partial<Pick<DurableOperationMetadata<TInput, TResult>, 'runtime'>>;
-
-export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult = unknown> = {
-  kind: 'domain-operation';
-  authority: DomainOperationAuthority;
-  exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
-  description?: string;
-  input?: GraphSchemaLike<TInput>;
-  output?: GraphSchemaLike<TResult>;
-  graphOutput?: GraphOutputDescriptor;
-  bridge?: DomainOperationBridgeMetadata<TInput>;
-  clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
-  ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
-  graphOps?: DomainOperationGraphOpsMetadata;
-  receiver?: DomainOperationReceiverDescriptor;
-  execution?: DomainOperationExecutionMetadata;
-  conditions?: PortableOperationConditions;
-  cache?: TCache;
-  durable?: DurableOperationMetadata<TInput, TResult>;
-  implementation?: {
-    selected: string;
-    kind?: string;
-    selection: { kind: 'static' } | { kind: 'environment-binding'; binding: string };
-  };
-};
-
-export type DomainOperationImplementationMetadata = NonNullable<
-  DomainOperationMetadata['implementation']
->;
-
-export type DomainOperationDefaults<TInput = unknown, TCache = unknown> = Partial<
-  Pick<DomainOperationMetadata<TInput, TCache>, 'authority' | 'exposure' | 'bridge'>
-> & {
-  layer?: string;
-  durable?: DurableOperationDefaults;
-};
+export type DomainOperationDefaults<
+  TInput = unknown,
+  TCache = unknown,
+> = PortableDomainOperationDefaults<TInput, TCache>;
 
 export type DomainOperationDeclarationMetadata<
   TInput = unknown,
   TCache = unknown,
   TResult = unknown,
-> = Omit<
-  DomainOperationMetadata<TInput, TCache, TResult>,
-  'authority' | 'exposure' | 'bridge' | 'durable' | 'receiver'
-> &
-  Partial<
-    Pick<DomainOperationMetadata<TInput, TCache, TResult>, 'authority' | 'exposure' | 'bridge'>
-  > & {
-    ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
-    durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
-    receiver?: DomainOperationReceiverDeclaration | DomainOperationReceiverDescriptor;
-  };
+> = PortableDomainOperationDeclarationMetadata<
+  TInput,
+  TCache,
+  TResult,
+  PortableOperationConditions
+>;
 
 export type HydratedGraphOperationInput<TInput> =
   TInput extends SemanticSelection<any, infer TEntity>
@@ -347,10 +154,7 @@ export type DomainOperationInvocation<TInput = unknown, TData = unknown> = {
   _data?: TData;
 };
 
-export type OperationBridgeBinding<TBinding = unknown, TAdapter extends string = string> = {
-  adapter: TAdapter;
-  callable: TBinding;
-};
+export type { OperationBridgeBinding } from '../model/operation/client-metadata.js';
 
 export type GraphOperationDeclarations = Record<string, GraphOperationDeclaration<any, any>>;
 export type DomainOperationDeclarations = Record<
@@ -994,18 +798,16 @@ export const defineGraphOperation = <TInput, TResult>(
 
 export const defineDomainOperationMetadata = <TInput, TCache = unknown>(
   operation: Omit<DomainOperationDeclarationMetadata<TInput, TCache>, 'kind'>,
-): DomainOperationDeclarationMetadata<TInput, TCache> => ({
-  kind: 'domain-operation',
-  authority: 'server',
-  ...operation,
-});
+): DomainOperationDeclarationMetadata<TInput, TCache> =>
+  ({
+    ...definePortableDomainOperationMetadata(operation),
+  }) as DomainOperationDeclarationMetadata<TInput, TCache>;
 
 export const defineOperationBridgeBinding = <TBinding, TAdapter extends string = string>(
   adapter: TAdapter,
   callable: TBinding,
 ): OperationBridgeBinding<TBinding, TAdapter> => ({
-  adapter,
-  callable,
+  ...definePortableOperationBridgeBinding(adapter, callable),
 });
 
 type InferClientOperationInput<TOperation> = TOperation extends {
