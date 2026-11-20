@@ -44,11 +44,29 @@ import {
   graphLiteral,
   graphVoid,
   presentGraphSchema,
+  valueArray,
+  valueDefault,
+  valueNamed,
+  valueNullable,
+  valueOptional,
+  valueRecord,
+  valueRefine,
+  valueTransform,
+  valueUnion,
 } from '../value/schema/authoring.js';
 import type {
   GraphLiteralDefinition,
   GraphSchemaLike,
   GraphVoidDefinition,
+  ValueArrayDefinition,
+  ValueDefaultDefinition,
+  ValueNamedDefinition,
+  ValueNullableDefinition,
+  ValueOptionalDefinition,
+  ValueRecordDefinition,
+  ValueRefinementDefinition,
+  ValueTransformDefinition,
+  ValueUnionDefinition,
 } from '../value/schema/definition.js';
 
 export {
@@ -233,69 +251,38 @@ export type AnyGraphObjectDefinition = GraphObjectDefinition<
   'strip' | 'strict' | 'passthrough'
 >;
 
-export interface GraphArrayDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.array';
-  item: TItem;
-  minItems?: number;
-  maxItems?: number;
-  __value?: InferGraphSchemaValue<TItem>[];
-}
+export interface GraphArrayDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueArrayDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphNullableDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.nullable';
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem> | null;
-}
+export interface GraphNullableDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueNullableDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
-export interface GraphOptionalDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.optional';
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem> | undefined;
-}
+export interface GraphOptionalDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueOptionalDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphUnionDefinition<
   TOptions extends readonly GraphSchemaLike[] = readonly GraphSchemaDefinition[],
-> {
-  kind: 'schema.union';
-  options: TOptions;
-  discriminator?: string;
-  description?: string;
-  __value?: InferGraphSchemaValue<TOptions[number]>;
-}
+> extends ValueUnionDefinition<TOptions, InferGraphSchemaValue<TOptions[number]>> {}
 
-export interface GraphRecordDefinition<TValue extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.record';
-  value: TValue;
-  description?: string;
-  __value?: Record<string, InferGraphSchemaValue<TValue>>;
-}
+export interface GraphRecordDefinition<
+  TValue extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueRecordDefinition<TValue, InferGraphSchemaValue<TValue>> {}
 
-export interface GraphDefaultDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.default';
-  item: TItem;
-  defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>;
-  __value?: Exclude<InferGraphSchemaValue<TItem>, undefined>;
-}
+export interface GraphDefaultDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueDefaultDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphTransformDefinition<
   TItem extends GraphSchemaLike = GraphSchemaDefinition,
   TOutput = unknown,
-> {
-  kind: 'schema.transform';
-  item: TItem;
-  transform: (value: InferGraphSchemaValue<TItem>) => TOutput;
-  __value?: TOutput;
-}
+> extends ValueTransformDefinition<TItem, InferGraphSchemaValue<TItem>, TOutput> {}
 
-export interface GraphRefinementDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.refinement';
-  item: TItem;
-  predicate: (value: InferGraphSchemaValue<TItem>) => boolean;
-  message: string;
-  path?: readonly (string | number)[];
-  rule?: string;
-  __value?: InferGraphSchemaValue<TItem>;
-}
+export interface GraphRefinementDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueRefinementDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphLazyDefinition<TValue = unknown> {
   kind: 'schema.lazy';
@@ -304,12 +291,9 @@ export interface GraphLazyDefinition<TValue = unknown> {
   __value?: TValue;
 }
 
-export interface GraphNamedDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
-  kind: 'schema.named';
-  name: string;
-  item: TItem;
-  __value?: InferGraphSchemaValue<TItem>;
-}
+export interface GraphNamedDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+> extends ValueNamedDefinition<TItem, InferGraphSchemaValue<TItem>> {}
 
 export interface GraphSelectionDefinition<
   TEntity extends AnyEntityDefinition = AnyEntityDefinition,
@@ -1025,80 +1009,49 @@ export const graphObject = <
 export const graphArray = <TItem extends GraphSchemaLike>(
   item: TItem,
   options?: { minItems?: number; maxItems?: number },
-): GraphArrayDefinition<TItem> => ({
-  kind: 'schema.array',
-  item,
-  ...(options?.minItems === undefined ? {} : { minItems: options.minItems }),
-  ...(options?.maxItems === undefined ? {} : { maxItems: options.maxItems }),
-});
+): GraphArrayDefinition<TItem> => valueArray<TItem, InferGraphSchemaValue<TItem>>(item, options);
 
 export const graphNullable = <TItem extends GraphSchemaLike>(
   item: TItem,
-): GraphNullableDefinition<TItem> => ({
-  kind: 'schema.nullable',
-  item,
-});
+): GraphNullableDefinition<TItem> => valueNullable<TItem, InferGraphSchemaValue<TItem>>(item);
 
 export const graphOptional = <TItem extends GraphSchemaLike>(
   item: TItem,
-): GraphOptionalDefinition<TItem> => ({
-  kind: 'schema.optional',
-  item,
-});
+): GraphOptionalDefinition<TItem> => valueOptional<TItem, InferGraphSchemaValue<TItem>>(item);
 
 export const graphUnion = <const TOptions extends readonly GraphSchemaLike[]>(
   options: TOptions,
-): GraphUnionDefinition<TOptions> => ({
-  kind: 'schema.union',
-  options,
-});
+): GraphUnionDefinition<TOptions> =>
+  valueUnion<TOptions, InferGraphSchemaValue<TOptions[number]>>(options);
 
 export const graphDiscriminatedUnion = <const TOptions extends readonly GraphSchemaLike[]>(
   discriminator: string,
   options: TOptions,
-): GraphUnionDefinition<TOptions> => ({
-  kind: 'schema.union',
-  discriminator,
-  options,
-});
+): GraphUnionDefinition<TOptions> =>
+  valueUnion<TOptions, InferGraphSchemaValue<TOptions[number]>>(options, discriminator);
 
 export const graphRecord = <TValue extends GraphSchemaLike>(
   recordValue: TValue,
-): GraphRecordDefinition<TValue> => ({
-  kind: 'schema.record',
-  value: recordValue,
-});
+): GraphRecordDefinition<TValue> => valueRecord<TValue, InferGraphSchemaValue<TValue>>(recordValue);
 
 export const graphDefault = <TItem extends GraphSchemaLike>(
   item: TItem,
   defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>,
-): GraphDefaultDefinition<TItem> => ({
-  kind: 'schema.default',
-  item,
-  defaultValue,
-});
+): GraphDefaultDefinition<TItem> =>
+  valueDefault<TItem, InferGraphSchemaValue<TItem>>(item, defaultValue);
 
 export const graphTransform = <TItem extends GraphSchemaLike, TOutput>(
   item: TItem,
   transform: (value: InferGraphSchemaValue<TItem>) => TOutput,
-): GraphTransformDefinition<TItem, TOutput> => ({
-  kind: 'schema.transform',
-  item,
-  transform,
-});
+): GraphTransformDefinition<TItem, TOutput> =>
+  valueTransform<TItem, InferGraphSchemaValue<TItem>, TOutput>(item, transform);
 
 export const graphRefine = <TItem extends GraphSchemaLike>(
   item: TItem,
   predicate: (value: InferGraphSchemaValue<TItem>) => boolean,
   options: { message: string; path?: readonly (string | number)[]; rule?: string },
-): GraphRefinementDefinition<TItem> => ({
-  kind: 'schema.refinement',
-  item,
-  predicate,
-  message: options.message,
-  ...(options.path ? { path: options.path } : {}),
-  ...(options.rule ? { rule: options.rule } : {}),
-});
+): GraphRefinementDefinition<TItem> =>
+  valueRefine<TItem, InferGraphSchemaValue<TItem>>(item, predicate, options);
 
 export const graphLazy = <TValue>(
   name: string,
@@ -1112,11 +1065,7 @@ export const graphLazy = <TValue>(
 export const graphNamed = <TItem extends GraphSchemaLike>(
   name: string,
   item: TItem,
-): GraphNamedDefinition<TItem> => ({
-  kind: 'schema.named',
-  name,
-  item,
-});
+): GraphNamedDefinition<TItem> => valueNamed<TItem, InferGraphSchemaValue<TItem>>(name, item);
 
 export const graphSelection = <
   TEntity extends AnyEntityDefinition,

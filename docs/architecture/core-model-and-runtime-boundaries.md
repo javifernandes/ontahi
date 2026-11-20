@@ -250,3 +250,10 @@ presentation metadata, and their dependency-free authoring helpers under `value/
 historical composite `GraphSchemaDefinition` remains in `definitions.ts` because it intentionally
 unites value schemas with Entity refs, Views, and Selections; moving that union into `value` would
 invert the accepted dependency direction.
+
+Generic array, nullable, optional, union, record, default, transform, refinement, and named schema
+containers now also live under `value/schema`. Their definitions accept the resolved value type as
+an explicit parameter, keeping this layer independent of Entity references. The historical
+`Graph*Definition` interfaces and `graphSchema.*` builders remain at the compatibility boundary and
+inject `InferGraphSchemaValue`, preserving model-aware reference inference without making
+`value/schema` depend on `model/entity`.

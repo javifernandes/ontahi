@@ -8,6 +8,7 @@ import {
   graphOutput,
   graphSchema,
   type InferGraphSchemaClientInput,
+  type InferGraphSchemaValue,
   type EntityRef,
   normalizeGraphSchemaClientInput,
   resolveDomainOperations,
@@ -461,6 +462,20 @@ describe('data-graph schema DSL', () => {
 
     expectTypeOf<ClientInput>().toEqualTypeOf<{ book: EntityRef<'SchemaClientBook'> }>();
     expect(normalizeGraphSchemaClientInput(inputSchema, { book })).toEqual({ book });
+  });
+
+  it('preserves model-aware Ref inference through value-schema containers', () => {
+    const Book = entity('ContainerSchemaBook', { id: field.id() });
+    const book = graphSchema.ref(Book);
+    const array = graphSchema.array(book);
+    const optional = graphSchema.optional(book);
+    const union = graphSchema.union([book, graphSchema.literal(null)] as const);
+
+    expectTypeOf(array.__value).toEqualTypeOf<InferGraphSchemaValue<typeof book>[] | undefined>();
+    expectTypeOf(optional.__value).toEqualTypeOf<InferGraphSchemaValue<typeof book> | undefined>();
+    expectTypeOf(union.__value).toEqualTypeOf<
+      InferGraphSchemaValue<typeof book> | null | undefined
+    >();
   });
 
   it('recognizes selections created by another loaded Ontahi entrypoint', () => {

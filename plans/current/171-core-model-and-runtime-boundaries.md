@@ -202,3 +202,9 @@ void schemas, presentation metadata, and description/presentation authoring now 
 `value/schema`. The composite Graph schema union remains at the compatibility boundary because it
 also includes Entity, View, Selection, and Reference forms; it must be decomposed rather than moved
 whole into `value`.
+
+Portable schema containers (array, nullable, optional, union, record, default, transform,
+refinement, and named) now have dependency-free definitions and constructors in `value/schema`.
+Compatibility interfaces in `data-graph/definitions.ts` supply the model-aware inferred value type,
+so references wrapped by these containers retain their established static shape while dependency
+direction remains `data-graph -> value`.
