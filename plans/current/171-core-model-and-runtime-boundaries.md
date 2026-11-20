@@ -237,3 +237,9 @@ schemas, variants, and fluent Relation methods around that model-owned state.
 Entity display/freshness metadata, locator extension, identity selection, and fluent Relation
 mutation now delegate to the same model-owned authoring module. The remaining facade-specific
 construction is limited to View, Selection, array-schema, and variant conveniences.
+
+Slice 3 begins by extracting the dependency-free operation declaration vocabulary into
+`model/operation`: authority and exposure, receivers, graph-operation metadata, HTTP ingress, and
+durable-operation declarations. `data-graph/operations.ts` re-exports those contracts while its
+mixed factories, binding, resolution, cache helpers, and execution-facing behavior remain to be
+split at their own seams.
