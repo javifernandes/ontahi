@@ -146,6 +146,8 @@ export type RecursiveEntityViewDefinition<
   ast: EntityViewAst;
   __entity?: TEntity;
   __shape?: TShape;
+  /** Schema inference retains the historical full Entity record value. */
+  __value?: InferEntityRecord<TEntity['fields']>;
   __viewResult?: TResult;
   toJSON: () => EntityViewAst;
 };
@@ -178,10 +180,10 @@ const validateViewNode = (entity: AnyEntityDefinition, node: ViewNode): void => 
       return;
     }
 
-    const relation = entity.relations[name];
-    if (!relation || child.kind !== 'relation-view') {
+    if (!hasOwn(entity.relations, name) || child.kind !== 'relation-view') {
       throw new Error(`Unknown relation ${entity.name}.${name}.`);
     }
+    const relation = entity.relations[name]!;
 
     const expected = {
       relation: `${entity.name}.${name}`,
@@ -251,10 +253,10 @@ const buildViewNode = <TEntity extends AnyEntityDefinition>(
         return [name, { kind: 'field-view', field: name } satisfies FieldViewNode];
       }
 
-      const relation = entity.relations[name];
-      if (!relation) {
+      if (!hasOwn(entity.relations, name)) {
         throw new Error(`Unknown relation ${entity.name}.${name}.`);
       }
+      const relation = entity.relations[name]!;
 
       const nestedView = isRecursiveEntityView(value)
         ? value.ast.entity === relation.target.name

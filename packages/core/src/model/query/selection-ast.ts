@@ -1,4 +1,4 @@
-import type { AnyEntityRef, EntityRefLocatorValue } from '../entity/ref/model.js';
+import { isEntityRef, type AnyEntityRef, type EntityRefLocatorValue } from '../entity/ref/model.js';
 
 export type SelectionPredicate =
   | {
@@ -93,14 +93,6 @@ export type SemanticSelection<
   build(): SelectionExpression;
 };
 
-const copyPredicate = (predicate: SelectionPredicate): SelectionPredicate =>
-  predicate.operator === 'in'
-    ? {
-        ...predicate,
-        values: [...predicate.values],
-      }
-    : { ...predicate };
-
 export const selectionAll = (): SelectionExpression => ({ kind: 'all' });
 
 export const selectionNone = (): SelectionExpression => ({ kind: 'none' });
@@ -113,6 +105,25 @@ const copyLocatorValue = (value: EntityRefLocatorValue): EntityRefLocatorValue =
           Object.entries(value).map(([key, child]) => [key, copyLocatorValue(child)]),
         )
       : value;
+
+const copyPredicate = (predicate: SelectionPredicate): SelectionPredicate => {
+  if (predicate.operator === 'in') return { ...predicate, values: [...predicate.values] };
+  if ('value' in predicate && isEntityRef(predicate.value)) {
+    return {
+      ...predicate,
+      value: {
+        ...predicate.value,
+        locator: Object.fromEntries(
+          Object.entries(predicate.value.locator).map(([fieldName, value]) => [
+            fieldName,
+            copyLocatorValue(value),
+          ]),
+        ),
+      },
+    };
+  }
+  return { ...predicate };
+};
 
 export const selectionReferences = (refs: readonly AnyEntityRef[]): SelectionExpression => ({
   kind: 'references',
@@ -172,7 +183,13 @@ export const selectionNot = (operand: SelectionExpression): SelectionExpression 
 
 export const copySelectionExpression = (expression: SelectionExpression): SelectionExpression => {
   if (expression.kind === 'relation-image') {
-    return { ...expression, source: structuredClone(expression.source) };
+    return {
+      ...expression,
+      source: {
+        ...expression.source,
+        expression: copySelectionExpression(expression.source.expression),
+      },
+    };
   }
   if (expression.kind === 'predicate') {
     return copyPredicate(expression);
@@ -201,12 +218,11 @@ export const copySelectionExpression = (expression: SelectionExpression): Select
 
 export const lowerSelectionReferences = (expression: SelectionExpression): SelectionExpression => {
   if (expression.kind === 'relation-image') {
-    const source = structuredClone(expression.source);
     return {
       ...expression,
       source: {
-        ...source,
-        expression: lowerSelectionReferences(source.expression),
+        ...expression.source,
+        expression: lowerSelectionReferences(expression.source.expression),
       },
     };
   }

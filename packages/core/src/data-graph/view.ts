@@ -21,14 +21,6 @@ export interface EntityViewFactory<
   TFields extends FieldDefinitions = TEntity['fields'],
   TRelations extends Record<string, RelationDefinition<RelationKind, any>> = TEntity['relations'],
 > {
-  <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
-    viewName: TViewName,
-    shape: TShape,
-  ): RecursiveEntityViewDefinition<
-    TEntity,
-    TShape,
-    InferEntityViewShapeFromParts<TFields, TRelations, TShape>
-  >;
   <
     TViewName extends string,
     TViewFields extends GraphSchemaFields = {},
@@ -37,4 +29,12 @@ export interface EntityViewFactory<
     viewName: TViewName,
     config?: EntityViewConfig<TEntity, TViewFields, TOmit>,
   ): EntityViewDefinition<TEntity, TViewName, TViewFields, TOmit>;
+  <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
+    viewName: TViewName,
+    shape: TShape,
+  ): RecursiveEntityViewDefinition<
+    TEntity,
+    TShape,
+    InferEntityViewShapeFromParts<TFields, TRelations, TShape>
+  >;
 }

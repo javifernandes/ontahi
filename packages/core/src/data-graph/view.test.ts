@@ -9,8 +9,10 @@ import {
   field,
   type EntityRef,
   type InferEntityViewResult,
+  type InferGraphSchemaValue,
   type InferQueryResult,
   query,
+  value,
 } from './index.js';
 
 const defineTripGraph = () => {
@@ -205,6 +207,28 @@ describe('recursive entity views', () => {
     }>();
   });
 
+  it('retains full Entity record inference when a recursive View is used as a schema', () => {
+    const { Trip } = defineTripGraph();
+    const TripSummary = Trip.view('TripSummary', { id: true });
+    const Input = value('ViewInput', { trip: TripSummary });
+
+    expectTypeOf<InferGraphSchemaValue<typeof TripSummary>>().toEqualTypeOf<
+      NonNullable<typeof Trip.__value>
+    >();
+    expectTypeOf(Input.__value).not.toEqualTypeOf<never>();
+  });
+
+  it('classifies an empty config as a legacy View and a nonempty shape as recursive', () => {
+    const { Trip } = defineTripGraph();
+    const Empty = Trip.view('Empty', {});
+    const Summary = Trip.view('Summary', { id: true });
+
+    expectTypeOf(Empty).not.toHaveProperty('ast');
+    expect(Empty).not.toHaveProperty('ast');
+    expectTypeOf(Summary).toHaveProperty('ast');
+    expect(Summary.toJSON()).toEqual(Summary.ast);
+  });
+
   it('infers many-to-many relation views as collections', () => {
     const Tag = entity('Tag', { id: field.id(), name: field.string() });
     const Todo = entity('Todo', { id: field.id() }).manyToMany('tags', Tag);
@@ -258,6 +282,14 @@ describe('recursive entity views', () => {
 
     expect(() => Trip.view('InheritedField', { constructor: true } as never)).toThrow(
       'Unknown field Trip.constructor.',
+    );
+  });
+
+  it('rejects inherited relation names unless the Entity declares them', () => {
+    const { Trip } = defineTripGraph();
+
+    expect(() => Trip.view('InheritedRelation', { toString: {} } as never)).toThrow(
+      'Unknown relation Trip.toString.',
     );
   });
 
