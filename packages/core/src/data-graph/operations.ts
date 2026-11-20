@@ -13,6 +13,11 @@ import type {
   GraphOperationAuthority,
   HttpIngressMethod,
 } from '../model/operation/definition.js';
+import {
+  assertValidDomainOperationExecution,
+  type DomainOperationExecutionMetadata,
+} from '../model/operation/execution-policy.js';
+import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
 export * from '../model/operation/definition.js';
@@ -33,12 +38,8 @@ import {
 } from './entity-mutation-authoring.js';
 import { reflectContextualSelections } from './entity-selections.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
-import {
-  assertValidDomainOperationExecution,
-  type DomainOperationExecutionMetadata,
-} from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
-import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
+import { getGraphOutputDescriptor } from './output/index.js';
 import { query } from './query.js';
 import {
   bindEntityRefOperationProxy,

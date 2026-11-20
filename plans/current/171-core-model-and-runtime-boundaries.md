@@ -243,3 +243,11 @@ Slice 3 begins by extracting the dependency-free operation declaration vocabular
 durable-operation declarations. `data-graph/operations.ts` re-exports those contracts while its
 mixed factories, binding, resolution, cache helpers, and execution-facing behavior remain to be
 split at their own seams.
+
+Operation retry and atomicity policy, capability requirements, and execution affordance derivation
+now live in `model/operation/execution-policy`. The established `data-graph/operation-execution`
+module is a compatibility facade; operation declaration assembly consumes the model owner directly.
+
+Portable graph-output descriptors and their authoring helpers now live in `model/operation/output`.
+Schema and query inspection remain at the compatibility/composition boundary and produce those
+portable descriptors through the model-owned constructors.
