@@ -2,8 +2,13 @@ export * from '../computation/entity-mapping.js';
 
 import type { AnyEntityDefinition, EntityMapping } from '../model/entity/definition.js';
 import {
+  addEntityLocators,
+  addEntityRelation,
   bindReferenceFieldSources,
   createEntityDefinitionState,
+  setEntityDisplayMetadata,
+  setEntityFreshnessMetadata,
+  setEntityIdentity,
   type ReferenceFieldRelations,
 } from '../model/entity/entity-authoring.js';
 export type { ReferenceFieldRelations } from '../model/entity/entity-authoring.js';
@@ -14,7 +19,6 @@ import type {
   InferEntityRecord,
 } from '../model/entity/field.js';
 import {
-  normalizeEntityLocatorDeclarations,
   type ConventionalEntityLocatorDeclarations,
   type EntityLocatorDeclarations,
   type EntityRefLocatorFactories,
@@ -30,7 +34,6 @@ export type { StringFieldInputConstraints } from '../model/entity/scalar-field-a
 import type { SemanticSelection } from '../model/query/selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
 import {
-  assertPortableRelationConstraints,
   type RelationDefinition,
   type RelationKind,
   type RelationOptions,
@@ -498,28 +501,21 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return { kind: 'schema.array' as const, item: this };
     },
     display(displayMetadata: EntityDisplayMetadata<TFields>) {
-      this.displayMetadata = displayMetadata;
+      setEntityDisplayMetadata(this, displayMetadata);
       return this as never;
     },
     freshness(freshnessMetadata: EntityFreshnessMetadata<TFields>) {
-      this.freshnessMetadata = freshnessMetadata;
+      setEntityFreshnessMetadata(this, freshnessMetadata);
       return this as never;
     },
     locators<TLocatorDeclarations extends EntityLocatorDeclarations<TFields>>(
       locators: TLocatorDeclarations,
     ) {
-      this.refLocators = {
-        ...this.refLocators,
-        ...normalizeEntityLocatorDeclarations<TFields, TLocatorDeclarations>(locators),
-      };
+      addEntityLocators(this, locators);
       return this as never;
     },
     identity(locatorName: string) {
-      if (!(locatorName in this.refLocators)) {
-        throw new Error(`Unknown identity locator ${locatorName} on entity ${name}`);
-      }
-
-      this.identityLocatorName = locatorName;
+      setEntityIdentity(this, locatorName);
       return this as never;
     },
     view(viewName: string, config?: unknown) {
@@ -542,19 +538,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return viewDefinition;
     },
     hasMany(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
-      if (options?.onDelete && options.onDelete !== 'cascade') {
-        throw new Error('hasMany Relations only support onDelete: cascade.');
-      }
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'hasMany',
-        target,
-        ...(options?.via ? { targetField: options.via } : {}),
-        ...(options?.ordered ? { ordered: true as const } : {}),
-        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'hasMany', target, options);
       return this as never;
     },
     belongsTo(
@@ -562,14 +546,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       target: AnyEntityDefinition,
       options?: Omit<RelationOptions, 'ordered' | 'onDelete'>,
     ) {
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'belongsTo',
-        target,
-        ...(options?.via ? { sourceField: options.via } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'belongsTo', target, options);
       return this as never;
     },
     manyToMany(
@@ -579,17 +556,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         onDelete?: 'detach';
       },
     ) {
-      if (options?.onDelete && options.onDelete !== 'detach') {
-        throw new Error('manyToMany Relations only support onDelete: detach.');
-      }
-      assertPortableRelationConstraints(options?.constraints);
-      this.relations[relationName] = {
-        kind: 'relation',
-        relationKind: 'manyToMany',
-        target,
-        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
-        ...(options?.constraints ? { constraints: options.constraints } : {}),
-      };
+      addEntityRelation(this, relationName, 'manyToMany', target, options);
       return this as never;
     },
   };

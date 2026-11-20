@@ -1,12 +1,18 @@
-import type { RelationDefinition } from '../relation/definition.js';
+import {
+  assertPortableRelationConstraints,
+  type RelationDefinition,
+  type RelationOptions,
+} from '../relation/definition.js';
 
 import type { AnyEntityDefinition } from './definition.js';
 import type { FieldDefinitions } from './field.js';
 import {
   normalizeEntityLocatorDeclarations,
   type ConventionalEntityLocatorDeclarations,
+  type EntityLocatorDeclarations,
   type EntityRefLocatorFactories,
 } from './locator.js';
+import type { EntityDisplayDescriptor, EntityFreshnessDescriptor } from './metadata.js';
 import { isReferenceFieldDefinition } from './reference-field.js';
 
 export type ReferenceFieldRelations<TFields extends FieldDefinitions> = {
@@ -90,4 +96,74 @@ export const bindReferenceFieldSources = (
       fieldName: { configurable: true, value: fieldName },
     });
   });
+};
+
+type MutableEntityAuthoring = {
+  name: string;
+  fields: FieldDefinitions;
+  relations: Record<string, RelationDefinition>;
+  refLocators: Record<string, unknown>;
+  identityLocatorName?: string;
+  displayMetadata?: EntityDisplayDescriptor;
+  freshnessMetadata?: EntityFreshnessDescriptor;
+};
+
+export const setEntityDisplayMetadata = (
+  entity: MutableEntityAuthoring,
+  metadata: EntityDisplayDescriptor,
+): void => {
+  entity.displayMetadata = metadata;
+};
+
+export const setEntityFreshnessMetadata = (
+  entity: MutableEntityAuthoring,
+  metadata: EntityFreshnessDescriptor,
+): void => {
+  entity.freshnessMetadata = metadata;
+};
+
+export const addEntityLocators = <
+  TFields extends FieldDefinitions,
+  TLocators extends EntityLocatorDeclarations<TFields>,
+>(
+  entity: MutableEntityAuthoring & { fields: TFields },
+  locators: TLocators,
+): void => {
+  entity.refLocators = {
+    ...entity.refLocators,
+    ...normalizeEntityLocatorDeclarations<TFields, TLocators>(locators),
+  };
+};
+
+export const setEntityIdentity = (entity: MutableEntityAuthoring, locatorName: string): void => {
+  if (!(locatorName in entity.refLocators)) {
+    throw new Error(`Unknown identity locator ${locatorName} on entity ${entity.name}`);
+  }
+  entity.identityLocatorName = locatorName;
+};
+
+export const addEntityRelation = (
+  entity: MutableEntityAuthoring,
+  relationName: string,
+  relationKind: 'hasMany' | 'belongsTo' | 'manyToMany',
+  target: AnyEntityDefinition,
+  options?: RelationOptions,
+): void => {
+  if (relationKind === 'hasMany' && options?.onDelete && options.onDelete !== 'cascade') {
+    throw new Error('hasMany Relations only support onDelete: cascade.');
+  }
+  if (relationKind === 'manyToMany' && options?.onDelete && options.onDelete !== 'detach') {
+    throw new Error('manyToMany Relations only support onDelete: detach.');
+  }
+  assertPortableRelationConstraints(options?.constraints);
+  entity.relations[relationName] = {
+    kind: 'relation',
+    relationKind,
+    target,
+    ...(relationKind === 'hasMany' && options?.via ? { targetField: options.via } : {}),
+    ...(relationKind === 'belongsTo' && options?.via ? { sourceField: options.via } : {}),
+    ...(relationKind === 'hasMany' && options?.ordered ? { ordered: true } : {}),
+    ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
+    ...(options?.constraints ? { constraints: options.constraints } : {}),
+  };
 };
