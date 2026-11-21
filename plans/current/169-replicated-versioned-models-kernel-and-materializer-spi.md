@@ -131,13 +131,15 @@ custom behavior escape hatch.
        dependency/affected-set evidence, unknown-dependency fallback, and the in-memory evidence retained
        by the first examples. Add caller-owned persistence ports only when a consumer proves they are
        required.
-3. Integrate the SPI in Atlas Plan 156 for versioned parsed-record artifacts, affected Entity
+3. [x] Allow a new process to hydrate a detached accepted snapshot and dependency index, and reject
+       incompatible incremental requests before invoking Materializer behavior.
+4. Integrate the SPI in Atlas Plan 156 for versioned parsed-record artifacts, affected Entity
    derivation, atomic Projection Revision publication, and full-rebuild comparison.
-4. Use Atlas evidence to narrow rather than expand the Ontahí surface; promote incremental execution
+5. Use Atlas evidence to narrow rather than expand the Ontahí surface; promote incremental execution
    only after equivalence and invalidation checks pass.
-5. Integrate the same SPI in one BookOps Markdown-to-content-node path that exercises ordering or
+6. Integrate the same SPI in one BookOps Markdown-to-content-node path that exercises ordering or
    cross-record dependencies.
-6. Decide whether the two adoptions justify a declarative Entity derivation API; if so, extract it
+7. Decide whether the two adoptions justify a declarative Entity derivation API; if so, extract it
    in a separate plan above the behavioral SPI.
 
 ## Acceptance Checklist
@@ -198,7 +200,10 @@ rebuild; conflicting output identity and failed derivation do not advance accept
 second slice adds a behavior-first Materializer, explicit dependency and affected-output evidence,
 an in-memory runner, and unknown-dependency fallback before derivation. Dependency evidence advances
 only with kernel acceptance. One input can affect one or many outputs without imposing an Entity
-DSL. The portable contracts live under `@ontahi/core`'s `model/replication` boundary while remaining
-available through the package root. No persistence port was needed by this proof; Atlas Plan 156
-should expose the first concrete storage boundary. Cooling, eviction, tiers, multi-master
+DSL. Atlas then proved the process boundary: a new runner can hydrate a detached accepted snapshot
+and dependency index while persistence remains application-owned. Missing baselines, incompatible
+versions, and Source frontier gaps now request rebuild before invoking Materializer behavior. The
+portable contracts live under `@ontahi/core`'s `model/replication` boundary while remaining
+available through the package root. Atlas Plan 156 owns the first concrete storage boundary; a
+generic persistence port still awaits BookOps evidence. Cooling, eviction, tiers, multi-master
 convergence, and a declarative Entity DSL require separate evidence and plans.
