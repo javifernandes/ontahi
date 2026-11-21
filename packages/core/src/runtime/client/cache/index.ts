@@ -30,7 +30,22 @@ import type {
   GraphClientCacheWriteResult,
 } from './records.js';
 
-export type * from './records.js';
+export type {
+  EntityLocatorRef,
+  GraphClientCacheAliasRecord,
+  GraphClientCacheEntityRecord,
+  GraphClientCacheEvent,
+  GraphClientCacheInspectableRecord,
+  GraphClientCacheInvalidationResult,
+  GraphClientCacheListener,
+  GraphClientCacheOptions,
+  GraphClientCacheOutputNormalizationResult,
+  GraphClientCacheOutputReadResult,
+  GraphClientCacheOutputRecord,
+  GraphClientCacheOutputSource,
+  GraphClientCacheSnapshot,
+  GraphClientCacheWriteResult,
+} from './records.js';
 export * from './reconciliation.js';
 export { createEntityLocatorRefs } from './normalization.js';
 
@@ -293,7 +308,8 @@ const collectGraphOutputEntityRecords /* NOSONAR */ = (
           return undefined;
         }
 
-        return [...records, ...itemRecords];
+        records.push(...itemRecords);
+        return records;
       }, []);
     case 'graph-output.object': {
       if (!isRecord(value)) {
@@ -368,7 +384,16 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
     }
 
     if (Array.isArray(value)) {
+      if (seen.has(value)) {
+        return value;
+      }
+
+      seen.add(value);
       return value.map(item => resolveOutputCacheKeyValue(item, seen));
+    }
+
+    if (value instanceof Date) {
+      return value;
     }
 
     if (isRecord(value)) {
@@ -430,6 +455,7 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
 
   const getAliasRefsForCanonicalKey = (canonicalKey: string): AnyEntityRef[] =>
     Array.from(aliasKeysByCanonicalRef.get(canonicalKey) ?? [])
+      .filter(aliasKey => canonicalKeysByAliasRef.get(aliasKey) === canonicalKey)
       .map(aliasKey => refsByKey.get(aliasKey))
       .filter((ref): ref is AnyEntityRef => Boolean(ref));
 
@@ -443,6 +469,10 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
     const aliases = getAliasRefsForCanonicalKey(canonicalKey);
 
     for (const aliasKey of previousAliases) {
+      if (canonicalKeysByAliasRef.get(aliasKey) !== canonicalKey) {
+        continue;
+      }
+
       canonicalKeysByAliasRef.delete(aliasKey);
       refsByKey.delete(aliasKey);
     }
@@ -492,8 +522,6 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
     }
 
     const canonicalKey = normalizeEntityRef(canonicalRef);
-    const aliases = createEntityLocatorRefs(entityDefinition, snapshot).map(({ ref }) => ref);
-    const aliasKeys = new Set(aliases.map(normalizeEntityRef));
     const cachedAt = now();
     const freshness = resolveEntitySnapshotFreshness(entityDefinition, snapshot);
     const existingRecord = recordsByCanonicalRef.get(canonicalKey);
@@ -501,6 +529,8 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
       hasFreshnessMarker(freshness) && hasSameFreshnessMarker(existingRecord, freshness)
         ? mergeFreshSnapshot(existingRecord as GraphClientCacheEntityRecord, snapshot)
         : snapshot;
+    const aliases = createEntityLocatorRefs(entityDefinition, value).map(({ ref }) => ref);
+    const aliasKeys = new Set(aliases.map(normalizeEntityRef));
 
     aliasKeys.add(canonicalKey);
     deleteAliasesForCanonicalKey(canonicalKey);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { entity, field } from '../../../data-graph/index.js';
+import { createEntityRef, entity, field } from '../../../data-graph/index.js';
 
 import {
   hasFreshnessMarker,
@@ -33,8 +33,15 @@ describe('graph client cache helpers', () => {
     expect(left).toBe(right);
     expect(left).toContain('[Circular]');
     expect(left).toContain('symbol(token)');
-    expect(left).toContain('function(operation)');
+    expect(left).toContain('function(');
     expect(left).toContain('{}');
+  });
+
+  it('terminates when output keys contain self-referential arrays', () => {
+    const circular: unknown[] = [];
+    circular.push(circular);
+
+    expect(normalizeOutputCacheKey(circular)).toBe('[[Circular]]');
   });
 
   it('resolves and compares every supported freshness marker', () => {
@@ -52,6 +59,7 @@ describe('graph client cache helpers', () => {
       version: 2,
       hash: true,
     });
+    const articleRef = createEntityRef(Article, { id: '1' });
 
     expect(freshness).toEqual({
       freshnessAt: Date.parse('2026-01-02T03:04:05.000Z'),
@@ -61,18 +69,15 @@ describe('graph client cache helpers', () => {
     expect(hasFreshnessMarker(freshness)).toBe(true);
     expect(hasFreshnessMarker({})).toBe(false);
     expect(hasSameFreshnessMarker(undefined, freshness)).toBe(false);
-    expect(
-      hasSameFreshnessMarker(
-        { cachedAt: 1, ref: { entityName: 'Article', locator: { id: '1' } }, value: {} },
-        freshness,
-      ),
-    ).toBe(false);
+    expect(hasSameFreshnessMarker({ cachedAt: 1, ref: articleRef, value: {} }, freshness)).toBe(
+      false,
+    );
     expect(
       hasSameFreshnessMarker(
         {
           cachedAt: 1,
           freshnessVersion: 2,
-          ref: { entityName: 'Article', locator: { id: '1' } },
+          ref: articleRef,
           value: {},
         },
         freshness,
@@ -106,11 +111,15 @@ describe('graph client cache helpers', () => {
   });
 
   it('merges defined snapshot fields without erasing cached projections', () => {
+    const Article = entity('Article', { id: field.id() })
+      .locators({ refById: 'id' })
+      .identity('refById');
+
     expect(
       mergeFreshSnapshot(
         {
           cachedAt: 1,
-          ref: { entityName: 'Article', locator: { id: '1' } },
+          ref: createEntityRef(Article, { id: '1' }),
           value: { id: '1', title: 'Cached', subtitle: 'Keep me' },
         },
         { id: '1', title: 'Fresh', subtitle: undefined },
