@@ -49,8 +49,14 @@ The reference runner asks the Materializer for an affected-output set before inc
 derivation. `known` evidence is passed into behavior; `unknown` requests a rebuild without invoking
 that behavior. Dependency evidence returned by a successful derivation replaces the retained index
 only after the kernel accepts the candidate, so rejected frontiers cannot corrupt later
-invalidation. This first proof retains evidence in memory. A caller-owned persistence port should
-be introduced only when an adopter demonstrates its required atomic boundary.
+invalidation.
+
+A runner may begin with a caller-owned accepted snapshot and dependency index restored across a
+process boundary. Core detaches hydrated JSON and dependency values from caller mutation and checks
+derivation identity at construction. Before incremental behavior runs, it rejects a missing
+baseline, incompatible Materializer version, or Source frontier gap with an explicit rebuild
+request. Persistence technology, artifact storage, transaction scope, and publication remain host
+responsibilities; hydration does not turn Core into a storage runtime.
 
 The portable contract belongs to the Core model layer under `model/replication`; it is not itself a
 storage or server runtime. Core continues to expose it from the package root so physical module

@@ -95,6 +95,13 @@ export type ReplicatedVersionedMaterializerRunner<
   dependencies(): readonly MaterializerDependency[];
 };
 
+export type ReplicatedVersionedMaterializerRunnerOptions<TState extends JsonValue> = {
+  initial?: {
+    snapshot: ReplicatedVersionedModelSnapshot<TState>;
+    dependencies: readonly MaterializerDependency[];
+  };
+};
+
 const cloneDependencies = (
   dependencies: readonly MaterializerDependency[],
 ): readonly MaterializerDependency[] =>
@@ -111,17 +118,41 @@ export const createReplicatedVersionedMaterializerRunner = <
   TChange extends JsonValue = JsonValue,
 >(
   materializer: Materializer<TInput, TDelta, TState, TArtifact, TChange>,
+  options: ReplicatedVersionedMaterializerRunnerOptions<TState> = {},
 ): ReplicatedVersionedMaterializerRunner<TInput, TDelta, TState, TArtifact, TChange> => {
   const id = materializer.id;
   const version = materializer.version;
   const kernel: ReplicatedVersionedModelKernel<TState> = createReplicatedVersionedModelKernel({
     derivationId: id,
+    initialSnapshot: options.initial?.snapshot,
   });
-  let dependencies: readonly MaterializerDependency[] = [];
+  let dependencies: readonly MaterializerDependency[] = cloneDependencies(
+    options.initial?.dependencies ?? [],
+  );
 
   const run = async (
     request: MaterializerRequest<TInput, TDelta>,
   ): Promise<MaterializerExecution<TState, TArtifact, TChange>> => {
+    const previous = kernel.current();
+
+    if (request.mode === 'incremental') {
+      const reason = !previous
+        ? 'missing-accepted-frontier'
+        : version !== previous.acceptance.materializerVersion
+          ? 'materializer-version-changed'
+          : request.sourceFrontier !== previous.acceptance.sourceFrontier &&
+              request.baseSourceFrontier !== previous.acceptance.sourceFrontier
+            ? 'source-frontier-gap'
+            : null;
+
+      if (reason) {
+        return {
+          result: kernel.apply({ outcome: 'rebuild-required', reason }),
+          output: null,
+        };
+      }
+    }
+
     const affected =
       request.mode === 'incremental'
         ? materializer.affectedBy(request.delta, cloneDependencies(dependencies))
@@ -138,7 +169,7 @@ export const createReplicatedVersionedMaterializerRunner = <
       const output = await materializer.derive(request.input, {
         mode: request.mode,
         sourceFrontier: request.sourceFrontier,
-        previous: kernel.current(),
+        previous,
         affectedOutputs: request.mode === 'incremental' ? [...affected.outputs] : null,
       });
       const result = kernel.apply(

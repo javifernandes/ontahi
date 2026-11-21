@@ -114,6 +114,35 @@ describe('replicated versioned model kernel', () => {
     });
   });
 
+  it('hydrates a detached accepted snapshot and rejects a mismatched derivation', () => {
+    const initialSnapshot = {
+      acceptance: {
+        derivationId: 'atlas-markdown-projection',
+        materializerVersion: 'markdown-v1',
+        sourceFrontier: 'git:1',
+        acceptedFrontier: 'projection:1',
+      },
+      state: { records: [{ id: 'plan-1', title: 'First' }] },
+    };
+    const kernel = createReplicatedVersionedModelKernel({
+      derivationId: 'atlas-markdown-projection',
+      initialSnapshot,
+    });
+
+    initialSnapshot.state.records[0]!.title = 'Mutated by caller';
+
+    expect(kernel.current()).toEqual({
+      acceptance: initialSnapshot.acceptance,
+      state: { records: [{ id: 'plan-1', title: 'First' }] },
+    });
+    expect(() =>
+      createReplicatedVersionedModelKernel({
+        derivationId: 'bookops-content',
+        initialSnapshot,
+      }),
+    ).toThrow('Cannot hydrate derivation bookops-content from snapshot atlas-markdown-projection.');
+  });
+
   it('requires a rebuild when incremental execution has no baseline or skips a source frontier', () => {
     const kernel = createReplicatedVersionedModelKernel<ProjectionState>({
       derivationId: 'atlas-markdown-projection',

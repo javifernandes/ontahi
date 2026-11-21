@@ -47,7 +47,7 @@ export type ReplicatedVersionedModelFailure = {
 
 export type ReplicatedVersionedModelRebuildRequest = {
   outcome: 'rebuild-required';
-  reason: 'unknown-dependency';
+  reason: ReplicatedVersionedModelRebuildRequired['reason'];
 };
 
 export type ReplicatedVersionedModelAttempt<TState extends JsonValue = JsonValue> =
@@ -119,9 +119,20 @@ const acceptanceFor = <TState extends JsonValue>(
 
 export const createReplicatedVersionedModelKernel = <TState extends JsonValue>(options: {
   derivationId: DerivationId;
+  initialSnapshot?: ReplicatedVersionedModelSnapshot<TState>;
 }): ReplicatedVersionedModelKernel<TState> => {
   const derivationId = options.derivationId;
-  let current: ReplicatedVersionedModelSnapshot<TState> | null = null;
+  const initialSnapshot = options.initialSnapshot;
+
+  if (initialSnapshot && initialSnapshot.acceptance.derivationId !== derivationId) {
+    throw new Error(
+      `Cannot hydrate derivation ${derivationId} from snapshot ${initialSnapshot.acceptance.derivationId}.`,
+    );
+  }
+
+  let current: ReplicatedVersionedModelSnapshot<TState> | null = initialSnapshot
+    ? cloneSnapshot(initialSnapshot)
+    : null;
 
   const accepted = (): ReplicatedVersionedModelAcceptance | null =>
     current ? cloneAcceptance(current.acceptance) : null;
