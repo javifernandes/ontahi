@@ -1,5 +1,19 @@
 # @ontahi/core
 
+## 1.0.0-alpha.22
+
+### Minor Changes
+
+- 74a238e: Allow replicated versioned model kernels and Materializer runners to hydrate accepted snapshots
+  and dependency evidence across process boundaries.
+
+### Patch Changes
+
+- 43d823c: Move the in-memory Data Graph storage and execution adapter behind the runtime storage boundary
+  while preserving all established package-root and `data-graph` exports.
+
+  Implements `ontahi://plans/171-core-model-and-runtime-boundaries`.
+
 ## 1.0.0-alpha.21
 
 ### Minor Changes

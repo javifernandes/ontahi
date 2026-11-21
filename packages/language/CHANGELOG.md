@@ -1,5 +1,13 @@
 # @ontahi/language
 
+## 1.0.0-alpha.22
+
+### Patch Changes
+
+- Updated dependencies [43d823c]
+- Updated dependencies [74a238e]
+  - @ontahi/core@1.0.0-alpha.22
+
 ## 1.0.0-alpha.21
 
 ### Patch Changes
