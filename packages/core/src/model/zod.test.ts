@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import * as valueZodHelpers from '../value/zod.js';
+
 import {
   boundedPositiveInteger,
   id,
@@ -13,8 +15,13 @@ import {
   positiveIntegerSchema,
   slug,
 } from './zod.js';
+import * as legacyZodHelpers from './zod.js';
 
 describe('model zod primitives', () => {
+  it('keeps the historical model path as an identity-preserving compatibility facade', () => {
+    expect(legacyZodHelpers).toEqual(valueZodHelpers);
+    expect(legacyZodHelpers.nonEmptyString).toBe(valueZodHelpers.nonEmptyString);
+  });
   it('accepts non-empty identifiers and rejects empty strings', () => {
     expect(nonEmptyString.parse('bookops')).toBe('bookops');
     expect(id.parse('book-1')).toBe('book-1');
