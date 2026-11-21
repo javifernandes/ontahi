@@ -2,6 +2,11 @@ import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
 
 import type { GraphClientCacheEntityRecord } from './records.js';
 
+type GraphClientCacheFreshness = Pick<
+  GraphClientCacheEntityRecord,
+  'freshnessAt' | 'freshnessHash' | 'freshnessVersion'
+>;
+
 const toTimestamp = (value: unknown): number | undefined => {
   if (value instanceof Date) {
     const timestamp = value.getTime();
@@ -26,7 +31,7 @@ const toFreshnessToken = (value: unknown): string | number | boolean | null | un
 export const resolveEntitySnapshotFreshness = (
   entityDefinition: AnyEntityDefinition,
   snapshot: Record<string, unknown>,
-): Pick<GraphClientCacheEntityRecord, 'freshnessAt' | 'freshnessHash' | 'freshnessVersion'> => {
+): GraphClientCacheFreshness => {
   const metadata = entityDefinition.freshnessMetadata;
   const freshnessAt = metadata?.updatedAt ? toTimestamp(snapshot[metadata.updatedAt]) : undefined;
   const freshnessHash = metadata?.hash ? toFreshnessToken(snapshot[metadata.hash]) : undefined;
@@ -42,16 +47,12 @@ export const resolveEntitySnapshotFreshness = (
 
 const freshnessMarkers = ['freshnessVersion', 'freshnessHash', 'freshnessAt'] as const;
 
-export const hasFreshnessMarker = (
-  freshness: Pick<
-    GraphClientCacheEntityRecord,
-    'freshnessAt' | 'freshnessHash' | 'freshnessVersion'
-  >,
-): boolean => freshnessMarkers.some(marker => freshness[marker] !== undefined);
+export const hasFreshnessMarker = (freshness: GraphClientCacheFreshness): boolean =>
+  freshnessMarkers.some(marker => freshness[marker] !== undefined);
 
 export const hasSameFreshnessMarker = (
   left: GraphClientCacheEntityRecord | undefined,
-  right: Pick<GraphClientCacheEntityRecord, 'freshnessAt' | 'freshnessHash' | 'freshnessVersion'>,
+  right: GraphClientCacheFreshness,
 ): boolean => {
   if (!left) return false;
   const commonMarkers = freshnessMarkers.filter(

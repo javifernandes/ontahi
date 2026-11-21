@@ -31,11 +31,13 @@ const normalizeOutputCacheKeyValue = (
     if (seen.has(value)) return '[Circular]';
     seen.add(value);
     return `{${Object.keys(value)
-      .sort()
+      .sort((left, right) => left.localeCompare(right))
       .map(key => `${JSON.stringify(key)}:${normalizeOutputCacheKeyValue(value[key], seen)}`)
       .join(',')}}`;
   }
-  return JSON.stringify(String(value));
+  if (typeof value === 'symbol') return `symbol(${value.description ?? ''})`;
+  if (typeof value === 'function') return `function(${value.name})`;
+  return `object(${Object.prototype.toString.call(value)})`;
 };
 
 export const normalizeOutputCacheKey = (key: readonly unknown[]): string =>

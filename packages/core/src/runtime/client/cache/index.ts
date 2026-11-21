@@ -46,7 +46,8 @@ type ReadEntityFn = (
 
 type ReadEntityRecordFn = (ref: AnyEntityRef) => GraphClientCacheEntityRecord | undefined;
 
-const normalizeGraphOutputValue = (
+// The exhaustive recursive dispatch mirrors the descriptor algebra.
+const normalizeGraphOutputValue /* NOSONAR */ = (
   descriptor: GraphOutputDescriptor,
   value: unknown,
   writeEntity: WriteEntityFn,
@@ -80,7 +81,7 @@ const normalizeGraphOutputValue = (
       return value.map(item =>
         normalizeGraphOutputValue(descriptor.item, item, writeEntity, writes),
       );
-    case 'graph-output.object':
+    case 'graph-output.object': {
       if (!isRecord(value)) {
         return value;
       }
@@ -110,6 +111,7 @@ const normalizeGraphOutputValue = (
       }
 
       return output;
+    }
     case 'graph-output.nullable':
       if (value === null || value === undefined) {
         return value;
@@ -147,7 +149,8 @@ const denormalizeObjectField = (
   };
 };
 
-const denormalizeGraphOutputValue = (
+// The exhaustive recursive dispatch mirrors the descriptor algebra.
+const denormalizeGraphOutputValue /* NOSONAR */ = (
   descriptor: GraphOutputDescriptor,
   value: unknown,
   readEntitySnapshot: ReadEntityFn,
@@ -224,7 +227,8 @@ const denormalizeGraphOutputValue = (
   }
 };
 
-const collectGraphOutputEntityRecords = (
+// The exhaustive recursive dispatch mirrors the descriptor algebra.
+const collectGraphOutputEntityRecords /* NOSONAR */ = (
   descriptor: GraphOutputDescriptor,
   value: unknown,
   readEntityRecordByRef: ReadEntityRecordFn,
@@ -233,13 +237,15 @@ const collectGraphOutputEntityRecords = (
     case 'graph-output.opaque':
       return [];
     case 'graph-output.entity': {
-      const ref = isEntityRef(value)
-        ? value
-        : isRecord(value)
-          ? createEntityIdentityRef(descriptor.entity, value)
-          : undefined;
+      let ref: AnyEntityRef | undefined;
 
-      if (!ref || ref.entityName !== descriptor.entity.name) {
+      if (isEntityRef(value)) {
+        ref = value;
+      } else if (isRecord(value)) {
+        ref = createEntityIdentityRef(descriptor.entity, value);
+      }
+
+      if (ref?.entityName !== descriptor.entity.name) {
         return undefined;
       }
 
@@ -530,7 +536,8 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
     return write;
   };
 
-  const writeOutput = (
+  // The result is always the normalized value; the conditional work persists it.
+  const writeOutput /* NOSONAR */ = (
     key: readonly unknown[],
     descriptor: GraphOutputDescriptor | undefined,
     value: unknown,
