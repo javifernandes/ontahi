@@ -229,6 +229,14 @@ contain re-exports only, so existing package-root and `@ontahi/core/data-graph` 
 their API while new internal dependencies can recognize the implementation as a concrete runtime
 adapter rather than portable model semantics.
 
+## Slice 5 progress
+
+The Graph client cache now lives under `runtime/client/cache`. Its public records and events,
+freshness rules, deterministic key and locator normalization, Entity record storage, output record
+storage, and complete-snapshot reconciliation are separate internal modules behind the existing
+`createGraphClientCache` factory. The historical `data-graph/client/cache` path is a re-export only;
+observable cache behavior and package-root exports remain unchanged.
+
 ## Slice 2 progress
 
 The first extraction moves Entity reference values, locator values, factories, normalization, and
