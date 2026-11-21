@@ -1,0 +1,243 @@
+import { Effect } from 'effect';
+
+import type { GraphCommandSpec } from '../../../data-graph/command.js';
+import {
+  isDerivedFieldDefinition,
+  type RelationConstraintRejection,
+} from '../../../data-graph/definitions.js';
+import {
+  liftEntityReferenceRecord,
+  lowerEntityReferenceRecord,
+  lowerEntityReferenceSelection,
+} from '../../../data-graph/reference-field.js';
+import { hasRelationImage } from '../../../data-graph/selection-ast.js';
+import { hasOwn } from '../../../value/object.js';
+
+import type { InMemoryDataset } from './materialization.js';
+import { applySelectionExpression } from './query.js';
+
+export type InMemoryDataGraphFailureReason =
+  | 'cardinality_mismatch'
+  | 'entity_mutation_condition_not_met'
+  | 'invalid_command'
+  | 'relation_constraint_rejected'
+  | 'ordered_relationship_rejected'
+  | 'relationship_precondition_failed'
+  | 'read_failed'
+  | 'mutation_failed';
+
+export class InMemoryDataGraphError extends Error {
+  readonly _tag = 'InMemoryDataGraphError';
+
+  constructor(
+    message: string,
+    readonly reason: InMemoryDataGraphFailureReason,
+    readonly cause?: unknown,
+    readonly rejection?: RelationConstraintRejection,
+  ) {
+    super(message);
+    this.name = 'InMemoryDataGraphError';
+  }
+}
+
+const payloadRows = (command: GraphCommandSpec<any, any, any>) => {
+  if (command.operation === 'insert_many' || command.operation === 'upsert') {
+    if (command.operation === 'upsert' && !Array.isArray(command.payload)) {
+      return command.payload
+        ? [lowerEntityReferenceRecord(command.root, command.payload as Record<string, unknown>)]
+        : [];
+    }
+
+    if (!Array.isArray(command.payload)) {
+      throw new InMemoryDataGraphError(
+        'Bulk commands require an array payload.',
+        'invalid_command',
+      );
+    }
+
+    return command.payload.map(row =>
+      lowerEntityReferenceRecord(command.root, row as Record<string, unknown>),
+    );
+  }
+
+  if (!command.payload || Array.isArray(command.payload)) {
+    throw new InMemoryDataGraphError(
+      `${command.operation} commands require an object payload.`,
+      'invalid_command',
+    );
+  }
+
+  return [lowerEntityReferenceRecord(command.root, command.payload as Record<string, unknown>)];
+};
+
+const projectReturningRows = (
+  entity: GraphCommandSpec['root'],
+  rows: ReadonlyArray<Record<string, unknown>>,
+  fields: readonly string[],
+) =>
+  rows.map(row =>
+    liftEntityReferenceRecord(entity, Object.fromEntries(fields.map(field => [field, row[field]]))),
+  );
+
+const assertRequiredConstructionFields = (
+  entity: GraphCommandSpec['root'],
+  row: Record<string, unknown>,
+) => {
+  const missing = Object.entries(entity.fields)
+    .filter(([, field]) => !field.optional && !isDerivedFieldDefinition(field))
+    .map(([fieldName]) => fieldName)
+    .filter(fieldName => !hasOwn(row, fieldName));
+
+  if (missing.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Cannot construct ${entity.name}; missing required fields: ${missing.join(', ')}.`,
+      'invalid_command',
+    );
+  }
+};
+
+const assertWritableFields = (entity: GraphCommandSpec['root'], row: Record<string, unknown>) => {
+  const derived = Object.keys(row).filter(fieldName => {
+    const field = entity.fields[fieldName];
+    return field && isDerivedFieldDefinition(field);
+  });
+  if (derived.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Cannot assign derived Fields on ${entity.name}: ${derived.join(', ')}.`,
+      'invalid_command',
+    );
+  }
+};
+
+const assertReturnableFields = (command: GraphCommandSpec) => {
+  const derived = (command.returning ?? []).filter(fieldName =>
+    isDerivedFieldDefinition(command.root.fields[fieldName]!),
+  );
+  if (derived.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Commands cannot return virtual derived Fields on ${command.root.name}: ${derived.join(', ')}. Read them through a Query instead.`,
+      'invalid_command',
+    );
+  }
+};
+
+const assertOneAffectedRow = (
+  command: GraphCommandSpec<any, any, any>,
+  rows: ReadonlyArray<Record<string, unknown>>,
+) => {
+  if (command.cardinality === 'one' && rows.length !== 1) {
+    throw new InMemoryDataGraphError(
+      `Expected exactly one affected row, got ${rows.length}.`,
+      'cardinality_mismatch',
+      { actualAffectedRows: rows.length },
+    );
+  }
+};
+
+const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any, any, any>) => {
+  if (hasRelationImage(command.selection))
+    throw new InMemoryDataGraphError(
+      'Graph Commands do not yet support relation-image Selections.',
+      'invalid_command',
+    );
+  assertReturnableFields(command);
+  const entityName = command.root.name;
+  const currentRows = [...(dataset[entityName] ?? [])];
+  let nextRows = currentRows;
+  let affectedRows: Array<Record<string, unknown>> = [];
+
+  if (command.operation === 'insert' || command.operation === 'insert_many') {
+    affectedRows = payloadRows(command);
+    affectedRows.forEach(row => {
+      assertWritableFields(command.root, row);
+      assertRequiredConstructionFields(command.root, row);
+    });
+    nextRows = [...currentRows, ...affectedRows];
+  } else if (command.operation === 'upsert') {
+    const payloads = payloadRows(command);
+    const conflictFields = command.upsert?.conflictOn ?? [];
+
+    if (
+      payloads.length === 0 ||
+      conflictFields.length === 0 ||
+      (command.upsert?.strategy !== 'ignore' && command.upsert?.strategy !== 'merge') ||
+      payloads.some(payload => conflictFields.some(field => !hasOwn(payload, field)))
+    ) {
+      throw new InMemoryDataGraphError(
+        'Upsert commands require a strategy and payload values for every conflict field.',
+        'invalid_command',
+      );
+    }
+
+    for (const payload of payloads) {
+      assertWritableFields(command.root, payload);
+      const existingIndex = nextRows.findIndex(row =>
+        conflictFields.every(field => row[field] === payload[field]),
+      );
+
+      if (existingIndex < 0) {
+        assertRequiredConstructionFields(command.root, payload);
+        affectedRows.push(payload);
+        nextRows = [...nextRows, payload];
+      } else if (command.upsert?.strategy === 'merge') {
+        const merged = { ...nextRows[existingIndex], ...payload };
+        affectedRows.push(merged);
+        nextRows = nextRows.map((row, index) => (index === existingIndex ? merged : row));
+      }
+    }
+  } else if (command.operation === 'update') {
+    const [payload] = payloadRows(command);
+    assertWritableFields(command.root, payload);
+    const matches = new Set(
+      applySelectionExpression(
+        currentRows,
+        lowerEntityReferenceSelection(command.root, command.selection),
+      ),
+    );
+
+    nextRows = currentRows.map(row => {
+      if (!matches.has(row)) {
+        return row;
+      }
+
+      const updated = { ...row, ...payload };
+      affectedRows.push(updated);
+      return updated;
+    });
+  } else {
+    const matches = new Set(
+      applySelectionExpression(
+        currentRows,
+        lowerEntityReferenceSelection(command.root, command.selection),
+      ),
+    );
+    affectedRows = currentRows.filter(row => matches.has(row));
+    nextRows = currentRows.filter(row => !matches.has(row));
+  }
+
+  assertOneAffectedRow(command, affectedRows);
+  dataset[entityName] = nextRows;
+
+  if (!command.returning || command.returning.length === 0) {
+    return undefined;
+  }
+
+  const returnedRows = projectReturningRows(command.root, affectedRows, command.returning);
+  return command.cardinality === 'one' ? returnedRows[0] : returnedRows;
+};
+
+export const executeInMemoryGraphCommandEffect = <TResult>(
+  dataset: InMemoryDataset,
+  command: GraphCommandSpec<any, any, TResult>,
+): Effect.Effect<TResult, InMemoryDataGraphError> =>
+  Effect.try({
+    try: () => executeMutation(dataset, command) as TResult,
+    catch: cause =>
+      cause instanceof InMemoryDataGraphError
+        ? cause
+        : new InMemoryDataGraphError(
+            `Failed to execute in-memory ${command.operation} command.`,
+            'mutation_failed',
+            cause,
+          ),
+  });

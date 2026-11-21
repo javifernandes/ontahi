@@ -220,6 +220,15 @@ facades. Moving either large file unchanged would reproduce `data-graph` under a
 6. Begin the implementation migration with the portable Entity kernel, one compatibility-preserving
    slice at a time.
 
+## Slice 4 progress
+
+The reference in-memory implementation now lives under `runtime/storage/in-memory`. Its storage
+factory, execution runtime, observation hub, read/materialization implementation, and mutation
+command executors move together as one adapter boundary. Historical `data-graph/in-memory` modules
+contain re-exports only, so existing package-root and `@ontahi/core/data-graph` consumers preserve
+their API while new internal dependencies can recognize the implementation as a concrete runtime
+adapter rather than portable model semantics.
+
 ## Slice 2 progress
 
 The first extraction moves Entity reference values, locator values, factories, normalization, and
