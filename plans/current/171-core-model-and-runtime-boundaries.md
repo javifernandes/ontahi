@@ -267,3 +267,8 @@ the existing model-expression conditions while preserving all established infere
 Domain Operation defaults and declaration metadata now share that portable owner, together with
 the basic metadata and bridge-binding factories. Graph-aware client inference, hydration,
 resolution, and entity binding remain in the composition layer by design.
+
+Graph and Domain Operation resolution now live under `runtime/operation`: operation identity,
+schema validation, receiver resolution, retry/durable validation, defaults, and callable invocation
+assembly are runtime concerns. `data-graph/operations.ts` retains public types and compatibility
+exports while consuming the runtime resolver.
