@@ -56,7 +56,7 @@ const materializeSelection = (
       continue;
     }
 
-    if (value && typeof value === 'object') {
+    if (typeof value === 'object') {
       result[key] = materializeSelection(row, value as Record<string, SelectionValue>, context);
     }
   }
