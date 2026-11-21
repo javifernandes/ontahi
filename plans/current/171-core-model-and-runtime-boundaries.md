@@ -283,3 +283,10 @@ Slice 5 moves the Graph client cache behind `runtime/client/cache` and decompose
 monolith into records, event publication, freshness handling, key and locator normalization, Entity
 storage, output storage, and Query reconciliation modules. The coordinator retains the established
 factory behavior, while `data-graph/client/cache` is now a compatibility-only re-export.
+
+Slice 6 classifies the legacy `model/zod` helpers as generic value validation rather than portable
+application-model semantics. Their implementation now lives at `value/zod`, exposed through the new
+`@ontahi/core/value/zod` subpath. The package root retains the same exports, while
+`@ontahi/core/model/zod` remains as a deprecated identity-preserving compatibility facade. This
+disposition is intentionally separate from the graph-schema-to-Zod runtime adapter and
+`contractFromZod`, which remain valid adapter boundaries.

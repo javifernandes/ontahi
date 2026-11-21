@@ -119,6 +119,11 @@
       "import": "./dist/model/zod.js",
       "require": "./dist/model/zod.js"
     },
+    "./value/zod": {
+      "types": "./dist/value/zod.d.ts",
+      "import": "./dist/value/zod.js",
+      "require": "./dist/value/zod.js"
+    },
     "./value/array": {
       "types": "./dist/value/array.d.ts",
       "import": "./dist/value/array.js",

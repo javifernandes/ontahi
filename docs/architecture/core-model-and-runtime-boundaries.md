@@ -204,6 +204,10 @@ facades. Moving either large file unchanged would reproduce `data-graph` under a
   runtime materializers into the model layer. Its current runner should be re-evaluated when runtime
   boundaries reach replication.
 - Defer cache decomposition, in-memory relocation, and Zod disposition to their dedicated slices.
+- The Slice 6 audit found that `model/zod` contains only generic value-validation helpers, with no
+  internal model consumers. `value/zod` is now their owner and public destination;
+  `model/zod` remains a deprecated compatibility facade. Graph-schema Zod projection and
+  `contractFromZod` are distinct runtime adapters and are not part of this legacy helper surface.
 - Add automated direction checks only after the first real boundary exists; a check against today's
   mixed namespace would either encode known debt or require a broad exception list.
 
