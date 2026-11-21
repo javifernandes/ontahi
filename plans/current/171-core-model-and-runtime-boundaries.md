@@ -272,3 +272,9 @@ Graph and Domain Operation resolution now live under `runtime/operation`: operat
 schema validation, receiver resolution, retry/durable validation, defaults, and callable invocation
 assembly are runtime concerns. `data-graph/operations.ts` retains public types and compatibility
 exports while consuming the runtime resolver.
+
+Slice 4 moves the complete in-memory Data Graph adapter behind `runtime/storage/in-memory`: storage
+composition, reads, materialization, observation, Graph Commands, Entity mutation, and direct,
+ordered, and many-to-many Relationship Commands now have one explicit runtime owner. The historical
+`data-graph/in-memory` modules are compatibility-only re-exports, and the package-root API remains
+unchanged.
