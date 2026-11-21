@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
 import type {
   EntityMutationCommand,
   EntityMutationDelta,
@@ -10,6 +9,7 @@ import {
   materializeEntityMutationDelta,
   toEntityMutationGraphCommand,
 } from '../../../data-graph/entity-mutation-command.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';

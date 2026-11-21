@@ -1,13 +1,14 @@
 import { Effect } from 'effect';
 
-import type { AnyEntityDefinition, RelationDefinition } from '../../../data-graph/definitions.js';
-import { createEntityIdentityRef } from '../../../data-graph/ref/index.js';
 import { appliedRelationshipCommand } from '../../../data-graph/relationship-command-result.js';
 import type {
   ManyToManyRelationshipCommand,
   RelationshipEndpointSelection,
   RelationshipFact,
 } from '../../../data-graph/relationship-command.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
+import type { RelationDefinition } from '../../../model/relation/definition.js';
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';

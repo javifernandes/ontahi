@@ -112,14 +112,15 @@ mechanical and low risk.
 
 ## Acceptance Checklist
 
-- [ ] Every existing `data-graph` module has a recorded owner category and intended destination.
-- [ ] Model modules do not depend on client, server, transport, or concrete storage implementations.
+- [x] Every existing `data-graph` module has a recorded owner category and intended destination.
+- [x] Model modules do not depend on client, server, transport, concrete storage implementations, or
+      the `data-graph` compatibility namespace.
 - [ ] Runtime modules consume portable models through explicit contracts.
-- [ ] The in-memory implementation is recognizable as a storage/runtime adapter rather than model
+- [x] The in-memory implementation is recognizable as a storage/runtime adapter rather than model
       semantics.
-- [ ] Client cache responsibilities are split into reviewable modules without changing behavior.
-- [ ] The legacy Zod surface has an evidence-backed disposition and migration path.
-- [ ] Package-root consumers retain source compatibility through the migration.
+- [x] Client cache responsibilities are split into reviewable modules without changing behavior.
+- [x] The legacy Zod surface has an evidence-backed disposition and migration path.
+- [x] Package-root consumers retain source compatibility through the migration.
 - [ ] Public API changes carry Changesets; mechanical internal moves do not manufacture API churn.
 - [ ] `data-graph` no longer serves as the default destination for unrelated Entity-adjacent work.
 
@@ -290,3 +291,16 @@ application-model semantics. Their implementation now lives at `value/zod`, expo
 `@ontahi/core/model/zod` remains as a deprecated identity-preserving compatibility facade. This
 disposition is intentionally separate from the graph-schema-to-Zod runtime adapter and
 `contractFromZod`, which remain valid adapter boundaries.
+
+Slice 7 begins with a retirement audit rather than deleting the namespace prematurely. `data-graph`
+still contains 86 non-test production modules and roughly 19,500 lines; at least 21 modules are now
+explicit compatibility facades, but the remaining mixed query, schema, command, protocol, and
+execution modules still contain real implementation. The first retirement checkpoint therefore
+locks the accepted dependency direction with an executable architecture test: production `value`,
+`model`, and `computation` modules may no longer import `data-graph` or inward runtime layers.
+
+The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
+Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
+those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than
+avoidable facade dependencies. Namespace removal remains deferred until those mixed modules are
+split; the audit explicitly rejects treating file deletion as progress while implementation remains.

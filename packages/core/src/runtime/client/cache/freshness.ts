@@ -1,4 +1,4 @@
-import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 
 import type { GraphClientCacheEntityRecord } from './records.js';
 

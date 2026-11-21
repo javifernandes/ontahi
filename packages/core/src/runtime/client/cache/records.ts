@@ -1,4 +1,4 @@
-import type { AnyEntityRef, EntityRef, EntityRefLocator } from '../../../data-graph/ref/index.js';
+import type { AnyEntityRef, EntityRef, EntityRefLocator } from '../../../model/entity/ref/model.js';
 
 export type EntityLocatorRef<TEntityName extends string = string> = {
   name: string;

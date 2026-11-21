@@ -1,11 +1,11 @@
-import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import {
   createEntityRef,
   isEntityRef,
   isEntityRefLocatorValue,
   normalizeEntityRef,
   type EntityRefLocatorValue,
-} from '../../../data-graph/ref/index.js';
+} from '../../../model/entity/ref/model.js';
 import { isRecord } from '../../../value/object.js';
 
 import type { EntityLocatorRef } from './records.js';
