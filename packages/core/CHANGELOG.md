@@ -1,5 +1,40 @@
 # @ontahi/core
 
+## 1.0.0-alpha.21
+
+### Minor Changes
+
+- 3935ac7: Add a provider-neutral in-memory acceptance kernel for replicated versioned models. Hosts can now
+  record exact source and output frontiers, apply full or incremental results, detect replay, gaps,
+  Materializer version changes and frontier conflicts, and preserve the last accepted JSON state
+  after rejection or failure.
+
+  Implements `ontahi://plans/169-replicated-versioned-models-kernel-and-materializer-spi` and shapes
+  `ontahi.model.replicated-versioned-model`.
+
+- 07a8020: Add a behavior-first Materializer SPI and in-memory runner for replicated versioned models. Hosts
+  can calculate affected outputs from retained dependency evidence, derive full or incremental
+  candidates, and request a safe rebuild when dependencies are unknown.
+
+  Implements `ontahi://plans/169-replicated-versioned-models-kernel-and-materializer-spi` and shapes
+  `ontahi.model.replicated-versioned-model`.
+
+### Patch Changes
+
+- 1cdbb9d: Move scalar Field authoring behind the portable Entity model boundary while preserving the existing
+  `field` API and factory behavior.
+- 8732f87: Move portable operation declaration vocabulary behind the model boundary while preserving the
+  existing operation exports.
+- 9738064: Move Graph and Domain Operation resolution behind the runtime operation boundary while preserving
+  the established data-graph API.
+- dd89e5e: Move value field picking behind the portable value-schema authoring boundary while preserving the
+  existing `graphSchema.pick` API and model-aware inference.
+- 83a145e: Reorganize portable Entity, Relation, query, expression, mapping, and value-schema internals behind
+  the existing public API. Preserve recursive View schema inference, reject empty reference
+  Selections, and keep generated Entity relation casts valid across the extracted type boundaries.
+
+  Implements `ontahi://plans/171-core-model-and-runtime-boundaries`.
+
 ## 1.0.0-alpha.20
 
 ### Minor Changes

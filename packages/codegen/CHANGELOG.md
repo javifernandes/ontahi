@@ -1,5 +1,15 @@
 # @ontahi/codegen
 
+## 1.0.0-alpha.21
+
+### Patch Changes
+
+- 83a145e: Reorganize portable Entity, Relation, query, expression, mapping, and value-schema internals behind
+  the existing public API. Preserve recursive View schema inference, reject empty reference
+  Selections, and keep generated Entity relation casts valid across the extracted type boundaries.
+
+  Implements `ontahi://plans/171-core-model-and-runtime-boundaries`.
+
 ## 1.0.0-alpha.20
 
 ### Minor Changes

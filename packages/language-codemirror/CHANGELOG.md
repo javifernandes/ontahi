@@ -1,5 +1,11 @@
 # @ontahi/language-codemirror
 
+## 1.0.0-alpha.21
+
+### Patch Changes
+
+- @ontahi/language@1.0.0-alpha.21
+
 ## 1.0.0-alpha.20
 
 ### Patch Changes
