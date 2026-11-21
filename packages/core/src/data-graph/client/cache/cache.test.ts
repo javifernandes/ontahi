@@ -708,6 +708,77 @@ describe('data-graph client cache', () => {
     });
   });
 
+  it('keeps output keys stable across object insertion order and distinct functions', () => {
+    const cache = createGraphClientCache();
+    const descriptor = graphOutput.opaque();
+    const firstFunction = function load() {
+      return 1;
+    };
+    const secondFunction = function load() {
+      return 2;
+    };
+
+    cache.writeOutput([{ '\u00e9': 1, 'e\u0301': 2 }], descriptor, 'unicode');
+    cache.writeOutput([firstFunction], descriptor, 'first');
+    cache.writeOutput([secondFunction], descriptor, 'second');
+
+    expect(cache.readOutput([{ 'e\u0301': 2, '\u00e9': 1 }], descriptor)?.value).toBe('unicode');
+    expect(cache.readOutput([firstFunction], descriptor)?.value).toBe('first');
+    expect(cache.readOutput([secondFunction], descriptor)?.value).toBe('second');
+  });
+
+  it('keeps date output keys distinct and terminates on circular array keys', () => {
+    const cache = createGraphClientCache();
+    const descriptor = graphOutput.opaque();
+    const firstDate = new Date('2026-01-01T00:00:00.000Z');
+    const secondDate = new Date('2026-01-02T00:00:00.000Z');
+    const circular: unknown[] = [];
+    circular.push(circular);
+
+    cache.writeOutput([firstDate], descriptor, 'first');
+    cache.writeOutput([secondDate], descriptor, 'second');
+    cache.writeOutput(circular, descriptor, 'circular');
+
+    expect(cache.readOutput([firstDate], descriptor)?.value).toBe('first');
+    expect(cache.readOutput([secondDate], descriptor)?.value).toBe('second');
+    expect(cache.readOutput(circular, descriptor)?.value).toBe('circular');
+  });
+
+  it('preserves transferred aliases when the former owner is invalidated', () => {
+    const Book = defineBookEntity();
+    const cache = createGraphClientCache();
+
+    cache.writeEntity(Book, { id: 'book-1', slug: 'news', title: 'First' });
+    const second = { id: 'book-2', slug: 'news', title: 'Second' };
+    cache.writeEntity(Book, second);
+    cache.invalidateEntity(createEntityRef(Book, { id: 'book-1' }));
+
+    expect(cache.readEntity(createEntityRef(Book, { slug: 'news' }))).toBe(second);
+  });
+
+  it('retains aliases present in same-freshness merged snapshots', () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      slug: field.string(),
+      title: field.string(),
+      version: field.number(),
+    })
+      .locators({ refById: 'id', refBySlug: 'slug' })
+      .identity('refById')
+      .freshness({ version: 'version' });
+    const cache = createGraphClientCache();
+
+    cache.writeEntity(Book, { id: 'book-1', slug: 'news', title: 'First', version: 2 });
+    cache.writeEntity(Book, { id: 'book-1', title: 'Updated', version: 2 });
+
+    expect(cache.readEntity(createEntityRef(Book, { slug: 'news' }))).toEqual({
+      id: 'book-1',
+      slug: 'news',
+      title: 'Updated',
+      version: 2,
+    });
+  });
+
   it('does not read output skeletons when a referenced entity is missing', () => {
     const Book = defineBookEntity();
     const cache = createGraphClientCache();

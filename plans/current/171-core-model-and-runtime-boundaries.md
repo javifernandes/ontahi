@@ -278,3 +278,8 @@ composition, reads, materialization, observation, Graph Commands, Entity mutatio
 ordered, and many-to-many Relationship Commands now have one explicit runtime owner. The historical
 `data-graph/in-memory` modules are compatibility-only re-exports, and the package-root API remains
 unchanged.
+
+Slice 5 moves the Graph client cache behind `runtime/client/cache` and decomposes the former
+monolith into records, event publication, freshness handling, key and locator normalization, Entity
+storage, output storage, and Query reconciliation modules. The coordinator retains the established
+factory behavior, while `data-graph/client/cache` is now a compatibility-only re-export.
