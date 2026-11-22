@@ -1,20 +1,20 @@
-import {
-  isDerivedFieldDefinition,
-  resolveRelationFields,
-  type AnyEntityDefinition,
-  type DerivedFieldDefinition,
-  type RelationDefinition,
-} from '../../../data-graph/definitions.js';
+import { resolveRelationFields } from '../../../computation/entity-mapping.js';
 import { evaluateModelExpression } from '../../../data-graph/model-expression/index.js';
 import { RelationQueryBuilder, type SelectionValue } from '../../../data-graph/query.js';
-import { createEntityIdentityRef } from '../../../data-graph/ref/index.js';
 import {
   getEntityReferenceField,
   liftEntityReferenceRecord,
   liftEntityReferenceValue,
 } from '../../../data-graph/reference-field.js';
 import type { RelationshipFact } from '../../../data-graph/relationship-command.js';
-import type { SelectionExpression } from '../../../data-graph/selection-ast.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import {
+  isDerivedFieldDefinition,
+  type DerivedFieldDefinition,
+} from '../../../model/entity/field.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
+import type { SelectionExpression } from '../../../model/query/selection-ast.js';
+import type { RelationDefinition } from '../../../model/relation/definition.js';
 
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 

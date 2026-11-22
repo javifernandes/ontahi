@@ -1,11 +1,11 @@
-import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
-import type { GraphOutputDescriptor } from '../../../data-graph/output/index.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
 import {
-  createEntityIdentityRef,
   isEntityRef,
   normalizeEntityRef,
   type AnyEntityRef,
-} from '../../../data-graph/ref/index.js';
+} from '../../../model/entity/ref/model.js';
+import type { GraphOutputDescriptor } from '../../../model/operation/output.js';
 import { isRecord } from '../../../value/object.js';
 
 import { createGraphClientEntityStorage } from './entity-storage.js';

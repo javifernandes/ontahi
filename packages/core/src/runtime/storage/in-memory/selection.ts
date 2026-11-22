@@ -1,17 +1,18 @@
-import { graphSchema, type AnyEntityDefinition } from '../../../data-graph/definitions.js';
+import { graphSchema } from '../../../data-graph/definitions.js';
 import { query, type QuerySpec } from '../../../data-graph/query.js';
-import { createEntityIdentityRef } from '../../../data-graph/ref/index.js';
 import {
   createRelatedRootReadSpec,
   type RelatedRootReadSpec,
 } from '../../../data-graph/relation-root.js';
 import { parseGraphSchema } from '../../../data-graph/schema.js';
+import { resolveSelectionRelation } from '../../../data-graph/selection-relations.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
 import {
   hasRelationImage,
   selectionReferences,
   type SelectionExpression,
-} from '../../../data-graph/selection-ast.js';
-import { resolveSelectionRelation } from '../../../data-graph/selection-relations.js';
+} from '../../../model/query/selection-ast.js';
 
 import { InMemoryDataGraphError } from './command.js';
 

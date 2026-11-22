@@ -2,15 +2,13 @@ import { Effect } from 'effect';
 
 import type { GraphCommandSpec } from '../../../data-graph/command.js';
 import {
-  isDerivedFieldDefinition,
-  type RelationConstraintRejection,
-} from '../../../data-graph/definitions.js';
-import {
   liftEntityReferenceRecord,
   lowerEntityReferenceRecord,
   lowerEntityReferenceSelection,
 } from '../../../data-graph/reference-field.js';
-import { hasRelationImage } from '../../../data-graph/selection-ast.js';
+import { isDerivedFieldDefinition } from '../../../model/entity/field.js';
+import { hasRelationImage } from '../../../model/query/selection-ast.js';
+import type { RelationConstraintRejection } from '../../../model/relation/definition.js';
 import { hasOwn } from '../../../value/object.js';
 
 import type { InMemoryDataset } from './materialization.js';

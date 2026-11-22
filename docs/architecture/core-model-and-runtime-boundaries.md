@@ -211,6 +211,27 @@ facades. Moving either large file unchanged would reproduce `data-graph` under a
 - Add automated direction checks only after the first real boundary exists; a check against today's
   mixed namespace would either encode known debt or require a broad exception list.
 
+### Slice 7 retirement checkpoint
+
+The extracted boundaries are now large enough to enforce direction without encoding the historical
+layout. An executable architecture test scans production sources and rejects these dependencies:
+
+- `value -> model | computation | runtime | data-graph`;
+- `model -> computation | runtime | data-graph`;
+- `computation -> runtime | data-graph`.
+
+Tests may still import historical paths to prove facade compatibility. Runtime modules may consume
+remaining `data-graph` implementation until its query, schema, command, protocol, and execution
+seams have direct owners. The retirement audit counts 86 non-test production modules and about
+19,500 lines under `data-graph`; at least 21 are explicit compatibility facades. This is not yet a
+facade-only directory, so wholesale removal would merge architectural migration with behavioral
+rewrites.
+
+As the first cleanup pass, `runtime/client/cache` and `runtime/storage/in-memory` now import the
+portable Entity, Ref, Relation, Selection AST, operation-output, and mapping contracts directly.
+Imports that remain point to mixed implementations with no complete replacement boundary yet and
+form the concrete backlog for the next retirement pass.
+
 ## Slice 1 decisions
 
 1. Adopt the dependency directions above as the migration rule.

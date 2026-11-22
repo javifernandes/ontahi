@@ -1,15 +1,5 @@
 import { Effect } from 'effect';
 
-import {
-  isReferenceFieldDefinition,
-  type AnyEntityDefinition,
-  type RelationDefinition,
-} from '../../../data-graph/definitions.js';
-import {
-  createEntityIdentityRef,
-  entityRefsEqual,
-  type AnyEntityRef,
-} from '../../../data-graph/ref/index.js';
 import { lowerEntityReferenceValue } from '../../../data-graph/reference-field.js';
 import {
   appliedRelationshipCommand,
@@ -21,6 +11,11 @@ import type {
   OrderedRelationshipCommand,
   OrderedRelationshipPosition,
 } from '../../../data-graph/relationship-command.js';
+import { type AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
+import { entityRefsEqual, type AnyEntityRef } from '../../../model/entity/ref/model.js';
+import { isReferenceFieldDefinition } from '../../../model/entity/reference-field.js';
+import type { RelationDefinition } from '../../../model/relation/definition.js';
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';

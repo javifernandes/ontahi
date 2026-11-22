@@ -1,10 +1,5 @@
 import { Effect } from 'effect';
 
-import type {
-  AnyEntityDefinition,
-  AnyReferenceFieldDefinition,
-} from '../../../data-graph/definitions.js';
-import { isReferenceFieldDefinition } from '../../../data-graph/definitions.js';
 import {
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
@@ -22,6 +17,11 @@ import type {
   RelationshipCommand,
   RelationshipFact,
 } from '../../../data-graph/relationship-command.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import {
+  isReferenceFieldDefinition,
+  type AnyReferenceFieldDefinition,
+} from '../../../model/entity/reference-field.js';
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';

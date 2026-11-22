@@ -4,7 +4,7 @@ import {
   selectionAnd,
   type SelectionExpression,
   type SelectionPredicate,
-} from '../../../data-graph/selection-ast.js';
+} from '../../../model/query/selection-ast.js';
 
 type OrderSpec = {
   kind: 'order';
@@ -96,7 +96,7 @@ export const applySelectionExpression = (
 ) => rows.filter(row => matchesSelectionExpression(row, expression));
 
 export const applyEntitySelectionExpression = (
-  entity: import('../../../data-graph/definitions.js').AnyEntityDefinition,
+  entity: import('../../../model/entity/definition.js').AnyEntityDefinition,
   rows: ReadonlyArray<Record<string, unknown>>,
   expression: SelectionExpression,
 ) => applySelectionExpression(rows, lowerEntityReferenceSelection(entity, expression));

@@ -1,12 +1,18 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createVercelWorkflowTaskRuntime } from './runtime.js';
+
 vi.mock('server-only', () => ({}));
 
-const start = vi.fn();
-const resumeHook = vi.fn();
+const { getRun, resumeHook, start } = vi.hoisted(() => ({
+  getRun: vi.fn(),
+  resumeHook: vi.fn(),
+  start: vi.fn(),
+}));
+vi.mock('workflow/api', () => ({ getRun, resumeHook, start }));
+
 const getTaskWorkflow = vi.fn();
-const getRun = vi.fn();
 const create = vi.fn();
 const attachRuntimeRef = vi.fn();
 const update = vi.fn();
@@ -19,7 +25,6 @@ const listRecent = vi.fn();
 
 describe('vercel workflow task runtime adapter', () => {
   beforeEach(() => {
-    vi.resetModules();
     start.mockReset();
     resumeHook.mockReset();
     getRun.mockReset();
@@ -33,7 +38,6 @@ describe('vercel workflow task runtime adapter', () => {
     claimEvent.mockReset();
     cancelEvent.mockReset();
     listRecent.mockReset();
-    vi.doMock('workflow/api', () => ({ getRun, resumeHook, start }));
   });
 
   it('creates a durable task run and starts Vercel with only the task run reference', async () => {
@@ -76,7 +80,6 @@ describe('vercel workflow task runtime adapter', () => {
       status: Promise.resolve('pending'),
     });
 
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const adapter = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
@@ -157,7 +160,6 @@ describe('vercel workflow task runtime adapter', () => {
     };
     loadSource.mockReturnValue(Effect.succeed(source));
     cancelEvent.mockReturnValue(Effect.succeed(cancelled));
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const runtime = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
@@ -207,7 +209,6 @@ describe('vercel workflow task runtime adapter', () => {
     claimInteraction.mockReturnValue(Effect.succeed(claimed));
     resumeHook.mockResolvedValue(undefined);
 
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const createRuntime = () =>
       createVercelWorkflowTaskRuntime({
         taskRunStore: {
@@ -269,7 +270,6 @@ describe('vercel workflow task runtime adapter', () => {
     };
     loadSource.mockReturnValue(Effect.succeed(source));
     claimInteraction.mockReturnValue(Effect.succeed(undefined));
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const runtime = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
@@ -329,7 +329,6 @@ describe('vercel workflow task runtime adapter', () => {
       }),
     );
     getSnapshot.mockReturnValue(Effect.succeed(snapshot));
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const runtime = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
@@ -384,7 +383,6 @@ describe('vercel workflow task runtime adapter', () => {
       .mockReturnValueOnce(Effect.succeed(claimed))
       .mockReturnValueOnce(Effect.succeed(undefined));
     resumeHook.mockResolvedValue(undefined);
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const runtime = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
@@ -449,7 +447,6 @@ describe('vercel workflow task runtime adapter', () => {
     );
     resumeHook.mockRejectedValue(new Error('hook unavailable'));
     update.mockImplementation((identity, patch) => Effect.succeed({ ...identity, ...patch }));
-    const { createVercelWorkflowTaskRuntime } = await import('./runtime.js');
     const runtime = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,

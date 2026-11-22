@@ -1,4 +1,4 @@
-import type { AnyEntityRef } from '../../../data-graph/ref/index.js';
+import type { AnyEntityRef } from '../../../model/entity/ref/model.js';
 
 import type { GraphClientCacheEntityRecord } from './records.js';
 

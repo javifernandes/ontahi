@@ -1,7 +1,6 @@
 import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from '../../../data-graph/command.js';
-import type { AnyEntityDefinition } from '../../../data-graph/definitions.js';
 import type { EntityMutationCommandExecutionRuntime } from '../../../data-graph/entity-mutation-command.js';
 import {
   resolveQuerySpec,
@@ -9,7 +8,6 @@ import {
   type QueryOrView,
   type QuerySpec,
 } from '../../../data-graph/query.js';
-import { getEntityIdentityLocator } from '../../../data-graph/ref/index.js';
 import {
   liftEntityReferenceFieldValues,
   normalizeEntityReferenceJoinValue,
@@ -30,8 +28,10 @@ import type {
   DataGraphExecutionRuntime,
   DataGraphObservationRuntime,
 } from '../../../data-graph/runtime.js';
-import { selectionAnd } from '../../../data-graph/selection-ast.js';
 import type { DataGraphTransactionCapability } from '../../../data-graph/transaction.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
+import { selectionAnd } from '../../../model/query/selection-ast.js';
 import { isJsonValue } from '../../../value/json.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
