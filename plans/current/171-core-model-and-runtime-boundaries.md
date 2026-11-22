@@ -305,6 +305,14 @@ now preserve compatibility through re-exports only; direct runtime consumers use
 This removes about 3,000 lines of protocol and policy execution behavior from the historical bucket
 without changing the package-root API or combining the move with protocol redesign.
 
+That checkpoint also owns the adjacent Query runtime boundary rather than stopping at wire parsing.
+Portable Query declarations, View composition, Selection budgets, and relation resolution now live
+under `model/query`; reference lowering and adapter-neutral planning live under `computation`; and
+Query binding, variant binding, and bound Selection assembly live under `runtime/query`. Historical
+paths remain compatibility re-exports. The move corrected the initial classification of Selection
+assembly: because it composes bound reads, commands, and Effects, it is runtime assembly rather than
+a pure computation.
+
 The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
 Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than
