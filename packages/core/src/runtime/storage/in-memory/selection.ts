@@ -20,7 +20,7 @@ import { InMemoryDataGraphError } from './command.js';
 export const lowerInMemoryRelationSelection = <TEntity extends AnyEntityDefinition, TResult>(
   spec: QuerySpec<TEntity, TResult>,
   entities: readonly AnyEntityDefinition[],
-  evaluate: (read: RelatedRootReadSpec) => Array<Record<string, unknown>>,
+  evaluate: (read: RelatedRootReadSpec<any, any, any, any, any>) => Array<Record<string, unknown>>,
 ): QuerySpec<TEntity, TResult> => {
   if (!hasRelationImage(spec.selection)) return spec;
   const lower = (

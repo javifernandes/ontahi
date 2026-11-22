@@ -266,7 +266,7 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
   ];
 
   const withRelatedTargetPredicate = (
-    spec: RelatedRootReadSpec,
+    spec: RelatedRootReadSpec<any, any, any, any, any>,
     targetField: string,
     sourceValues: readonly unknown[],
   ): QuerySpec => {
