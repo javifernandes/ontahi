@@ -313,6 +313,13 @@ paths remain compatibility re-exports. The move corrected the initial classifica
 assembly: because it composes bound reads, commands, and Effects, it is runtime assembly rather than
 a pure computation.
 
+Portable Graph Command intent, fluent Selection values, contextual Selection declarations, and
+classified Entity Variant reads now also have model owners. Their previous dependency on the
+composite Graph Schema parser existed only to validate Selection expressions constructed by their
+own typed builders; a model-owned field validator preserves that failure behavior without creating
+a model-to-schema-composition inversion. Named Selection factories remain the deliberate exception:
+they accept user-provided schemas and stay at the composition seam until schema compilation moves.
+
 The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
 Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than
