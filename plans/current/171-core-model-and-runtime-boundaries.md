@@ -320,6 +320,11 @@ own typed builders; a model-owned field validator preserves that failure behavio
 a model-to-schema-composition inversion. Named Selection factories remain the deliberate exception:
 they accept user-provided schemas and stay at the composition seam until schema compilation moves.
 
+Named Selection factories now make that seam explicit under `runtime/query`: their declarations
+produce portable Selection values, but their compiler reflects composite Graph schemas and parses
+untrusted invocation input. The historical file is a facade, and a later schema-boundary pass can
+move the generic parsing dependency without reopening the Query model.
+
 The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
 Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than
