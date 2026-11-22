@@ -299,6 +299,12 @@ execution modules still contain real implementation. The first retirement checkp
 locks the accepted dependency direction with an executable architecture test: production `value`,
 `model`, and `computation` modules may no longer import `data-graph` or inward runtime layers.
 
+The second retirement checkpoint assigns the Graph Command and Graph Read protocols and dispatchers
+to `runtime/protocol/command` and `runtime/protocol/read`. The four historical `data-graph` modules
+now preserve compatibility through re-exports only; direct runtime consumers use the new owners.
+This removes about 3,000 lines of protocol and policy execution behavior from the historical bucket
+without changing the package-root API or combining the move with protocol redesign.
+
 The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
 Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than

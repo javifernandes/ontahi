@@ -1,12 +1,5 @@
 import { Effect, Stream } from 'effect';
 
-import {
-  graphReadProtocolError,
-  isGraphReadProtocolError,
-  parseGraphReadRequest,
-  type GraphReadProtocolError,
-  type GraphReadRequestV1,
-} from '../../data-graph/read-protocol.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
@@ -29,6 +22,13 @@ import {
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
 } from './envelope.js';
+import {
+  graphReadProtocolError,
+  isGraphReadProtocolError,
+  parseGraphReadRequest,
+  type GraphReadProtocolError,
+  type GraphReadRequestV1,
+} from './read/protocol.js';
 
 export const RUNTIME_PROTOCOL_SESSION_NAME = 'ontahi.runtime.session' as const;
 export const RUNTIME_PROTOCOL_SESSION_VERSION = 1 as const;

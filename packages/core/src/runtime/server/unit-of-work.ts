@@ -1,9 +1,5 @@
 import { Effect, Exit, Fiber, Runtime } from 'effect';
 
-import {
-  toGraphCommandRequest,
-  type GraphCommandRequest,
-} from '../../data-graph/command-protocol.js';
 import type {
   CommittedMutation,
   CommittedMutationProvenance,
@@ -13,6 +9,7 @@ import type { AppliedMutationOutcome } from '../../data-graph/mutation-reaction.
 import { normalizeEntityRef, type AnyEntityRef } from '../../data-graph/ref/index.js';
 import type { SelectionAst } from '../../data-graph/selection-ast.js';
 import { cloneJson } from '../../value/json.js';
+import { toGraphCommandRequest, type GraphCommandRequest } from '../protocol/command/protocol.js';
 
 import { getServerRuntimeConfig } from './config.js';
 import {

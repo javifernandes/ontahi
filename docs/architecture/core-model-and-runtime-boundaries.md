@@ -232,6 +232,13 @@ portable Entity, Ref, Relation, Selection AST, operation-output, and mapping con
 Imports that remain point to mixed implementations with no complete replacement boundary yet and
 form the concrete backlog for the next retirement pass.
 
+The next retirement pass moves the complete Graph Command and Graph Read wire protocols and their
+policy dispatchers under `runtime/protocol/command` and `runtime/protocol/read`. Together these four
+modules account for roughly 3,000 lines of protocol parsing, validation, authorization, capability
+discovery, and dispatch behavior. Their historical `data-graph` files are compatibility-only
+re-exports, while runtime protocol, transport, session, and unit-of-work consumers use the explicit
+runtime owners directly.
+
 ## Slice 1 decisions
 
 1. Adopt the dependency directions above as the migration rule.
