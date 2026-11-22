@@ -7,6 +7,7 @@ import {
   relationship,
   relationshipSet,
   Selection,
+  toGraphCommandRequest,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
 import {
@@ -515,7 +516,7 @@ describe('Fetch graph read executor', () => {
           provenance: 'captured' as const,
           effect: {
             kind: 'graph-command' as const,
-            request: { version: 1 as const, kind: 'graph-command' as const, command },
+            request: toGraphCommandRequest(command),
           },
         },
       ],
