@@ -360,6 +360,10 @@ describe('runtime-bound data graph api', () => {
     });
 
     const namedFromSelection = selection.named('bookBySlug');
+    const namedFromStructuralSelection = api.namedGraphRead('allBooks', {
+      root: Book,
+      build: () => query(Book).build(),
+    });
     const namedFromEntity = api.namedGraphRead(
       'bookBySlugParam',
       Book,
@@ -370,6 +374,7 @@ describe('runtime-bound data graph api', () => {
     );
 
     expect(namedFromSelection.name).toBe('bookBySlug');
+    expect(namedFromStructuralSelection.name).toBe('allBooks');
     expect(namedFromEntity.name).toBe('bookBySlugParam');
     await expect(
       Effect.runPromise(namedFromEntity.get({ slug: 'progbook' }, { authority: 'viewer' })),

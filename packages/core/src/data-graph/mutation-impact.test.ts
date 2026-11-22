@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GraphCommandRequest } from './command-protocol.js';
+import { toGraphCommandRequest, type GraphCommandRequest } from './command-protocol.js';
 import {
   isCommittedMutationSet,
   mayAffectGraphRead,
@@ -24,7 +24,7 @@ const read = (
 });
 
 const mutation = (command: GraphCommandRequest['command']): CommittedMutation => ({
-  effect: { kind: 'graph-command', request: { version: 3, kind: 'graph-command', command } },
+  effect: { kind: 'graph-command', request: toGraphCommandRequest(command) },
   provenance: 'captured',
 });
 

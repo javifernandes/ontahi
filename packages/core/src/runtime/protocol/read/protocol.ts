@@ -5,7 +5,7 @@ import {
 } from '../../../data-graph/entity-variant-contract.js';
 import type { QueryBuilder, QuerySpec } from '../../../data-graph/query.js';
 import { isEntityRef } from '../../../data-graph/ref/index.js';
-import { parseGraphSchema } from '../../../data-graph/schema.js';
+import { GraphSchemaValidationError, parseGraphSchema } from '../../../data-graph/schema.js';
 import {
   assertNoRelationImage,
   toSelectionAst,
@@ -493,10 +493,20 @@ export const resolveGraphReadRequest = (
         graphSchema.selection(entity, { entities: options.entities }),
         request.selection,
       ).expression;
-    } catch {
+    } catch (error) {
+      const diagnostic =
+        error instanceof GraphSchemaValidationError
+          ? error.issues
+              .map(issue => issue.message)
+              .find(message =>
+                /^(Unknown field|Unknown Selection source entity|Relation .+ does not target)/.test(
+                  message,
+                ),
+              )
+          : undefined;
       return {
         success: false,
-        error: selectionError('Invalid contextual Selection for the receiver model.'),
+        error: selectionError(diagnostic ?? 'Invalid contextual Selection for the receiver model.'),
       };
     }
   } else {

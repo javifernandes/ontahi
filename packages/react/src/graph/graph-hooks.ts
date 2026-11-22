@@ -16,8 +16,8 @@ import {
   type EntityMutationDelta,
   type ManyToManyRelationshipCommand,
   type OrderedRelationshipCommand,
+  type PlainGraphRead,
   type RelationshipCommandResult,
-  type QueryOrView,
   type ViewDefinition,
 } from '@ontahi/core/data-graph';
 import { executionIdentityCacheKey } from '@ontahi/core/runtime/identity';
@@ -58,14 +58,14 @@ import {
 
 const isQueryOrView = <TResult>(
   read: Exclude<GraphReadSource<TResult>, { kind: 'graph-read-expression' }>,
-): read is QueryOrView<any, TResult> => 'kind' in read;
+): read is PlainGraphRead<any, TResult> => 'kind' in read;
 
 const isBuildableRead = <TResult>(
   read: Exclude<GraphReadSource<TResult>, { kind: 'graph-read-expression' }>,
 ): read is BuildableRead<TResult> => typeof (read as BuildableRead<TResult>).build === 'function';
 
 const isNamedView = <TResult>(
-  read: QueryOrView<any, TResult>,
+  read: PlainGraphRead<any, TResult>,
 ): read is ViewDefinition<any, any, TResult> => 'kind' in read && read.kind === 'view';
 
 type PlainGraphReadSource<TResult> = Exclude<
@@ -74,7 +74,7 @@ type PlainGraphReadSource<TResult> = Exclude<
 >;
 
 const resolveGraphRead = <TResult>(read: PlainGraphReadSource<TResult>) =>
-  (isQueryOrView(read) ? read : isBuildableRead(read) ? read.build() : read) as QueryOrView<
+  (isQueryOrView(read) ? read : isBuildableRead(read) ? read.build() : read) as PlainGraphRead<
     any,
     TResult
   >;

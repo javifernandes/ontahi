@@ -36,7 +36,30 @@ type AnyGraphCommand =
   | RelationshipCommand
   | ManyToManyRelationshipCommand
   | OrderedRelationshipCommand;
-type GraphCommandV1 = Exclude<AnyGraphCommand, OrderedRelationshipCommand>;
+type TargetedEntityMutationCommand = Exclude<EntityMutationCommand, { action: 'create' }>;
+type WithRefTarget<TCommand extends TargetedEntityMutationCommand> = TCommand extends unknown
+  ? Omit<TCommand, 'target'> & { readonly target: AnyEntityRef }
+  : never;
+type WithoutCondition<TCommand extends TargetedEntityMutationCommand> = TCommand extends unknown
+  ? Omit<TCommand, 'target' | 'if'> & {
+      readonly target: AnyEntityRef;
+      readonly if?: never;
+    }
+  : never;
+type RefEntityMutationCommand =
+  | Extract<EntityMutationCommand, { action: 'create' }>
+  | WithRefTarget<TargetedEntityMutationCommand>;
+type GraphCommandV1 =
+  | Extract<EntityMutationCommand, { action: 'create' }>
+  | WithoutCondition<TargetedEntityMutationCommand>
+  | RelationshipCommand
+  | ManyToManyRelationshipCommand;
+type GraphCommandV2 =
+  | RefEntityMutationCommand
+  | RelationshipCommand
+  | ManyToManyRelationshipCommand
+  | OrderedRelationshipCommand;
+type GraphCommandV3 = Exclude<AnyGraphCommand, OrderedRelationshipCommand>;
 
 export type GraphCommandRequestV1 = {
   readonly version: 1;
@@ -47,13 +70,13 @@ export type GraphCommandRequestV1 = {
 export type GraphCommandRequestV2 = {
   readonly version: 2;
   readonly kind: 'graph-command';
-  readonly command: AnyGraphCommand;
+  readonly command: GraphCommandV2;
 };
 
 export type GraphCommandRequestV3 = {
   readonly version: 3;
   readonly kind: 'graph-command';
-  readonly command: AnyGraphCommand;
+  readonly command: GraphCommandV3;
 };
 
 export type GraphCommandRequest =
@@ -202,8 +225,8 @@ export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandReq
       ? { version: 3, kind: 'graph-command', command }
       : command.kind === 'ordered-relationship-command' ||
           (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
-        ? { version: 2, kind: 'graph-command', command }
-        : { version: 1, kind: 'graph-command', command };
+        ? { version: 2, kind: 'graph-command', command: command as GraphCommandV2 }
+        : { version: 1, kind: 'graph-command', command: command as GraphCommandV1 };
   if (!isJsonValue(request)) throw new Error('Data graph Command request must be JSON-safe.');
   return cloneJson(request);
 };

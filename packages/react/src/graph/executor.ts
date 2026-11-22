@@ -6,6 +6,7 @@ import type {
   GraphReadIntent,
   GraphSchemaLike,
   InferGraphSchemaClientInput,
+  PlainGraphRead,
   QueryOrView,
   QuerySpec,
   ManyToManyRelationshipCommand,
@@ -99,7 +100,7 @@ export type BuildableRead<TResult> = {
   build: () => QuerySpec<any, TResult>;
 };
 
-type PlainGraphReadSource<TResult> = QueryOrView<any, TResult> | BuildableRead<TResult>;
+type PlainGraphReadSource<TResult> = PlainGraphRead<any, TResult> | BuildableRead<TResult>;
 
 export type GraphReadSource<TResult = unknown> =
   | PlainGraphReadSource<TResult>
@@ -108,14 +109,14 @@ export type GraphReadSource<TResult = unknown> =
 export type ReadParams<TRead> =
   TRead extends GraphReadExpression<infer TSource, any, any>
     ? ReadParams<TSource>
-    : TRead extends QueryOrView<infer TParams, any>
+    : TRead extends PlainGraphRead<infer TParams, any>
       ? TParams
       : undefined;
 
 export type ReadResult<TRead> =
   TRead extends GraphReadExpression<any, any, infer TResult>
     ? TResult
-    : TRead extends QueryOrView<any, infer TResult>
+    : TRead extends PlainGraphRead<any, infer TResult>
       ? TResult
       : TRead extends BuildableRead<infer TResult>
         ? TResult

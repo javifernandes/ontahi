@@ -77,7 +77,7 @@ const resolveRelationTraversal = (
     ...Object.entries(targetEntity.relations)
       .filter(([, relation]) => relation.target.name === sourceEntity.name)
       .map(([relationName]) => ({ relationName, relationOwner: 'target' as const })),
-    ...(targetEntity === sourceEntity
+    ...(targetEntity.name === sourceEntity.name
       ? []
       : Object.entries(sourceEntity.relations)
           .filter(([, relation]) => relation.target.name === targetEntity.name)
@@ -85,10 +85,12 @@ const resolveRelationTraversal = (
   ];
 
   if (through) {
-    const candidate = candidates.find(relation => relation.relationName === through);
-    if (candidate) {
-      return candidate;
-    }
+    const matches = candidates.filter(relation => relation.relationName === through);
+    if (matches.length === 1) return matches[0]!;
+    if (matches.length > 1)
+      throw new Error(
+        `Relation ${through} is declared by both ${targetEntity.name} and ${sourceEntity.name}; the string selector remains ambiguous.`,
+      );
     if (through in targetEntity.relations || through in sourceEntity.relations) {
       throw new Error(
         `Relation ${through} does not connect ${targetEntity.name} and ${sourceEntity.name}.`,
@@ -715,6 +717,22 @@ type GraphSelectionRead<TEntity extends AnyEntityDefinition, TResult> = Pick<
   'build' | 'root'
 >;
 
+type NamedGraphRead<TReadError, TReadOptions> = {
+  <TEntity extends AnyEntityDefinition, TResult>(
+    name: string,
+    selection: GraphSelectionRead<TEntity, TResult>,
+  ): BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
+  <TEntity extends AnyEntityDefinition>(
+    name: string,
+    entity: TEntity,
+  ): BoundGraphRead<ViewDefinition<any, TEntity, never>, TReadError, TReadOptions>;
+  <TParams, TEntity extends AnyEntityDefinition, TResult>(
+    name: string,
+    entity: TEntity,
+    build: (params: TParams) => GraphSelectionRead<TEntity, TResult>,
+  ): BoundGraphRead<ViewDefinition<TParams, TEntity, TResult>, TReadError, TReadOptions>;
+};
+
 export type GraphSelectionAssembly<
   TReadError = never,
   TReadOptions = undefined,
@@ -751,15 +769,7 @@ export type GraphSelectionAssembly<
     TCommandError,
     TCommandOptions
   >;
-  namedGraphRead: <TParams, TEntity extends AnyEntityDefinition, TResult>(
-    name: string,
-    selectionOrEntity: GraphSelectionRead<TEntity, TResult> | TEntity,
-    build?: (params: TParams) => GraphSelectionRead<TEntity, TResult>,
-  ) => BoundGraphRead<
-    ViewDefinition<TParams | undefined, TEntity, TResult>,
-    TReadError,
-    TReadOptions
-  >;
+  namedGraphRead: NamedGraphRead<TReadError, TReadOptions>;
 };
 
 export const createGraphSelectionAssembly = <
@@ -781,21 +791,17 @@ export const createGraphSelectionAssembly = <
     name: string,
     selectionOrEntity: GraphSelectionRead<TEntity, TResult> | TEntity,
     build?: (params: TParams) => GraphSelectionRead<TEntity, TResult>,
-  ): BoundGraphRead<
-    ViewDefinition<TParams | undefined, TEntity, TResult>,
-    TReadError,
-    TReadOptions
-  > => {
-    if (selectionOrEntity instanceof BaseGraphSelection) {
-      const selection = selectionOrEntity;
+  ) => {
+    if (
+      build === undefined &&
+      'root' in selectionOrEntity &&
+      typeof selectionOrEntity.build === 'function'
+    ) {
+      const selection = selectionOrEntity as GraphSelectionRead<TEntity, TResult>;
 
       return bindGraphRead(
         view<undefined, TEntity, TResult>(name, selection.root, () => selection.build()),
-      ) as BoundGraphRead<
-        ViewDefinition<TParams | undefined, TEntity, TResult>,
-        TReadError,
-        TReadOptions
-      >;
+      ) as BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
     }
 
     const entityDefinition = selectionOrEntity as TEntity;
@@ -807,11 +813,7 @@ export const createGraphSelectionAssembly = <
       view<TParams, TEntity, TResult>(name, entityDefinition, ({ params }) =>
         build(params).build(),
       ),
-    ) as BoundGraphRead<
-      ViewDefinition<TParams | undefined, TEntity, TResult>,
-      TReadError,
-      TReadOptions
-    >;
+    ) as BoundGraphRead<ViewDefinition<TParams, TEntity, TResult>, TReadError, TReadOptions>;
   };
 
   let createGraphSelection!: <
@@ -1085,6 +1087,6 @@ export const createGraphSelectionAssembly = <
     bindSelection: createBoundSelection,
     bindSelectionEntity,
     createGraphSelection,
-    namedGraphRead,
+    namedGraphRead: namedGraphRead as NamedGraphRead<TReadError, TReadOptions>,
   };
 };

@@ -22,7 +22,7 @@ import type {
   GraphSchemaFields,
   GraphTransformDefinition,
 } from '../definitions.js';
-import { resolveQuerySpec, type QueryOrView } from '../query.js';
+import { resolveQuerySpec, type PlainGraphRead } from '../query.js';
 import type { ViewNode } from '../view.js';
 
 export * from '../../model/operation/output.js';
@@ -186,7 +186,7 @@ const graphReadEntityOutput = (
 
 /** Describes one complete many-result Query snapshot for Entity identity reconciliation. */
 export const getGraphReadOutputDescriptor = <TParams, TResult>(
-  read: QueryOrView<TParams, TResult>,
+  read: PlainGraphRead<TParams, TResult>,
   params: TParams,
 ): GraphOutputArrayDescriptor => {
   const spec = resolveQuerySpec(read, params);

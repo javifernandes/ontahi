@@ -570,6 +570,12 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         : undefined;
     const selectionTarget =
       command.action !== 'create' && !isEntityRef(command.target) ? command.target : undefined;
+    if (selectionTarget && !isRecord(selectionTarget.expression)) {
+      return graphCommandProtocolError(
+        'invalid_selection',
+        'Selection mutation target requires an expression.',
+      );
+    }
     const allowed =
       isRecord(declaration) &&
       (command.action === 'delete' ||

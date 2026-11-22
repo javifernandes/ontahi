@@ -51,7 +51,15 @@ export type RelatedRootReadSpec<
   __result?: RelatedRootReadResult<TMode, TSourceResult, TResult, TTarget>;
 };
 
-export const isRelatedRootReadSpec = (value: unknown): value is RelatedRootReadSpec =>
+export const isRelatedRootReadSpec = (
+  value: unknown,
+): value is RelatedRootReadSpec<
+  AnyEntityDefinition,
+  AnyEntityDefinition,
+  unknown,
+  unknown,
+  RelatedRootReadMode
+> =>
   !!value && typeof value === 'object' && (value as { kind?: string }).kind === 'related-root-read';
 
 export const createRelatedRootReadSpec = <

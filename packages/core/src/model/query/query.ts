@@ -120,6 +120,7 @@ export class RelationQueryBuilder<
   TRelationKind extends RelationKind = RelationKind,
   TItem = InferEntityRecord<TEntity['fields']>,
   TNullable extends boolean = boolean,
+  TIncludes extends Record<string, AnyRelationQueryBuilder> = {},
 > {
   readonly kind = 'relation-builder';
   declare readonly __item: TItem;
@@ -130,27 +131,32 @@ export class RelationQueryBuilder<
     readonly relationKind: TRelationKind,
     readonly entity: TEntity,
     readonly selectShape?: Record<string, SelectionValue>,
-    readonly includeShape?: Record<string, AnyRelationQueryBuilder>,
+    readonly includeShape?: TIncludes,
     readonly orderBySpecs: readonly OrderSpec[] = [],
     readonly limitValue?: number,
     readonly selectionExpression: SelectionExpression = selectionAll(),
     readonly nullable: boolean = false,
   ) {}
 
-  include<TInclude extends Record<string, AnyRelationQueryBuilder>>(
-    build: (root: EntityIncludeProxy<TEntity>) => TInclude,
+  include<TNextIncludes extends Record<string, AnyRelationQueryBuilder>>(
+    build: (root: EntityIncludeProxy<TEntity>) => TNextIncludes,
   ) {
+    const includeShape = {
+      ...this.includeShape,
+      ...build(createEntityIncludeProxy(this.entity)),
+    };
     return new RelationQueryBuilder<
       TEntity,
       TRelationKind,
-      Simplify<Omit<TItem, keyof TInclude> & InferIncludeShape<TInclude>>,
-      TNullable
+      Simplify<Omit<TItem, keyof TNextIncludes> & InferIncludeShape<TNextIncludes>>,
+      TNullable,
+      TIncludes & TNextIncludes
     >(
       this.relationName,
       this.relationKind,
       this.entity,
       this.selectShape,
-      build(createEntityIncludeProxy(this.entity)),
+      includeShape as TIncludes & TNextIncludes,
       this.orderBySpecs,
       this.limitValue,
       this.selectionExpression,
@@ -164,8 +170,9 @@ export class RelationQueryBuilder<
     return new RelationQueryBuilder<
       TEntity,
       TRelationKind,
-      InferSelectionShape<TSelection>,
-      TNullable
+      Simplify<InferSelectionShape<TSelection> & InferIncludeShape<TIncludes>>,
+      TNullable,
+      TIncludes
     >(
       this.relationName,
       this.relationKind,
@@ -183,7 +190,7 @@ export class RelationQueryBuilder<
     const result = build(createEntityFieldProxy(this.entity));
     const orderSpec = result.kind === 'field-ref' ? result.asc() : result;
 
-    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable, TIncludes>(
       this.relationName,
       this.relationKind,
       this.entity,
@@ -197,7 +204,7 @@ export class RelationQueryBuilder<
   }
 
   limit(limitValue: number) {
-    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable, TIncludes>(
       this.relationName,
       this.relationKind,
       this.entity,
@@ -212,7 +219,7 @@ export class RelationQueryBuilder<
 
   /** Receiver-owned relation membership; callers normally author root Selections instead. */
   withSelection(selectionExpression: SelectionExpression) {
-    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable, TIncludes>(
       this.relationName,
       this.relationKind,
       this.entity,
@@ -296,7 +303,7 @@ const createEntitySelectionProxy = <TEntity extends AnyEntityDefinition>(
   for (const [relationName, relationDefinition] of Object.entries(
     entityDefinition.relations,
   ) as Array<[string, RelationDefinition<RelationKind, AnyEntityDefinition>]>) {
-    if (relationName in entityDefinition.fields) continue;
+    if (hasOwn(entityDefinition.fields, relationName)) continue;
     proxy[relationName] = new RelationQueryBuilder(
       relationName,
       relationDefinition.relationKind,

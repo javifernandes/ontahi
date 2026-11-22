@@ -19,7 +19,10 @@ export const withinSelectionBudget = (expression: unknown): boolean => {
             ? [current.source.expression]
             : [];
     if (children.length > 1000) return false;
-    pending.push(...children.map(child => ({ expression: child, depth: depth + 1 })));
+    for (let index = 0; index < children.length; index++) {
+      if (!(index in children)) return false;
+      pending.push({ expression: children[index], depth: depth + 1 });
+    }
   }
   return true;
 };

@@ -1,5 +1,5 @@
 import { getGraphReadOutputDescriptor } from '../../../data-graph/output/index.js';
-import type { QueryOrView } from '../../../data-graph/query.js';
+import type { PlainGraphRead } from '../../../model/query/query.js';
 
 import type { GraphClientCacheWriteResult } from './records.js';
 
@@ -13,7 +13,7 @@ export type GraphClientCacheQueryReconciliation<TResult> = {
 /** Reconciles one complete Query snapshot through Entity identities before exposing its value. */
 export const reconcileGraphReadSnapshot = <TParams, TResult>(
   cache: GraphClientCache,
-  read: QueryOrView<TParams, TResult>,
+  read: PlainGraphRead<TParams, TResult>,
   params: TParams,
   value: TResult[],
 ): GraphClientCacheQueryReconciliation<TResult> => {
