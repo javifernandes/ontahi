@@ -6,6 +6,15 @@ import { describe, expect, it } from 'vitest';
 
 const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
 
+const referencesForbiddenNamespace = (line: string, namespace: string): boolean => {
+  const namespaceRoot = namespace.endsWith('/') ? namespace.slice(0, -1) : namespace;
+  return (
+    line.includes(`${namespaceRoot}/`) ||
+    line.includes(`${namespaceRoot}'`) ||
+    line.includes(`${namespaceRoot}\"`)
+  );
+};
+
 const productionTypeScriptFiles = async (directory: string): Promise<string[]> => {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(
@@ -30,7 +39,7 @@ const findForbiddenImports = async (
       return source
         .split('\n')
         .flatMap((line, index) =>
-          forbiddenSegments.some(segment => line.includes(segment))
+          forbiddenSegments.some(segment => referencesForbiddenNamespace(line, segment))
             ? [`${path.relative(sourceRoot, file)}:${index + 1}: ${line.trim()}`]
             : [],
         );
@@ -40,6 +49,15 @@ const findForbiddenImports = async (
 };
 
 describe('Core architecture boundaries', () => {
+  it.each([
+    "import '@ontahi/core/data-graph';",
+    "import '@ontahi/core/data-graph/query';",
+    "import '../data-graph';",
+    "import '../data-graph/query';",
+  ])('recognizes forbidden namespace roots and subpaths in %s', source => {
+    expect(referencesForbiddenNamespace(source, '/data-graph/')).toBe(true);
+  });
+
   it.each([
     ['value', ['/model/', '/computation/', '/runtime/', '/data-graph/']],
     ['model', ['/computation/', '/runtime/', '/data-graph/']],
