@@ -5,6 +5,7 @@ import {
   isEntityVariantDescriptor,
   type EntityVariantDescriptor,
 } from '../../entity/variant-contract.js';
+import { VariantSelection } from '../../entity/variant-selection.js';
 import type { EntityVariantDiscriminator } from '../../entity/variant.js';
 import type { SelectionExpression } from '../selection-ast.js';
 
@@ -115,8 +116,10 @@ const attachContextualSelections = <
           !/^[A-Za-z][A-Za-z0-9_]*$/.test(name) ||
           name in Selection.prototype ||
           name in GraphSelection.prototype ||
+          name in VariantSelection.prototype ||
           [
             'root',
+            'variant',
             'expression',
             'name',
             'cardinality',

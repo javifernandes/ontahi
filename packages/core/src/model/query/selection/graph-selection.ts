@@ -18,6 +18,11 @@ type EntityMutationPayload<TEntity extends AnyEntityDefinition> = Partial<
   InferEntityMutationRecord<TEntity['fields']>
 >;
 
+export type NonEmptyMutationFieldNames<TEntity extends AnyEntityDefinition> = readonly [
+  EntityMutationFieldName<TEntity>,
+  ...EntityMutationFieldName<TEntity>[],
+];
+
 export type QueryWhereArg<TEntity extends AnyEntityDefinition, TResult> = Parameters<
   QueryBuilder<TEntity, TResult>['where']
 >[0];
@@ -75,15 +80,19 @@ export const createUpdateCommandSpec = <TEntity extends AnyEntityDefinition>(
     returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   },
-): GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> => ({
-  kind: 'command',
-  operation: 'update',
-  root,
-  selection: resolveEntitySelection(root, selection),
-  payload,
-  ...(options?.returning ? { returning: [...options.returning] } : {}),
-  ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
-});
+): GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> => {
+  if (options?.returning && options.returning.length === 0)
+    throw new TypeError('Graph Command returning fields must not be empty.');
+  return {
+    kind: 'command',
+    operation: 'update',
+    root,
+    selection: resolveEntitySelection(root, selection),
+    payload,
+    ...(options?.returning ? { returning: [...options.returning] } : {}),
+    ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
+  };
+};
 
 export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TResult = void>(
   root: TEntity,
@@ -92,14 +101,18 @@ export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TRe
     returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   },
-): GraphCommandSpec<TEntity, never, TResult> => ({
-  kind: 'command',
-  operation: 'delete',
-  root,
-  selection: resolveEntitySelection(root, selection),
-  ...(options?.returning ? { returning: [...options.returning] } : {}),
-  ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
-});
+): GraphCommandSpec<TEntity, never, TResult> => {
+  if (options?.returning && options.returning.length === 0)
+    throw new TypeError('Graph Command returning fields must not be empty.');
+  return {
+    kind: 'command',
+    operation: 'delete',
+    root,
+    selection: resolveEntitySelection(root, selection),
+    ...(options?.returning ? { returning: [...options.returning] } : {}),
+    ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
+  };
+};
 
 export const createInsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
@@ -273,7 +286,7 @@ export class GraphSelection<
     return this.update(payload);
   }
 
-  updateReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ): GraphCommand<
@@ -288,7 +301,7 @@ export class GraphSelection<
     >;
   }
 
-  updateOneReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateOneReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, EntityMutationPayload<TEntity>, PickEntityFields<TEntity, TFieldNames>> {
@@ -302,7 +315,7 @@ export class GraphSelection<
     >;
   }
 
-  updateManyReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateManyReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ): GraphCommand<
@@ -325,7 +338,7 @@ export class GraphSelection<
     return this.delete();
   }
 
-  deleteOneReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteOneReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, PickEntityFields<TEntity, TFieldNames>> {
     return this.deleteCommand<PickEntityFields<TEntity, TFieldNames>>({
@@ -334,7 +347,7 @@ export class GraphSelection<
     });
   }
 
-  deleteManyReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteManyReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, Array<PickEntityFields<TEntity, TFieldNames>>> {
     return this.deleteCommand<Array<PickEntityFields<TEntity, TFieldNames>>>({
@@ -372,7 +385,11 @@ export class GraphSelection<
     return this.factories.createCommand(
       createUpdateCommandSpec(this.root, this.builder.spec.selection, payload, {
         ...options,
-        ...(this.builder.spec.cardinality === 'one' ? { cardinality: 'one' as const } : {}),
+        ...(options?.cardinality === undefined &&
+        options?.returning === undefined &&
+        this.builder.spec.cardinality === 'one'
+          ? { cardinality: 'one' as const }
+          : {}),
       }),
     );
   }
@@ -384,7 +401,11 @@ export class GraphSelection<
     return this.factories.createCommand<TEntity, never, TResultCommand>(
       createDeleteCommandSpec<TEntity, TResultCommand>(this.root, this.builder.spec.selection, {
         ...options,
-        ...(this.builder.spec.cardinality === 'one' ? { cardinality: 'one' as const } : {}),
+        ...(options?.cardinality === undefined &&
+        options?.returning === undefined &&
+        this.builder.spec.cardinality === 'one'
+          ? { cardinality: 'one' as const }
+          : {}),
       }),
     );
   }

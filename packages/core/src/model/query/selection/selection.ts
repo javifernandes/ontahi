@@ -25,6 +25,7 @@ import {
   createDeleteCommandSpec,
   createUpdateCommandSpec,
   type EntityMutationFieldName,
+  type NonEmptyMutationFieldNames,
   type PickEntityFields,
   type QueryIncludeArg,
   type QueryOrderByArg,
@@ -199,7 +200,7 @@ export class Selection<
     );
   }
 
-  updateReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: Partial<InferEntityMutationRecord<TEntity['fields']>>,
     fieldNames: TFieldNames,
   ): GraphCommand<
@@ -227,7 +228,7 @@ export class Selection<
     );
   }
 
-  deleteReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteReturning<TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, SelectionReturningResult<TEntity, TFieldNames, TCardinality>> {
     return new GraphCommand(

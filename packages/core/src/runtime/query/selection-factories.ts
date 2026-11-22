@@ -97,6 +97,7 @@ const validateDeclaration = (
         field.kind !== 'field' ||
         !['id', 'string', 'number', 'boolean', 'enum'].includes(field.fieldType) ||
         field.optional ||
+        hasOwn(field, 'defaultValue') ||
         field.derived,
     )
   )
@@ -151,6 +152,37 @@ const bindTemplate = (
     ),
   );
   return selectionReferences([ref]);
+};
+
+const normalizeFactoryExpression = (
+  entity: AnyEntityDefinition,
+  expression: SelectionExpression,
+): SelectionExpression => {
+  if (expression.kind === 'predicate' && expression.operator !== 'isNull') {
+    const field = entity.fields[expression.fieldName];
+    if (!field) return expression;
+    if (expression.operator === 'in')
+      return {
+        ...expression,
+        values: expression.values.map(value => parseGraphSchema(field, value)),
+      };
+    return { ...expression, value: parseGraphSchema(field, expression.value) };
+  }
+  if (expression.kind === 'references')
+    return selectionReferences(
+      expression.refs.map(ref =>
+        createEntityRef(
+          entity,
+          Object.fromEntries(
+            Object.entries(ref.locator).map(([fieldName, value]) => [
+              fieldName,
+              parseGraphSchema(entity.fields[fieldName]!, value),
+            ]),
+          ) as Record<string, JsonValue>,
+        ),
+      ),
+    );
+  return expression;
 };
 
 /** Expand portable authoring data; the eventual receiver still validates membership and policy. */
@@ -237,7 +269,11 @@ export const withSelectionFactories = <
       throw new TypeError(`Unknown Selection factory ${entity.name}.${name}.`);
     const factory = factories[name]!;
     validateDeclaration(entity, name, factory);
-    const { input, expression } = expandSelectionFactory(descriptors[name]!, supplied[name]);
+    const { input, expression: expandedExpression } = expandSelectionFactory(
+      descriptors[name]!,
+      supplied[name],
+    );
+    const expression = normalizeFactoryExpression(entity, expandedExpression);
     // Validate the output against the Entity as well as the declared input schema.
     parseGraphSchema(
       { kind: 'schema.selection', entity, cardinality: 'many' },

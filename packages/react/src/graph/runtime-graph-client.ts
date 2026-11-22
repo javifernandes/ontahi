@@ -4,7 +4,6 @@ import { Stream } from '@ontahi/core/computation/stream';
 import {
   createGraphClientCache,
   createRuntimeBoundDataGraphApi,
-  isRelatedRootReadSpec,
   reconcileGraphReadSnapshot,
   type ClientApplication,
   type GraphClientCache,
@@ -56,15 +55,14 @@ export const createRuntimeGraphClient = <TTransportOptions = unknown>({
       graph.runtime
         .observe(read, params, options)
         .pipe(
-          Stream.map(snapshot =>
-            isRelatedRootReadSpec(read)
-              ? snapshot
-              : reconcileGraphReadSnapshot(
-                  clientCache,
-                  read as PlainGraphRead<TParams, TResult>,
-                  params,
-                  snapshot,
-                ).value,
+          Stream.map(
+            snapshot =>
+              reconcileGraphReadSnapshot(
+                clientCache,
+                read as PlainGraphRead<TParams, TResult>,
+                params,
+                snapshot,
+              ).value,
           ),
         ),
   };

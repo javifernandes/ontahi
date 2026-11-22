@@ -58,7 +58,8 @@ import {
 
 const isQueryOrView = <TResult>(
   read: Exclude<GraphReadSource<TResult>, { kind: 'graph-read-expression' }>,
-): read is PlainGraphRead<any, TResult> => 'kind' in read;
+): read is PlainGraphRead<any, TResult> =>
+  'kind' in read && (read.kind === 'query' || read.kind === 'view');
 
 const isBuildableRead = <TResult>(
   read: Exclude<GraphReadSource<TResult>, { kind: 'graph-read-expression' }>,

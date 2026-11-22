@@ -1,3 +1,4 @@
+import { hasOwn } from '../../value/object.js';
 import type { AnyEntityDefinition } from '../entity/definition.js';
 import { isEntityRef, type AnyEntityRef, type EntityRefLocatorValue } from '../entity/ref/model.js';
 
@@ -103,8 +104,28 @@ export const assertSelectionExpressionFields = (
   expression: SelectionExpression,
 ): void => {
   if (expression.kind === 'predicate') {
-    if (!(expression.fieldName in entity.fields))
+    if (!hasOwn(entity.fields, expression.fieldName))
       throw new TypeError(`Unknown field ${entity.name}.${expression.fieldName}.`);
+    return;
+  }
+  if (expression.kind === 'references') {
+    for (const ref of expression.refs) {
+      if (ref.entityName !== entity.name)
+        throw new TypeError(`Selection references must target ${entity.name}.`);
+      const locatorFields = Object.keys(ref.locator);
+      if (
+        locatorFields.length === 0 ||
+        locatorFields.some(fieldName => !hasOwn(entity.fields, fieldName)) ||
+        !Object.values(entity.refLocators).some(locator => {
+          const declared = [...(locator.fields ?? [])];
+          return (
+            declared.length === locatorFields.length &&
+            declared.every(fieldName => locatorFields.includes(fieldName))
+          );
+        })
+      )
+        throw new TypeError(`Selection reference does not match a ${entity.name} locator.`);
+    }
     return;
   }
   if (expression.kind === 'and' || expression.kind === 'or') {

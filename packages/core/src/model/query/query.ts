@@ -150,13 +150,13 @@ export class RelationQueryBuilder<
       TRelationKind,
       Simplify<Omit<TItem, keyof TNextIncludes> & InferIncludeShape<TNextIncludes>>,
       TNullable,
-      TIncludes & TNextIncludes
+      Omit<TIncludes, keyof TNextIncludes> & TNextIncludes
     >(
       this.relationName,
       this.relationKind,
       this.entity,
       this.selectShape,
-      includeShape as TIncludes & TNextIncludes,
+      includeShape as Omit<TIncludes, keyof TNextIncludes> & TNextIncludes,
       this.orderBySpecs,
       this.limitValue,
       this.selectionExpression,

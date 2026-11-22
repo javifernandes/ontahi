@@ -510,6 +510,12 @@ describe('Entity Mutation Command dispatcher', () => {
       });
 
     await expect(
+      dispatch(toGraphCommandRequest(commandFor({ kind: 'and', operands: [null] })), {
+        authority: undefined,
+      }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'invalid_selection' } });
+
+    await expect(
       dispatch(
         toGraphCommandRequest(
           commandFor({ kind: 'predicate', fieldName: 'title', operator: 'eq', value: 'A' }),

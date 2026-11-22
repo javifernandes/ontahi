@@ -26,6 +26,7 @@ import {
   createUpsertManyCommandSpec,
   type EntityMutationFieldName,
   type GraphSelectionFactories,
+  type NonEmptyMutationFieldNames,
   type QueryIncludeArg,
   type QueryOrderByArg,
   type QuerySelectArg,
@@ -217,7 +218,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -227,7 +228,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateOneReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateOneReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -237,7 +238,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateManyReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -250,7 +251,7 @@ export type BoundGraphSelectionSemanticApi<
   delete: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
   deleteOne: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
   deleteMany: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
-  deleteOneReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteOneReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -259,7 +260,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  deleteManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteManyReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -492,7 +493,7 @@ export type BoundSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  updateReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -503,7 +504,7 @@ export type BoundSelectionSemanticApi<
     TCommandOptions
   >;
   delete: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
-  deleteReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+  deleteReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -722,10 +723,6 @@ type NamedGraphRead<TReadError, TReadOptions> = {
     name: string,
     selection: GraphSelectionRead<TEntity, TResult>,
   ): BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
-  <TEntity extends AnyEntityDefinition>(
-    name: string,
-    entity: TEntity,
-  ): BoundGraphRead<ViewDefinition<any, TEntity, never>, TReadError, TReadOptions>;
   <TParams, TEntity extends AnyEntityDefinition, TResult>(
     name: string,
     entity: TEntity,
@@ -800,7 +797,14 @@ export const createGraphSelectionAssembly = <
       const selection = selectionOrEntity as GraphSelectionRead<TEntity, TResult>;
 
       return bindGraphRead(
-        view<undefined, TEntity, TResult>(name, selection.root, () => selection.build()),
+        view<undefined, TEntity, TResult>(name, selection.root, () => {
+          const spec = selection.build();
+          if (spec.root.name !== selection.root.name)
+            throw new TypeError(
+              `namedGraphRead(${name}) must build a query rooted at ${selection.root.name}.`,
+            );
+          return spec;
+        }),
       ) as BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
     }
 
@@ -939,12 +943,12 @@ export const createGraphSelectionAssembly = <
         asGraphSelection().orderBy(build),
       limit: (limitValue: number) => asGraphSelection().limit(limitValue),
       update: (payload: EntityMutationPayload<TEntity>) => createCommand(update(payload).build()),
-      updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+      updateReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
         payload: EntityMutationPayload<TEntity>,
         fieldNames: TFieldNames,
       ) => createCommand(updateReturning(payload, fieldNames).build()),
       delete: () => createCommand(deleteSelection().build()),
-      deleteReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+      deleteReturning: <TFieldNames extends NonEmptyMutationFieldNames<TEntity>>(
         fieldNames: TFieldNames,
       ) => createCommand(deleteReturning(fieldNames).build()),
       exec: () => asGraphSelection().exec(),
@@ -1079,6 +1083,13 @@ export const createGraphSelectionAssembly = <
       TCommandError,
       TCommandOptions
     >;
+
+    if (bindingTarget && bindingTarget !== entityDefinition) {
+      for (const capability of ['by', 'selectionFactories'] as const) {
+        const descriptor = Object.getOwnPropertyDescriptor(entityDefinition, capability);
+        if (descriptor) Object.defineProperty(boundEntity, capability, descriptor);
+      }
+    }
 
     return boundEntity;
   };

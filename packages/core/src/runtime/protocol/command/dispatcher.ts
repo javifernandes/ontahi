@@ -41,6 +41,7 @@ import { safeParseGraphSchema } from '../../../data-graph/schema.js';
 import type { SelectionExpression, SelectionPredicate } from '../../../data-graph/selection-ast.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
+import { validateGraphReadSelection } from '../read/protocol.js';
 
 import {
   graphCommandProtocolError,
@@ -575,6 +576,14 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         'invalid_selection',
         'Selection mutation target requires an expression.',
       );
+    }
+    if (selectionTarget) {
+      const invalidSelection = validateGraphReadSelection(
+        selectionTarget.expression,
+        policy.entity,
+      );
+      if (invalidSelection)
+        return graphCommandProtocolError('invalid_selection', invalidSelection.error.message);
     }
     const allowed =
       isRecord(declaration) &&

@@ -409,6 +409,12 @@ describe('contextual Selection factories', () => {
         value: 'part',
       })),
     ).toThrow('Unknown field');
+    expect(() =>
+      contextualSelectionFactory(Book, 'nodes', () => ({
+        kind: 'references',
+        refs: [createEntityRef(Book, { id: 'b1' })],
+      })),
+    ).toThrow('must target Node');
     const original = Books.by({ slug: 'alpha' });
     const derived = parts.from(original);
     const wire = derived.toAst();

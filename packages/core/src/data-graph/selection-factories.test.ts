@@ -372,6 +372,7 @@ describe('pure named Selection factories', () => {
     { input: graphSchema.object({ value: field.json() }) },
     { input: graphSchema.object({}) },
     { input: graphSchema.object({ value: field.optional(field.string()) }) },
+    { input: graphSchema.object({ value: field.default(field.string(), 'draft') }) },
     { input: field.string() },
   ])('rejects unsupported declarations before attaching by: %j', override => {
     const Customer = entity('Customer', { id: field.id(), email: field.string() });
@@ -395,6 +396,27 @@ describe('pure named Selection factories', () => {
     });
     expect(() => Customer.by({ bad: { value: 1 } })).toThrow();
     expect(() => withSelectionFactories(Customer, {})).toThrow('already defined');
+  });
+
+  it('normalizes factory predicate values with the target field schema', () => {
+    const Score = withSelectionFactories(
+      entity('Score', { id: field.id(), value: field.number({ coerce: true }) }),
+      {
+        value: {
+          version: 1,
+          input: graphSchema.object({ value: field.string() }),
+          scalarInput: 'value',
+          template: { kind: 'predicate', fieldName: 'value', operator: 'eq', input: 'value' },
+        },
+      },
+    );
+
+    expect(Score.by({ value: '10' }).expression).toEqual({
+      kind: 'predicate',
+      fieldName: 'value',
+      operator: 'eq',
+      value: 10,
+    });
   });
 
   it('rejects a legacy by method collision rather than overriding either meaning', () => {
