@@ -531,17 +531,7 @@ const toBareZodSchema = (schema: GraphSchemaDefinition): ZodType => {
     return toZodEntityViewSchema(schema);
   }
 
-  if (isValueDefinition(schema)) {
-    const valueSchema = z.object(toZodObjectShape(schema.fields));
-
-    return schema.unknownKeys === 'passthrough'
-      ? valueSchema.passthrough()
-      : schema.unknownKeys === 'strict'
-        ? valueSchema.strict()
-        : valueSchema;
-  }
-
-  if (isGraphObjectDefinition(schema)) {
+  if (isValueDefinition(schema) || isGraphObjectDefinition(schema)) {
     const objectSchema = z.object(toZodObjectShape(schema.fields));
 
     return schema.unknownKeys === 'passthrough'
@@ -691,16 +681,11 @@ export const safeParseUnknownGraphSchema = (
       };
 };
 
-export function safeParseGraphSchema<TSchema extends GraphSchemaDefinition>(
+export const safeParseGraphSchema = <TSchema extends GraphSchemaDefinition>(
   schema: TSchema,
   value: unknown,
-): GraphSchemaParseResult<GraphSchemaValue<TSchema>>;
-export function safeParseGraphSchema(
-  schema: GraphSchemaDefinition,
-  value: unknown,
-): GraphSchemaParseResult<unknown> {
-  return safeParseUnknownGraphSchema(schema, value);
-}
+): GraphSchemaParseResult<GraphSchemaValue<TSchema>> =>
+  safeParseUnknownGraphSchema(schema, value) as GraphSchemaParseResult<GraphSchemaValue<TSchema>>;
 
 export const parseGraphSchema = <TSchema extends GraphSchemaDefinition>(
   schema: TSchema,

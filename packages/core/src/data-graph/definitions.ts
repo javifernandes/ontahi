@@ -157,7 +157,6 @@ export type {
   GraphSelectionDefinition,
   GraphTransformDefinition,
   GraphUnionDefinition,
-  InferGraphSchemaFields,
   InferGraphSchemaValue,
   ValueDefinition,
 } from '../model/schema/definition.js';

@@ -66,4 +66,18 @@ describe('graphSchemaDescriptorToJsonSchema', () => {
       },
     });
   });
+
+  it('projects nullable and named descriptors and accepts void output', () => {
+    expect(
+      graphSchemaDescriptorToJsonSchema({
+        kind: 'named',
+        name: 'OptionalTitle',
+        item: { kind: 'nullable', item: { kind: 'scalar', type: 'string' } },
+      }),
+    ).toEqual({
+      title: 'OptionalTitle',
+      anyOf: [{ type: 'string' }, { type: 'null' }],
+    });
+    expect(graphSchemaDescriptorToJsonSchema({ kind: 'void' })).toEqual({});
+  });
 });
