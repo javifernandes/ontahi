@@ -134,6 +134,10 @@ describe('data-graph selection helpers', () => {
     expect(selected.updateMany({ title: 'Updated' }).build().cardinality).toBe('one');
     expect(selected.delete().build().cardinality).toBe('one');
     expect(selected.deleteMany().build().cardinality).toBe('one');
+    expect(selected.updateReturning({ title: 'Updated' }, ['id']).build()).not.toHaveProperty(
+      'cardinality',
+    );
+    expect(selected.deleteManyReturning(['id']).build()).not.toHaveProperty('cardinality');
     expect(exactBook.update({ title: 'Updated' }).build().cardinality).toBe('one');
     expect(exactBook.updateReturning({ title: 'Updated' }, ['id']).build()).toMatchObject({
       cardinality: 'one',
@@ -214,6 +218,16 @@ describe('data-graph selection helpers', () => {
       operation: 'delete',
       returning: ['id'],
     });
+  });
+
+  it('rejects empty returning projections before building a mutating command', () => {
+    const selected = new GraphSelection(query(Book));
+    // @ts-expect-error Returning projections require at least one field.
+    expect(() => selected.updateReturning({ title: 'Updated' }, [])).toThrow(
+      'returning fields must not be empty',
+    );
+    // @ts-expect-error Returning projections require at least one field.
+    expect(() => selected.deleteManyReturning([])).toThrow('returning fields must not be empty');
   });
 
   it('supports top-level command spec factories and pipe helpers', () => {

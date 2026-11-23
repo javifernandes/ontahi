@@ -127,7 +127,7 @@ const uniqueNonNullValues = (
 ];
 
 const withRelatedTargetPredicate = (
-  spec: RelatedRootReadSpec,
+  spec: RelatedRootReadSpec<any, any, any, any, any>,
   targetField: string,
   sourceValues: readonly unknown[],
 ): QuerySpec<any, any> => {

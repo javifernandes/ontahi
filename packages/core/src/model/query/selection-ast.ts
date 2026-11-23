@@ -1,3 +1,5 @@
+import { hasOwn } from '../../value/object.js';
+import type { AnyEntityDefinition } from '../entity/definition.js';
 import { isEntityRef, type AnyEntityRef, type EntityRefLocatorValue } from '../entity/ref/model.js';
 
 export type SelectionPredicate =
@@ -96,6 +98,44 @@ export type SemanticSelection<
 export const selectionAll = (): SelectionExpression => ({ kind: 'all' });
 
 export const selectionNone = (): SelectionExpression => ({ kind: 'none' });
+
+export const assertSelectionExpressionFields = (
+  entity: AnyEntityDefinition,
+  expression: SelectionExpression,
+): void => {
+  if (expression.kind === 'predicate') {
+    if (!hasOwn(entity.fields, expression.fieldName))
+      throw new TypeError(`Unknown field ${entity.name}.${expression.fieldName}.`);
+    return;
+  }
+  if (expression.kind === 'references') {
+    for (const ref of expression.refs) {
+      if (ref.entityName !== entity.name)
+        throw new TypeError(`Selection references must target ${entity.name}.`);
+      const locatorFields = Object.keys(ref.locator);
+      if (
+        locatorFields.length === 0 ||
+        locatorFields.some(fieldName => !hasOwn(entity.fields, fieldName)) ||
+        !Object.values(entity.refLocators).some(locator => {
+          const declared = [...(locator.fields ?? [])];
+          return (
+            declared.length === locatorFields.length &&
+            declared.every(fieldName => locatorFields.includes(fieldName))
+          );
+        })
+      )
+        throw new TypeError(`Selection reference does not match a ${entity.name} locator.`);
+    }
+    return;
+  }
+  if (expression.kind === 'and' || expression.kind === 'or') {
+    expression.operands.forEach(operand => assertSelectionExpressionFields(entity, operand));
+    return;
+  }
+  if (expression.kind === 'not') assertSelectionExpressionFields(entity, expression.operand);
+  // Relation images carry their own source Entity name and are validated when resolved against
+  // the receiver model; the target-side expression cannot infer that source definition here.
+};
 
 const copyLocatorValue = (value: EntityRefLocatorValue): EntityRefLocatorValue =>
   Array.isArray(value)

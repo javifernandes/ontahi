@@ -10,8 +10,10 @@ import {
   defineClientEntity,
   entity,
   field,
+  graphSchema,
   query,
   selection,
+  withSelectionFactories,
   type DataGraphExecutionRuntime,
   type EntityMutationCommand,
   type EntityMutationCommandExecutionRuntime,
@@ -120,6 +122,24 @@ describe('runtime-bound data graph api', () => {
     expect(BoundBook.fields).toBe(Book.fields);
     expect(BoundBook.pipe(entity => entity)).toBe(BoundBook);
     expect(BoundBook.pipe(entity => entity.all()).root).toBe(Book);
+
+    const SearchableBook = withSelectionFactories(
+      entity('SearchableBook', { id: field.id(), slug: field.string() }),
+      {
+        slug: {
+          version: 1,
+          input: graphSchema.object({ slug: field.string() }),
+          scalarInput: 'slug',
+          template: { kind: 'predicate', fieldName: 'slug', operator: 'eq', input: 'slug' },
+        },
+      },
+    );
+    const BoundSearchableBook = api.selectionAssembly.bindSelectionEntity(SearchableBook, {});
+    expect(BoundSearchableBook.by({ slug: 'progbook' }).expression).toMatchObject({
+      fieldName: 'slug',
+      value: 'progbook',
+    });
+    expect(BoundSearchableBook.selectionFactories).toEqual(SearchableBook.selectionFactories);
   });
 
   it('binds a portable client Entity facade without losing its client-owned surface', async () => {
@@ -360,6 +380,10 @@ describe('runtime-bound data graph api', () => {
     });
 
     const namedFromSelection = selection.named('bookBySlug');
+    const namedFromStructuralSelection = api.namedGraphRead('allBooks', {
+      root: Book,
+      build: () => query(Book).build(),
+    });
     const namedFromEntity = api.namedGraphRead(
       'bookBySlugParam',
       Book,
@@ -370,12 +394,21 @@ describe('runtime-bound data graph api', () => {
     );
 
     expect(namedFromSelection.name).toBe('bookBySlug');
+    expect(namedFromStructuralSelection.name).toBe('allBooks');
     expect(namedFromEntity.name).toBe('bookBySlugParam');
     await expect(
       Effect.runPromise(namedFromEntity.get({ slug: 'progbook' }, { authority: 'viewer' })),
     ).resolves.toEqual({ id: 'book-1', slug: 'progbook' });
+    // @ts-expect-error A bare Entity is not a supported named read.
     expect(() => api.namedGraphRead('missingBuilder', Book)).toThrow(
       'namedGraphRead(missingBuilder) requires a selection or a builder function.',
+    );
+    const mismatchedStructuralRead = api.namedGraphRead('wrongRoot', {
+      root: Book,
+      build: () => query(entity('Author', { id: field.id() })).build(),
+    } as never);
+    expect(() => mismatchedStructuralRead.build(undefined)).toThrow(
+      'must build a query rooted at Book',
     );
   });
 

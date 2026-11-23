@@ -299,6 +299,32 @@ execution modules still contain real implementation. The first retirement checkp
 locks the accepted dependency direction with an executable architecture test: production `value`,
 `model`, and `computation` modules may no longer import `data-graph` or inward runtime layers.
 
+The second retirement checkpoint assigns the Graph Command and Graph Read protocols and dispatchers
+to `runtime/protocol/command` and `runtime/protocol/read`. The four historical `data-graph` modules
+now preserve compatibility through re-exports only; direct runtime consumers use the new owners.
+This removes about 3,000 lines of protocol and policy execution behavior from the historical bucket
+without changing the package-root API or combining the move with protocol redesign.
+
+That checkpoint also owns the adjacent Query runtime boundary rather than stopping at wire parsing.
+Portable Query declarations, View composition, Selection budgets, and relation resolution now live
+under `model/query`; reference lowering and adapter-neutral planning live under `computation`; and
+Query binding, variant binding, and bound Selection assembly live under `runtime/query`. Historical
+paths remain compatibility re-exports. The move corrected the initial classification of Selection
+assembly: because it composes bound reads, commands, and Effects, it is runtime assembly rather than
+a pure computation.
+
+Portable Graph Command intent, fluent Selection values, contextual Selection declarations, and
+classified Entity Variant reads now also have model owners. Their previous dependency on the
+composite Graph Schema parser existed only to validate Selection expressions constructed by their
+own typed builders; a model-owned field validator preserves that failure behavior without creating
+a model-to-schema-composition inversion. Named Selection factories remain the deliberate exception:
+they accept user-provided schemas and stay at the composition seam until schema compilation moves.
+
+Named Selection factories now make that seam explicit under `runtime/query`: their declarations
+produce portable Selection values, but their compiler reflects composite Graph schemas and parses
+untrusted invocation input. The historical file is a facade, and a later schema-boundary pass can
+move the generic parsing dependency without reopening the Query model.
+
 The already-extracted client-cache and in-memory runtime boundaries now consume Entity, Ref,
 Relation, Selection AST, operation-output, and mapping contracts from their direct owners whenever
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than

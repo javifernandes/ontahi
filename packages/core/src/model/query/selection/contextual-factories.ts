@@ -1,0 +1,116 @@
+import { cloneJson } from '../../../value/json.js';
+import { hasOwn } from '../../../value/object.js';
+import type { AnyEntityDefinition } from '../../entity/definition.js';
+import { getEntityVariantContract } from '../../entity/variant-contract.js';
+import type { EntityVariant, VariantSelection } from '../../entity/variant-selection.js';
+import type { EntityVariantDiscriminator } from '../../entity/variant.js';
+import { assertSelectionExpressionFields, type SelectionAst } from '../selection-ast.js';
+
+import type { SelectionProperties } from './entity-selections.js';
+import { Selection, type SelectionBuilder } from './selection.js';
+
+export type ContextualSelectionDescriptor = {
+  version: number;
+  input: { context: { kind: 'selection'; entityName: string } };
+  output: { kind: 'selection'; entityName: string };
+  template: { relationName: string; target: SelectionAst };
+};
+
+export interface ContextualSelectionFactory<
+  TSource extends AnyEntityDefinition,
+  TTarget extends AnyEntityDefinition,
+> {
+  readonly descriptor: ContextualSelectionDescriptor;
+  as<
+    TVariantTarget extends AnyEntityDefinition & Pick<TTarget, 'name' | 'fields'>,
+    TName extends string,
+    TDiscriminator extends EntityVariantDiscriminator<TVariantTarget>,
+  >(
+    variant: EntityVariant<TVariantTarget, TName, TDiscriminator>,
+  ): ClassifiedContextualSelectionFactory<TSource, TVariantTarget, TName, TDiscriminator>;
+  from<TContext extends TSource>(
+    source: Selection<TContext>,
+  ): Selection<TTarget, undefined> & SelectionProperties<TTarget>;
+}
+
+export interface ClassifiedContextualSelectionFactory<
+  TSource extends AnyEntityDefinition,
+  TTarget extends AnyEntityDefinition,
+  TName extends string,
+  TDiscriminator extends EntityVariantDiscriminator<TTarget>,
+> {
+  readonly descriptor: ContextualSelectionDescriptor;
+  from<TContext extends TSource>(
+    source: Selection<TContext>,
+  ): VariantSelection<TTarget, TName, TDiscriminator> & SelectionProperties<TTarget>;
+}
+
+const compiledFactories = new WeakSet<object>();
+export const isContextualSelectionFactory = (value: unknown): boolean =>
+  typeof value === 'object' && value !== null && compiledFactories.has(value);
+
+/** Experimental parameterless contextual counterpart of a pure named `by` factory. */
+export const contextualSelectionFactory = <
+  TSource extends AnyEntityDefinition,
+  TKey extends keyof TSource['relations'] & string,
+>(
+  owner: TSource,
+  relationName: TKey,
+  where?: SelectionBuilder<TSource['relations'][TKey]['target']>,
+): ContextualSelectionFactory<TSource, TSource['relations'][TKey]['target']> => {
+  if (!hasOwn(owner.relations, relationName))
+    throw new TypeError(`Unknown relation ${owner.name}.${relationName}.`);
+  const target: TSource['relations'][TKey]['target'] = owner.relations[relationName]!.target;
+  const membership = where ? Selection.where(target, where) : Selection.all(target);
+  // Capture compiled data once. The callback is declaration sugar, not an invocation resolver.
+  const template = cloneJson(membership.toAst());
+  if (template.entityName !== target.name)
+    throw new TypeError(`Contextual Selection must target ${target.name}.`);
+  assertSelectionExpressionFields(target, template.expression);
+  const descriptor = {
+    version: 1,
+    input: { context: { kind: 'selection' as const, entityName: owner.name } },
+    output: { kind: 'selection' as const, entityName: target.name },
+    template: { relationName, target: template },
+  };
+  const factory: ContextualSelectionFactory<TSource, TSource['relations'][TKey]['target']> = {
+    as(variant) {
+      if (getEntityVariantContract(variant)?.base !== target)
+        throw new TypeError(
+          `Contextual variant must classify the target of ${owner.name}.${relationName}.`,
+        );
+      const classified = {
+        get descriptor(): ContextualSelectionDescriptor {
+          return {
+            ...cloneJson(descriptor),
+            output: { kind: 'selection', entityName: variant.name },
+            template: {
+              relationName,
+              target: { ...cloneJson(template), entityName: variant.name },
+            },
+          };
+        },
+        from<TContext extends TSource>(source: Selection<TContext>) {
+          // Fluent enrichment preserves the base object but changes its static relation/factory
+          // type. After the identity check above, project membership onto the variant's own type.
+          return variant.from(new Selection(variant.base, factory.from(source).build()));
+        },
+      };
+      compiledFactories.add(classified);
+      return classified;
+    },
+    get descriptor() {
+      return cloneJson(descriptor);
+    },
+    from<TContext extends TSource>(source: Selection<TContext>) {
+      if (source.root !== owner)
+        throw new TypeError(`Expected ${owner.name} context from this model definition.`);
+      const filter = cloneJson(template);
+      return new Selection(owner, source.build())
+        .through(relationName)
+        .and(new Selection(target, filter.expression));
+    },
+  };
+  compiledFactories.add(factory);
+  return factory;
+};

@@ -184,6 +184,18 @@ describe('Entity contextual Selections', () => {
     expect(() => Fake.contextualSelections).toThrow('built from self relations');
   });
 
+  it('rejects contextual names owned by classified selections', () => {
+    const Target = entity({ name: 'Target', fields: { id: field.id(), ownerId: field.string() } });
+    const Owner = entity({
+      name: 'Owner',
+      fields: { id: field.id() },
+      relations: { targets: relation.hasMany(Target, { via: 'ownerId' }) },
+      selections: ({ self }) => ({ variant: self.targets }),
+    });
+
+    expect(() => Owner.contextualSelections).toThrow('conflicts with the Selection API');
+  });
+
   it('rejects API collisions and source view modifiers without silently discarding them', () => {
     const { Book } = fixture();
     expect(() => Book.by({ id: 'b1' }).limit(1).parts).toThrow('membership');

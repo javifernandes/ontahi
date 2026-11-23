@@ -2,13 +2,12 @@ import {
   parseGraphCommandFamilyRequest,
   type GraphCommandFamilyRequest,
   type GraphCommandProtocolError,
-} from '../../data-graph/command-protocol.js';
+} from './command/protocol.js';
 import {
   parseGraphReadFamilyRequest,
   type GraphReadProtocolError,
   type GraphReadFamilyRequest,
-} from '../../data-graph/read-protocol.js';
-
+} from './read/protocol.js';
 import { defineRuntimeProtocolFamily } from './registry.js';
 
 export const graphReadRuntimeProtocolFamily = defineRuntimeProtocolFamily<

@@ -1,4 +1,3 @@
-import type { GraphReadRequest, GraphReadRequestV1 } from '../../data-graph/read-protocol.js';
 import type { JsonValue } from '../../value/json.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
 import type { AnyEventDeclaration, EventDeliveryFor } from '../server/events/index.js';
@@ -13,6 +12,7 @@ import {
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
 } from './envelope.js';
+import type { GraphReadRequest, GraphReadRequestV1 } from './read/protocol.js';
 import type {
   RuntimeProtocolGraphObservationBody,
   RuntimeProtocolGraphRefreshCause,

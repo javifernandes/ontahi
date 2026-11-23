@@ -526,7 +526,7 @@ const executeSupabaseRelatedRootCountEffect = <
   TReadOptions extends object,
 >(
   deps: SupabaseReadDeps<TClient, TError, TReadOptions>,
-  spec: RelatedRootReadSpec,
+  spec: RelatedRootReadSpec<any, any, any, any, any>,
   options?: TReadOptions,
 ): Effect.Effect<number, TError> =>
   Effect.gen(function* () {
