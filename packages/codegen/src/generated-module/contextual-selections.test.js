@@ -58,7 +58,7 @@ describe('Entity contextual Selection projection', () => {
     async deferred => {
       const input = `
       import { entity, relation } from '@ontahi/core/runtime/server';
-      import { field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+      import { field, graphSchema, withSelectionFactories } from '@ontahi/core';
       export const Node = entity({ name: 'Node', fields: { id: field.id(), bookId: field.string(), type: field.enum(['part', 'chapter']) } });
       const Base = entity({ name: 'Book', fields: { id: field.id() },
         relations: { nodes: relation.hasMany(${deferred ? "entity.ref('Node')" : 'Node'}, { via: 'bookId' }) },

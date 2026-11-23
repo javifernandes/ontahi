@@ -1,4 +1,4 @@
-import { createEntityRef, isEntityRef } from '@ontahi/core/data-graph';
+import { createEntityRef, isEntityRef } from '@ontahi/core';
 import {
   createApplicationModelCommandRuntime,
   getCurrentInvocationContext,

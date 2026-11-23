@@ -3,7 +3,7 @@
 import {
   definePortableDerivedFieldRegistry,
   definePortableOperationConditionRegistry,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 export const derivedFields = definePortableDerivedFieldRegistry({
   version: 1,

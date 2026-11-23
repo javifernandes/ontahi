@@ -3,7 +3,7 @@ import {
   isEntityMutationDelta,
   mutateEntity,
   type EntityMutationCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import {
   TagSchema,

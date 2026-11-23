@@ -81,7 +81,7 @@ describe('classified Operation input browser projection', () => {
       await writeFile(
         path.join(directory, 'graph.ts'),
         `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { ContentNode } from './nodes';
         import { Book } from './book';
         export const Graph = defineGraphApi({ entities: { ContentNode, Book } });
@@ -128,7 +128,7 @@ describe('classified Operation input browser projection', () => {
       const generated = await importGeneratedModule({
         directory,
         source: `${source}
-        import { createEntityRef, defineGraphApi, toGraphSchemaDescriptor } from '@ontahi/core/data-graph';
+        import { createEntityRef, defineGraphApi, toGraphSchemaDescriptor } from '@ontahi/core';
         type Input = NonNullable<typeof Book.domain.inspect.__clientTypes>['input'];
         const accepted: Input = { chapter: createEntityRef(ContentNodeSchema, { id: 'c1' }), other: null };
         // @ts-expect-error variant names do not create another Ref identity namespace

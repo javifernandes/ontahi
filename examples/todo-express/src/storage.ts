@@ -3,7 +3,7 @@ import {
   type AnyEntityRef,
   type DataGraphExecutionRuntime,
   type RelationshipFact,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createMysqlDataGraphStorage } from '@ontahi/mysql/data-graph';
 import { createMysqlEventRuntime } from '@ontahi/mysql/events';
 import { createMysqlTaskStorage } from '@ontahi/mysql/tasks';

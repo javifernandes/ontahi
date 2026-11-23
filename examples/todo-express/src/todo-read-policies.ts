@@ -1,4 +1,4 @@
-import type { GraphReadPolicy } from '@ontahi/core/data-graph';
+import type { GraphReadPolicy } from '@ontahi/core';
 import type { Principal } from '@ontahi/core/runtime/server';
 
 import { Tag, TodoItem, TodoList } from './todo.js';

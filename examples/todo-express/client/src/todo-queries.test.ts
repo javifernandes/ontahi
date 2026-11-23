@@ -1,4 +1,4 @@
-import { toGraphReadRequest } from '@ontahi/core/data-graph';
+import { toGraphReadRequest } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { TodoItem, TodoList } from '../../src/generated/client-entities.js';

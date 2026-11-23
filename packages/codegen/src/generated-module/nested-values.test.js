@@ -19,7 +19,7 @@ const withApplication = async (files, check) => {
       await writeFile(path.join(directory, name), source);
     await writeFile(
       path.join(directory, 'graph.ts'),
-      `import { defineGraphApi } from '@ontahi/core/data-graph';
+      `import { defineGraphApi } from '@ontahi/core';
        import { Item } from './item';
        export const Graph = defineGraphApi({ entities: { Item } });`,
     );
@@ -35,7 +35,7 @@ const withApplication = async (files, check) => {
 
 const itemSource = (declarations, operations) => `
   import { entity } from '@ontahi/core/entity';
-  import { field, value, graphSchema } from '@ontahi/core/data-graph';
+  import { field, value, graphSchema } from '@ontahi/core';
   ${declarations}
   export const Item = entity({ name: 'Item', fields: { id: field.id() },
     domainOperationDefaults: { authority: 'server', exposure: 'bridge', layer: 'items' },
@@ -73,7 +73,7 @@ describe('nested Value client projections', () => {
           const generated = await importGeneratedModule({
             directory,
             source: `${source}
-        import { safeParseUnknownGraphSchema } from '@ontahi/core/data-graph';
+        import { safeParseUnknownGraphSchema } from '@ontahi/core';
         type Output = NonNullable<typeof Item.domain.read.__clientTypes>['output'];
         const accepted: Output = { content: 'a', children: [{ style: 'bullet', items: [{ content: 'b' }] }] };
         // @ts-expect-error recursive fields retain their types
@@ -120,7 +120,7 @@ describe('nested Value client projections', () => {
     async operationContracts => {
       await withApplication(
         {
-          'schemas.ts': `import { field, value, graphSchema } from '@ontahi/core/data-graph';
+          'schemas.ts': `import { field, value, graphSchema } from '@ontahi/core';
             const Detail = value('Detail', { title: field.string() });
             export const Output = graphSchema.named('Results', graphSchema.nullable(
               graphSchema.array(graphSchema.union([Detail, value('Empty', { empty: field.boolean() })]))
@@ -142,7 +142,7 @@ describe('nested Value client projections', () => {
               namedDefinitions: analysis.namedDefinitions,
               operationContracts,
             })}
-              import { safeParseUnknownGraphSchema } from '@ontahi/core/data-graph';
+              import { safeParseUnknownGraphSchema } from '@ontahi/core';
               type Output = NonNullable<typeof Item.domain.read.__clientTypes>['output'];
               const accepted: Output = [{ title: 'Title' }, { empty: true }];
               const absent: Output = null;
@@ -208,7 +208,7 @@ describe('nested Value client projections', () => {
       export const Output = value('Output', { ...Subject.fields, nested: graphSchema.array(Input) });`;
       await withApplication(
         {
-          'schemas.ts': `import { field, value, graphSchema } from '@ontahi/core/data-graph'; ${definitions}`,
+          'schemas.ts': `import { field, value, graphSchema } from '@ontahi/core'; ${definitions}`,
           'item.ts': itemSource(
             form === 'local'
               ? definitions
@@ -229,7 +229,7 @@ describe('nested Value client projections', () => {
           const generated = await importGeneratedModule({
             directory,
             source: `${source}
-        import { toGraphSchemaDescriptor } from '@ontahi/core/data-graph';
+        import { toGraphSchemaDescriptor } from '@ontahi/core';
         type Input = NonNullable<typeof Item.domain.read.__clientTypes>['input'];
         const accepted: Input = { subject: { title: 'Title', state: 'open' } };
         // @ts-expect-error nested enum inference must be retained
@@ -271,7 +271,7 @@ describe('nested Value client projections', () => {
         const generated = await importGeneratedModule({
           directory,
           source: `${render(analysis)}
-        import { toGraphSchemaDescriptor } from '@ontahi/core/data-graph';
+        import { toGraphSchemaDescriptor } from '@ontahi/core';
         export const input = toGraphSchemaDescriptor(Item.domain.read.input);
         export const output = toGraphSchemaDescriptor(Item.domain.read.output);
       `,

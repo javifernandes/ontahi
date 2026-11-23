@@ -6,7 +6,7 @@ import {
   safeParseGraphSchema,
   toGraphReadRequest,
   type InferGraphSchemaValue,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   ModelInterpretationError as TodoCommandError,
   type ApplicationModelScopeAccess,

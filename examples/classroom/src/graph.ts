@@ -1,4 +1,4 @@
-import { defineGraphApi } from '@ontahi/core/data-graph';
+import { defineGraphApi } from '@ontahi/core';
 
 import { Course, Enrollment, School, Student, Teacher } from './classroom.js';
 

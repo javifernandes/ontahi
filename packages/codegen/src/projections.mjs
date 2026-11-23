@@ -472,7 +472,7 @@ export const renderGeneratedClientEntityModule = ({
 
 import {
 ${coreImports.map(name => `  ${name},`).join('\n')}
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 ${
   usesOperationConditions

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { query, toGraphReadRequest, type GraphReadPolicy } from '@ontahi/core/data-graph';
+import { query, toGraphReadRequest, type GraphReadPolicy } from '@ontahi/core';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-import { createInMemoryDataGraphStorage } from '@ontahi/core/data-graph';
+import { createInMemoryDataGraphStorage } from '@ontahi/core';
 import {
   createTaskDefinitionFromDurableDomainOperation,
   DATA_GRAPH_RUNTIME_RESOURCE_KEY,

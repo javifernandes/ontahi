@@ -96,7 +96,7 @@ describe('conventional client entity codegen', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Course, Student } from './classroom';
 
         export const ClassroomGraphApi = defineGraphApi({ entities: [Course, Student] });
@@ -106,7 +106,7 @@ describe('conventional client entity codegen', () => {
     await writeFile(
       path.join(sourceDirectory, 'classroom.ts'),
       `
-        import { field, graphSchema } from '@ontahi/core/data-graph';
+        import { field, graphSchema } from '@ontahi/core';
         import { entity } from '@ontahi/core/entity';
 
         export const Course = entity({ name: 'Course', fields: { id: field.id() } });
@@ -193,7 +193,7 @@ describe('conventional client entity codegen', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Driver } from './driver';
         import { Trip } from './trip';
 

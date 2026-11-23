@@ -1,4 +1,4 @@
-import { field, graphSchema, type InferGraphSchemaValue } from '@ontahi/core/data-graph';
+import { field, graphSchema, type InferGraphSchemaValue } from '@ontahi/core';
 
 export const TodoItemSuggestion = graphSchema.object({
   title: field.nonEmptyString({ trim: true }),

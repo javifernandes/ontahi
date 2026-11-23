@@ -1,4 +1,4 @@
-import { createEntityRef, mutateEntity } from '@ontahi/core/data-graph';
+import { createEntityRef, mutateEntity } from '@ontahi/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

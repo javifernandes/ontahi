@@ -63,8 +63,7 @@ const summarizeSchemaModule = source => {
   );
   const coreImport = sourceFile.statements.find(
     statement =>
-      ts.isImportDeclaration(statement) &&
-      statement.moduleSpecifier.text === '@ontahi/core/data-graph',
+      ts.isImportDeclaration(statement) && statement.moduleSpecifier.text === '@ontahi/core',
   );
   const schemaDeclaration = sourceFile.statements
     .filter(ts.isVariableStatement)
@@ -108,7 +107,7 @@ const summarizeSchemaFamily = ({ source, localNames }) => {
     bindings: statement.importClause.namedBindings.elements
       .filter(
         element =>
-          statement.moduleSpecifier.text !== '@ontahi/core/data-graph' ||
+          statement.moduleSpecifier.text !== '@ontahi/core' ||
           ['entity', 'field'].includes(element.propertyName?.text ?? element.name.text),
       )
       .map(element => ({

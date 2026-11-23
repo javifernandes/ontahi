@@ -1,4 +1,4 @@
-import type { EntityRef } from '@ontahi/core/data-graph';
+import type { EntityRef } from '@ontahi/core';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import type { AnyEventDeclaration, EventDelivery } from '@ontahi/core/runtime/server';
 import type { JsonValue } from '@ontahi/core/value/json';

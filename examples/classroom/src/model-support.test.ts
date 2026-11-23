@@ -4,7 +4,7 @@ import {
   query,
   toGraphCommandRequest,
   toGraphReadRequest,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { ModelProvider } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 

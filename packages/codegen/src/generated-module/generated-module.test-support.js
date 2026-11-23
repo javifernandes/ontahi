@@ -10,7 +10,7 @@ const coreDataGraphPath = path.resolve(
   '../../../core/dist/data-graph/index.js',
 );
 const coreDataGraphUrl = pathToFileURL(coreDataGraphPath).href;
-const coreImports = ["'@ontahi/core/data-graph'", '"@ontahi/core/data-graph"'];
+const coreImports = ["'@ontahi/core'", '"@ontahi/core"'];
 
 const replaceCoreImport = (source, replacement) =>
   coreImports.reduce(
@@ -66,7 +66,7 @@ export const assertGeneratedModuleTypechecks = async ({
 export const importGeneratedModule = async ({ directory, source }) => {
   const modulePath = path.join(directory, `generated-${randomUUID()}.mjs`);
   if (!coreImports.some(moduleSpecifier => source.includes(moduleSpecifier))) {
-    throw new Error('Generated module does not import @ontahi/core/data-graph.');
+    throw new Error('Generated module does not import @ontahi/core.');
   }
 
   await assertGeneratedModuleTypechecks({ modulePath, source });

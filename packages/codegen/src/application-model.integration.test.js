@@ -33,7 +33,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Tag } from './tag';
 
         export const TagsGraph = defineGraphApi({ entities: { Tag } });
@@ -76,7 +76,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from './note';
         import { Task } from './task';
 
@@ -87,7 +87,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       path.join(directory, 'shared-output.ts'),
       `
-        import { field, value } from '@ontahi/core/data-graph';
+        import { field, value } from '@ontahi/core';
 
         export const SharedOutput = value('SharedOutput', { id: field.id() });
       `,
@@ -148,7 +148,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from './note';
         import { Task } from './task';
 
@@ -221,7 +221,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Trip } from './trip';
 
         export const TripsGraph = defineGraphApi({ entities: { Trip } });
@@ -297,7 +297,7 @@ describe('Ontahi application declaration analysis', () => {
 
   it('discovers graph entities without application-specific imports', () => {
     const analysis = analyzeGraphApiModule(`
-      import { defineGraphApi } from '@ontahi/core/data-graph';
+      import { defineGraphApi } from '@ontahi/core';
       import { Note } from './note';
       import { Notebook } from './notebook';
 
@@ -324,7 +324,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from './note';
 
         export const NotesGraph = defineGraphApi({ entities: { Note } });
@@ -357,7 +357,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from './note';
 
         export const NotesGraph = defineGraphApi({ entities: { Note } });
@@ -1037,7 +1037,7 @@ describe('Ontahi application declaration analysis', () => {
             ? {
                 sourcePath: '/app/shared-fields.ts',
                 sourceText: `
-                  import { field } from '@ontahi/core/data-graph';
+                  import { field } from '@ontahi/core';
                   export const SharedFields = {
                     id: field.id(),
                     title: field.string(),
@@ -1121,7 +1121,7 @@ describe('Ontahi application declaration analysis', () => {
             ? {
                 sourcePath: '/app/note-schema.ts',
                 sourceText: `
-                  import { field } from '@ontahi/core/data-graph';
+                  import { field } from '@ontahi/core';
                   import { entity } from '@ontahi/core/entity';
 
                   export const NoteEntity = entity({
@@ -1189,7 +1189,7 @@ describe('Ontahi application declaration analysis', () => {
   it('projects operation metadata from an embedded Ontahi DSL declaration', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
-        import { field, value } from '@ontahi/core/data-graph';
+        import { field, value } from '@ontahi/core';
         import { app } from './application';
 
         const NoteEntity = { name: 'Note' };
@@ -1265,7 +1265,7 @@ describe('Ontahi application declaration analysis', () => {
   it('projects selection input contracts into generated client operations', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
-        import { graphSchema, value } from '@ontahi/core/data-graph';
+        import { graphSchema, value } from '@ontahi/core';
         import { app } from './application';
         import { BookEntity } from '@/features/books/schema';
 
@@ -1503,7 +1503,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from '@/domain/note';
         import { Tag } from '@/domain/tag';
 
@@ -1516,7 +1516,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       noteSourcePath,
       `
-        import { field, value } from '@ontahi/core/data-graph';
+        import { field, value } from '@ontahi/core';
         import { app } from '../../application';
         import {
           ArchiveNoteInput,
@@ -1571,7 +1571,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       taskSourcePath,
       `
-        import { field, value } from '@ontahi/core/data-graph';
+        import { field, value } from '@ontahi/core';
         import { defineTaskStep } from '@ontahi/core/runtime/server/tasks';
 
         export const ArchiveNoteInput = value('ArchiveNoteInput', { id: field.string() });
@@ -1642,7 +1642,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { Note } from './note.js';
         export const NotesGraphApi = defineGraphApi({ entities: { Note } });
       `,
@@ -1691,7 +1691,7 @@ describe('Ontahi application declaration analysis', () => {
 
   it('continues past the graph overload of an Ontahi application declaration', () => {
     const analysis = analyzeGraphApiModule(`
-      import { defineGraphApi } from '@ontahi/core/data-graph';
+      import { defineGraphApi } from '@ontahi/core';
       import { defineOntahiApplication } from '@ontahi/core/runtime/server';
       import { Note } from './note';
 
@@ -1736,7 +1736,7 @@ describe('Ontahi application declaration analysis', () => {
     await writeFile(
       graphApiPath,
       `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { MissingNote } from './missing-note';
         export const NotesGraphApi = defineGraphApi({ entities: { MissingNote } });
       `,

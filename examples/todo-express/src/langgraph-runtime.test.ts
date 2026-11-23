@@ -1,4 +1,4 @@
-import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core';
 import {
   createTaskBackedModelCommandRuntime,
   withInvocationContext,

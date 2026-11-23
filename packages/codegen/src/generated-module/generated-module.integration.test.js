@@ -22,7 +22,7 @@ it('rejects generated modules with semantic TypeScript errors before importing t
     importGeneratedModule({
       directory,
       source: `
-        import { field } from '@ontahi/core/data-graph';
+        import { field } from '@ontahi/core';
 
         const invalid: string = 42;
         export const Identifier = field.string();
