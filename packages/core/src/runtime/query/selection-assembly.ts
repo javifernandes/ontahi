@@ -11,11 +11,6 @@ import {
   contextualSelectionProperties,
   type SelectionProperties,
 } from '../../data-graph/entity-selections.js';
-import {
-  RelationRootSelection,
-  type RelationRootSourceSelection,
-  type RelationRootTargetEntity,
-} from '../../data-graph/relation-root.js';
 import { Selection, selection, type SelectionBuilder } from '../../data-graph/selection-value.js';
 import {
   GraphSelection as BaseGraphSelection,
@@ -49,6 +44,11 @@ import type {
 import type { BoundGraphCommand } from '../data/command-binding.js';
 
 import type { BoundGraphRead, ExecutableGraphRead } from './binding.js';
+import {
+  RelationRootSelection,
+  type RelationRootSourceSelection,
+  type RelationRootTargetEntity,
+} from './relation-root.js';
 import {
   createVariantReadBinder,
   type BoundVariantSelection,

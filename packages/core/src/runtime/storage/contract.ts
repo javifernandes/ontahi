@@ -1,9 +1,9 @@
+import type { AnyEntityDefinition } from '../../model/entity/definition.js';
+import type { DataGraphExecutionRuntime } from '../data/runtime.js';
 import type {
   ReflectedEntityDataReader,
   ReflectedRelatedEntityDataReader,
-} from '../../data-graph/reflection.js';
-import type { AnyEntityDefinition } from '../../model/entity/definition.js';
-import type { DataGraphExecutionRuntime } from '../data/runtime.js';
+} from '../server/reflection.js';
 
 export type DataGraphDefaultStorage<
   TRuntime extends DataGraphExecutionRuntime<any, any, any, any> = DataGraphExecutionRuntime<

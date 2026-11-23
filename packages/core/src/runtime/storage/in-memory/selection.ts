@@ -1,9 +1,5 @@
 import { graphSchema } from '../../../data-graph/definitions.js';
 import { query, type QuerySpec } from '../../../data-graph/query.js';
-import {
-  createRelatedRootReadSpec,
-  type RelatedRootReadSpec,
-} from '../../../data-graph/relation-root.js';
 import { parseGraphSchema } from '../../../data-graph/schema.js';
 import { resolveSelectionRelation } from '../../../data-graph/selection-relations.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
@@ -13,6 +9,7 @@ import {
   selectionReferences,
   type SelectionExpression,
 } from '../../../model/query/selection-ast.js';
+import { createRelatedRootReadSpec, type RelatedRootReadSpec } from '../../query/relation-root.js';
 
 import { InMemoryDataGraphError } from './command.js';
 

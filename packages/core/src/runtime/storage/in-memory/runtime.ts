@@ -11,12 +11,6 @@ import {
   liftEntityReferenceFieldValues,
   normalizeEntityReferenceJoinValue,
 } from '../../../data-graph/reference-field.js';
-import {
-  isRelatedRootReadSpec,
-  resolveRelatedRootFields,
-  type RelatedRootReadMode,
-  type RelatedRootReadSpec,
-} from '../../../data-graph/relation-root.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
 import { selectionAnd } from '../../../model/query/selection-ast.js';
@@ -24,6 +18,12 @@ import type { RelationshipFact } from '../../../model/relation/command.js';
 import { isJsonValue } from '../../../value/json.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
 import type { EntityMutationCommandExecutionRuntime } from '../../entity-mutation/command.js';
+import {
+  isRelatedRootReadSpec,
+  resolveRelatedRootFields,
+  type RelatedRootReadMode,
+  type RelatedRootReadSpec,
+} from '../../query/relation-root.js';
 import type {
   ManyToManyRelationshipCommandExecutionRuntime,
   OrderedRelationshipCommandExecutionRuntime,
