@@ -1,5 +1,13 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.25
+
+### Patch Changes
+
+- @ontahi/core@1.0.0-alpha.25
+  - @ontahi/explorer-react@1.0.0-alpha.25
+  - @ontahi/runtime-http@1.0.0-alpha.25
+
 ## 1.0.0-alpha.24
 
 ### Patch Changes
