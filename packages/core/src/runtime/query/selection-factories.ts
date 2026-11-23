@@ -2,20 +2,22 @@ import type {
   AnyEntityDefinition,
   AnyFieldDefinition,
   FieldDefinitions,
-  GraphObjectDefinition,
-  InferGraphSchemaValue,
 } from '../../data-graph/definitions.js';
-import {
-  toGraphSchemaDescriptor,
-  type GraphSchemaDescriptor,
-  type GraphSelectionDescriptor,
-} from '../../data-graph/schema-descriptor.js';
+import { toGraphSchemaDescriptor } from '../../data-graph/schema-descriptor.js';
 import { parseGraphSchema } from '../../data-graph/schema.js';
 import { getEntityIdentityLocator } from '../../model/entity/ref/identity.js';
 import { createEntityRef } from '../../model/entity/ref/model.js';
 import type { SelectionProperties } from '../../model/query/selection/entity-selections.js';
 import { Selection } from '../../model/query/selection/selection.js';
 import { type SelectionExpression, selectionReferences } from '../../model/query/selection-ast.js';
+import type {
+  GraphObjectDefinition,
+  InferGraphSchemaValue,
+} from '../../model/schema/definition.js';
+import type {
+  GraphSchemaDescriptor,
+  GraphSelectionDescriptor,
+} from '../../model/schema/descriptor.js';
 import { cloneJson, type JsonValue } from '../../value/json.js';
 import { hasOwn, isRecord } from '../../value/object.js';
 

@@ -1,9 +1,7 @@
-import type {
-  GraphSchemaDescriptor,
-  GraphSchemaLike,
-  InferGraphSchemaClientInput,
-} from '../../../data-graph/index.js';
+import type { InferGraphSchemaClientInput } from '../../../data-graph/index.js';
+import type { GraphSchemaDescriptor } from '../../../model/schema/descriptor.js';
 import type { JsonValue } from '../../../value/json.js';
+import type { GraphSchemaLike } from '../../../value/schema/definition.js';
 
 export type EventDeclaration<
   TId extends string = string,

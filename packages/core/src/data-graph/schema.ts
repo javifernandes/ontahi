@@ -1,17 +1,17 @@
 import { z, type ZodType } from 'zod';
 
-import { isRecord } from '../value/object.js';
-
+import type { AnyEntityDefinition } from '../model/entity/definition.js';
+import type { AnyFieldDefinition } from '../model/entity/field.js';
+import {
+  isReferenceFieldDefinition,
+  type ReferenceFieldDefinition,
+} from '../model/entity/reference-field.js';
 import type {
-  AnyEntityDefinition,
   AnyEntityViewDefinition,
-  AnyFieldDefinition,
-  ReferenceFieldDefinition,
   AnyGraphObjectDefinition,
   AnyValueDefinition,
   GraphArrayDefinition,
   GraphDefaultDefinition,
-  GraphLiteralDefinition,
   GraphLazyDefinition,
   GraphNamedDefinition,
   GraphNullableDefinition,
@@ -23,9 +23,10 @@ import type {
   GraphSchemaFields,
   GraphTransformDefinition,
   GraphUnionDefinition,
-  GraphVoidDefinition,
-} from './definitions.js';
-import { isReferenceFieldDefinition } from './definitions.js';
+} from '../model/schema/definition.js';
+import { isRecord } from '../value/object.js';
+import type { GraphLiteralDefinition, GraphVoidDefinition } from '../value/schema/definition.js';
+
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref/index.js';
 import { schemaReferenceInputError } from './ref/schema-reference.js';
