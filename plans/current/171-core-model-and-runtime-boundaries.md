@@ -330,3 +330,16 @@ Relation, Selection AST, operation-output, and mapping contracts from their dire
 those owners exist. Their remaining `data-graph` imports identify real unextracted seams rather than
 avoidable facade dependencies. Namespace removal remains deferred until those mixed modules are
 split; the audit explicitly rejects treating file deletion as progress while implementation remains.
+
+The Data Graph execution ports, executor construction, runtime-bound API, and Graph Command binding
+now live under `runtime/data`; the default-storage contract lives under `runtime/storage`, and the
+transaction capability lives under `runtime/transaction.ts`.
+Entity mutation authoring moved with them because its executable facade binds portable command intent
+to Effect-based runtime execution. Historical `data-graph` modules are compatibility re-exports, and
+server plus in-memory consumers now import the runtime owners directly. Relation mutation remains a
+separate split: its current files combine portable intent, physical mapping resolution, and executable
+binding, so moving them whole would recreate the original ownership problem.
+
+The same runtime pass places remote Graph execution/observation and the operation-result cache under
+`runtime/client`. Their former `data-graph` modules now preserve imports only; the concrete client
+adapters no longer appear beside portable Entity and Query declarations.

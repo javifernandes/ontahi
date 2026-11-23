@@ -6,7 +6,7 @@ import {
   DataGraphTransactionUnavailableError,
   isDataGraphTransactionCapability,
   type DataGraphTransactionCapability,
-} from '../../data-graph/transaction.js';
+} from '../transaction.js';
 
 import { getOperationRuntimeContext, getRequiredOperationRuntimeContext } from './context.js';
 import { createOperationFailure, failOperation, forbidOperationFailureRetry } from './failures.js';

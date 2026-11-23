@@ -41,16 +41,16 @@ import {
   type SemanticSelectionPublicInput,
 } from '../../data-graph/ref/index.js';
 import { RelationRootSelection } from '../../data-graph/relation-root.js';
-import {
-  createRuntimeBoundDataGraphApi,
-  type RuntimeBoundSelection,
-} from '../../data-graph/runtime-bound-api.js';
-import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 import { hasOwn } from '../../value/object.js';
+import {
+  createRuntimeBoundDataGraphApi,
+  type RuntimeBoundSelection,
+} from '../data/runtime-bound-api.js';
+import type { DataGraphExecutionRuntime } from '../data/runtime.js';
 
 import {
   getOperationRuntimeContext,

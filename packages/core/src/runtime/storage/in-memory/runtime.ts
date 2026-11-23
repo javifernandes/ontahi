@@ -24,15 +24,12 @@ import type {
   RelationshipCommandExecutionRuntime,
   RelationshipFact,
 } from '../../../data-graph/relationship-command.js';
-import type {
-  DataGraphExecutionRuntime,
-  DataGraphObservationRuntime,
-} from '../../../data-graph/runtime.js';
-import type { DataGraphTransactionCapability } from '../../../data-graph/transaction.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
 import { selectionAnd } from '../../../model/query/selection-ast.js';
 import { isJsonValue } from '../../../value/json.js';
+import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
+import type { DataGraphTransactionCapability } from '../../transaction.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
