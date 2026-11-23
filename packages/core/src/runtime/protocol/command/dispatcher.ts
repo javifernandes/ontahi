@@ -10,12 +10,6 @@ import {
   toEntityMutationAffordanceDescriptor,
   type EntityMutationAffordanceDescriptor,
 } from '../../../data-graph/entity-mutation-affordance.js';
-import {
-  entityMutationCommandDiagnosticFromError,
-  isEntityMutationDeltaForCommand,
-  type EntityMutationCommand,
-  type EntityMutationDelta,
-} from '../../../data-graph/entity-mutation-command.js';
 import { getEntityIdentityLocator, isEntityRef } from '../../../data-graph/ref/index.js';
 import {
   directRelationshipCommandAffordance,
@@ -37,6 +31,12 @@ import type {
 } from '../../../model/relation/command.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
+import {
+  entityMutationCommandDiagnosticFromError,
+  isEntityMutationDeltaForCommand,
+  type EntityMutationCommand,
+  type EntityMutationDelta,
+} from '../../entity-mutation/command.js';
 import { validateGraphReadSelection } from '../read/protocol.js';
 
 import {

@@ -1,7 +1,6 @@
 import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from '../../../data-graph/command.js';
-import type { EntityMutationCommandExecutionRuntime } from '../../../data-graph/entity-mutation-command.js';
 import {
   resolveQuerySpec,
   type PlainGraphRead,
@@ -24,6 +23,7 @@ import { selectionAnd } from '../../../model/query/selection-ast.js';
 import type { RelationshipFact } from '../../../model/relation/command.js';
 import { isJsonValue } from '../../../value/json.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
+import type { EntityMutationCommandExecutionRuntime } from '../../entity-mutation/command.js';
 import type {
   ManyToManyRelationshipCommandExecutionRuntime,
   OrderedRelationshipCommandExecutionRuntime,

@@ -1,13 +1,5 @@
 import { Effect, Stream } from 'effect';
 
-import {
-  isEntityMutationCommandDiagnostic,
-  isEntityMutationDeltaForCommand,
-  type EntityMutationCommand,
-  type EntityMutationCommandDiagnostic,
-  type EntityMutationCommandExecutionRuntime,
-  type EntityMutationDelta,
-} from '../../../data-graph/entity-mutation-command.js';
 import type { GraphCommandSpec } from '../../../model/command/command.js';
 import { resolveQuerySpec, type QueryOrView } from '../../../model/query/query.js';
 import { hasRelationImage } from '../../../model/query/selection-ast.js';
@@ -19,6 +11,14 @@ import {
 import { isJsonValue } from '../../../value/json.js';
 import { isRecord } from '../../../value/object.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
+import {
+  isEntityMutationCommandDiagnostic,
+  isEntityMutationDeltaForCommand,
+  type EntityMutationCommand,
+  type EntityMutationCommandDiagnostic,
+  type EntityMutationCommandExecutionRuntime,
+  type EntityMutationDelta,
+} from '../../entity-mutation/command.js';
 import {
   isGraphCommandProtocolError,
   toGraphCommandRequest,

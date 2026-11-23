@@ -1,5 +1,8 @@
 import type { Effect } from 'effect';
 
+import type { AnyEntityDefinition } from '../../model/entity/definition.js';
+import type { InferEntityMutationRecord } from '../../model/entity/field.js';
+import type { AnyEntityRef, EntityRef, EntityRefLocator } from '../../model/entity/ref/model.js';
 import {
   mutateEntity,
   type CreateEntityMutationCommand,
@@ -9,10 +12,7 @@ import {
   type EntityMutationConditionOptions,
   type EntityMutationDelta,
   type UpdateEntityMutationCommand,
-} from '../../data-graph/entity-mutation-command.js';
-import type { AnyEntityDefinition } from '../../model/entity/definition.js';
-import type { InferEntityMutationRecord } from '../../model/entity/field.js';
-import type { AnyEntityRef, EntityRef, EntityRefLocator } from '../../model/entity/ref/model.js';
+} from '../entity-mutation/command.js';
 
 export type ExecutableEntityMutationCommand<
   TCommand extends EntityMutationCommand = EntityMutationCommand,

@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 
-import type { EntityMutationCommandExecutionRuntime } from '../../data-graph/entity-mutation-command.js';
 import type { GraphCommandSpec } from '../../model/command/command.js';
 import type { AnyEntityDefinition } from '../../model/entity/definition.js';
 import type { InferEntityRecord } from '../../model/entity/field.js';
 import type { AnyEntityRef, EntityRefLocator } from '../../model/entity/ref/model.js';
 import type { QueryBuilder, QueryOrView } from '../../model/query/query.js';
 import type { Selection } from '../../model/query/selection/selection.js';
+import type { EntityMutationCommandExecutionRuntime } from '../entity-mutation/command.js';
 import type { BoundGraphRead, ExecutableGraphRead, GraphReadExecutor } from '../query/binding.js';
 import {
   bindGraphRead,

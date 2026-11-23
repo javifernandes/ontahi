@@ -1,9 +1,5 @@
 import { Effect } from 'effect';
 
-import type {
-  EntityMutationCommand,
-  EntityMutationDelta,
-} from '../../data-graph/entity-mutation-command.js';
 import {
   createMutationReactionRunner,
   type AppliedRelationshipMutationResult,
@@ -19,6 +15,7 @@ import type {
   RelationshipCommand,
   RelationshipCommandExecutor,
 } from '../../data-graph/relationship-command.js';
+import type { EntityMutationCommand, EntityMutationDelta } from '../entity-mutation/command.js';
 
 import { deferDataGraphPostCommitWork, getRequiredDataGraphRuntime } from './data-graph.js';
 import { recordAppliedMutationOutcome } from './unit-of-work.js';
