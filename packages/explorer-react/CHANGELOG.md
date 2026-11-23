@@ -1,5 +1,14 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.24
+
+### Patch Changes
+
+- @ontahi/core@1.0.0-alpha.24
+  - @ontahi/language@1.0.0-alpha.24
+  - @ontahi/language-codemirror@1.0.0-alpha.24
+  - @ontahi/react@1.0.0-alpha.24
+
 ## 1.0.0-alpha.23
 
 ### Patch Changes

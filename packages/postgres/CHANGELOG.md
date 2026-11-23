@@ -1,5 +1,12 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.24
+
+### Patch Changes
+
+- @ontahi/core@1.0.0-alpha.24
+  - @ontahi/sql@1.0.0-alpha.24
+
 ## 1.0.0-alpha.23
 
 ### Patch Changes

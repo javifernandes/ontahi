@@ -1,5 +1,11 @@
 # @ontahi/codegen
 
+## 1.0.0-alpha.24
+
+### Patch Changes
+
+- fd4036d: Publish the client entity generator that targets the public `@ontahi/core` package root.
+
 ## 1.0.0-alpha.23
 
 ### Patch Changes
