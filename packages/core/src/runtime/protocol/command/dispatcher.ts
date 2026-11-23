@@ -10,7 +10,6 @@ import {
   toEntityMutationAffordanceDescriptor,
   type EntityMutationAffordanceDescriptor,
 } from '../../../data-graph/entity-mutation-affordance.js';
-import { getEntityIdentityLocator, isEntityRef } from '../../../data-graph/ref/index.js';
 import {
   directRelationshipCommandAffordance,
   manyToManyRelationshipCommandAffordance,
@@ -19,6 +18,8 @@ import {
 } from '../../../data-graph/relationship-command-affordance.js';
 import { safeParseGraphSchema } from '../../../data-graph/schema.js';
 import type { SelectionExpression, SelectionPredicate } from '../../../data-graph/selection-ast.js';
+import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
+import { isEntityRef } from '../../../model/entity/ref/model.js';
 import {
   isRelationshipCommandResult,
   relationshipCommandDiagnosticFromError,

@@ -4,7 +4,6 @@ import {
   type EntityVariantDescriptor,
 } from '../../../data-graph/entity-variant-contract.js';
 import type { QueryBuilder, QuerySpec } from '../../../data-graph/query.js';
-import { isEntityRef } from '../../../data-graph/ref/index.js';
 import { GraphSchemaValidationError, parseGraphSchema } from '../../../data-graph/schema.js';
 import {
   assertNoRelationImage,
@@ -15,6 +14,7 @@ import {
 import { withinSelectionBudget } from '../../../data-graph/selection-budget.js';
 import { applyViewToQuerySpec } from '../../../data-graph/view-query.js';
 import { createRecursiveEntityViewFromAst, type EntityViewAst } from '../../../data-graph/view.js';
+import { isEntityRef } from '../../../model/entity/ref/model.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
 

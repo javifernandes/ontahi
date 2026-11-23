@@ -1,23 +1,22 @@
 import { Effect } from 'effect';
 
 import { toEffect } from '../../computation/effect.js';
+import {
+  bindEntityRefInputResolver,
+  type EntityRefInputResolutionScope,
+} from '../../computation/entity-reference/input-normalization.js';
+import { safeParseUnknownGraphSchema } from '../../computation/schema/zod.js';
 import type {
   AnyEntityDefinition,
   GraphSchemaFields,
   GraphSchemaLike,
   ReferenceFieldDefinition,
 } from '../../data-graph/definitions.js';
-import {
-  bindEntityRefInputResolver,
-  getEntityIdentityLocator,
-  getGraphSchemaReferenceResolver,
-  isEntityRef,
-  type EntityRefInputResolutionScope,
-  type EntityRefInputResolver,
-  type EntityRef,
-} from '../../data-graph/ref/index.js';
-import { variantReferenceInputError } from '../../data-graph/ref/variant-input.js';
-import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
+import { getEntityIdentityLocator } from '../../model/entity/ref/identity.js';
+import type { EntityRefInputResolver } from '../../model/entity/ref/input.js';
+import { isEntityRef, type EntityRef } from '../../model/entity/ref/model.js';
+import { getGraphSchemaReferenceResolver } from '../../model/entity/ref/schema-reference.js';
+import { variantReferenceInputError } from '../../model/entity/ref/variant-input.js';
 import { isPlainObject } from '../../value/object.js';
 
 import { failOperation } from './failures.js';

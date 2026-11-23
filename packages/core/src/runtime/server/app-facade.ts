@@ -1,25 +1,23 @@
 import type { AnyEntityDefinition } from '../../data-graph/definitions.js';
-import {
-  queryRef,
-  type EntityName,
-  type HttpIngressMetadata,
-} from '../../data-graph/operations.js';
 import { graphOutput } from '../../data-graph/output/index.js';
-import {
-  bindEntityRefOperationProxy,
-  createEntityRef,
-  type BoundEntityRefOperationProxy,
-  type EntityRefLocatorDeclarations,
-  type EntityRef,
-  type EntityRefLocator,
-  type SemanticSelectionPublicInput,
-} from '../../data-graph/ref/index.js';
 import {
   bindEntityRefRelationshipCommands,
   type BoundEntityRefRelationshipCommands,
   type RelationshipCommandExecutor,
 } from '../../data-graph/relationship-command.js';
 import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
+import type { SemanticSelectionPublicInput } from '../../model/entity/ref/input.js';
+import {
+  createEntityRef,
+  type EntityRef,
+  type EntityRefLocator,
+  type EntityRefLocatorDeclarations,
+} from '../../model/entity/ref/model.js';
+import {
+  bindEntityRefOperationProxy,
+  type BoundEntityRefOperationProxy,
+} from '../query/entity-ref-binding.js';
+import { queryRef, type EntityName, type HttpIngressMetadata } from '../query/graph-api.js';
 
 import type { ArchitectureDefinition, ArchitectureNamespace } from './architecture-types.js';
 import { authenticated, getCurrentPrincipal, requirePrincipal } from './authentication.js';

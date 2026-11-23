@@ -8,13 +8,13 @@ import {
   isEntityMutationAffordanceDescriptor,
   type EntityMutationAffordanceDescriptor,
 } from '../../../data-graph/entity-mutation-affordance.js';
-import { isEntityRef, type AnyEntityRef } from '../../../data-graph/ref/index.js';
 import {
   isRelationshipCommandAffordanceDescriptor,
   type RelationshipCommandAffordanceDescriptor,
 } from '../../../data-graph/relationship-command-affordance.js';
 import { safeParseGraphSchema } from '../../../data-graph/schema.js';
 import type { SelectionAst } from '../../../data-graph/selection-ast.js';
+import { isEntityRef, type AnyEntityRef } from '../../../model/entity/ref/model.js';
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,

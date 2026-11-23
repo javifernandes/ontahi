@@ -1,12 +1,12 @@
-import type {
-  ClientCacheKeySegment,
-  DomainOperationClientCacheMetadata,
-} from '../../../data-graph/operations.js';
 import {
   isEntityRef,
   normalizeEntityRef,
   type AnyEntityRef,
 } from '../../../model/entity/ref/model.js';
+import type {
+  ClientCacheKeySegment,
+  DomainOperationClientCacheMetadata,
+} from '../../../model/operation/client-metadata.js';
 import type { GraphOutputDescriptor } from '../../../model/operation/output.js';
 import type { GraphClientCache } from '../cache/index.js';
 
