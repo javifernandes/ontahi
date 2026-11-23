@@ -1,5 +1,12 @@
 # @ontahi/codegen
 
+## 1.0.0-alpha.25
+
+### Patch Changes
+
+- a01df80: Restore generated bridge query input alias declarations after moving client imports to the
+  public `@ontahi/core` package root.
+
 ## 1.0.0-alpha.24
 
 ### Patch Changes
