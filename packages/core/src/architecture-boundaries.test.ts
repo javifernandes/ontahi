@@ -68,4 +68,22 @@ describe('Core architecture boundaries', () => {
       expect(await findForbiddenImports(boundary, forbidden)).toEqual([]);
     },
   );
+
+  it('keeps substantial data-graph implementations explicitly allowlisted', async () => {
+    const files = await productionTypeScriptFiles(path.join(sourceRoot, 'data-graph'));
+    const substantialFiles = (
+      await Promise.all(
+        files.map(async file => {
+          const lineCount = (await readFile(file, 'utf8')).split('\n').length;
+          return lineCount > 100 ? path.relative(sourceRoot, file) : undefined;
+        }),
+      )
+    ).filter((file): file is string => file !== undefined);
+
+    expect(substantialFiles.sort()).toEqual([
+      'data-graph/definitions.ts',
+      'data-graph/fixtures.test-support.ts',
+      'data-graph/schema-descriptor.ts',
+    ]);
+  });
 });

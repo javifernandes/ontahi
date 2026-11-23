@@ -1,5 +1,5 @@
-import { getGraphReadOutputDescriptor } from '../../../data-graph/output/index.js';
 import type { PlainGraphRead } from '../../../model/query/query.js';
+import { getGraphReadOutputDescriptor } from '../../query/output-reflection.js';
 
 import type { GraphClientCacheWriteResult } from './records.js';
 

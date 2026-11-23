@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { evaluatePortableOperationCondition } from '../../../data-graph/model-expression/index.js';
+import { evaluatePortableOperationCondition } from '../../../computation/expression/condition.js';
 import {
   assertValidDomainOperationExecution,
   type OperationRetryBackoff,

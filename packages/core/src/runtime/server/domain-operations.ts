@@ -1,5 +1,9 @@
 import { Effect, Utils } from 'effect';
 
+import {
+  type OperationConditionContracts,
+  type PortableOperationConditions,
+} from '../../computation/expression/condition.js';
 import { normalizeGraphSchemaClientInput } from '../../data-graph/client-input.js';
 import { GraphCommand } from '../../data-graph/command.js';
 import {
@@ -11,16 +15,11 @@ import {
   type InferGraphSchemaValue,
   type InferEntityRecord,
 } from '../../data-graph/definitions.js';
-import {
-  type OperationConditionContracts,
-  type PortableOperationConditions,
-} from '../../data-graph/model-expression/index.js';
 import type { DomainOperationExecutionMetadata } from '../../data-graph/operation-execution.js';
 import {
   attachOperationInputSchema,
   type OperationInputSchema,
 } from '../../data-graph/operation-input.js';
-import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
 import type { GraphReadSpec } from '../../data-graph/query.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { Selection } from '../../data-graph/selection-value.js';
@@ -31,6 +30,7 @@ import {
   type SemanticSelectionPublicInput,
 } from '../../model/entity/ref/input.js';
 import type { EntityRef, EntityRefLocator, SchemaEntityRef } from '../../model/entity/ref/model.js';
+import type { GraphOutputDescriptor } from '../../model/operation/output.js';
 import { hasOwn } from '../../value/object.js';
 import {
   createRuntimeBoundDataGraphApi,

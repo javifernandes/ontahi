@@ -1,7 +1,7 @@
-import { createRuntimeReflectedRelatedEntityDataReader } from '../../../data-graph/reflected-related-entity-data.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import type { RelationshipFact } from '../../../model/relation/command.js';
 import type { DataGraphDefaultStorage } from '../contract.js';
+import { createRuntimeReflectedRelatedEntityDataReader } from '../reflected-related-entity-data.js';
 
 import type { InMemoryDataset } from './materialization.js';
 import {

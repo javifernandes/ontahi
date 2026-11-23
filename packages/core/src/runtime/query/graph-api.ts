@@ -1,9 +1,9 @@
+import type { PortableOperationConditions } from '../../computation/expression/condition.js';
 import type { InferGraphSchemaClientInput } from '../../computation/schema/client-input.js';
 import {
   attachOperationInputSchema,
   type OperationInputSchema,
 } from '../../computation/schema/operation-input.js';
-import type { PortableOperationConditions } from '../../data-graph/model-expression/index.js';
 import {
   isGraphSchemaDefinition,
   toGraphSchemaDescriptor,

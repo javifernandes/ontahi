@@ -1,4 +1,3 @@
-import { getGraphOutputDescriptor } from '../../data-graph/output/index.js';
 import { isGraphSchemaDefinition } from '../../data-graph/schema-descriptor.js';
 import type { DomainOperationBridgeMetadata } from '../../model/operation/client-metadata.js';
 import type { DomainOperationReceiverDescriptor } from '../../model/operation/definition.js';
@@ -13,6 +12,7 @@ import type {
   ResolveDomainOperations,
   ResolveGraphOperations,
 } from '../query/graph-api.js';
+import { getGraphOutputDescriptor } from '../query/output-reflection.js';
 
 type ResolvedDomainOperation = {
   id: string;

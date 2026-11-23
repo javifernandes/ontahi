@@ -1,4 +1,4 @@
-import type { PortableOperationConditions } from '../../../data-graph/model-expression/index.js';
+import type { PortableOperationConditions } from '../../../computation/expression/condition.js';
 import type { DomainOperationExecutionMetadata } from '../../../data-graph/operation-execution.js';
 import type { EffectSuccessPayload } from '../effect-intents/types.js';
 import type { LayerConcern, LayerScopedOptions } from '../layer-types.js';

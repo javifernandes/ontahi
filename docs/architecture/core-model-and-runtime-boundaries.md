@@ -314,3 +314,22 @@ constructors now live in `value/schema` as well. `data-graph` retains the histor
 supplies `InferGraphSchemaFields`; this keeps optional-field and Entity-reference inference at the
 composition boundary while moving the dependency-free runtime representation to its intended
 owner.
+
+## Final boundary checkpoint
+
+The extraction is now complete enough for `data-graph` to act as the public composition and
+compatibility surface proposed in Slice 1. Production code under that namespace fell from roughly
+19,500 lines at the Slice 7 checkpoint to about 1,500 lines. Only three files remain over 100 lines:
+
+- `definitions.ts`, which intentionally composes value schemas, Entities, Views, Relations, and
+  reference-aware inference into the public authoring API;
+- `schema-descriptor.ts`, which reflects those composite declarations into model-owned portable
+  descriptors;
+- `fixtures.test-support.ts`, which is shared test support rather than production ownership.
+
+Graph protocols, storage, client cache, operation assembly, reference input handling, schema
+validation, expression evaluation, relation-root execution, mutation/reaction execution,
+affordance reflection, and runtime inspection now import their model, computation, or runtime
+owners directly. Historical `data-graph` paths remain re-export facades so documented package
+imports continue to work. The architecture test allowlists the three substantial files above and
+fails if a new implementation grows inside the compatibility namespace.
