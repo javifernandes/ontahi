@@ -8,20 +8,17 @@ import {
   resolveDirectRelationConstraints,
   resolveDirectRelationCountConstraints,
 } from '../../../data-graph/relation-constraint.js';
-import {
-  appliedRelationshipCommand,
-  notAppliedRelationshipCommand,
-  type RelationshipCommandResult,
-} from '../../../data-graph/relationship-command-result.js';
-import type {
-  RelationshipCommand,
-  RelationshipFact,
-} from '../../../data-graph/relationship-command.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import {
   isReferenceFieldDefinition,
   type AnyReferenceFieldDefinition,
 } from '../../../model/entity/reference-field.js';
+import {
+  appliedRelationshipCommand,
+  notAppliedRelationshipCommand,
+  type RelationshipCommandResult,
+} from '../../../model/relation/command-result.js';
+import type { RelationshipCommand, RelationshipFact } from '../../../model/relation/command.js';
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';

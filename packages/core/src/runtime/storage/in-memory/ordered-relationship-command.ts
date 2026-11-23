@@ -1,20 +1,20 @@
 import { Effect } from 'effect';
 
 import { lowerEntityReferenceValue } from '../../../data-graph/reference-field.js';
+import { type AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
+import { entityRefsEqual, type AnyEntityRef } from '../../../model/entity/ref/model.js';
+import { isReferenceFieldDefinition } from '../../../model/entity/reference-field.js';
 import {
   appliedRelationshipCommand,
   notAppliedRelationshipCommand,
   orderedRelationshipDiagnostic,
   type RelationshipCommandResult,
-} from '../../../data-graph/relationship-command-result.js';
+} from '../../../model/relation/command-result.js';
 import type {
   OrderedRelationshipCommand,
   OrderedRelationshipPosition,
-} from '../../../data-graph/relationship-command.js';
-import { type AnyEntityDefinition } from '../../../model/entity/definition.js';
-import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
-import { entityRefsEqual, type AnyEntityRef } from '../../../model/entity/ref/model.js';
-import { isReferenceFieldDefinition } from '../../../model/entity/reference-field.js';
+} from '../../../model/relation/command.js';
 import type { RelationDefinition } from '../../../model/relation/definition.js';
 
 import { InMemoryDataGraphError } from './command.js';

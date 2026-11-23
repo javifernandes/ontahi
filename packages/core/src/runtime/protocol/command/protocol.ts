@@ -17,6 +17,8 @@ import {
   isRelationshipCommandAffordanceDescriptor,
   type RelationshipCommandAffordanceDescriptor,
 } from '../../../data-graph/relationship-command-affordance.js';
+import { safeParseGraphSchema } from '../../../data-graph/schema.js';
+import type { SelectionAst } from '../../../data-graph/selection-ast.js';
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,
@@ -24,9 +26,7 @@ import type {
   OrderedRelationshipPosition,
   RelationshipCommand,
   RelationshipEndpointSelection,
-} from '../../../data-graph/relationship-command.js';
-import { safeParseGraphSchema } from '../../../data-graph/schema.js';
-import type { SelectionAst } from '../../../data-graph/selection-ast.js';
+} from '../../../model/relation/command.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
 import { validateGraphReadSelection } from '../read/protocol.js';

@@ -18,17 +18,17 @@ import {
   type RelatedRootReadMode,
   type RelatedRootReadSpec,
 } from '../../../data-graph/relation-root.js';
+import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
+import { selectionAnd } from '../../../model/query/selection-ast.js';
+import type { RelationshipFact } from '../../../model/relation/command.js';
+import { isJsonValue } from '../../../value/json.js';
+import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
 import type {
   ManyToManyRelationshipCommandExecutionRuntime,
   OrderedRelationshipCommandExecutionRuntime,
   RelationshipCommandExecutionRuntime,
-  RelationshipFact,
-} from '../../../data-graph/relationship-command.js';
-import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
-import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
-import { selectionAnd } from '../../../model/query/selection-ast.js';
-import { isJsonValue } from '../../../value/json.js';
-import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
+} from '../../relation/command.js';
 import type { DataGraphTransactionCapability } from '../../transaction.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';

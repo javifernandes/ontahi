@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
-import type { RelationshipCommandExecutor } from '../../data-graph/relationship-command.js';
+import type { RelationshipCommandExecutor } from '../relation/command.js';
 import {
   DataGraphTransactionUnavailableError,
   isDataGraphTransactionCapability,

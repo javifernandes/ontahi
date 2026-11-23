@@ -7,7 +7,7 @@ import {
   isRelationshipCommandDiagnostic,
   type RelationshipCommandDiagnostic,
   type RelationshipCommandResult,
-} from '../../../data-graph/relationship-command-result.js';
+} from '../../../model/relation/command-result.js';
 import { isRecord } from '../../../value/object.js';
 
 import type { GraphCommandCapabilitiesResult, GraphCommandProtocolError } from './protocol.js';
