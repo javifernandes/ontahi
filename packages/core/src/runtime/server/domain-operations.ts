@@ -22,7 +22,6 @@ import {
 } from '../../data-graph/operation-input.js';
 import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
 import type { GraphReadSpec } from '../../data-graph/query.js';
-import { RelationRootSelection } from '../../data-graph/relation-root.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
@@ -49,6 +48,7 @@ import {
   type DomainOperationReceiverDescriptor,
   type ResolveDomainOperations,
 } from '../query/graph-api.js';
+import { RelationRootSelection } from '../query/relation-root.js';
 
 import {
   getOperationRuntimeContext,

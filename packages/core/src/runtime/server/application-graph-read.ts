@@ -9,7 +9,7 @@ import {
   type QuerySpec,
   type ViewDefinition,
 } from '../../data-graph/query.js';
-import type { RelatedRootReadSpec } from '../../data-graph/relation-root.js';
+import type { RelatedRootReadSpec } from '../../model/query/related-root.js';
 
 import type { ArchitectureDefinition } from './architecture-types.js';
 import { runServerEffectForArchitecture } from './runtime-effect.js';

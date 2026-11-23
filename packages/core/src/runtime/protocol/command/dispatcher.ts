@@ -5,17 +5,6 @@ import {
   type StoredFieldName,
   type WritableStoredFieldName,
 } from '../../../data-graph/definitions.js';
-import {
-  reflectEntityMutationAffordances,
-  toEntityMutationAffordanceDescriptor,
-  type EntityMutationAffordanceDescriptor,
-} from '../../../data-graph/entity-mutation-affordance.js';
-import {
-  directRelationshipCommandAffordance,
-  manyToManyRelationshipCommandAffordance,
-  orderedRelationshipCommandAffordance,
-  type RelationshipCommandAffordanceDescriptor,
-} from '../../../data-graph/relationship-command-affordance.js';
 import { safeParseGraphSchema } from '../../../data-graph/schema.js';
 import type { SelectionExpression, SelectionPredicate } from '../../../data-graph/selection-ast.js';
 import { getEntityIdentityLocator } from '../../../model/entity/ref/identity.js';
@@ -41,10 +30,21 @@ import {
 import { validateGraphReadSelection } from '../read/protocol.js';
 
 import {
+  reflectEntityMutationAffordances,
+  toEntityMutationAffordanceDescriptor,
+  type EntityMutationAffordanceDescriptor,
+} from './entity-mutation-affordance.js';
+import {
   graphCommandProtocolError,
   parseGraphCommandFamilyRequest,
   resolveGraphCommandRequest,
 } from './protocol.js';
+import {
+  directRelationshipCommandAffordance,
+  manyToManyRelationshipCommandAffordance,
+  orderedRelationshipCommandAffordance,
+  type RelationshipCommandAffordanceDescriptor,
+} from './relationship-affordance.js';
 import { type GraphCommandDispatchResponse } from './response.js';
 
 export { isGraphCommandRejection, type GraphCommandDispatchResponse } from './response.js';

@@ -1,15 +1,15 @@
 import { Effect, Exit, Fiber, Runtime } from 'effect';
 
+import type { SelectionAst } from '../../data-graph/selection-ast.js';
+import { normalizeEntityRef, type AnyEntityRef } from '../../model/entity/ref/model.js';
+import { cloneJson } from '../../value/json.js';
 import type {
   CommittedMutation,
   CommittedMutationProvenance,
   CommittedMutationSet,
-} from '../../data-graph/mutation-impact.js';
-import type { AppliedMutationOutcome } from '../../data-graph/mutation-reaction.js';
-import type { SelectionAst } from '../../data-graph/selection-ast.js';
-import { normalizeEntityRef, type AnyEntityRef } from '../../model/entity/ref/model.js';
-import { cloneJson } from '../../value/json.js';
+} from '../mutation/impact.js';
 import { toGraphCommandRequest, type GraphCommandRequest } from '../protocol/command/protocol.js';
+import type { AppliedMutationOutcome } from '../reaction/mutation.js';
 
 import { getServerRuntimeConfig } from './config.js';
 import {

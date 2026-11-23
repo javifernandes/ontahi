@@ -1,6 +1,7 @@
-import type { CommittedMutationSet } from '../data-graph/mutation-impact.js';
 import type { JsonValue } from '../value/json.js';
 import { isRecord } from '../value/object.js';
+
+import type { CommittedMutationSet } from './mutation/impact.js';
 
 export type OperationValidationIssue = {
   path?: string;

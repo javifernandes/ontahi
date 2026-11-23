@@ -1,0 +1,690 @@
+import { isEntityRef } from '../../model/entity/ref/model.js';
+import type { RelationshipCommandResult } from '../../model/relation/command-result.js';
+import { isJsonValue } from '../../value/json.js';
+import { hasOwn, isRecord } from '../../value/object.js';
+import type { EntityMutationCommand, EntityMutationDelta } from '../entity-mutation/command.js';
+import { parseGraphCommandRequest } from '../protocol/command/protocol.js';
+import type {
+  CanonicalManyToManyRelationIdentity,
+  CanonicalOrderedRelationIdentity,
+  CanonicalRelationIdentity,
+  ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  OrderedRelationshipDelta,
+  RelationshipCommand,
+  RelationshipDelta,
+} from '../relation/command.js';
+import type { EventOccurrence } from '../server/events/index.js';
+
+export type MutationCausality = {
+  outcomeId: string;
+  rootOutcomeId: string;
+  parentOutcomeId?: string;
+  depth: number;
+};
+
+export type AppliedRelationshipMutationOutcome = {
+  kind: 'applied-mutation-outcome';
+  mutationKind: 'relationship-command';
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand;
+  delta: RelationshipDelta | OrderedRelationshipDelta;
+  causality: MutationCausality;
+};
+
+export type AppliedEntityMutationOutcome = {
+  kind: 'applied-mutation-outcome';
+  mutationKind: 'entity-mutation-command';
+  command: EntityMutationCommand;
+  delta: EntityMutationDelta;
+  causality: MutationCausality;
+};
+
+export type AppliedMutationOutcome =
+  | AppliedRelationshipMutationOutcome
+  | AppliedEntityMutationOutcome;
+
+export type ExecuteRelationshipCommandIntent = {
+  kind: 'execute-relationship-command';
+  command: RelationshipCommand;
+};
+
+export type ExecuteManyToManyRelationshipCommandIntent = {
+  kind: 'execute-many-to-many-relationship-command';
+  command: ManyToManyRelationshipCommand;
+};
+
+export type ExecuteOrderedRelationshipCommandIntent = {
+  kind: 'execute-ordered-relationship-command';
+  command: OrderedRelationshipCommand;
+};
+
+export type ExecuteEntityMutationCommandIntent = {
+  kind: 'execute-entity-mutation-command';
+  command: EntityMutationCommand;
+};
+
+export type InvokeOperationReactionIntent = {
+  kind: 'invoke-operation';
+  request: {
+    kind: 'invoke';
+    operationId: string;
+    input?: unknown;
+  };
+};
+
+export type EmitEventReactionIntent = {
+  kind: 'emit-event';
+  event: unknown;
+};
+
+export type MutationReactionIntent =
+  | ExecuteRelationshipCommandIntent
+  | ExecuteManyToManyRelationshipCommandIntent
+  | ExecuteOrderedRelationshipCommandIntent
+  | ExecuteEntityMutationCommandIntent
+  | InvokeOperationReactionIntent
+  | EmitEventReactionIntent;
+
+export type MutationReactionMatch =
+  | {
+      mutationKind: 'relationship-command';
+      action?:
+        | RelationshipCommand['action']
+        | ManyToManyRelationshipCommand['action']
+        | OrderedRelationshipCommand['action'];
+      relation?:
+        | CanonicalRelationIdentity
+        | CanonicalManyToManyRelationIdentity
+        | CanonicalOrderedRelationIdentity;
+    }
+  | {
+      mutationKind: 'entity-mutation-command';
+      action?: EntityMutationCommand['action'];
+      entityName?: string;
+    };
+
+export type MutationReaction = {
+  id: string;
+  delivery: 'inline' | 'best-effort' | 'durable';
+  when: MutationReactionMatch;
+  react: (outcome: AppliedMutationOutcome) => readonly MutationReactionIntent[];
+};
+
+export type MutationReactionFailure = {
+  code:
+    | 'reaction_failed'
+    | 'follow_up_failed'
+    | 'max_depth_exceeded'
+    | 'follow_up_unavailable'
+    | 'durable_acceptance_unavailable'
+    | 'durable_intent_not_serializable'
+    | 'durable_acceptance_failed';
+  message: string;
+};
+
+export type DurableMutationReactionEnvelope = {
+  kind: 'durable-mutation-reaction';
+  reactionId: string;
+  reactionKey: string;
+  source: AppliedMutationOutcome;
+  intent: MutationReactionIntent;
+};
+
+export type DurableMutationReactionAcceptance = {
+  acceptanceId: string;
+};
+
+export type MutationReactionExecution = {
+  reactionId: string;
+  reactionKey: string;
+  sourceOutcomeId: string;
+  delivery: MutationReaction['delivery'];
+  intentIndex?: number;
+} & (
+  | { status: 'applied'; outcome: AppliedMutationOutcome }
+  | { status: 'completed'; result: unknown }
+  | { status: 'emitted'; occurrence?: EventOccurrence }
+  | { status: 'accepted'; acceptance: DurableMutationReactionAcceptance }
+  | {
+      status: 'not-applied';
+      diagnostic: Extract<RelationshipCommandResult, { status: 'not-applied' }>['diagnostic'];
+    }
+  | { status: 'failed' | 'depth-exceeded'; failure: MutationReactionFailure }
+);
+
+export type MutationReactionResult = {
+  root: AppliedMutationOutcome;
+  reactions: MutationReactionExecution[];
+};
+
+export type AppliedRelationshipMutationResult = {
+  status: 'applied';
+  outcome: AppliedRelationshipMutationOutcome;
+  reactions: MutationReactionExecution[];
+};
+
+export type NotAppliedRelationshipMutationResult = Extract<
+  RelationshipCommandResult,
+  { status: 'not-applied' }
+>;
+
+export type RelationshipMutationResult =
+  | AppliedRelationshipMutationResult
+  | NotAppliedRelationshipMutationResult;
+
+export type CreateMutationReactionRunnerOptions = {
+  reactions: readonly MutationReaction[];
+  executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipCommandResult>;
+  executeManyToManyRelationshipCommand?: (
+    command: ManyToManyRelationshipCommand,
+  ) => Promise<RelationshipCommandResult>;
+  executeOrderedRelationshipCommand?: (
+    command: OrderedRelationshipCommand,
+  ) => Promise<RelationshipCommandResult>;
+  executeEntityMutationCommand?: (command: EntityMutationCommand) => Promise<EntityMutationDelta>;
+  invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
+  emitEvent?: (event: unknown) => Promise<EventOccurrence | void>;
+  acceptDurableReaction?: (
+    envelope: DurableMutationReactionEnvelope,
+  ) => Promise<DurableMutationReactionAcceptance>;
+  createOutcomeId: () => string;
+  maxDepth?: number;
+};
+
+export const assertMutationReactionConfiguration = (
+  reactions: readonly MutationReaction[],
+  maxDepth = 8,
+) => {
+  if (!Number.isInteger(maxDepth) || maxDepth < 0) {
+    throw new Error('Mutation Reaction maximum depth must be a non-negative integer.');
+  }
+  if (reactions.some(reaction => reaction.id.length === 0)) {
+    throw new Error('Mutation Reactions require a non-empty id.');
+  }
+  if (new Set(reactions.map(reaction => reaction.id)).size !== reactions.length) {
+    throw new Error('Mutation Reaction ids must be unique.');
+  }
+};
+
+export type MutationReactionRunner = {
+  (
+    command: RelationshipCommand,
+  ): Promise<MutationReactionResult | NotAppliedRelationshipMutationResult>;
+  createAppliedOutcome: (
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
+  ) => AppliedRelationshipMutationOutcome;
+  createAppliedEntityOutcome: (
+    command: EntityMutationCommand,
+    delta: EntityMutationDelta,
+  ) => AppliedEntityMutationOutcome;
+  react: (outcome: AppliedMutationOutcome) => Promise<MutationReactionResult>;
+  applied: (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    delta: RelationshipDelta,
+  ) => Promise<MutationReactionResult>;
+};
+
+const isRelationshipCommandIntent = (
+  command: unknown,
+  kind:
+    | RelationshipCommand['kind']
+    | ManyToManyRelationshipCommand['kind']
+    | OrderedRelationshipCommand['kind'],
+) =>
+  isRecord(command) &&
+  command.kind === kind &&
+  parseGraphCommandRequest({
+    version: kind === 'ordered-relationship-command' ? 2 : 1,
+    kind: 'graph-command',
+    command,
+  }).success;
+
+const isEntityMutationCommand = (command: unknown): command is EntityMutationCommand => {
+  if (
+    !isRecord(command) ||
+    command.kind !== 'entity-mutation-command' ||
+    typeof command.entityName !== 'string'
+  ) {
+    return false;
+  }
+  if (command.action === 'create') return isRecord(command.values);
+  if (command.action === 'update') {
+    return isEntityRef(command.target) && isRecord(command.values);
+  }
+  return command.action === 'delete' && isEntityRef(command.target);
+};
+
+const isMutationReactionIntent = (intent: unknown): intent is MutationReactionIntent => {
+  if (!isRecord(intent)) return false;
+  if (intent.kind === 'execute-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'relationship-command');
+  }
+  if (intent.kind === 'execute-many-to-many-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'many-to-many-relationship-command');
+  }
+  if (intent.kind === 'execute-ordered-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'ordered-relationship-command');
+  }
+  if (intent.kind === 'execute-entity-mutation-command') {
+    return isEntityMutationCommand(intent.command);
+  }
+  if (intent.kind === 'invoke-operation') {
+    return (
+      isRecord(intent.request) &&
+      intent.request.kind === 'invoke' &&
+      typeof intent.request.operationId === 'string'
+    );
+  }
+  return intent.kind === 'emit-event' && hasOwn(intent, 'event');
+};
+
+const sameRelation = (
+  left:
+    | CanonicalRelationIdentity
+    | CanonicalManyToManyRelationIdentity
+    | CanonicalOrderedRelationIdentity,
+  right:
+    | CanonicalRelationIdentity
+    | CanonicalManyToManyRelationIdentity
+    | CanonicalOrderedRelationIdentity,
+) =>
+  left.sourceEntityName === right.sourceEntityName &&
+  left.targetEntityName === right.targetEntityName &&
+  ('fieldName' in left
+    ? 'fieldName' in right && left.fieldName === right.fieldName
+    : 'relationName' in right &&
+      left.relationName === right.relationName &&
+      left.cardinality === right.cardinality);
+
+const reactToOutcome = (
+  reaction: MutationReaction,
+  outcome: AppliedMutationOutcome,
+): readonly MutationReactionIntent[] | undefined => {
+  if (reaction.when.mutationKind === 'relationship-command') {
+    if (
+      outcome.mutationKind !== 'relationship-command' ||
+      (reaction.when.action && reaction.when.action !== outcome.command.action) ||
+      (reaction.when.relation && !sameRelation(reaction.when.relation, outcome.command.relation))
+    ) {
+      return undefined;
+    }
+    return reaction.react(outcome);
+  }
+  if (
+    outcome.mutationKind !== 'entity-mutation-command' ||
+    (reaction.when.action && reaction.when.action !== outcome.command.action) ||
+    (reaction.when.entityName && reaction.when.entityName !== outcome.command.entityName)
+  ) {
+    return undefined;
+  }
+  return reaction.react(outcome);
+};
+
+export const createMutationReactionRunner = ({
+  reactions,
+  executeRelationshipCommand,
+  executeManyToManyRelationshipCommand,
+  executeOrderedRelationshipCommand,
+  executeEntityMutationCommand,
+  invokeOperation,
+  emitEvent,
+  acceptDurableReaction,
+  createOutcomeId,
+  maxDepth = 8,
+}: CreateMutationReactionRunnerOptions) => {
+  assertMutationReactionConfiguration(reactions, maxDepth);
+
+  const causalityFor = (parent?: AppliedMutationOutcome): MutationCausality => {
+    const outcomeId = createOutcomeId();
+    if (outcomeId.length === 0) {
+      throw new Error('Applied Mutation Outcomes require a non-empty id.');
+    }
+    return {
+      outcomeId,
+      rootOutcomeId: parent?.causality.rootOutcomeId ?? outcomeId,
+      ...(parent ? { parentOutcomeId: parent.causality.outcomeId } : {}),
+      depth: parent ? parent.causality.depth + 1 : 0,
+    };
+  };
+
+  const applyRelationship = async (
+    command: RelationshipCommand,
+    parent?: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationResult | NotAppliedRelationshipMutationResult> => {
+    const result = await executeRelationshipCommand(command);
+    if (result.status === 'not-applied') return result;
+    const outcome: AppliedRelationshipMutationOutcome = {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'relationship-command',
+      command,
+      delta: result.delta,
+      causality: causalityFor(parent),
+    };
+    return {
+      status: 'applied',
+      outcome,
+      reactions: [],
+    };
+  };
+
+  const applyManyToManyRelationship = async (
+    command: ManyToManyRelationshipCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationResult | NotAppliedRelationshipMutationResult> => {
+    if (!executeManyToManyRelationshipCommand) {
+      throw new Error('Many-to-many Relationship execution for Mutation Reactions is unavailable.');
+    }
+    const result = await executeManyToManyRelationshipCommand(command);
+    if (result.status === 'not-applied') return result;
+    const outcome: AppliedRelationshipMutationOutcome = {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'relationship-command',
+      command,
+      delta: result.delta,
+      causality: causalityFor(parent),
+    };
+    return {
+      status: 'applied',
+      outcome,
+      reactions: [],
+    };
+  };
+
+  const applyOrderedRelationship = async (
+    command: OrderedRelationshipCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationResult | NotAppliedRelationshipMutationResult> => {
+    if (!executeOrderedRelationshipCommand) {
+      throw new Error('Ordered Relationship execution for Mutation Reactions is unavailable.');
+    }
+    const result = await executeOrderedRelationshipCommand(command);
+    if (result.status === 'not-applied') return result;
+    const outcome: AppliedRelationshipMutationOutcome = {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'relationship-command',
+      command,
+      delta: result.delta,
+      causality: causalityFor(parent),
+    };
+    return { status: 'applied', outcome, reactions: [] };
+  };
+
+  const applyEntityMutation = async (
+    command: EntityMutationCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedEntityMutationOutcome> => {
+    if (!executeEntityMutationCommand) {
+      throw new Error('Entity mutation execution for Mutation Reactions is unavailable.');
+    }
+    const causality = causalityFor(parent);
+    const delta = await executeEntityMutationCommand(command);
+    return {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'entity-mutation-command',
+      command,
+      delta,
+      causality,
+    };
+  };
+
+  type ExecutionContext = {
+    reactionId: string;
+    reactionKey: string;
+    sourceOutcomeId: string;
+    delivery: MutationReaction['delivery'];
+    intentIndex: number;
+  };
+
+  const failedExecution = (
+    execution: ExecutionContext,
+    code: MutationReactionFailure['code'],
+    message: string,
+    status: 'failed' | 'depth-exceeded' = 'failed',
+  ): MutationReactionExecution => ({
+    ...execution,
+    status,
+    failure: { code, message },
+  });
+
+  const acceptDurableIntent = async (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+    intent: MutationReactionIntent,
+    execution: ExecutionContext,
+  ): Promise<MutationReactionExecution> => {
+    if (!acceptDurableReaction) {
+      return failedExecution(
+        execution,
+        'durable_acceptance_unavailable',
+        'Durable Mutation Reaction acceptance is unavailable.',
+      );
+    }
+    const envelope: DurableMutationReactionEnvelope = {
+      kind: 'durable-mutation-reaction',
+      reactionId: reaction.id,
+      reactionKey: execution.reactionKey,
+      source,
+      intent,
+    };
+    if (!isJsonValue(envelope)) {
+      return failedExecution(
+        execution,
+        'durable_intent_not_serializable',
+        'Durable Mutation Reaction intent must be serializable.',
+      );
+    }
+    try {
+      const acceptance = await acceptDurableReaction(envelope);
+      if (acceptance.acceptanceId.length === 0) {
+        throw new Error('Durable acceptance requires a non-empty id.');
+      }
+      return { ...execution, status: 'accepted', acceptance };
+    } catch {
+      return failedExecution(
+        execution,
+        'durable_acceptance_failed',
+        'Durable Mutation Reaction acceptance failed.',
+      );
+    }
+  };
+
+  const applyFollowUpIntent = async (
+    intent: MutationReactionIntent,
+    source: AppliedMutationOutcome,
+    execution: ExecutionContext,
+  ): Promise<MutationReactionExecution> => {
+    try {
+      if (intent.kind === 'execute-relationship-command') {
+        const result = await applyRelationship(intent.command, source);
+        return result.status === 'applied'
+          ? { ...execution, status: 'applied', outcome: result.outcome }
+          : { ...execution, status: 'not-applied', diagnostic: result.diagnostic };
+      }
+      if (intent.kind === 'execute-many-to-many-relationship-command') {
+        const result = await applyManyToManyRelationship(intent.command, source);
+        return result.status === 'applied'
+          ? { ...execution, status: 'applied', outcome: result.outcome }
+          : { ...execution, status: 'not-applied', diagnostic: result.diagnostic };
+      }
+      if (intent.kind === 'execute-ordered-relationship-command') {
+        const result = await applyOrderedRelationship(intent.command, source);
+        return result.status === 'applied'
+          ? { ...execution, status: 'applied', outcome: result.outcome }
+          : { ...execution, status: 'not-applied', diagnostic: result.diagnostic };
+      }
+      if (intent.kind === 'execute-entity-mutation-command') {
+        const outcome = await applyEntityMutation(intent.command, source);
+        return { ...execution, status: 'applied', outcome };
+      }
+      if (intent.kind === 'invoke-operation') {
+        if (!invokeOperation) {
+          return failedExecution(
+            execution,
+            'follow_up_unavailable',
+            'Operation invocation for Mutation Reactions is unavailable.',
+          );
+        }
+        const result = await invokeOperation(intent.request);
+        return { ...execution, status: 'completed', result };
+      }
+      if (!emitEvent) {
+        return failedExecution(
+          execution,
+          'follow_up_unavailable',
+          'Event emission for Mutation Reactions is unavailable.',
+        );
+      }
+      const event =
+        isRecord(intent.event) &&
+        intent.event.kind === 'event-emission' &&
+        !hasOwn(intent.event, 'causation')
+          ? {
+              ...intent.event,
+              causation: {
+                kind: 'mutation-outcome',
+                outcomeId: source.causality.outcomeId,
+                rootOutcomeId: source.causality.rootOutcomeId,
+                ...(source.causality.parentOutcomeId
+                  ? { parentOutcomeId: source.causality.parentOutcomeId }
+                  : {}),
+              },
+            }
+          : intent.event;
+      const occurrence = await emitEvent(event);
+      return {
+        ...execution,
+        status: 'emitted',
+        ...(occurrence ? { occurrence } : {}),
+      };
+    } catch {
+      return failedExecution(execution, 'follow_up_failed', 'Post-commit follow-up intent failed.');
+    }
+  };
+
+  const evaluateReaction = (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+  ): readonly MutationReactionIntent[] | undefined => {
+    const intents = reactToOutcome(reaction, source);
+    if (!intents) return undefined;
+    if (!Array.isArray(intents)) {
+      throw new TypeError('Mutation Reaction must return an array of follow-up intents.');
+    }
+    if (!intents.every(isMutationReactionIntent)) {
+      throw new TypeError('Mutation Reaction returned an invalid follow-up intent.');
+    }
+    return intents;
+  };
+
+  const reactionEvaluationFailure = (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+  ): MutationReactionExecution => ({
+    reactionId: reaction.id,
+    reactionKey: `${reaction.id}:${source.causality.outcomeId}`,
+    sourceOutcomeId: source.causality.outcomeId,
+    delivery: reaction.delivery,
+    status: 'failed',
+    failure: {
+      code: 'reaction_failed',
+      message: 'Post-commit Reaction evaluation failed.',
+    },
+  });
+
+  const interpretReactionIntent = async (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+    intent: MutationReactionIntent,
+    intentIndex: number,
+  ): Promise<MutationReactionExecution> => {
+    const execution: ExecutionContext = {
+      reactionId: reaction.id,
+      reactionKey: `${reaction.id}:${source.causality.outcomeId}:${intentIndex}`,
+      sourceOutcomeId: source.causality.outcomeId,
+      delivery: reaction.delivery,
+      intentIndex,
+    };
+    if (source.causality.depth >= maxDepth) {
+      return failedExecution(
+        execution,
+        'max_depth_exceeded',
+        `Post-commit Reaction exceeded maximum depth ${maxDepth}.`,
+        'depth-exceeded',
+      );
+    }
+    return reaction.delivery === 'durable'
+      ? acceptDurableIntent(reaction, source, intent, execution)
+      : applyFollowUpIntent(intent, source, execution);
+  };
+
+  const interpretReaction = async (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+    pending: AppliedMutationOutcome[],
+    executions: MutationReactionExecution[],
+  ) => {
+    let intents: readonly MutationReactionIntent[] | undefined;
+    try {
+      intents = evaluateReaction(reaction, source);
+    } catch {
+      executions.push(reactionEvaluationFailure(reaction, source));
+      return;
+    }
+    if (!intents) return;
+
+    for (const [intentIndex, intent] of intents.entries()) {
+      const result = await interpretReactionIntent(reaction, source, intent, intentIndex);
+      if (result.status === 'applied') pending.push(result.outcome);
+      executions.push(result);
+    }
+  };
+
+  const processAppliedOutcome = async (
+    root: AppliedMutationOutcome,
+  ): Promise<MutationReactionResult> => {
+    const pending: AppliedMutationOutcome[] = [root];
+    const executions: MutationReactionExecution[] = [];
+
+    for (const source of pending) {
+      for (const reaction of reactions) {
+        await interpretReaction(reaction, source, pending, executions);
+      }
+    }
+
+    return { root, reactions: executions };
+  };
+
+  const run = (async (command: RelationshipCommand) => {
+    const result = await applyRelationship(command);
+    return result.status === 'applied' ? processAppliedOutcome(result.outcome) : result;
+  }) as MutationReactionRunner;
+
+  run.createAppliedOutcome = (
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
+  ) => ({
+    kind: 'applied-mutation-outcome',
+    mutationKind: 'relationship-command',
+    command,
+    delta,
+    causality: causalityFor(),
+  });
+  run.createAppliedEntityOutcome = (
+    command: EntityMutationCommand,
+    delta: EntityMutationDelta,
+  ) => ({
+    kind: 'applied-mutation-outcome',
+    mutationKind: 'entity-mutation-command',
+    command,
+    delta,
+    causality: causalityFor(),
+  });
+  run.react = processAppliedOutcome;
+  run.applied = (
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
+  ) => processAppliedOutcome(run.createAppliedOutcome(command, delta));
+
+  return run;
+};

@@ -1,13 +1,5 @@
 import { Effect } from 'effect';
 
-import {
-  createMutationReactionRunner,
-  type AppliedRelationshipMutationResult,
-  type InvokeOperationReactionIntent,
-  type MutationReaction,
-  type MutationReactionResult,
-  type RelationshipMutationResult,
-} from '../../data-graph/mutation-reaction.js';
 import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
 import type {
   ManyToManyRelationshipCommand,
@@ -16,6 +8,14 @@ import type {
   RelationshipCommandExecutor,
 } from '../../data-graph/relationship-command.js';
 import type { EntityMutationCommand, EntityMutationDelta } from '../entity-mutation/command.js';
+import {
+  createMutationReactionRunner,
+  type AppliedRelationshipMutationResult,
+  type InvokeOperationReactionIntent,
+  type MutationReaction,
+  type MutationReactionResult,
+  type RelationshipMutationResult,
+} from '../reaction/mutation.js';
 
 import { deferDataGraphPostCommitWork, getRequiredDataGraphRuntime } from './data-graph.js';
 import { recordAppliedMutationOutcome } from './unit-of-work.js';

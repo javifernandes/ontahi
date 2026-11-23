@@ -1,9 +1,6 @@
-import {
-  isCommittedMutationSet,
-  type CommittedMutationSet,
-} from '../../data-graph/mutation-impact.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
+import { isCommittedMutationSet, type CommittedMutationSet } from '../mutation/impact.js';
 
 export const RUNTIME_PROTOCOL_NAME = 'ontahi.runtime' as const;
 export const RUNTIME_PROTOCOL_VERSION = 1 as const;
