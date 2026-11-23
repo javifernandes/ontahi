@@ -10,12 +10,6 @@ import {
   toEntityMutationAffordanceDescriptor,
   type EntityMutationAffordanceDescriptor,
 } from '../../../data-graph/entity-mutation-affordance.js';
-import {
-  entityMutationCommandDiagnosticFromError,
-  isEntityMutationDeltaForCommand,
-  type EntityMutationCommand,
-  type EntityMutationDelta,
-} from '../../../data-graph/entity-mutation-command.js';
 import { getEntityIdentityLocator, isEntityRef } from '../../../data-graph/ref/index.js';
 import {
   directRelationshipCommandAffordance,
@@ -23,20 +17,26 @@ import {
   orderedRelationshipCommandAffordance,
   type RelationshipCommandAffordanceDescriptor,
 } from '../../../data-graph/relationship-command-affordance.js';
+import { safeParseGraphSchema } from '../../../data-graph/schema.js';
+import type { SelectionExpression, SelectionPredicate } from '../../../data-graph/selection-ast.js';
 import {
   isRelationshipCommandResult,
   relationshipCommandDiagnosticFromError,
   type RelationshipCommandResult,
-} from '../../../data-graph/relationship-command-result.js';
+} from '../../../model/relation/command-result.js';
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,
   RelationshipCommand,
-} from '../../../data-graph/relationship-command.js';
-import { safeParseGraphSchema } from '../../../data-graph/schema.js';
-import type { SelectionExpression, SelectionPredicate } from '../../../data-graph/selection-ast.js';
+} from '../../../model/relation/command.js';
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
+import {
+  entityMutationCommandDiagnosticFromError,
+  isEntityMutationDeltaForCommand,
+  type EntityMutationCommand,
+  type EntityMutationDelta,
+} from '../../entity-mutation/command.js';
 import { validateGraphReadSelection } from '../read/protocol.js';
 
 import {

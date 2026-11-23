@@ -6,7 +6,6 @@ import {
   liftEntityReferenceRecord,
   liftEntityReferenceValue,
 } from '../../../data-graph/reference-field.js';
-import type { RelationshipFact } from '../../../data-graph/relationship-command.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import {
   isDerivedFieldDefinition,
@@ -14,6 +13,7 @@ import {
 } from '../../../model/entity/field.js';
 import { createEntityIdentityRef } from '../../../model/entity/ref/identity.js';
 import type { SelectionExpression } from '../../../model/query/selection-ast.js';
+import type { RelationshipFact } from '../../../model/relation/command.js';
 import type { RelationDefinition } from '../../../model/relation/definition.js';
 
 import { applyEntitySelectionExpression, applyOrder } from './query.js';

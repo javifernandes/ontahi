@@ -6,8 +6,8 @@ import {
   type ReflectedEntityDataReader,
   type ReflectedEntityDataResult,
 } from '../../../data-graph/reflection.js';
-import type { RelationshipFact } from '../../../data-graph/relationship-command.js';
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
+import type { RelationshipFact } from '../../../model/relation/command.js';
 
 import { materializeDerivedFields, type InMemoryDataset } from './materialization.js';
 

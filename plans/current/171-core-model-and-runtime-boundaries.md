@@ -343,3 +343,14 @@ binding, so moving them whole would recreate the original ownership problem.
 The same runtime pass places remote Graph execution/observation and the operation-result cache under
 `runtime/client`. Their former `data-graph` modules now preserve imports only; the concrete client
 adapters no longer appear beside portable Entity and Query declarations.
+
+Relationship Command intent, facts, deltas, typed operations, results, and diagnostics now live
+under `model/relation`. Executable binding lives under `runtime/relation`, while Relation constraint
+authoring belongs to the model and mapping-dependent constraint resolution belongs to computation.
+The historical Relationship Command, result, and constraint paths remain compatibility facades.
+
+Entity mutation execution has moved under `runtime/entity-mutation`, and all runtime consumers now
+use that owner directly. Its historical module is a facade. The file still combines portable
+command/delta vocabulary with materialization and error translation; a later pass must split those
+pieces between `model/entity/mutation`, computation, and runtime rather than misclassifying the
+whole module as portable.

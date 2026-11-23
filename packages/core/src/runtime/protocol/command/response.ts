@@ -1,14 +1,14 @@
 import {
-  isEntityMutationCommandDiagnostic,
-  type EntityMutationCommandDiagnostic,
-  type EntityMutationDelta,
-} from '../../../data-graph/entity-mutation-command.js';
-import {
   isRelationshipCommandDiagnostic,
   type RelationshipCommandDiagnostic,
   type RelationshipCommandResult,
-} from '../../../data-graph/relationship-command-result.js';
+} from '../../../model/relation/command-result.js';
 import { isRecord } from '../../../value/object.js';
+import {
+  isEntityMutationCommandDiagnostic,
+  type EntityMutationCommandDiagnostic,
+  type EntityMutationDelta,
+} from '../../entity-mutation/command.js';
 
 import type { GraphCommandCapabilitiesResult, GraphCommandProtocolError } from './protocol.js';
 
