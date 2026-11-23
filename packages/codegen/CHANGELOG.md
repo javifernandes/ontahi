@@ -1,5 +1,12 @@
 # @ontahi/codegen
 
+## 1.0.0-alpha.23
+
+### Patch Changes
+
+- 5e15f28: Generate client schemas and portable expression registries against the public `@ontahi/core`
+  package root instead of the legacy `@ontahi/core/data-graph` compatibility subpath.
+
 ## 1.0.0-alpha.22
 
 ## 1.0.0-alpha.21
