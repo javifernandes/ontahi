@@ -1,5 +1,16 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.22
+
+### Patch Changes
+
+- Updated dependencies [43d823c]
+- Updated dependencies [93b700e]
+- Updated dependencies [74a238e]
+- Updated dependencies [97f7a68]
+- Updated dependencies [4dcd21f]
+  - @ontahi/core@1.0.0-alpha.22
+
 ## 1.0.0-alpha.21
 
 ### Patch Changes

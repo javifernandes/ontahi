@@ -1,5 +1,31 @@
 # @ontahi/core
 
+## 1.0.0-alpha.22
+
+### Minor Changes
+
+- 74a238e: Allow replicated versioned model kernels and Materializer runners to hydrate accepted snapshots
+  and dependency evidence across process boundaries.
+
+### Patch Changes
+
+- 43d823c: Move the in-memory Data Graph storage and execution adapter behind the runtime storage boundary
+  while preserving all established package-root and `data-graph` exports.
+
+  Implements `ontahi://plans/171-core-model-and-runtime-boundaries`.
+
+- 93b700e: Move the Graph client cache behind the runtime client boundary and split its records, events,
+  freshness, normalization, Entity storage, output storage, and reconciliation responsibilities while
+  preserving the established cache API.
+
+  Implements `ontahi://plans/171-core-model-and-runtime-boundaries`.
+
+- 97f7a68: Move the generic Zod value-validation helpers to the new `@ontahi/core/value/zod` subpath. The
+  historical `@ontahi/core/model/zod` subpath remains as a deprecated compatibility facade, and
+  package-root exports keep the same identities.
+- 4dcd21f: Harden portable Selection factories, returning mutations, named reads, and React read-shape
+  handling while completing the Query and Selection model/runtime boundary extraction.
+
 ## 1.0.0-alpha.21
 
 ### Minor Changes
