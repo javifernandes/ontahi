@@ -1,5 +1,14 @@
 # @ontahi/devtools
 
+## 1.0.0-alpha.23
+
+### Patch Changes
+
+- @ontahi/core@1.0.0-alpha.23
+  - @ontahi/language@1.0.0-alpha.23
+  - @ontahi/language-codemirror@1.0.0-alpha.23
+  - @ontahi/react@1.0.0-alpha.23
+
 ## 1.0.0-alpha.22
 
 ### Patch Changes

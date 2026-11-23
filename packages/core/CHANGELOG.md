@@ -1,5 +1,7 @@
 # @ontahi/core
 
+## 1.0.0-alpha.23
+
 ## 1.0.0-alpha.22
 
 ### Minor Changes
