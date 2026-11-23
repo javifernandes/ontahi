@@ -1,7 +1,7 @@
 import {
   resolveOperationConditionContracts,
   type PortableOperationConditionRegistry,
-} from '../../../data-graph/model-expression/index.js';
+} from '../../../computation/expression/condition.js';
 import type { DomainOperationDeclarations } from '../domain-operations.js';
 
 export const materializeDomainOperationConditions = <

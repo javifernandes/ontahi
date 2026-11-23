@@ -1,5 +1,4 @@
 import type { AnyEntityDefinition } from '../../data-graph/definitions.js';
-import { graphOutput } from '../../data-graph/output/index.js';
 import {
   bindEntityRefRelationshipCommands,
   type BoundEntityRefRelationshipCommands,
@@ -13,6 +12,7 @@ import {
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from '../../model/entity/ref/model.js';
+import { graphOutput } from '../../model/operation/output.js';
 import {
   bindEntityRefOperationProxy,
   type BoundEntityRefOperationProxy,

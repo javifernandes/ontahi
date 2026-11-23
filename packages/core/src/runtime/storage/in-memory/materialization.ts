@@ -1,5 +1,5 @@
 import { resolveRelationFields } from '../../../computation/entity-mapping.js';
-import { evaluateModelExpression } from '../../../data-graph/model-expression/index.js';
+import { evaluateModelExpression } from '../../../computation/expression/evaluator.js';
 import { RelationQueryBuilder, type SelectionValue } from '../../../data-graph/query.js';
 import {
   getEntityReferenceField,

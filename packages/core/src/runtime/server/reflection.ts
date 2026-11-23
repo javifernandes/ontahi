@@ -1,5 +1,5 @@
 import { getEntityMapping, resolveFieldNameForEntity } from '../../computation/entity-mapping.js';
-import type { PortableOperationConditions } from '../../data-graph/model-expression/index.js';
+import type { PortableOperationConditions } from '../../computation/expression/condition.js';
 import type { AnyEntityDefinition } from '../../model/entity/definition.js';
 import type { AnyEntityRef } from '../../model/entity/ref/model.js';
 import type {

@@ -1,43 +1,5 @@
-export { modelExpression } from './builder.js';
-export {
-  definePortableDerivedFieldRegistry,
-  materializeDerivedFieldDefinitions,
-} from './derived-field.js';
-export type { PortableDerivedFieldRegistry } from './derived-field.js';
-export {
-  definePortableOperationConditionRegistry,
-  evaluatePortableOperationCondition,
-  resolveOperationConditionContracts,
-} from './condition.js';
-export type {
-  ConditionEvaluation,
-  ExplicitOperationCondition,
-  OperationConditionAuthoring,
-  OperationConditionContracts,
-  OperationConditionInput,
-  PortableOperationCondition,
-  PortableOperationConditionDeclaration,
-  PortableOperationConditionRegistry,
-  PortableOperationConditionRegistryDeclaration,
-  PortableOperationConditionRejection,
-  PortableOperationConditions,
-} from './condition.js';
-export { evaluateModelExpression } from './evaluator.js';
-export type { ModelExpressionEvaluation, ModelExpressionEvaluationContext } from './evaluator.js';
-export {
-  assertModelExpression,
-  assertModelExpressionProgram,
-  collectModelExpressionDependencies,
-} from './program.js';
-export type {
-  ModelArithmeticExpression,
-  ModelCompareExpression,
-  ModelExpression,
-  ModelExpressionDependency,
-  ModelExpressionProgram,
-  ModelFieldExpression,
-  ModelInputRefExpression,
-  ModelNotExpression,
-  ModelRefIdentityExpression,
-  ModelRelationAggregateExpression,
-} from './program.js';
+export * from '../../computation/expression/builder.js';
+export * from '../../computation/expression/condition.js';
+export * from '../../computation/expression/derived-field.js';
+export * from '../../computation/expression/evaluator.js';
+export * from '../../model/expression/program.js';

@@ -16,17 +16,17 @@ import {
   type QuerySpec,
 } from '../../../data-graph/query.js';
 import {
-  createReadVariantRegistry,
-  lowerReadVariantSelection,
-  readVariantCapabilities,
-} from '../../../data-graph/read-variants.js';
-import {
   selectionAnd,
   type EntitySelectionSource,
   type SelectionExpression,
   type SelectionPredicate,
 } from '../../../data-graph/selection-ast.js';
 import type { ViewNode } from '../../../data-graph/view.js';
+import {
+  createReadVariantRegistry,
+  lowerReadVariantSelection,
+  readVariantCapabilities,
+} from '../../../model/query/read-variants.js';
 import { isJsonValue, type JsonValue } from '../../../value/json.js';
 import { hasOwn, isRecord } from '../../../value/object.js';
 
