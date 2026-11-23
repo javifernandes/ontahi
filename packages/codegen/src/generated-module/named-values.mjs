@@ -62,9 +62,9 @@ export const renderNamedValues = (definitions, names, entities, replaceEntityNam
     const shape = allocate(`${name}Shape`);
     declarations.push(
       `function ${factory}() { return ${renderDefinition(definition)}; }`,
-      `type ${shape} = import('@ontahi/core/data-graph').InferGraphSchemaValue<ReturnType<typeof ${factory}>>;`,
+      `type ${shape} = import('@ontahi/core').InferGraphSchemaValue<ReturnType<typeof ${factory}>>;`,
       `interface ${model} extends ${shape} {}`,
-      `const ${name}: import('@ontahi/core/data-graph').GraphLazyDefinition<${model}> = graphSchema.lazy(${JSON.stringify(definition.name)}, ${factory});`,
+      `const ${name}: import('@ontahi/core').GraphLazyDefinition<${model}> = graphSchema.lazy(${JSON.stringify(definition.name)}, ${factory});`,
     );
     visited.add(definition.name);
   }

@@ -12,7 +12,7 @@ import {
   withSelectionFactories,
   graphSchema,
   value,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 const TodoListSchemaBase = defineEntitySchema('TodoList', {
   id: field.generated(field.id(), 'uuid'),

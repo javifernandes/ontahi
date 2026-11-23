@@ -9,7 +9,7 @@ import {
   relationshipSet,
   Selection,
   toGraphCommandRequest,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeProtocolExchange,

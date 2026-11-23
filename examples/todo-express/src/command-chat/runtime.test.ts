@@ -4,7 +4,7 @@ import {
   query,
   toGraphCommandRequest,
   toGraphReadRequest,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   withInvocationContext,
   type ModelProvider,

@@ -59,8 +59,8 @@ if (namedInputSource.includes('serverOnlyResolver'))
 // Resolve only the installed public entrypoint, never a workspace/source path.
 const namedInputModule = ts.transpileModule(
   namedInputSource.replaceAll(
-    "'@ontahi/core/data-graph'",
-    JSON.stringify(import.meta.resolve('@ontahi/core/data-graph')),
+    "'@ontahi/core'",
+    JSON.stringify(import.meta.resolve('@ontahi/core')),
   ),
   { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } },
 ).outputText;

@@ -27,7 +27,7 @@ describe('named classified Operation inputs', () => {
           path.join(directory, 'nodes.ts'),
           `
         import { entity, relation } from '@ontahi/core/entity';
-        import { field } from '@ontahi/core/data-graph';
+        import { field } from '@ontahi/core';
         export const ContentNode = entity({ name: 'ContentNode', fields: {
           id: field.id(), type: field.enum(['part', 'chapter']), title: field.string(),
           bookId: field.id(), parentId: field.nullable(field.id()), slug: field.string(),
@@ -42,7 +42,7 @@ describe('named classified Operation inputs', () => {
           path.join(directory, 'book.ts'),
           `
         import { entity, relation } from '@ontahi/core/entity';
-        import { field } from '@ontahi/core/data-graph';
+        import { field } from '@ontahi/core';
         import { ContentNode, Chapter, Part } from './nodes';
         export const Book = entity({ name: 'Book', fields: { id: field.id(), slug: field.string() },
           relations: { contentNodes: relation.hasMany(ContentNode, { via: 'bookId' }) },
@@ -56,7 +56,7 @@ describe('named classified Operation inputs', () => {
         await writeFile(
           path.join(directory, 'input.ts'),
           `
-        import { value, graphSchema, field } from '@ontahi/core/data-graph';
+        import { value, graphSchema, field } from '@ontahi/core';
         import { Chapter } from './nodes';
         export const ChapterInput = ${definition};
       `,
@@ -66,7 +66,7 @@ describe('named classified Operation inputs', () => {
           path.join(directory, 'thread.ts'),
           `
         import { entity } from '@ontahi/core/entity';
-        import { value, graphSchema, field } from '@ontahi/core/data-graph';
+        import { value, graphSchema, field } from '@ontahi/core';
         import { Chapter } from './nodes';
         ${form === 'imported-alias' ? "import { ChapterInput as Input } from './input';" : ''}
         ${['local', 'shared-server-only'].includes(form) ? `const Input = ${definition};` : ''}
@@ -83,7 +83,7 @@ describe('named classified Operation inputs', () => {
         await writeFile(
           path.join(directory, 'graph.ts'),
           `
-        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { defineGraphApi } from '@ontahi/core';
         import { ContentNode } from './nodes';
         import { Thread } from './thread';
         import { Book } from './book';
@@ -110,7 +110,7 @@ describe('named classified Operation inputs', () => {
         const generated = await importGeneratedModule({
           directory,
           source: `${source}
-        import { createEntityRef, defineGraphApi, toGraphSchemaDescriptor } from '@ontahi/core/data-graph';
+        import { createEntityRef, defineGraphApi, toGraphSchemaDescriptor } from '@ontahi/core';
         type Input = NonNullable<typeof Thread.domain.list.__clientTypes>['input'];
         const accepted: Input = { chapter: createEntityRef(ContentNodeSchema, { id: 'c1' }), stateFilter: 'open', comparison: null };
         const minimal: Input = { chapter: createEntityRef(ContentNodeSchema, { id: 'c1' }) };

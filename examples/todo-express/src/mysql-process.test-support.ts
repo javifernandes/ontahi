@@ -8,7 +8,7 @@ import {
   toGraphCommandRequest,
   type EntityMutationCommand,
   type EntityMutationDelta,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   getOntahiSemanticEntities,
   type GraphCommandableOntahiApplication,

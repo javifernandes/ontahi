@@ -23,7 +23,7 @@ const withGraph = async (
       path.join(directory, 'item.ts'),
       `
       import { entity } from '@ontahi/core/entity';
-      import { field, value, graphSchema } from '@ontahi/core/data-graph';
+      import { field, value, graphSchema } from '@ontahi/core';
       import { Input as Request } from './input';
       const Input = Request;
       export const Item = entity({ name: 'Item', fields: { id: field.id() },
@@ -37,7 +37,7 @@ const withGraph = async (
     await writeFile(
       path.join(directory, 'graph.ts'),
       `
-      import { defineGraphApi } from '@ontahi/core/data-graph';
+      import { defineGraphApi } from '@ontahi/core';
       import { Item } from './item';
       export const Graph = defineGraphApi({ entities: { Item } });`,
     );
@@ -52,7 +52,7 @@ const withGraph = async (
 };
 
 const transformedSchema = `
-  import { field, value, graphSchema } from '@ontahi/core/data-graph';
+  import { field, value, graphSchema } from '@ontahi/core';
   export let calls = 0;
   const normalizeCount = (text: string) => { calls++; return Number(text) + 1; };
   export const Input = value('Input', {
@@ -135,7 +135,7 @@ describe('Operation wire inputs with server processing', () => {
           const server = await importGeneratedModule({
             directory,
             source: `${transformedSchema}
-          import { safeParseGraphSchema } from '@ontahi/core/data-graph';
+          import { safeParseGraphSchema } from '@ontahi/core';
           export const parsed = safeParseGraphSchema(Input, { count: '41' });
           export const negative = safeParseGraphSchema(Input, { count: '-3' });
         `,
@@ -176,7 +176,7 @@ describe('Operation wire inputs with server processing', () => {
   }, 30_000);
 
   it('reuses inline Values in a shared anonymous input schema across Operations', async () => {
-    const schema = `import { field, graphSchema, value } from '@ontahi/core/data-graph';
+    const schema = `import { field, graphSchema, value } from '@ontahi/core';
       export const Input = graphSchema.union([
         value('Data', { count: graphSchema.transform(field.string(), Number) }), value('Empty', {}),
       ]);`;
@@ -199,7 +199,7 @@ describe('Operation wire inputs with server processing', () => {
   }, 30_000);
 
   it('keeps a default of the parsed type on the server, not in the wire schema', async () => {
-    const schema = `import { field, graphSchema, value } from '@ontahi/core/data-graph';
+    const schema = `import { field, graphSchema, value } from '@ontahi/core';
       export const Input = value('Input', { count: graphSchema.default(graphSchema.transform(field.string(), Number), 42) });`;
     await withGraph({ schema }, async (analysis, directory) => {
       expect(analysis.diagnostics).toEqual([]);
@@ -223,7 +223,7 @@ describe('Operation wire inputs with server processing', () => {
       const server = await importGeneratedModule({
         directory,
         source: `${schema}
-        import { safeParseGraphSchema } from '@ontahi/core/data-graph';
+        import { safeParseGraphSchema } from '@ontahi/core';
         export const parsed = safeParseGraphSchema(Input, {});
       `,
       });

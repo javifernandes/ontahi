@@ -2,7 +2,7 @@ import type {
   EntityMutationCommand,
   EntityMutationCommandPolicy,
   GraphCommandDispatchContext,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import { todoAuthenticationMode } from './authentication-mode.js';
 import type { TodoGraphReadAuthority } from './todo-read-policies.js';

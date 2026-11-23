@@ -24,7 +24,7 @@ describe('Selection factory browser projection', () => {
       const analysis = analyzeSpecificDomainEntityExport(
         `
       import { entity } from '@ontahi/core/runtime/server';
-      import { field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+      import { field, graphSchema, withSelectionFactories } from '@ontahi/core';
       const factoryDeclarations = ${factories};
       const Base = entity({ name: 'Customer', fields: { id: field.id(), archivedAt: field.datetime() },
         locators: { refByDate: 'archivedAt' } });

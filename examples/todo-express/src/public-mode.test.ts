@@ -1,4 +1,4 @@
-import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core';
 import type { GraphCommandableOntahiApplication } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

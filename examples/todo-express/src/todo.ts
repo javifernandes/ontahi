@@ -11,7 +11,7 @@ import {
   type EntityRef,
   type InferGraphSchemaValue,
   type RelationConstraint,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import {
   defineTaskExecution,

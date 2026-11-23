@@ -1,4 +1,4 @@
-import { createEntityRef } from '@ontahi/core/data-graph';
+import { createEntityRef } from '@ontahi/core';
 import { createTaskDefinitionFromDurableDomainOperation } from '@ontahi/core/runtime/server';
 import type { TaskRunSource } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';

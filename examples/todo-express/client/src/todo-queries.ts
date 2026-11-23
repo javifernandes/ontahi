@@ -1,4 +1,4 @@
-import { defineClientEntity } from '@ontahi/core/data-graph';
+import { defineClientEntity } from '@ontahi/core';
 
 import { Tag, TodoListSchema } from '../../src/generated/client-entities.js';
 

@@ -3,7 +3,7 @@ import {
   reaction,
   type DataGraphDefaultStorage,
   type DataGraphExecutionRuntime,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 

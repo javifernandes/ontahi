@@ -1,4 +1,4 @@
-import { evaluatePortableOperationCondition } from '@ontahi/core/data-graph';
+import { evaluatePortableOperationCondition } from '@ontahi/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ClassroomApplication, classroomEvents } from './application.js';

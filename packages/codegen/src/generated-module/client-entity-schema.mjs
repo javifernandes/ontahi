@@ -307,7 +307,7 @@ const createNamedImport = ({ moduleSpecifier, bindings }) =>
   );
 
 const createCoreImport = bindings =>
-  createNamedImport({ moduleSpecifier: '@ontahi/core/data-graph', bindings });
+  createNamedImport({ moduleSpecifier: '@ontahi/core', bindings });
 
 const readExpression = expression => {
   const parsed = parseSourceExpression(expression.sourceText);

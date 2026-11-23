@@ -1,4 +1,4 @@
-import type { EntityMutationCommandPolicy, GraphReadPolicy } from '@ontahi/core/data-graph';
+import type { EntityMutationCommandPolicy, GraphReadPolicy } from '@ontahi/core';
 import {
   createApplicationModelCommandRuntime,
   type GraphCommandableOntahiApplication,
