@@ -331,8 +331,9 @@ those owners exist. Their remaining `data-graph` imports identify real unextract
 avoidable facade dependencies. Namespace removal remains deferred until those mixed modules are
 split; the audit explicitly rejects treating file deletion as progress while implementation remains.
 
-The Data Graph execution ports, executor construction, runtime-bound API, Graph Command binding,
-transaction capability, and default-storage contract now live under `runtime/data` and `runtime/storage`.
+The Data Graph execution ports, executor construction, runtime-bound API, and Graph Command binding
+now live under `runtime/data`; the default-storage contract lives under `runtime/storage`, and the
+transaction capability lives under `runtime/transaction.ts`.
 Entity mutation authoring moved with them because its executable facade binds portable command intent
 to Effect-based runtime execution. Historical `data-graph` modules are compatibility re-exports, and
 server plus in-memory consumers now import the runtime owners directly. Relation mutation remains a

@@ -12,10 +12,8 @@ import {
 } from '../../../data-graph/entity-mutation-affordance.js';
 import {
   entityMutationCommandDiagnosticFromError,
-  isEntityMutationCommandDiagnostic,
   isEntityMutationDeltaForCommand,
   type EntityMutationCommand,
-  type EntityMutationCommandDiagnostic,
   type EntityMutationDelta,
 } from '../../../data-graph/entity-mutation-command.js';
 import { getEntityIdentityLocator, isEntityRef } from '../../../data-graph/ref/index.js';
@@ -26,10 +24,8 @@ import {
   type RelationshipCommandAffordanceDescriptor,
 } from '../../../data-graph/relationship-command-affordance.js';
 import {
-  isRelationshipCommandDiagnostic,
   isRelationshipCommandResult,
   relationshipCommandDiagnosticFromError,
-  type RelationshipCommandDiagnostic,
   type RelationshipCommandResult,
 } from '../../../data-graph/relationship-command-result.js';
 import type {
@@ -47,9 +43,10 @@ import {
   graphCommandProtocolError,
   parseGraphCommandFamilyRequest,
   resolveGraphCommandRequest,
-  type GraphCommandProtocolError,
-  type GraphCommandCapabilitiesResult,
 } from './protocol.js';
+import { type GraphCommandDispatchResponse } from './response.js';
+
+export { isGraphCommandRejection, type GraphCommandDispatchResponse } from './response.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   readonly entity: TEntity;
@@ -136,18 +133,6 @@ export type GraphCommandDispatchContext<TAuthority> = {
   readonly authority: TAuthority;
 };
 
-export type GraphCommandDispatchResponse =
-  | GraphCommandCapabilitiesResult
-  | {
-      readonly kind: 'graph-command-result';
-      readonly value: RelationshipCommandResult | EntityMutationDelta;
-    }
-  | {
-      readonly kind: 'graph-command-rejection';
-      readonly diagnostic: RelationshipCommandDiagnostic | EntityMutationCommandDiagnostic;
-    }
-  | GraphCommandProtocolError;
-
 export type GraphCommandDispatchExecutor<TAuthority> = (
   command: RelationshipCommand,
   context: GraphCommandDispatchContext<TAuthority>,
@@ -181,14 +166,6 @@ export type CreateGraphCommandDispatcherOptions<TAuthority> = {
   readonly executeEntityMutation?: EntityMutationGraphCommandDispatchExecutor<TAuthority>;
   readonly reportError?: (error: unknown) => void;
 };
-
-export const isGraphCommandRejection = (
-  value: unknown,
-): value is Extract<GraphCommandDispatchResponse, { kind: 'graph-command-rejection' }> =>
-  isRecord(value) &&
-  value.kind === 'graph-command-rejection' &&
-  (isRelationshipCommandDiagnostic(value.diagnostic) ||
-    isEntityMutationCommandDiagnostic(value.diagnostic));
 
 const policyKey = (entityName: string, fieldName: string, targetEntityName: string) =>
   `${entityName}\u0000${fieldName}\u0000${targetEntityName}`;

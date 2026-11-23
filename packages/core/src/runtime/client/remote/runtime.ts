@@ -27,13 +27,13 @@ import { hasRelationImage } from '../../../model/query/selection-ast.js';
 import { isJsonValue } from '../../../value/json.js';
 import { isRecord } from '../../../value/object.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../../data/runtime.js';
-import { isGraphCommandRejection } from '../../protocol/command/dispatcher.js';
 import {
   isGraphCommandProtocolError,
   toGraphCommandRequest,
   type GraphCommandProtocolErrorCode,
   type GraphCommandRequest,
 } from '../../protocol/command/protocol.js';
+import { isGraphCommandRejection } from '../../protocol/command/response.js';
 import {
   isGraphReadProtocolError,
   isGraphReadCapabilities,
