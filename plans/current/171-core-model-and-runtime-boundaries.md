@@ -338,3 +338,7 @@ to Effect-based runtime execution. Historical `data-graph` modules are compatibi
 server plus in-memory consumers now import the runtime owners directly. Relation mutation remains a
 separate split: its current files combine portable intent, physical mapping resolution, and executable
 binding, so moving them whole would recreate the original ownership problem.
+
+The same runtime pass places remote Graph execution/observation and the operation-result cache under
+`runtime/client`. Their former `data-graph` modules now preserve imports only; the concrete client
+adapters no longer appear beside portable Entity and Query declarations.
