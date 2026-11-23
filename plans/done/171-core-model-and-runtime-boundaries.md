@@ -8,6 +8,7 @@ Related plans:
 
 1. [169. Replicated Versioned Models Kernel And Materializer SPI](../current/169-replicated-versioned-models-kernel-and-materializer-spi.md)
 2. [160. Semantic Modules, Composition And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
+3. [171a. Data Graph Consumer Migration And Compatibility Retirement](../backlog/171a-data-graph-consumer-migration-and-compatibility-retirement.md)
 
 ## Summary
 
@@ -360,7 +361,8 @@ reflection, reactions, operation application, schema composition, expression eva
 reflection, and storage helpers. Production code under `data-graph` fell from roughly 19,500 lines
 at the retirement audit to 1,474 lines. Only `definitions.ts`, `schema-descriptor.ts`, and test
 fixture support remain substantial; an architecture test prevents any other production module in
-that namespace from growing beyond a compatibility facade.
+that namespace from exceeding 100 lines. The limit bounds new implementation growth; it does not
+independently prove that every smaller module is a pure compatibility facade.
 
 Plan 171 is complete. The retained `data-graph` exports are compatibility policy rather than
 unfinished architectural ownership. After a release containing the new model, computation, value,
