@@ -1,7 +1,7 @@
 # Core Model And Runtime Boundaries
 
 This document records the slice 1 inventory and boundary proposal for
-[Plan 171](../../plans/current/171-core-model-and-runtime-boundaries.md). It describes the current
+[Plan 171](../../plans/done/171-core-model-and-runtime-boundaries.md). It describes the completed
 source tree; it does not authorize a repository-wide move or make internal paths public API.
 
 ## Classification rubric
