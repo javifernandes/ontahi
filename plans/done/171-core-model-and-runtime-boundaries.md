@@ -1,6 +1,6 @@
 # 171. Core Model And Runtime Boundaries
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/171-core-model-and-runtime-boundaries`
 
@@ -8,6 +8,7 @@ Related plans:
 
 1. [169. Replicated Versioned Models Kernel And Materializer SPI](../current/169-replicated-versioned-models-kernel-and-materializer-spi.md)
 2. [160. Semantic Modules, Composition And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
+3. [171a. Data Graph Consumer Migration And Compatibility Retirement](../backlog/171a-data-graph-consumer-migration-and-compatibility-retirement.md)
 
 ## Summary
 
@@ -115,14 +116,14 @@ mechanical and low risk.
 - [x] Every existing `data-graph` module has a recorded owner category and intended destination.
 - [x] Model modules do not depend on client, server, transport, concrete storage implementations, or
       the `data-graph` compatibility namespace.
-- [ ] Runtime modules consume portable models through explicit contracts.
+- [x] Runtime modules consume portable models through explicit contracts.
 - [x] The in-memory implementation is recognizable as a storage/runtime adapter rather than model
       semantics.
 - [x] Client cache responsibilities are split into reviewable modules without changing behavior.
 - [x] The legacy Zod surface has an evidence-backed disposition and migration path.
 - [x] Package-root consumers retain source compatibility through the migration.
-- [ ] Public API changes carry Changesets; mechanical internal moves do not manufacture API churn.
-- [ ] `data-graph` no longer serves as the default destination for unrelated Entity-adjacent work.
+- [x] Public API changes carry Changesets; mechanical internal moves do not manufacture API churn.
+- [x] `data-graph` no longer serves as the default destination for unrelated Entity-adjacent work.
 
 ## Verification
 
@@ -354,3 +355,18 @@ use that owner directly. Its historical module is a facade. The file still combi
 command/delta vocabulary with materialization and error translation; a later pass must split those
 pieces between `model/entity/mutation`, computation, and runtime rather than misclassifying the
 whole module as portable.
+
+The final boundary pass completed those remaining ownership splits across Entity mutation,
+reflection, reactions, operation application, schema composition, expression evaluation, output
+reflection, and storage helpers. Production code under `data-graph` fell from roughly 19,500 lines
+at the retirement audit to 1,474 lines. Only `definitions.ts`, `schema-descriptor.ts`, and test
+fixture support remain substantial; an architecture test prevents any other production module in
+that namespace from exceeding 100 lines. The limit bounds new implementation growth; it does not
+independently prove that every smaller module is a pure compatibility facade.
+
+Plan 171 is complete. The retained `data-graph` exports are compatibility policy rather than
+unfinished architectural ownership. After a release containing the new model, computation, value,
+and runtime subpaths is available, first-party applications should migrate away from legacy
+subpath imports. Removing the compatibility namespace is a separate breaking-change follow-up and
+should happen only after those consumers have shipped on the new imports; it is not required to
+close this plan.
