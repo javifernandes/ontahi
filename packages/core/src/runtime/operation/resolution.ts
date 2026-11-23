@@ -1,3 +1,9 @@
+import { getGraphOutputDescriptor } from '../../data-graph/output/index.js';
+import { isGraphSchemaDefinition } from '../../data-graph/schema-descriptor.js';
+import type { DomainOperationBridgeMetadata } from '../../model/operation/client-metadata.js';
+import type { DomainOperationReceiverDescriptor } from '../../model/operation/definition.js';
+import { assertValidDomainOperationExecution } from '../../model/operation/execution-policy.js';
+import { isRecord } from '../../value/object.js';
 import type {
   DomainOperationDeclarationMetadata,
   DomainOperationDefaults,
@@ -6,13 +12,7 @@ import type {
   GraphOperationDeclarations,
   ResolveDomainOperations,
   ResolveGraphOperations,
-} from '../../data-graph/operations.js';
-import { getGraphOutputDescriptor } from '../../data-graph/output/index.js';
-import { isGraphSchemaDefinition } from '../../data-graph/schema-descriptor.js';
-import type { DomainOperationBridgeMetadata } from '../../model/operation/client-metadata.js';
-import type { DomainOperationReceiverDescriptor } from '../../model/operation/definition.js';
-import { assertValidDomainOperationExecution } from '../../model/operation/execution-policy.js';
-import { isRecord } from '../../value/object.js';
+} from '../query/graph-api.js';
 
 type ResolvedDomainOperation = {
   id: string;

@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
 
-import type {
-  EntityRefInputResolutionScope,
-  EntityRefInputResolver,
-} from '../../data-graph/ref/index.js';
+import type { EntityRefInputResolutionScope } from '../../computation/entity-reference/input-normalization.js';
+import type { EntityRefInputResolver } from '../../model/entity/ref/input.js';
 import { anonymousExecutionIdentity, executionIdentityCacheKey } from '../identity.js';
 
 import { getCurrentInvocationContext } from './invocation-context.js';

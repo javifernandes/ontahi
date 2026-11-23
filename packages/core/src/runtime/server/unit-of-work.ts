@@ -6,8 +6,8 @@ import type {
   CommittedMutationSet,
 } from '../../data-graph/mutation-impact.js';
 import type { AppliedMutationOutcome } from '../../data-graph/mutation-reaction.js';
-import { normalizeEntityRef, type AnyEntityRef } from '../../data-graph/ref/index.js';
 import type { SelectionAst } from '../../data-graph/selection-ast.js';
+import { normalizeEntityRef, type AnyEntityRef } from '../../model/entity/ref/model.js';
 import { cloneJson } from '../../value/json.js';
 import { toGraphCommandRequest, type GraphCommandRequest } from '../protocol/command/protocol.js';
 

@@ -20,6 +20,24 @@ import {
   attachOperationInputSchema,
   type OperationInputSchema,
 } from '../../data-graph/operation-input.js';
+import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
+import type { GraphReadSpec } from '../../data-graph/query.js';
+import { RelationRootSelection } from '../../data-graph/relation-root.js';
+import type { SemanticSelection } from '../../data-graph/selection-ast.js';
+import { Selection } from '../../data-graph/selection-value.js';
+import { GraphSelection } from '../../data-graph/selection.js';
+import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
+import {
+  type EntityRefInputResolver,
+  type SemanticSelectionPublicInput,
+} from '../../model/entity/ref/input.js';
+import type { EntityRef, EntityRefLocator, SchemaEntityRef } from '../../model/entity/ref/model.js';
+import { hasOwn } from '../../value/object.js';
+import {
+  createRuntimeBoundDataGraphApi,
+  type RuntimeBoundSelection,
+} from '../data/runtime-bound-api.js';
+import type { DataGraphExecutionRuntime } from '../data/runtime.js';
 import {
   resolveDomainOperations,
   type DurableOperationDeclarationMetadata as PortableDurableOperationDeclarationMetadata,
@@ -30,27 +48,7 @@ import {
   type DomainOperationReceiverDeclaration,
   type DomainOperationReceiverDescriptor,
   type ResolveDomainOperations,
-} from '../../data-graph/operations.js';
-import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
-import type { GraphReadSpec } from '../../data-graph/query.js';
-import {
-  type EntityRefInputResolver,
-  type EntityRef,
-  type EntityRefLocator,
-  type SchemaEntityRef,
-  type SemanticSelectionPublicInput,
-} from '../../data-graph/ref/index.js';
-import { RelationRootSelection } from '../../data-graph/relation-root.js';
-import type { SemanticSelection } from '../../data-graph/selection-ast.js';
-import { Selection } from '../../data-graph/selection-value.js';
-import { GraphSelection } from '../../data-graph/selection.js';
-import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
-import { hasOwn } from '../../value/object.js';
-import {
-  createRuntimeBoundDataGraphApi,
-  type RuntimeBoundSelection,
-} from '../data/runtime-bound-api.js';
-import type { DataGraphExecutionRuntime } from '../data/runtime.js';
+} from '../query/graph-api.js';
 
 import {
   getOperationRuntimeContext,
