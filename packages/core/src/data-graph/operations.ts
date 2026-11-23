@@ -26,6 +26,12 @@ import type {
 import { definePortableDomainOperationMetadata } from '../model/operation/metadata.js';
 import type { GraphOutputDescriptor } from '../model/operation/output.js';
 import {
+  bindEntityRefMutationAuthoring,
+  createEntityMutationAuthoring,
+  type EntityMutationAuthoring,
+  type EntityRefMutationAuthoring,
+} from '../runtime/data/entity-mutation-authoring.js';
+import {
   resolveDomainOperations,
   resolveGraphOperations,
 } from '../runtime/operation/resolution.js';
@@ -39,12 +45,6 @@ import type {
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
-import {
-  bindEntityRefMutationAuthoring,
-  createEntityMutationAuthoring,
-  type EntityMutationAuthoring,
-  type EntityRefMutationAuthoring,
-} from './entity-mutation-authoring.js';
 import { reflectContextualSelections } from './entity-selections.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';

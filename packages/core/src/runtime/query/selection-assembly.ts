@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { booleanComputation, type BooleanComputation } from '../../computation/conditional.js';
-import type { BoundGraphCommand } from '../../data-graph/command-binding.js';
 import type { GraphCommandSpec } from '../../data-graph/command.js';
 import type {
   AnyEntityDefinition,
@@ -47,6 +46,7 @@ import type {
   InferEntityViewResult,
   RecursiveEntityViewDefinition,
 } from '../../model/query/view.js';
+import type { BoundGraphCommand } from '../data/command-binding.js';
 
 import type { BoundGraphRead, ExecutableGraphRead } from './binding.js';
 import {
