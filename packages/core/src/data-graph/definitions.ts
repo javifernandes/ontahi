@@ -13,11 +13,7 @@ import {
 } from '../model/entity/entity-authoring.js';
 export type { ReferenceFieldRelations } from '../model/entity/entity-authoring.js';
 import { field } from '../model/entity/field-authoring.js';
-import type {
-  AnyFieldDefinition,
-  FieldDefinitions,
-  InferEntityRecord,
-} from '../model/entity/field.js';
+import type { FieldDefinitions, InferEntityRecord } from '../model/entity/field.js';
 import {
   type ConventionalEntityLocatorDeclarations,
   type EntityLocatorDeclarations,
@@ -29,15 +25,34 @@ import type {
   EntityFreshnessDescriptor,
   EntityFreshnessMetadata,
 } from '../model/entity/metadata.js';
-import { type ReferenceFieldDefinition } from '../model/entity/reference-field.js';
 export type { StringFieldInputConstraints } from '../model/entity/scalar-field-authoring.js';
-import type { SemanticSelection } from '../model/query/selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape } from '../model/query/view.js';
 import {
   type RelationDefinition,
   type RelationKind,
   type RelationOptions,
 } from '../model/relation/definition.js';
+import type {
+  AnyEntityViewDefinition,
+  EntityViewConfig,
+  GraphArrayDefinition,
+  GraphDefaultDefinition,
+  GraphLazyDefinition,
+  GraphNamedDefinition,
+  GraphNullableDefinition,
+  GraphObjectDefinition,
+  GraphOptionalDefinition,
+  GraphRecordDefinition,
+  GraphRefinementDefinition,
+  GraphSchemaDefinition,
+  GraphSchemaFields,
+  GraphSelectionDefinition,
+  GraphTransformDefinition,
+  GraphUnionDefinition,
+  InferGraphSchemaFields,
+  InferGraphSchemaValue,
+  ValueDefinition,
+} from '../model/schema/definition.js';
 import {
   defineValue,
   describeGraphSchema,
@@ -57,25 +72,7 @@ import {
   valueObject,
   valueUnion,
 } from '../value/schema/authoring.js';
-import type {
-  GraphLiteralDefinition,
-  GraphSchemaLike,
-  GraphVoidDefinition,
-  PortableObjectDefinition,
-  PortableValueDefinition,
-  ValueArrayDefinition,
-  ValueDefaultDefinition,
-  ValueLazyDefinition,
-  ValueNamedDefinition,
-  ValueNullableDefinition,
-  ValueOptionalDefinition,
-  ValueRecordDefinition,
-  ValueRefinementDefinition,
-  ValueSchemaFieldSource,
-  ValueSchemaFields,
-  ValueTransformDefinition,
-  ValueUnionDefinition,
-} from '../value/schema/definition.js';
+import type { GraphSchemaLike, ValueSchemaFieldSource } from '../value/schema/definition.js';
 
 export {
   describeGraphSchema,
@@ -136,186 +133,33 @@ import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant
 import {
   graphSchemaExistingReference,
   graphSchemaReference,
-  type EntityRefLocator,
   type EntityRefLocatorDeclarations,
-  type SchemaEntityRef,
 } from './ref/index.js';
 import type { EntityViewFactory } from './view.js';
 
-export type GraphSchemaDefinition =
-  | AnyFieldDefinition
-  | AnyEntityDefinition
-  | AnyEntityViewDefinition
-  | AnyValueDefinition
-  | AnyGraphObjectDefinition
-  | GraphArrayDefinition
-  | GraphNullableDefinition
-  | GraphOptionalDefinition
-  | GraphLiteralDefinition
-  | GraphUnionDefinition
-  | GraphRecordDefinition
-  | GraphDefaultDefinition
-  | GraphTransformDefinition
-  | GraphRefinementDefinition
-  | GraphLazyDefinition
-  | GraphNamedDefinition
-  | GraphSelectionDefinition
-  | GraphVoidDefinition;
-
-export interface GraphSchemaFields extends ValueSchemaFields {}
-
-type OptionalGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = {
-  [TKey in keyof TFields]: TFields[TKey] extends { kind: 'schema.optional' } | { optional: true }
-    ? TKey
-    : never;
-}[keyof TFields];
-
-type RequiredGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = Exclude<
-  keyof TFields,
-  OptionalGraphSchemaFieldKeys<TFields>
->;
-
-type InferGraphSchemaFields<TFields extends GraphSchemaFields> = Simplify<
-  {
-    [TKey in RequiredGraphSchemaFieldKeys<TFields>]: InferGraphSchemaValue<TFields[TKey]>;
-  } & {
-    [TKey in OptionalGraphSchemaFieldKeys<TFields>]?: Exclude<
-      InferGraphSchemaValue<TFields[TKey]>,
-      undefined
-    >;
-  }
->;
-
-type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
-
-type GraphSchemaReferenceResolution<TSchema> = TSchema extends {
-  readonly __graphSchemaRef?: { readonly resolution: infer TResolution };
-}
-  ? TResolution
-  : never;
-
-type GraphSchemaReferenceRequirement<TSchema> = TSchema extends {
-  readonly __graphSchemaRef?: { readonly requirement: infer TRequirement };
-}
-  ? TRequirement
-  : 'portable';
-
-export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> =
-  TSchema extends ReferenceFieldDefinition<infer TTarget>
-    ? SchemaEntityRef<
-        TTarget['name'],
-        EntityRefLocator,
-        TTarget,
-        GraphSchemaReferenceResolution<TSchema>,
-        GraphSchemaReferenceRequirement<TSchema>
-      >
-    : TSchema extends { __value?: infer TValue }
-      ? TValue
-      : never;
-
-export interface ValueDefinition<
-  TName extends string = string,
-  TFields extends GraphSchemaFields = GraphSchemaFields,
-  TValue = InferGraphSchemaFields<TFields>,
-> extends PortableValueDefinition<TName, TFields, TValue> {}
-
-export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields, unknown>;
-
-export interface GraphObjectDefinition<
-  TFields extends GraphSchemaFields = GraphSchemaFields,
-  TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
-> extends PortableObjectDefinition<TFields, TUnknownKeys, InferGraphSchemaFields<TFields>> {}
-
-export type AnyGraphObjectDefinition = GraphObjectDefinition<
-  GraphSchemaFields,
-  'strip' | 'strict' | 'passthrough'
->;
-
-export interface GraphArrayDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueArrayDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphNullableDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueNullableDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphOptionalDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueOptionalDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphUnionDefinition<
-  TOptions extends readonly GraphSchemaLike[] = readonly GraphSchemaDefinition[],
-> extends ValueUnionDefinition<TOptions, InferGraphSchemaValue<TOptions[number]>> {}
-
-export interface GraphRecordDefinition<
-  TValue extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueRecordDefinition<TValue, InferGraphSchemaValue<TValue>> {}
-
-export interface GraphDefaultDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueDefaultDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphTransformDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-  TOutput = unknown,
-> extends ValueTransformDefinition<TItem, InferGraphSchemaValue<TItem>, TOutput> {}
-
-export interface GraphRefinementDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueRefinementDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphLazyDefinition<TValue = unknown> extends ValueLazyDefinition<
+export type {
+  AnyEntityViewDefinition,
+  AnyGraphObjectDefinition,
+  AnyValueDefinition,
+  EntityViewConfig,
+  EntityViewDefinition,
+  GraphArrayDefinition,
+  GraphDefaultDefinition,
+  GraphLazyDefinition,
+  GraphNamedDefinition,
+  GraphNullableDefinition,
+  GraphObjectDefinition,
+  GraphOptionalDefinition,
+  GraphRecordDefinition,
+  GraphRefinementDefinition,
   GraphSchemaDefinition,
-  TValue
-> {}
-
-export interface GraphNamedDefinition<
-  TItem extends GraphSchemaLike = GraphSchemaDefinition,
-> extends ValueNamedDefinition<TItem, InferGraphSchemaValue<TItem>> {}
-
-export interface GraphSelectionDefinition<
-  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
-  TCardinality extends 'one' | 'many' = 'one' | 'many',
-> {
-  kind: 'schema.selection';
-  entity: TEntity;
-  cardinality: TCardinality;
-  /** Receiver-owned model context for source-relative Selection validation. Not wire data. */
-  entities?: readonly AnyEntityDefinition[];
-  __value?: SemanticSelection<TEntity['name'], TEntity, TCardinality>;
-}
-
-export type EntityViewDefinition<
-  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
-  TName extends string = string,
-  TFields extends GraphSchemaFields = GraphSchemaFields,
-  TOmit extends readonly (keyof TEntity['fields'] & string)[] = readonly [],
-> = {
-  kind: 'entity-view';
-  name: TName;
-  entity: TEntity;
-  fields: TFields;
-  omit: TOmit;
-  __value?: Simplify<
-    Omit<InferEntityRecord<TEntity['fields']>, TOmit[number]> & InferGraphSchemaFields<TFields>
-  >;
-};
-
-export type AnyEntityViewDefinition = EntityViewDefinition<
-  AnyEntityDefinition,
-  string,
   GraphSchemaFields,
-  readonly string[]
->;
-
-export type EntityViewConfig<
-  TEntity extends AnyEntityDefinition,
-  TFields extends GraphSchemaFields,
-  TOmit extends readonly (keyof TEntity['fields'] & string)[],
-> = {
-  fields?: TFields;
-  omit?: TOmit;
-};
+  GraphSelectionDefinition,
+  GraphTransformDefinition,
+  GraphUnionDefinition,
+  InferGraphSchemaValue,
+  ValueDefinition,
+} from '../model/schema/definition.js';
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
 
