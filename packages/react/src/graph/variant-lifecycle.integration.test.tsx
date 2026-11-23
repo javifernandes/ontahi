@@ -1,4 +1,3 @@
-import { Stream } from '@ontahi/core/computation/stream';
 import {
   createEntityRef,
   createGraphReadDispatcher,
@@ -10,7 +9,8 @@ import {
   query,
   Selection,
   type GraphReadPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
+import { Stream } from '@ontahi/core/computation/stream';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import {
   createRuntimeProtocolResponse,

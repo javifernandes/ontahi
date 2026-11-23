@@ -5,7 +5,7 @@ import {
   type AnyEntityRef,
   type EntityMutationCommand,
   type EntityRefLocator,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Check, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
 import {
   useEffect,

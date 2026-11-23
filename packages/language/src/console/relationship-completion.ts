@@ -1,4 +1,4 @@
-import type { GraphSchemaDescriptor, GraphSchemaObjectDescriptor } from '@ontahi/core/data-graph';
+import type { GraphSchemaDescriptor, GraphSchemaObjectDescriptor } from '@ontahi/core';
 
 import type {
   ConsoleGraphReadSyntax,

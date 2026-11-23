@@ -17,7 +17,7 @@ import {
   defineClientEntity,
   createRuntimeBoundDataGraphApi,
   type DataGraphExecutionRuntime,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import { createExpressRuntimeProtocolHandler } from '@ontahi/runtime-express/runtime-protocol';
@@ -27,7 +27,7 @@ import { createElement, type ReactNode } from 'react';
 
 type PublicModules = [
   typeof import('@ontahi/core'),
-  typeof import('@ontahi/core/data-graph'),
+  typeof import('@ontahi/core'),
   typeof import('@ontahi/core/runtime/browser'),
   typeof import('@ontahi/core/runtime/identity'),
   typeof import('@ontahi/core/runtime/protocol'),

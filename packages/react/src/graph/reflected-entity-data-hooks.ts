@@ -4,7 +4,7 @@ import type {
   ReflectedEntityDataQuery,
   ReflectedEntityDataResult,
   ReflectedRelatedEntityDataQuery,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   useQuery,
   type QueryKey,

@@ -1,4 +1,4 @@
-import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation } from '@ontahi/core';
 
 import { sqlMapping } from './mapping.js';
 export const defineConformanceGraph = () => {

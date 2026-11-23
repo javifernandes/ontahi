@@ -3,7 +3,7 @@ import {
   field,
   graphSchema,
   withSelectionFactories,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   entity,
   ontahi,

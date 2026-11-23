@@ -2,7 +2,7 @@ import {
   lowerEntityReferenceRecord,
   liftEntityReferenceRecord,
   type GraphCommandSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 import { normalizeMysqlRecord, executeMysql } from './client.js';

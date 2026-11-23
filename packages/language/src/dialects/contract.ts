@@ -1,5 +1,5 @@
 import type { LRParser } from '@lezer/lr';
-import type { GraphReadOrder } from '@ontahi/core/data-graph';
+import type { GraphReadOrder } from '@ontahi/core';
 
 import type {
   ConsoleDialect,

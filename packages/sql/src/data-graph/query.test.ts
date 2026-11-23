@@ -1,4 +1,4 @@
-import { entity, field, query, Selection, mapRelation } from '@ontahi/core/data-graph';
+import { entity, field, query, Selection, mapRelation } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import type { SqlDialect } from './dialect.js';

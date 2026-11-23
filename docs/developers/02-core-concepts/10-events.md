@@ -12,7 +12,7 @@ Graph Schema payload:
 
 ```ts
 import { event } from '@ontahi/core/runtime/server';
-import { field, graphSchema } from '@ontahi/core/data-graph';
+import { field, graphSchema } from '@ontahi/core';
 
 export const TodoListCompleted = event.define({
   id: 'TodoListCompleted',

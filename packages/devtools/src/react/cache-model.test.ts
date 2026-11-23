@@ -1,4 +1,4 @@
-import { createEntityRef, createGraphClientCache, entity, field } from '@ontahi/core/data-graph';
+import { createEntityRef, createGraphClientCache, entity, field } from '@ontahi/core';
 import { expect, it } from 'vitest';
 
 import { entityReferenceLinks } from './cache-model.js';

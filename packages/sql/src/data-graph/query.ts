@@ -13,7 +13,7 @@ import {
   type QuerySpec,
   type SelectionExpression,
   type SelectionPredicate,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import { createSqlDerivedFieldCompiler } from './derived-field.js';
 import type { SqlDialect } from './dialect.js';

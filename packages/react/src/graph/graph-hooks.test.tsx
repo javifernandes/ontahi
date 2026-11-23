@@ -12,7 +12,7 @@ import {
   type CommittedMutationSet,
   type GraphCommandSpec,
   type GraphReadRequest,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   createRuntimeProtocolExecutionExchange,
@@ -542,7 +542,7 @@ describe('graph query and command hooks', () => {
       run: ({
         progress,
       }: {
-        progress: import('@ontahi/core/data-graph').Selection<typeof ReadingProgressEntity>;
+        progress: import('@ontahi/core').Selection<typeof ReadingProgressEntity>;
       }) => progress.delete(),
     } as const;
 

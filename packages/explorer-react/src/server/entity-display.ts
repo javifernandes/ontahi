@@ -1,1 +1,1 @@
-export { describeReflectedEntityDisplay as describeExplorerEntityDisplay } from '@ontahi/core/data-graph';
+export { describeReflectedEntityDisplay as describeExplorerEntityDisplay } from '@ontahi/core';

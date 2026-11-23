@@ -1,4 +1,4 @@
-import type { GraphClientCacheOutputRecord } from '@ontahi/core/data-graph';
+import type { GraphClientCacheOutputRecord } from '@ontahi/core';
 import type { ConsoleDialect } from '@ontahi/language';
 
 import { graphReadSummary } from './activity-model.js';

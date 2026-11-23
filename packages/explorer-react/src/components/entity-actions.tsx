@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnyEntityRef } from '@ontahi/core/data-graph';
+import type { AnyEntityRef } from '@ontahi/core';
 import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
 import { ArrowLeft, ArrowUpRight, CirclePlay, Trash2, X } from 'lucide-react';
 import {

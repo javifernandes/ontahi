@@ -1,6 +1,6 @@
 'use client';
 
-import { entityRefsEqual, type AnyEntityRef } from '@ontahi/core/data-graph';
+import { entityRefsEqual, type AnyEntityRef } from '@ontahi/core';
 import {
   useGraphExecutorCapability,
   useHasReflectedRelatedEntityDataReader,

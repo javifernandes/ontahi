@@ -1,4 +1,4 @@
-import type { EntityVariantDescriptor } from '@ontahi/core/data-graph';
+import type { EntityVariantDescriptor } from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   createRuntimeTransportRouter,

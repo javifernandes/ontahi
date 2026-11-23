@@ -9,7 +9,7 @@ import {
   type RelationshipCommand,
   type RelationshipFact,
   type RelationshipCommandResult,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { RowDataPacket } from 'mysql2/promise';
 
 import { executeMysql } from './client.js';

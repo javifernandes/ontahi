@@ -15,7 +15,7 @@ import {
   type OrderedRelationshipPlacement,
   type RelationshipDelta,
   type OrderedRelationshipMove,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-import { graphSchema } from '@ontahi/core/data-graph';
+import { graphSchema } from '@ontahi/core';
 import type { OperationInvocationDispatcher } from '@ontahi/core/runtime/operation-invocation';
 import {
   createEventApplication,

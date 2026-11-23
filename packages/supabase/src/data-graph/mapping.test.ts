@@ -1,4 +1,4 @@
-import { entity, field, getEntityMapping } from '@ontahi/core/data-graph';
+import { entity, field, getEntityMapping } from '@ontahi/core';
 import { relation, entity as ontahiEntity } from '@ontahi/core/entity';
 import { describe, expect, it } from 'vitest';
 

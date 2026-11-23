@@ -9,7 +9,7 @@ import {
   type ReflectedRelatedEntityDataReader,
   type ReflectedOperationDescriptor,
   type ReflectedOperationInvoker,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { anonymousExecutionIdentity, type ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   subscribeRuntimeProtocolExecutions,

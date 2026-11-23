@@ -1,4 +1,4 @@
-import { graphSchema } from '@ontahi/core/data-graph';
+import { graphSchema } from '@ontahi/core';
 import {
   createEventApplication,
   defineEvent,

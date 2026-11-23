@@ -1,4 +1,4 @@
-import { createEntityRef, entity, field, mutateEntity, query } from '@ontahi/core/data-graph';
+import { createEntityRef, entity, field, mutateEntity, query } from '@ontahi/core';
 import { createRuntimeProtocolDispatcher } from '@ontahi/core/runtime/protocol';
 import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createExpressRuntimeProtocolHandler } from '@ontahi/runtime-express/runtime-protocol';

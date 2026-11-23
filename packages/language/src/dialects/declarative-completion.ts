@@ -1,4 +1,4 @@
-import type { GraphSchemaDescriptor, GraphSchemaScalarType } from '@ontahi/core/data-graph';
+import type { GraphSchemaDescriptor, GraphSchemaScalarType } from '@ontahi/core';
 
 import {
   completionWordRange,

@@ -42,7 +42,7 @@ not grant a remote client access to the Entity.
 A server process, build tool, CLI, or test can execute a Query through the composed application:
 
 ```ts
-import { query } from '@ontahi/core/data-graph';
+import { query } from '@ontahi/core';
 
 const item = await TodoApplication.graph.read(
   query(TodoItem)
@@ -69,7 +69,7 @@ the permitted modes, cardinalities, limit, fields, operators, ordering, relation
 scope:
 
 ```ts
-import { defineGraphReadPolicy, selection } from '@ontahi/core/data-graph';
+import { defineGraphReadPolicy, selection } from '@ontahi/core';
 import type { Principal } from '@ontahi/core/runtime/server';
 
 type TodoReadAuthority = {

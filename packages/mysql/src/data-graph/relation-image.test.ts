@@ -1,4 +1,4 @@
-import { Selection, toGraphReadRequest } from '@ontahi/core/data-graph';
+import { Selection, toGraphReadRequest } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { contextualGraph } from '../../../sql/src/data-graph/relation-image.test-support.js';

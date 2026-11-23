@@ -1,4 +1,4 @@
-import { entity, field, modelExpression, query } from '@ontahi/core/data-graph';
+import { entity, field, modelExpression, query } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { selectColumnsForQuery } from './materialization.js';

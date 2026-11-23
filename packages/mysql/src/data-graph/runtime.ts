@@ -8,7 +8,7 @@ import {
   type RelationshipCommandExecutionRuntime,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type OrderedRelationshipCommandExecutionRuntime,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createSqlReadRuntime, createSqlMappingRegistry } from '@ontahi/sql';
 import { Effect, Stream } from 'effect';
 import type { Pool, PoolConnection } from 'mysql2/promise';

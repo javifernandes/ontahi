@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage
   - ontahi://plans/140-colocated-test-topology
   - ontahi://plans/141-data-graph-progressive-module-boundaries
+  - ontahi://plans/171a-data-graph-consumer-migration-and-compatibility-retirement
 migratedFrom: bookops://atlas/source-code-organization
 sourceCommit: 67713696
 ---
@@ -97,7 +98,7 @@ runtime binding; authoring and query/command APIs build on the portable model; r
 build on the model and semantic ASTs; in-memory execution and external adapter packages implement
 those contracts.
 
-The supported `@ontahi/core/data-graph` entrypoint remains the consumer facade. Internal folders
+The supported `@ontahi/core` entrypoint remains the consumer facade. Internal folders
 may provide small cohesive entrypoints for source navigation without becoming additional package
 entrypoints. Conceptual recursion between Entity, Relation, Ref, and Operation does not by itself
 justify runtime module cycles or mixed-responsibility files.

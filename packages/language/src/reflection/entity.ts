@@ -3,7 +3,7 @@ import {
   reflectSelectionFactories,
   reflectContextualSelections,
   type AnyEntityDefinition,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { SelectionLanguageEntityReflection } from '../model/contracts.js';
 

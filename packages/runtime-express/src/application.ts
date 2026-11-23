@@ -6,7 +6,7 @@ import type {
   ManyToManyRelationshipCommandPolicy,
   OrderedRelationshipCommandPolicy,
   RelationshipCommandPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createOperationInvocationDispatcher,
   type AnyEventDeclaration,

@@ -14,7 +14,7 @@ import {
   type RelationshipCommand,
   type RelationshipCommandResult,
   type RelationshipDelta,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 
 import {

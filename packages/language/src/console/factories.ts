@@ -3,7 +3,7 @@ import {
   expandSelectionFactory,
   type GraphSchemaDescriptor,
   type SelectionFactoryDescriptor,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { hasOwn } from '@ontahi/core/value/object';
 
 import type {

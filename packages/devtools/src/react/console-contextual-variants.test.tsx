@@ -1,12 +1,12 @@
 import { EditorView } from '@codemirror/view';
-import { isJsonValue } from '@ontahi/core';
 import {
+  isJsonValue,
   createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
   entity,
   field,
   withContextualSelections,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolRequestEnvelope,

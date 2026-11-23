@@ -1,4 +1,4 @@
-import { field, value } from '@ontahi/core/data-graph';
+import { field, value } from '@ontahi/core';
 import {
   defineEvent,
   getRequiredDataGraphRuntime,

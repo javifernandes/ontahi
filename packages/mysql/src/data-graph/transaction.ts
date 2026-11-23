@@ -1,4 +1,4 @@
-import type { DataGraphTransactionCapability } from '@ontahi/core/data-graph';
+import type { DataGraphTransactionCapability } from '@ontahi/core';
 import { Effect } from 'effect';
 import type { Pool, PoolConnection } from 'mysql2/promise';
 

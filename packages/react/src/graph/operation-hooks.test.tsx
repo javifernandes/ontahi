@@ -10,7 +10,7 @@ import {
   graphSchema,
   type CommittedMutationSet,
   type GraphReadRequest,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   type RuntimeTransport,

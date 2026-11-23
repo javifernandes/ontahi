@@ -6,7 +6,7 @@ import {
   mapEntity,
   selectionNot,
   selectionOr,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import {

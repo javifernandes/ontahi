@@ -17,7 +17,7 @@ import {
   type EntityMutationCommandPolicy,
   type GraphReadPolicy,
   type ManyToManyRelationshipCommandPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { entity as defineOntahiEntity, relation as defineRelation } from '@ontahi/core/entity';
 import {
   createRuntimeProtocolDispatcher,

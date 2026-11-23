@@ -1,10 +1,4 @@
-import {
-  entity,
-  field,
-  mapRelation,
-  Selection,
-  withContextualSelections,
-} from '@ontahi/core/data-graph';
+import { entity, field, mapRelation, Selection, withContextualSelections } from '@ontahi/core';
 
 import { sqlMapping } from './mapping.js';
 

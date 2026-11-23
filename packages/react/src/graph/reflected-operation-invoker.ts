@@ -7,7 +7,7 @@ import {
   type ReflectedOperationDescriptor,
   type ReflectedOperationInvocation,
   type ReflectedOperationInvoker,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   operationInputInvalid,
   operationRejected,

@@ -1,4 +1,4 @@
-import { createGraphClientCache, graphOutput } from '@ontahi/core/data-graph';
+import { createGraphClientCache, graphOutput } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { presentCacheOutput } from './cache-output-presentation.js';

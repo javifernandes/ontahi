@@ -1,4 +1,4 @@
-import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import {

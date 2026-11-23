@@ -9,7 +9,7 @@ import {
   field,
   type RelationshipFact,
   type GraphReadPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { ontahi } from '@ontahi/core/runtime/server';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect, Stream } from 'effect';

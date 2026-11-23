@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { MemorySaver } from '@langchain/langgraph';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
-import { graphSchema } from '@ontahi/core/data-graph';
+import { graphSchema } from '@ontahi/core';
 import { event } from '@ontahi/core/runtime/server';
 import {
   createInMemoryTaskStorage,

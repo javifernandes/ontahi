@@ -1,11 +1,5 @@
+import { defineClientApplication, defineClientEntity, entity, field, query } from '@ontahi/core';
 import { runCollectArray } from '@ontahi/core/computation/stream';
-import {
-  defineClientApplication,
-  defineClientEntity,
-  entity,
-  field,
-  query,
-} from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { describe, expect, it, vi } from 'vitest';

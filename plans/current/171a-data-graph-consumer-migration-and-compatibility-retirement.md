@@ -1,6 +1,6 @@
 # 171a. Data Graph Consumer Migration And Compatibility Retirement
 
-Status: backlog
+Status: current
 
 Canonical ID: `ontahi://plans/171a-data-graph-consumer-migration-and-compatibility-retirement`
 
@@ -19,22 +19,32 @@ compatibility namespace in an explicit breaking release.
 3. Replace legacy subpath imports and verify application builds, tests, and deployments.
 4. Confirm that no first-party consumer depends on the `data-graph` package export or historical
    source paths.
-5. Relocate the residual schema composition owned by `definitions.ts` and
-   `schema-descriptor.ts`, then remove compatibility-only facades, tests, and package exports.
+5. Retire the public compatibility export while preserving `data-graph` as an internal Core
+   implementation directory until its remaining modules move for architectural reasons.
 6. Publish the removal as a documented breaking prerelease.
 
 ## Non-Goals
 
 - Redesigning Entity, schema, query, operation, or runtime behavior during import migration.
-- Removing compatibility exports before all named first-party applications have shipped on the
-  replacement imports.
+- Moving the remaining Core implementation modules merely to erase the internal `data-graph`
+  directory name.
 - Preserving undocumented historical source paths after the breaking release.
+
+## Verification evidence
+
+- Atlas `origin/main`: no legacy imports.
+- Bartlet `origin/main`: no legacy imports.
+- Todo and Classroom on Ontahí `origin/main`: migrated to the package root.
+- BookOps PR [#532](https://github.com/javifernandes/bookops/pull/532): migrates the final fifteen
+  imports after PR #531 established the current Sonar baseline.
+- Ontahí package sources, fixtures, current documentation, and clean-consumer proofs use the
+  package root; historical completed plans retain their original references.
 
 ## Acceptance Checklist
 
 - [ ] Atlas, Bartlet, Todo, Classroom, and BookOps use the replacement public imports.
 - [ ] The named applications pass their relevant builds and tests on the same Ontahí release.
 - [ ] A repository and consumer audit finds no first-party `data-graph` subpath imports.
-- [ ] Residual schema composition has an explicit non-compatibility owner.
-- [ ] The `data-graph` compatibility namespace and package export are removed.
-- [ ] Release notes identify replacement imports and the breaking removal.
+- [x] Residual Core implementation has an explicit internal owner and is not a public subpath.
+- [x] The `data-graph` compatibility package export is removed.
+- [x] Release notes identify replacement imports and the breaking removal.

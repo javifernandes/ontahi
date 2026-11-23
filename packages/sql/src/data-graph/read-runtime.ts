@@ -18,7 +18,7 @@ import {
   type QuerySpec,
   type RelatedRootReadSpec,
   type SelectionValue,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect, Stream } from 'effect';
 
 import type { SqlDialect } from './dialect.js';

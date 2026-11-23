@@ -2,7 +2,7 @@ import {
   createRuntimeReflectedRelatedEntityDataReader,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { Pool } from 'pg';
 
 import {

@@ -7,7 +7,7 @@ import {
   type ReflectedEntityDataQuery,
   type ReflectedEntityDataReader,
   type ReflectedEntityDataResult,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { Pool, QueryResultRow } from 'pg';
 
 import { compilePostgresDerivedField } from './derived-field.js';

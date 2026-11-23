@@ -1,4 +1,4 @@
-import type { AnyEntityDefinition, GraphClientCache } from '@ontahi/core/data-graph';
+import type { AnyEntityDefinition, GraphClientCache } from '@ontahi/core';
 import { useContext, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cloneDiagnosticValue } from '../diagnostics.js';

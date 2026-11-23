@@ -198,7 +198,7 @@ const contentReadPolicy = {
 } satisfies GraphReadPolicy;
 ```
 
-`GraphReadPolicy` is exported from `@ontahi/core/data-graph`. Pass this policy to the host's
+`GraphReadPolicy` is exported from `@ontahi/core`. Pass this policy to the host's
 Graph Read dispatcher. Classification and the base authority scope are applied outside caller
 `not`/`or`, and all other grants remain those of the base policy. Discovery advertises the registered
 root without fetching records. Console then accepts `Chapter.many()` or `Chapter many` and

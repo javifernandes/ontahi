@@ -6,7 +6,7 @@ import {
   createRemoteDataGraphRuntime,
   toGraphReadRequestV2,
   type GraphReadPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { PostgrestClient } from '@supabase/postgrest-js';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect, Stream } from 'effect';

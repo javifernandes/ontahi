@@ -5,7 +5,7 @@ import {
   field,
   mutateEntity,
   query,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import {
   createRuntimeProtocolResponse,

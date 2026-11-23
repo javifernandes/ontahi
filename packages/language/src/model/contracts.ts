@@ -9,7 +9,7 @@ import type {
   EntityMutationAffordanceDescriptor,
   RelationshipCommandAffordanceDescriptor,
   EntityVariantDescriptor,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type {
   GraphCommandApplication,
   GraphReadApplication,

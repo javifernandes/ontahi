@@ -1,4 +1,4 @@
-import type { AnyEntityDefinition } from '@ontahi/core/data-graph';
+import type { AnyEntityDefinition } from '@ontahi/core';
 import type { ParameterizedSql } from '@ontahi/sql';
 import type { Pool, RowDataPacket, ExecuteValues, QueryResult } from 'mysql2/promise';
 

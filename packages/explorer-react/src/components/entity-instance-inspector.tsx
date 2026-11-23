@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnyEntityRef } from '@ontahi/core/data-graph';
+import type { AnyEntityRef } from '@ontahi/core';
 import { ArrowUpRight, Minus, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 

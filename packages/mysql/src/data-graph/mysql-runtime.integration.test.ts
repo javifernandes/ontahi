@@ -6,7 +6,7 @@ import {
   mutateEntity,
   createEntityRef,
   type GraphCommandSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect, Fiber } from 'effect';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

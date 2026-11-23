@@ -1,4 +1,4 @@
-import type { QuerySpec } from '@ontahi/core/data-graph';
+import type { QuerySpec } from '@ontahi/core';
 import { Effect } from 'effect';
 
 import type { SupabaseErrorFactory } from './types.js';

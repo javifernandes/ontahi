@@ -5,7 +5,7 @@ import {
   field,
   graphSchema,
   queryRef,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { getActionInvalidationQueryKeys, getActionQueryKey } from '@ontahi/core/runtime/actions';
 import { describe, expect, it } from 'vitest';
 

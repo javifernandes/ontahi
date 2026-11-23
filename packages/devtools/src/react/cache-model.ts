@@ -5,7 +5,7 @@ import {
   normalizeEntityRef,
   type GraphClientCache,
   type GraphClientCacheSnapshot,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 // Core inspection returns a new object each time; React requires stable snapshots between writes.
 export const createCacheStore = (cache: GraphClientCache) => {

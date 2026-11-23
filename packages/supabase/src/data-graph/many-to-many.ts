@@ -8,7 +8,7 @@ import {
   type ManyToManyRelationshipCommand,
   type RelationConstraintRejection,
   type RelationshipCommandResult,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 
 import {

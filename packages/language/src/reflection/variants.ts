@@ -1,4 +1,4 @@
-import { isEntityVariantDescriptor, type EntityVariantDescriptor } from '@ontahi/core/data-graph';
+import { isEntityVariantDescriptor, type EntityVariantDescriptor } from '@ontahi/core';
 
 import type {
   ConsoleLanguageApplicationReflection,

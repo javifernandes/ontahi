@@ -67,7 +67,7 @@ is a Selection, not rows or a Ref. The current authoring surface is an experimen
 helper; declare both how inputs are validated and how they expand:
 
 ```ts
-import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core';
 
 const Tag = withSelectionFactories(
   entity('Tag', {

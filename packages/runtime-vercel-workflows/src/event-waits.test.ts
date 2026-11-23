@@ -1,4 +1,4 @@
-import { field, value } from '@ontahi/core/data-graph';
+import { field, value } from '@ontahi/core';
 import { defineEvent, type EventOccurrence, type EventRuntime } from '@ontahi/core/runtime/server';
 import type { TaskRunSource } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';

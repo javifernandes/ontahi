@@ -1,4 +1,4 @@
-import type { CommittedMutationSet, GraphReadRequest } from '@ontahi/core/data-graph';
+import type { CommittedMutationSet, GraphReadRequest } from '@ontahi/core';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 

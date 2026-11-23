@@ -1,4 +1,4 @@
-import type { ResolvedRelationConstraint } from '@ontahi/core/data-graph';
+import type { ResolvedRelationConstraint } from '@ontahi/core';
 
 import type { PostgresEntityMapping } from './mapping.js';
 import {

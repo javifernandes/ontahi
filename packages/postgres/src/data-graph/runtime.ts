@@ -7,7 +7,7 @@ import {
   type ManyToManyRelationshipCommandExecutionRuntime,
   type OrderedRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createSqlReadRuntime } from '@ontahi/sql';
 import { Effect } from 'effect';
 import type { Pool, QueryResultRow } from 'pg';

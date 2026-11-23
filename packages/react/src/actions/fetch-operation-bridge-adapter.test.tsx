@@ -5,7 +5,7 @@ import {
   graphSchema,
   Selection,
   type CommittedMutationSet,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,

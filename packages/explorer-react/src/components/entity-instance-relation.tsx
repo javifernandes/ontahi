@@ -4,7 +4,7 @@ import {
   selectionReferences,
   type AnyEntityRef,
   type ManyToManyRelationshipCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   useGraphExecutorCapability,
   useReflectedEntityDataQuery,

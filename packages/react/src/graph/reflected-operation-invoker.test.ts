@@ -1,4 +1,4 @@
-import { entity, field, graphSchema } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema } from '@ontahi/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createReflectedOperationInvoker, type ReactGraphExecutor } from './index.js';
@@ -21,11 +21,8 @@ const resetReadingProgress = {
     progress: graphSchema.selection(ReadingProgress, { cardinality: 'one' }),
   }),
   output: graphSchema.void(),
-  run: ({
-    progress,
-  }: {
-    progress: import('@ontahi/core/data-graph').Selection<typeof ReadingProgress>;
-  }) => progress.delete(),
+  run: ({ progress }: { progress: import('@ontahi/core').Selection<typeof ReadingProgress> }) =>
+    progress.delete(),
 };
 
 const operationDescriptor = {

@@ -1,6 +1,6 @@
 import { undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
-import { entity, field } from '@ontahi/core/data-graph';
+import { entity, field } from '@ontahi/core';
 import { authoringDialectPreference } from '@ontahi/language-codemirror';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

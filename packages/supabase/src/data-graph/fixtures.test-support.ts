@@ -1,4 +1,4 @@
-import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation } from '@ontahi/core';
 
 export const defineReaderGraph = () => {
   const Book = entity('Book', {

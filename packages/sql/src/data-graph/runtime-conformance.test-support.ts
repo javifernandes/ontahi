@@ -10,7 +10,7 @@ import {
   type EntityProxy,
   type GraphCommandSpec,
   type SelectionPredicate,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Chunk, Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 

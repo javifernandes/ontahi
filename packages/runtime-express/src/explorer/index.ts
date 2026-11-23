@@ -2,7 +2,7 @@ import type {
   EntityMutationCommandPolicy,
   ManyToManyRelationshipCommandPolicy,
   OrderedRelationshipCommandPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type {
   ExplorerEntityDetail,
   ExplorerEntityMutationDescriptor,

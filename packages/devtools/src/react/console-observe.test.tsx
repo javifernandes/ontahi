@@ -6,7 +6,7 @@ import {
   createGraphClientCache,
   entity,
   field,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolGraphObservationBody,

@@ -1,4 +1,4 @@
-import type { RelationConstraintRejection } from '@ontahi/core/data-graph';
+import type { RelationConstraintRejection } from '@ontahi/core';
 
 export type PostgresDataGraphErrorReason =
   | 'execution_failed'

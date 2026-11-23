@@ -8,7 +8,7 @@ import type {
   GraphClientCache,
   OperationInputSchema,
   ReflectedOperationDescriptor,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import type {
   InfiniteData,

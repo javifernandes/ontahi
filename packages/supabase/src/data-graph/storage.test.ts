@@ -1,4 +1,4 @@
-import { createEntityRef, entity, field, getEntityMapping, query } from '@ontahi/core/data-graph';
+import { createEntityRef, entity, field, getEntityMapping, query } from '@ontahi/core';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 

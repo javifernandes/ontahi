@@ -79,7 +79,7 @@ An Entity can name a fixed classification for local read authoring without creat
 identity or storage population:
 
 ```ts
-import { entity, field } from '@ontahi/core/data-graph';
+import { entity, field } from '@ontahi/core';
 
 const ContentNode = entity('ContentNode', {
   id: field.id(),
@@ -276,7 +276,7 @@ Apply it after declaring the Entity's identity and locators. This first data-fir
 with legacy `refByX` methods; it does not deprecate them.
 
 ```ts
-import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core';
 
 const Customer = withSelectionFactories(
   entity('Customer', { id: field.id(), archivedAt: field.datetime() }),
@@ -385,7 +385,7 @@ It also accepts portable `{ name: { relationName, expression } }` templates for 
 The explicit low-level counterpart remains available:
 
 ```ts
-import { contextualSelectionFactory, Selection } from '@ontahi/core/data-graph';
+import { contextualSelectionFactory, Selection } from '@ontahi/core';
 
 // Book.contentNodes and ContentNode.children are actual declared relations.
 const parts = contextualSelectionFactory(Book, 'contentNodes', node => node.type.eq('part'));
@@ -574,7 +574,7 @@ never carry capabilities.
 
 Both forms are advisory receiver metadata, not client-authored authority or a grant for
 future requests. Every subsequent read must still pass ordinary authorization. Consumers can use
-`isGraphReadCapabilities` from `@ontahi/core/data-graph` to validate optional response metadata.
+`isGraphReadCapabilities` from `@ontahi/core` to validate optional response metadata.
 
 ## Caller-owned Views
 
@@ -769,7 +769,7 @@ factories derive the canonical relation identity from either endpoint and keep d
 visible:
 
 ```ts
-import { graphSchema, reaction } from '@ontahi/core/data-graph';
+import { graphSchema, reaction } from '@ontahi/core';
 import { event, ontahi } from '@ontahi/core/runtime/server';
 
 const StudentCourseAssigned = event.define({

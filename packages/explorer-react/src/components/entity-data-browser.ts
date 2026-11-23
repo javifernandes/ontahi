@@ -1,9 +1,6 @@
 'use client';
 
-import type {
-  ReflectedEntityDataColumn,
-  ReflectedEntityDataFilterOperator,
-} from '@ontahi/core/data-graph';
+import type { ReflectedEntityDataColumn, ReflectedEntityDataFilterOperator } from '@ontahi/core';
 import { useReflectedEntityDataQuery } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 

@@ -3,7 +3,7 @@
 import { history, historyKeymap } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
-import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
+import type { ReflectedEntityDataReader } from '@ontahi/core';
 import type { SelectionLanguageEntityReflection } from '@ontahi/language';
 import {
   authoringDialectPreference,

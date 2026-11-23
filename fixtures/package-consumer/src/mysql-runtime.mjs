@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { entity, field, query, Selection, withContextualSelections } from '@ontahi/core/data-graph';
+import { entity, field, query, Selection, withContextualSelections } from '@ontahi/core';
 import { createMysqlDataGraphStorage } from '@ontahi/mysql';
 import { Effect } from 'effect';
 

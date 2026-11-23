@@ -1,4 +1,4 @@
-import type { GraphReadRequest } from '@ontahi/core/data-graph';
+import type { GraphReadRequest } from '@ontahi/core';
 import { useEffect, useState } from 'react';
 
 import { styles } from './devtools-styles.js';

@@ -1,4 +1,4 @@
-import { entity, field, mapEntity, mapRelation, modelExpression } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation, modelExpression } from '@ontahi/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createSupabaseReflectedEntityDataReader } from './index.js';

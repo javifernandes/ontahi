@@ -1,4 +1,4 @@
-import { getEntityMapping, type AnyEntityDefinition } from '@ontahi/core/data-graph';
+import { getEntityMapping, type AnyEntityDefinition } from '@ontahi/core';
 import { Pool, type PoolConfig, type QueryResultRow } from 'pg';
 
 export type PostgresDataGraphSchemaIssue =

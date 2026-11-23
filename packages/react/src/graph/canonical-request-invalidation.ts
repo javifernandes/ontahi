@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeGraphSchemaClientInput, type GraphCommandRequest } from '@ontahi/core/data-graph';
+import { normalizeGraphSchemaClientInput, type GraphCommandRequest } from '@ontahi/core';
 import type { ModelCommandCanonicalRequest } from '@ontahi/core/runtime/protocol';
 import { useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
