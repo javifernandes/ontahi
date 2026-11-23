@@ -68,7 +68,7 @@ const hoistClientBridgeQueryInputTypes = sourceText => {
     .join('\n\n');
 
   return withAliases.replace(
-    /import \{[\s\S]*?\} from '@ontahi\/core\/data-graph';/,
+    /import \{[\s\S]*?\} from '@ontahi\/core';/,
     match => `${match}\n\n${aliasDeclarations}`,
   );
 };

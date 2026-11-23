@@ -1787,6 +1787,28 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).toContain('find: defineClientDomainOperation({');
   });
 
+  it('declares aliases for inline bridge query input types', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'Note',
+          helperTexts: [],
+          operations: [
+            {
+              name: 'find',
+              authority: 'server',
+              exposure: 'bridge',
+              bridgeQueryText: '[(input: { id: string }) => input.id]',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain('type BridgeQueryInput1 = { id: string };');
+    expect(source).toContain('(input: BridgeQueryInput1) => input.id');
+  });
+
   it('avoids named Value bindings that collide with imported entity bindings', () => {
     const namedValue = {
       kind: 'value',
