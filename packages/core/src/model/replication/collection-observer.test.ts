@@ -4,17 +4,25 @@ import { createInMemoryDataGraphStorage } from '../../runtime/storage/in-memory/
 
 import {
   createInMemoryReplicatedCollectionStorage,
-  createReplicatedCollectionAcceptanceRunner,
+  createReplicatedCollectionAcceptanceRunner as createRunnerWithStorage,
   resolveReplicatedCollectionStorage,
   type AcceptedCollectionSnapshot,
   type CollectionObservation,
   type CollectionObservationMode,
   type ReplicatedCollectionObserver,
+  type ReplicatedCollectionAcceptanceRunnerOptions,
 } from './collection-observer.js';
 import { createReplicatedVersionedMaterializerRunner } from './materializer.js';
 
 type RecordValue = { title: string };
 type Diagnostic = { code: string };
+
+const createReplicatedCollectionAcceptanceRunner = (
+  observer: ReplicatedCollectionObserver<RecordValue, string, Diagnostic>,
+  options: ReplicatedCollectionAcceptanceRunnerOptions<RecordValue, string> = {
+    activeStorage: createInMemoryDataGraphStorage(),
+  },
+) => createRunnerWithStorage(observer, options);
 
 const observation = (
   overrides: Partial<CollectionObservation<RecordValue, string, Diagnostic>> = {},
@@ -35,6 +43,41 @@ const observerFor = (
 ): ReplicatedCollectionObserver<RecordValue, string, Diagnostic> => ({ observe });
 
 describe('replicated collection acceptance runner', () => {
+  it('validates reordered JSON keys and isolates a mutable observer frontier', async () => {
+    const activeStorage = createInMemoryDataGraphStorage();
+    const bootstrap = createRunnerWithStorage(
+      {
+        observe: async () => ({
+          ...observation(),
+          changes: [{ kind: 'put', id: 'a', record: { a: 1, b: 2 } }],
+          targetFrontier: { page: 1 },
+        }),
+      },
+      { activeStorage },
+    );
+    await bootstrap.run('bootstrap');
+
+    const restored = createRunnerWithStorage<{ a: number; b: number }, { page: number }>(
+      {
+        observe: async frontier => {
+          expect(frontier).toEqual({ page: 1 });
+          frontier!.page = 99;
+          return {
+            ...observation(),
+            changes: [{ kind: 'put', id: 'a', record: { b: 2, a: 1 } }],
+            targetFrontier: { page: 1 },
+          };
+        },
+      },
+      { activeStorage },
+    );
+
+    await expect(restored.run('validation')).resolves.toMatchObject({
+      status: 'validated',
+      snapshot: { frontier: { page: 1 } },
+      metrics: { changed: 0, reused: 1 },
+    });
+  });
   it('bootstraps a complete accepted snapshot with detached records and metrics', async () => {
     const source = observation();
     const runner = createReplicatedCollectionAcceptanceRunner(
@@ -181,7 +224,7 @@ describe('replicated collection acceptance runner', () => {
   it('protects accepted state from a delayed writer', async () => {
     const resolvers: ((value: CollectionObservation<RecordValue, string, Diagnostic>) => void)[] =
       [];
-    const storage = createInMemoryReplicatedCollectionStorage<RecordValue, string>();
+    const activeStorage = createInMemoryDataGraphStorage();
     const createRunner = () =>
       createReplicatedCollectionAcceptanceRunner(
         observerFor(
@@ -190,7 +233,7 @@ describe('replicated collection acceptance runner', () => {
               resolvers.push(resolve);
             }),
         ),
-        { collectionId: 'plans', storage },
+        { collectionId: 'plans', activeStorage },
       );
     const delayedRunner = createRunner();
     const winningRunner = createRunner();

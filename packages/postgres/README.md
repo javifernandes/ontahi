@@ -116,6 +116,7 @@ do not acquire domain relations, operations, or public query semantics.
 The host applies `createPostgresReplicatedCollectionSchemaSql()` through its migration system:
 
 ```ts
+import { createReplicatedCollectionAcceptanceRunner } from '@ontahi/core';
 import {
   createPostgresDataGraphStorage,
   createPostgresReplicatedCollectionSchemaSql,
@@ -126,6 +127,10 @@ for (const statement of createPostgresReplicatedCollectionSchemaSql()) {
 }
 
 const storage = createPostgresDataGraphStorage({ pool });
+const runner = createReplicatedCollectionAcceptanceRunner(observer, {
+  activeStorage: storage,
+  collectionId: 'repository-evidence',
+});
 ```
 
 Acceptance uses a conditional revision update or conflict-safe first insert. A delayed process

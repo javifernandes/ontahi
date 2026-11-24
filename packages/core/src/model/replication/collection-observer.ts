@@ -85,7 +85,7 @@ export type ReplicatedCollectionAcceptanceRunnerOptions<
   TFrontier extends JsonValue,
 > = {
   collectionId?: string;
-  initialSnapshot?: AcceptedCollectionSnapshot<TRecord, TFrontier>;
+  activeStorage?: Partial<ReplicatedCollectionStorageCapability>;
   storage?: ReplicatedCollectionStorage<TRecord, TFrontier>;
 };
 
@@ -152,8 +152,30 @@ const sortedRecords = <TRecord extends JsonValue>(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, record]) => ({ id, record: cloneJson(record) }));
 
-const equalJson = (left: JsonValue, right: JsonValue): boolean =>
-  JSON.stringify(left) === JSON.stringify(right);
+const equalJson = (left: JsonValue, right: JsonValue): boolean => {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+    return false;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => equalJson(value, right[index]))
+    );
+  }
+  const leftEntries = Object.entries(left);
+  const rightObject = right as Readonly<Record<string, JsonValue>>;
+  return (
+    leftEntries.length === Object.keys(rightObject).length &&
+    leftEntries.every(
+      ([key, value]) =>
+        Object.prototype.hasOwnProperty.call(rightObject, key) &&
+        equalJson(value, rightObject[key]),
+    )
+  );
+};
 
 const sameSnapshotRecords = <TRecord extends JsonValue>(
   left: readonly AcceptedCollectionRecord<TRecord>[],
@@ -217,14 +239,10 @@ export const createReplicatedCollectionAcceptanceRunner = <
   TDiagnostic extends JsonValue = JsonValue,
 >(
   observer: ReplicatedCollectionObserver<TRecord, TFrontier, TDiagnostic>,
-  options: ReplicatedCollectionAcceptanceRunnerOptions<TRecord, TFrontier> = {},
+  options: ReplicatedCollectionAcceptanceRunnerOptions<TRecord, TFrontier>,
 ): ReplicatedCollectionAcceptanceRunner<TRecord, TFrontier, TDiagnostic> => {
   const collectionId = options.collectionId ?? 'default';
-  const storage =
-    options.storage ??
-    createInMemoryReplicatedCollectionStorage<TRecord, TFrontier>(
-      options.initialSnapshot ? { [collectionId]: options.initialSnapshot } : {},
-    );
+  const storage = resolveReplicatedCollectionStorage(options.activeStorage ?? {}, options.storage);
 
   const run = async (
     mode: CollectionObservationMode,
@@ -242,7 +260,7 @@ export const createReplicatedCollectionAcceptanceRunner = <
 
     let observation: CollectionObservation<TRecord, TFrontier, TDiagnostic>;
     try {
-      observation = cloneJson(await observer.observe(base?.frontier ?? null, mode));
+      observation = cloneJson(await observer.observe(cloneJson(base?.frontier ?? null), mode));
     } catch (failure) {
       return rejection(
         base,

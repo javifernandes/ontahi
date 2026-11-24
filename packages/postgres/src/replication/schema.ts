@@ -3,7 +3,7 @@ export type PostgresReplicatedCollectionTableNames = { readonly snapshots?: stri
 const DEFAULT_REPLICATED_COLLECTIONS_TABLE = 'ontahi_replicated_collections';
 
 const requireIdentifier = (value: string) => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+  if (value.length > 63 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
     throw new TypeError(`Invalid PostgreSQL replicated collection table name: ${value}.`);
   }
   return value;

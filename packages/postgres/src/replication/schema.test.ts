@@ -6,6 +6,15 @@ import {
 } from './schema.js';
 
 describe('PostgreSQL replicated collection schema', () => {
+  it('rejects identifiers that would collide after truncation', () => {
+    const prefix = 'r'.repeat(63);
+    expect(resolvePostgresReplicatedCollectionTableName({ snapshots: prefix })).toBe(prefix);
+    for (const suffix of ['_a', '_b']) {
+      expect(() =>
+        createPostgresReplicatedCollectionSchemaSql({ snapshots: prefix + suffix }),
+      ).toThrow('Invalid PostgreSQL replicated collection table name');
+    }
+  });
   it('creates an internal snapshot table with revision CAS state', () => {
     expect(createPostgresReplicatedCollectionSchemaSql()).toEqual([
       `CREATE TABLE IF NOT EXISTS "ontahi_replicated_collections" (
