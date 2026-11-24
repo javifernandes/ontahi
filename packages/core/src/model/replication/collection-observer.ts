@@ -77,14 +77,64 @@ export type ReplicatedCollectionAcceptanceRunner<
   run(
     mode: CollectionObservationMode,
   ): Promise<CollectionAcceptanceResult<TRecord, TFrontier, TDiagnostic>>;
-  current(): AcceptedCollectionSnapshot<TRecord, TFrontier> | null;
+  current(): Promise<AcceptedCollectionSnapshot<TRecord, TFrontier> | null>;
 };
 
 export type ReplicatedCollectionAcceptanceRunnerOptions<
   TRecord extends JsonValue,
   TFrontier extends JsonValue,
 > = {
+  collectionId?: string;
   initialSnapshot?: AcceptedCollectionSnapshot<TRecord, TFrontier>;
+  storage?: ReplicatedCollectionStorage<TRecord, TFrontier>;
+};
+
+export type ReplicatedCollectionStoredSnapshot<
+  TRecord extends JsonValue,
+  TFrontier extends JsonValue,
+> = {
+  revision: string;
+  snapshot: AcceptedCollectionSnapshot<TRecord, TFrontier>;
+};
+
+export type ReplicatedCollectionStorage<
+  TRecord extends JsonValue = JsonValue,
+  TFrontier extends JsonValue = JsonValue,
+> = {
+  load(
+    collectionId: string,
+  ): Promise<ReplicatedCollectionStoredSnapshot<TRecord, TFrontier> | null>;
+  accept(input: {
+    collectionId: string;
+    expectedRevision: string | null;
+    snapshot: AcceptedCollectionSnapshot<TRecord, TFrontier>;
+  }): Promise<
+    | ReplicatedCollectionStoredSnapshot<TRecord, TFrontier>
+    | {
+        status: 'conflict';
+        current: ReplicatedCollectionStoredSnapshot<TRecord, TFrontier> | null;
+      }
+  >;
+};
+
+export type ReplicatedCollectionStorageCapability = {
+  replicatedCollectionStorage: ReplicatedCollectionStorage;
+};
+
+export const resolveReplicatedCollectionStorage = <
+  TRecord extends JsonValue,
+  TFrontier extends JsonValue,
+>(
+  activeStorage: Partial<ReplicatedCollectionStorageCapability>,
+  customStorage?: ReplicatedCollectionStorage<TRecord, TFrontier>,
+): ReplicatedCollectionStorage<TRecord, TFrontier> => {
+  const storage = customStorage ?? activeStorage.replicatedCollectionStorage;
+  if (!storage) {
+    throw new Error(
+      'The active Entity storage does not provide replicated collection persistence. Pass a custom storage adapter explicitly.',
+    );
+  }
+  return storage as ReplicatedCollectionStorage<TRecord, TFrontier>;
 };
 
 const cloneSnapshot = <TRecord extends JsonValue, TFrontier extends JsonValue>(
@@ -169,16 +219,22 @@ export const createReplicatedCollectionAcceptanceRunner = <
   observer: ReplicatedCollectionObserver<TRecord, TFrontier, TDiagnostic>,
   options: ReplicatedCollectionAcceptanceRunnerOptions<TRecord, TFrontier> = {},
 ): ReplicatedCollectionAcceptanceRunner<TRecord, TFrontier, TDiagnostic> => {
-  let current = options.initialSnapshot ? cloneSnapshot(options.initialSnapshot) : null;
+  const collectionId = options.collectionId ?? 'default';
+  const storage =
+    options.storage ??
+    createInMemoryReplicatedCollectionStorage<TRecord, TFrontier>(
+      options.initialSnapshot ? { [collectionId]: options.initialSnapshot } : {},
+    );
 
   const run = async (
     mode: CollectionObservationMode,
   ): Promise<CollectionAcceptanceResult<TRecord, TFrontier, TDiagnostic>> => {
-    const base = current ? cloneSnapshot(current) : null;
+    const storedBase = await storage.load(collectionId);
+    const base = storedBase ? cloneSnapshot(storedBase.snapshot) : null;
 
     if (mode === 'incremental' && !base) {
       return rejection(
-        current,
+        base,
         'missing-accepted-frontier',
         'Incremental observation requires an accepted collection frontier.',
       );
@@ -189,7 +245,7 @@ export const createReplicatedCollectionAcceptanceRunner = <
       observation = cloneJson(await observer.observe(base?.frontier ?? null, mode));
     } catch (failure) {
       return rejection(
-        current,
+        base,
         'observation-failed',
         failure instanceof Error ? failure.message : 'Collection observation failed.',
       );
@@ -197,7 +253,7 @@ export const createReplicatedCollectionAcceptanceRunner = <
 
     if (!Number.isSafeInteger(observation.fetched) || observation.fetched < 0) {
       return rejection(
-        current,
+        base,
         'invalid-fetched-count',
         'Observed fetched count must be a non-negative safe integer.',
         observation.diagnostics,
@@ -206,7 +262,7 @@ export const createReplicatedCollectionAcceptanceRunner = <
 
     if (mode !== 'incremental' && observation.completeness !== 'complete') {
       return rejection(
-        current,
+        base,
         'incomplete-observation',
         `${mode} observation must produce a complete collection candidate.`,
         observation.diagnostics,
@@ -253,22 +309,24 @@ export const createReplicatedCollectionAcceptanceRunner = <
       };
     }
 
-    const acceptedFrontier = current?.frontier ?? null;
-    const baseFrontier = base?.frontier ?? null;
-    if (!equalJson(acceptedFrontier, baseFrontier)) {
+    const acceptance = await storage.accept({
+      collectionId,
+      expectedRevision: storedBase?.revision ?? null,
+      snapshot: candidateSnapshot,
+    });
+
+    if ('status' in acceptance) {
       return rejection(
-        current,
+        acceptance.current?.snapshot ?? null,
         'stale-writer',
         'Accepted collection advanced while this observation was in progress.',
         observation.diagnostics,
       );
     }
 
-    current = cloneSnapshot(candidateSnapshot);
-
     return {
       status: 'accepted',
-      snapshot: cloneSnapshot(current),
+      snapshot: cloneSnapshot(acceptance.snapshot),
       metrics,
       diagnostics: [],
       observerDiagnostics: cloneJson(observation.diagnostics),
@@ -277,6 +335,47 @@ export const createReplicatedCollectionAcceptanceRunner = <
 
   return {
     run,
-    current: () => (current ? cloneSnapshot(current) : null),
+    current: async () => (await storage.load(collectionId))?.snapshot ?? null,
+  };
+};
+
+export const createInMemoryReplicatedCollectionStorage = <
+  TRecord extends JsonValue = JsonValue,
+  TFrontier extends JsonValue = JsonValue,
+>(
+  initial: Readonly<
+    Record<string, AcceptedCollectionSnapshot<TRecord, TFrontier> | undefined>
+  > = {},
+): ReplicatedCollectionStorage<TRecord, TFrontier> => {
+  const snapshots = new Map<string, ReplicatedCollectionStoredSnapshot<TRecord, TFrontier>>();
+  let nextRevision = 1;
+
+  for (const [collectionId, snapshot] of Object.entries(initial)) {
+    if (snapshot) {
+      snapshots.set(collectionId, {
+        revision: String(nextRevision++),
+        snapshot: cloneSnapshot(snapshot),
+      });
+    }
+  }
+
+  return {
+    load: async collectionId => {
+      const stored = snapshots.get(collectionId);
+      return stored ? cloneJson(stored) : null;
+    },
+    accept: async ({ collectionId, expectedRevision, snapshot }) => {
+      const current = snapshots.get(collectionId) ?? null;
+      if ((current?.revision ?? null) !== expectedRevision) {
+        return { status: 'conflict', current: current ? cloneJson(current) : null };
+      }
+
+      const accepted = {
+        revision: String(nextRevision++),
+        snapshot: cloneSnapshot(snapshot),
+      };
+      snapshots.set(collectionId, accepted);
+      return cloneJson(accepted);
+    },
   };
 };

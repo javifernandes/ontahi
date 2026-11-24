@@ -170,15 +170,18 @@ evidence without changing the Materializer's semantic input.
        validates completeness, and publishes an accepted snapshot atomically.
 3. [x] Prove replay, stale-writer protection, failed observation, validation
        mismatch, bootstrap, incremental, and repair behavior with deterministic tests.
-4. [ ] Add persistence through the active Entity storage contract, including transactional
-       frontier compare-and-swap; keep a custom adapter as an explicit option.
-5. [ ] Connect accepted collection snapshots to the existing Materializer runner without exposing
+4. [x] Add the persistence port and store-owned compare-and-swap revision, resolve it from the
+       active Entity storage by default, and prove the contract with the in-memory storage; keep a
+       custom adapter as an explicit option.
+5. [x] Implement the capability in PostgreSQL without
+       moving provider transaction mechanics into Core.
+6. [x] Connect accepted collection snapshots to the existing Materializer runner without exposing
        unaccepted candidates.
-6. [ ] Update the smallest durable Ontahi Atlas item for Replicated Versioned Models with the
+7. [x] Update the smallest durable Ontahi Atlas item for Replicated Versioned Models with the
        accepted observer and storage decisions.
-7. [ ] Replace the smallest ad hoc orchestration seam from Atlas PR #117 with the Ontahi runner,
+8. [ ] Replace the smallest ad hoc orchestration seam from Atlas PR #117 with the Ontahi runner,
        leaving the GitHub adapter and Evidence Binding derivation in Atlas.
-8. [ ] Migrate remaining Atlas orchestration gradually only after full and incremental results,
+9. [ ] Migrate remaining Atlas orchestration gradually only after full and incremental results,
        diagnostics, and metrics are equivalent.
 
 ## Acceptance Checklist
@@ -236,9 +239,12 @@ evidence without changing the Materializer's semantic input.
 
 ## Closure / Evolution
 
-Current. The first implementation slice adds the provider-neutral observer contract and an
-in-memory acceptance runner to `@ontahi/core`. It proves all four modes, complete-snapshot guards,
-idempotent positive and negative changes, logical metrics, validation without mutation,
-observation-failure isolation, detached snapshots, and stale-writer rejection. Durable storage and
-Materializer handoff remain the next Ontahi slices; Atlas adoption begins only after those ports are
-defined.
+Current. The first implementation slice adds the provider-neutral observer contract and acceptance
+runner to `@ontahi/core`. It proves all four modes, complete-snapshot guards, idempotent positive
+and negative changes, logical metrics, validation without mutation, observation-failure isolation,
+detached snapshots, and stale-writer rejection. The second slice adds a storage-owned CAS revision,
+runner restoration, active Entity storage resolution, the in-memory default capability, a custom
+adapter escape hatch, and an executable Materializer handoff. Durable provider adapters remain the
+next Ontahi slice; PostgreSQL now supplies the contract through the same Data Graph storage and
+pool, with a host-applied internal snapshot table. Atlas can begin its first characterization-backed
+adoption seam; MySQL support remains later provider work rather than a prerequisite for that proof.

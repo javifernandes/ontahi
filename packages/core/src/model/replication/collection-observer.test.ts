@@ -1,11 +1,17 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+
+import { createInMemoryDataGraphStorage } from '../../runtime/storage/in-memory/storage.js';
 
 import {
+  createInMemoryReplicatedCollectionStorage,
   createReplicatedCollectionAcceptanceRunner,
+  resolveReplicatedCollectionStorage,
+  type AcceptedCollectionSnapshot,
   type CollectionObservation,
   type CollectionObservationMode,
   type ReplicatedCollectionObserver,
 } from './collection-observer.js';
+import { createReplicatedVersionedMaterializerRunner } from './materializer.js';
 
 type RecordValue = { title: string };
 type Diagnostic = { code: string };
@@ -55,7 +61,7 @@ describe('replicated collection acceptance runner', () => {
       diagnostics: [],
       observerDiagnostics: [],
     });
-    expect(runner.current()).toEqual(result.snapshot);
+    await expect(runner.current()).resolves.toEqual(result.snapshot);
   });
 
   it('applies positive and negative incremental changes idempotently', async () => {
@@ -108,7 +114,7 @@ describe('replicated collection acceptance runner', () => {
         status: 'rejected',
         diagnostics: [{ code: 'incomplete-observation' }],
       });
-      expect(runner.current()).toBeNull();
+      await expect(runner.current()).resolves.toBeNull();
     },
   );
 
@@ -138,7 +144,7 @@ describe('replicated collection acceptance runner', () => {
       status: 'rejected',
       diagnostics: [{ code: 'validation-mismatch' }],
     });
-    expect(runner.current()?.frontier).toBe('source:1');
+    await expect(runner.current()).resolves.toMatchObject({ frontier: 'source:1' });
   });
 
   it('repairs by replacing the complete collection and counts logical record changes', async () => {
@@ -175,17 +181,23 @@ describe('replicated collection acceptance runner', () => {
   it('protects accepted state from a delayed writer', async () => {
     const resolvers: ((value: CollectionObservation<RecordValue, string, Diagnostic>) => void)[] =
       [];
-    const runner = createReplicatedCollectionAcceptanceRunner(
-      observerFor(
-        async () =>
-          new Promise(resolve => {
-            resolvers.push(resolve);
-          }),
-      ),
-    );
+    const storage = createInMemoryReplicatedCollectionStorage<RecordValue, string>();
+    const createRunner = () =>
+      createReplicatedCollectionAcceptanceRunner(
+        observerFor(
+          async () =>
+            new Promise(resolve => {
+              resolvers.push(resolve);
+            }),
+        ),
+        { collectionId: 'plans', storage },
+      );
+    const delayedRunner = createRunner();
+    const winningRunner = createRunner();
 
-    const delayed = runner.run('bootstrap');
-    const winner = runner.run('bootstrap');
+    const delayed = delayedRunner.run('bootstrap');
+    const winner = winningRunner.run('bootstrap');
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
     resolvers[1]!(observation({ targetFrontier: 'source:winner' }));
     await expect(winner).resolves.toMatchObject({ status: 'accepted' });
     resolvers[0]!(observation({ targetFrontier: 'source:delayed' }));
@@ -194,7 +206,7 @@ describe('replicated collection acceptance runner', () => {
       status: 'rejected',
       diagnostics: [{ code: 'stale-writer' }],
     });
-    expect(runner.current()?.frontier).toBe('source:winner');
+    await expect(delayedRunner.current()).resolves.toMatchObject({ frontier: 'source:winner' });
   });
 
   it('preserves accepted state after observation failure and requires bootstrap first', async () => {
@@ -217,7 +229,78 @@ describe('replicated collection acceptance runner', () => {
       status: 'rejected',
       diagnostics: [{ code: 'observation-failed', message: 'provider unavailable' }],
     });
-    expect(runner.current()?.frontier).toBe('source:1');
+    await expect(runner.current()).resolves.toMatchObject({ frontier: 'source:1' });
+  });
+
+  it('restores accepted state through a shared storage port', async () => {
+    const storage = createInMemoryReplicatedCollectionStorage<RecordValue, string>();
+    const first = createReplicatedCollectionAcceptanceRunner(
+      observerFor(async () => observation()),
+      {
+        collectionId: 'plans',
+        storage,
+      },
+    );
+
+    await first.run('bootstrap');
+    const restored = createReplicatedCollectionAcceptanceRunner(
+      observerFor(async acceptedFrontier => {
+        expect(acceptedFrontier).toBe('source:1');
+        return observation({ changes: [], targetFrontier: 'source:2', completeness: 'candidate' });
+      }),
+      { collectionId: 'plans', storage },
+    );
+
+    await expect(restored.run('incremental')).resolves.toMatchObject({
+      status: 'accepted',
+      metrics: { changed: 0, reused: 2, resulting: 2 },
+      snapshot: { frontier: 'source:2' },
+    });
+  });
+
+  it('uses the active Entity storage by default and a custom adapter only when supplied', () => {
+    const activeStorage = createInMemoryDataGraphStorage();
+    const custom = createInMemoryReplicatedCollectionStorage<RecordValue, string>();
+
+    expect(resolveReplicatedCollectionStorage(activeStorage)).toBe(
+      activeStorage.replicatedCollectionStorage,
+    );
+    expect(resolveReplicatedCollectionStorage(activeStorage, custom)).toBe(custom);
+    expect(() => resolveReplicatedCollectionStorage({})).toThrow(
+      'The active Entity storage does not provide replicated collection persistence.',
+    );
+  });
+
+  it('hands only an accepted snapshot to a Materializer', async () => {
+    const collectionRunner = createReplicatedCollectionAcceptanceRunner(
+      observerFor(async () => observation()),
+    );
+    const acceptance = await collectionRunner.run('bootstrap');
+    const snapshot = acceptance.snapshot!;
+    const materializer = createReplicatedVersionedMaterializerRunner<
+      AcceptedCollectionSnapshot<RecordValue, string>,
+      never,
+      { count: number }
+    >({
+      id: 'plan-count',
+      version: 'v1',
+      affectedBy: () => ({ status: 'known', outputs: [] }),
+      derive: async input => ({
+        acceptedFrontier: `count:${input.records.length}`,
+        state: { count: input.records.length },
+        artifacts: [],
+        changes: [],
+        dependencies: [],
+        diagnostics: [],
+      }),
+    });
+
+    await expect(
+      materializer.run({ mode: 'rebuild', input: snapshot, sourceFrontier: snapshot.frontier }),
+    ).resolves.toMatchObject({
+      result: { status: 'accepted' },
+      output: { state: { count: 2 } },
+    });
   });
 
   it('exposes the provider-neutral observer contract', () => {

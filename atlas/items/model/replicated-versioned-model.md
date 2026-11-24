@@ -77,10 +77,11 @@ without mutation; a delayed writer cannot replace state advanced from the fronti
 read.
 
 Replica records are internal persisted records by default rather than implicitly addressable
-Entities. Durable runners should use the application's active Entity storage and transaction
-contract while keeping replica namespaces and semantics distinct. A custom storage adapter is an
-escape hatch for stores that cannot provide atomic frontier compare-and-swap, not the default
-application setup.
+Entities. The acceptance runner persists them through a store-owned revision and atomic
+compare-and-swap port. Composition resolves that port from the application's active Entity storage
+by default while keeping replica namespaces and semantics distinct; the in-memory Entity storage
+provides the reference capability. A custom storage adapter is an escape hatch for stores that
+cannot provide the capability, not the default application setup.
 
 A future declarative Entity API may name recurring source/output identities, dependencies,
 versions, and consistency requirements after Atlas and BookOps prove their common shape. That

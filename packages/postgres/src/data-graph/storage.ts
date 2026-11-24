@@ -2,8 +2,14 @@ import {
   createRuntimeReflectedRelatedEntityDataReader,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
+  type ReplicatedCollectionStorage,
 } from '@ontahi/core';
 import type { Pool } from 'pg';
+
+import {
+  createPostgresReplicatedCollectionStorage,
+  type PostgresReplicatedCollectionStorageOptions,
+} from '../replication/storage.js';
 
 import {
   inferPostgresMappings,
@@ -23,6 +29,7 @@ import {
 export type PostgresDataGraphStorage =
   DataGraphDefaultStorage<PostgresTransactionDataGraphRuntime> & {
     kind: 'postgres';
+    replicatedCollectionStorage: ReplicatedCollectionStorage;
   };
 
 export const createPostgresDataGraphStorage = (options: {
@@ -31,6 +38,7 @@ export const createPostgresDataGraphStorage = (options: {
   naming?: PostgresDataGraphNaming;
   overrides?: PostgresDataGraphMappingOverrides;
   pageSizeOptions?: PostgresReflectedEntityDataReaderOptions['pageSizeOptions'];
+  replicatedCollections?: Omit<PostgresReplicatedCollectionStorageOptions, 'pool'>;
 }): PostgresDataGraphStorage => {
   let mappings = options.mappings;
   let entities: readonly AnyEntityDefinition[] | undefined;
@@ -53,6 +61,10 @@ export const createPostgresDataGraphStorage = (options: {
   };
   return {
     kind: 'postgres',
+    replicatedCollectionStorage: createPostgresReplicatedCollectionStorage({
+      pool: options.pool,
+      ...options.replicatedCollections,
+    }),
     graphReadCapabilities: { relationSelections: true },
     bindEntities: declarations => {
       entities = declarations;
