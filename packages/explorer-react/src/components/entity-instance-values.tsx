@@ -1,4 +1,4 @@
-import type { AnyEntityRef } from '@ontahi/core/data-graph';
+import type { AnyEntityRef } from '@ontahi/core';
 import type { ReactNode } from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';

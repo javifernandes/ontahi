@@ -1,4 +1,4 @@
-import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, value } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { describeRuntimeSchema, undeclaredResultSchema } from './index.js';

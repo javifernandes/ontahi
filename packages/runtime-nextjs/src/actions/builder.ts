@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { PortableOperationConditions } from '@ontahi/core/data-graph';
+import type { PortableOperationConditions } from '@ontahi/core';
 import {
   attachActionRuntime,
   createFeatureAllQueryTarget,

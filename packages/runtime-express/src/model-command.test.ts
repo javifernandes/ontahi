@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 
-import { createInMemoryDataGraphStorage, field } from '@ontahi/core/data-graph';
+import { createInMemoryDataGraphStorage, field } from '@ontahi/core';
 import {
   entity,
   ontahi,

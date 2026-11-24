@@ -4,7 +4,7 @@ import {
   defineClientEntity,
   entity,
   field,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeTransportRouter,

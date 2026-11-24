@@ -2,7 +2,7 @@ import type {
   ReflectedEntityDataReader,
   ReflectedOperationInvoker,
   ReflectedRelatedEntityDataReader,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';

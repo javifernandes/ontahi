@@ -5,7 +5,7 @@ import {
   type AnyEntityRef,
   type SelectionExpression,
   type ResolvedRelationConstraint,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { PoolConnection, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 
 import { executeMysql, normalizeMysqlRecord } from './client.js';

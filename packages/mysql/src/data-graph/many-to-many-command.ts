@@ -6,7 +6,7 @@ import {
   type RelationshipFact,
   type RelationshipCommandResult,
   type RelationshipEndpointSelection,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 
 import { executeMysql } from './client.js';

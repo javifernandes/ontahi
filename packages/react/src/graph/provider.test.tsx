@@ -5,7 +5,7 @@ import {
   type GraphClientCache,
   type ReflectedEntityDataReader,
   type ReflectedOperationInvoker,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { act, renderHook, waitFor } from '@testing-library/react';

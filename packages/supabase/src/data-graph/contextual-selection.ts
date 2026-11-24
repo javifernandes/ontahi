@@ -8,7 +8,7 @@ import {
   type AnyEntityDefinition,
   type CompiledSelectionExpression,
   type SelectionExpression,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import { serializeSupabaseSelection } from './selection-filter.js';
 

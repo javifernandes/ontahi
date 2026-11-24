@@ -1,4 +1,4 @@
-import type { GraphReadOrder } from '@ontahi/core/data-graph';
+import type { GraphReadOrder } from '@ontahi/core';
 import { useContext } from 'react';
 
 import {

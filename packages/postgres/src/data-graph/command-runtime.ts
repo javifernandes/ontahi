@@ -12,7 +12,7 @@ import {
   type OrderedRelationshipCommand,
   type RelationConstraintRejection,
   type RelationshipCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 import type { QueryResult, QueryResultRow } from 'pg';
 

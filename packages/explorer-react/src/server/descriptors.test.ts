@@ -8,7 +8,7 @@ import {
   modelExpression,
   value,
   withSelectionFactories,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';

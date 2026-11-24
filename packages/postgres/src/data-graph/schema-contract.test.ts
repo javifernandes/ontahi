@@ -1,4 +1,4 @@
-import { field, mapEntity, mapRelation, modelExpression } from '@ontahi/core/data-graph';
+import { field, mapEntity, mapRelation, modelExpression } from '@ontahi/core';
 import { entity } from '@ontahi/core/entity';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';

@@ -10,7 +10,7 @@ import {
   selection,
   type ManyToManyRelationshipCommand,
   type RelationshipCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

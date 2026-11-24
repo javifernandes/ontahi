@@ -3,7 +3,7 @@ import {
   getEntityMapping,
   resolveColumnNameForEntity,
   type GraphCommandSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 
 import type { SupabaseErrorFactory, SupabaseLikeClient } from './types.js';

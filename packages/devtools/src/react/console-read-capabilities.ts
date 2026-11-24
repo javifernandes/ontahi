@@ -1,5 +1,5 @@
 import { isRecord } from '@ontahi/core';
-import { isGraphReadCapabilities, type GraphReadCapabilities } from '@ontahi/core/data-graph';
+import { isGraphReadCapabilities, type GraphReadCapabilities } from '@ontahi/core';
 import {
   createRuntimeProtocolExchange,
   isConfigurableRuntimeTransport,

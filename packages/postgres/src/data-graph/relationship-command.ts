@@ -7,7 +7,7 @@ import {
   type RelationConstraintRejection,
   type RelationshipCommand,
   type RelationshipDelta,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { PostgresEntityMapping } from './mapping.js';
 import {

@@ -18,7 +18,7 @@ import {
   type GraphReadCapabilities,
   type GraphReadRequest,
   type GraphReadOrder,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   graphCommandApplicationHoles,
   graphCommandApplicationHolePositions,

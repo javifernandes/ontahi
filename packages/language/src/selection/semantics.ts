@@ -5,7 +5,7 @@ import {
   selectionNot,
   selectionOr,
   type SelectionExpression,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { applicationHole } from '@ontahi/core/experimental/semantic-program';
 
 import type {

@@ -6,7 +6,7 @@ import {
   readInitialOperationCacheValueFromCache,
   reconcileOperationOutput,
   valueContainsEntityRef,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { QueryClient } from '@tanstack/react-query';
 
 export {

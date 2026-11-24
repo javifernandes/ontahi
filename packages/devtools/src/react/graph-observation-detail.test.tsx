@@ -1,4 +1,4 @@
-import { entity, field, query, toGraphReadRequest } from '@ontahi/core/data-graph';
+import { entity, field, query, toGraphReadRequest } from '@ontahi/core';
 import {
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,

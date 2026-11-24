@@ -1,13 +1,7 @@
 'use client';
 
-import type {
-  ReflectedOperationInvocation,
-  ReflectedOperationInvoker,
-} from '@ontahi/core/data-graph';
-import {
-  normalizeGraphSchemaClientInput,
-  resolveOperationExecutionAffordance,
-} from '@ontahi/core/data-graph';
+import type { ReflectedOperationInvocation, ReflectedOperationInvoker } from '@ontahi/core';
+import { normalizeGraphSchemaClientInput, resolveOperationExecutionAffordance } from '@ontahi/core';
 import type { OperationInvocationResult } from '@ontahi/core/runtime/contracts';
 import {
   isOperationInvocationProtocolResponse,

@@ -1,6 +1,5 @@
 'use client';
 
-import { Stream } from '@ontahi/core/computation/stream';
 import {
   createGraphClientCache,
   createRuntimeBoundDataGraphApi,
@@ -9,7 +8,8 @@ import {
   type GraphClientCache,
   type PlainGraphRead,
   type QueryOrView,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
+import { Stream } from '@ontahi/core/computation/stream';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 
 import {

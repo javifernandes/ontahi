@@ -1,9 +1,4 @@
-import {
-  entity as defineEntity,
-  field,
-  graphSchema,
-  withSelectionFactories,
-} from '@ontahi/core/data-graph';
+import { entity as defineEntity, field, graphSchema, withSelectionFactories } from '@ontahi/core';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 

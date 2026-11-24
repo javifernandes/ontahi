@@ -7,7 +7,7 @@ import {
   type ReflectedEntityDataQuery,
   type ReflectedEntityDataReader,
   type ReflectedEntityDataResult,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createSqlDerivedFieldCompiler } from '@ontahi/sql';
 import type { RowDataPacket } from 'mysql2/promise';
 

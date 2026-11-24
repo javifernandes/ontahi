@@ -1,4 +1,4 @@
-import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core/data-graph';
+import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core';
 import { getCurrentInvocationContext, type InvocationContext } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 

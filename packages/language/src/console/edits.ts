@@ -1,4 +1,4 @@
-import type { GraphReadOrder } from '@ontahi/core/data-graph';
+import type { GraphReadOrder } from '@ontahi/core';
 
 import type { Dialect } from '../dialects/contract.js';
 import { getDialect } from '../dialects/registry.js';

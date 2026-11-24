@@ -1,4 +1,4 @@
-import type { CompiledPredicate, CompiledSelectionExpression } from '@ontahi/core/data-graph';
+import type { CompiledPredicate, CompiledSelectionExpression } from '@ontahi/core';
 
 const quotePostgrestValue = (value: unknown) => {
   if (value === null) return 'null';

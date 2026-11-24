@@ -6,7 +6,7 @@ import {
   field,
   graphSchema,
   value,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { expect, it } from 'vitest';
 
 import { getOperationQueryKey } from './operation-hooks.js';

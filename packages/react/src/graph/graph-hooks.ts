@@ -19,7 +19,7 @@ import {
   type PlainGraphRead,
   type RelationshipCommandResult,
   type ViewDefinition,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { executionIdentityCacheKey } from '@ontahi/core/runtime/identity';
 import { wasRuntimeProtocolExecutionObserved } from '@ontahi/core/runtime/protocol';
 import {

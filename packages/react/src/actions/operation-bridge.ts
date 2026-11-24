@@ -4,7 +4,7 @@ import type {
   ClientDomainOperationDeclaration,
   EntityViewAst,
   QueryKeySegment,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   attachActionRuntime,
   getActionErrorMessage,

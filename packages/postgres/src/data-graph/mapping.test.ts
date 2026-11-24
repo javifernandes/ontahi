@@ -1,4 +1,4 @@
-import { field, resolveRelatedRootFields } from '@ontahi/core/data-graph';
+import { field, resolveRelatedRootFields } from '@ontahi/core';
 import { entity, relation } from '@ontahi/core/entity';
 import { describe, expect, it } from 'vitest';
 

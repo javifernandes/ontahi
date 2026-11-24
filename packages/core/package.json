@@ -94,11 +94,6 @@
       "import": "./dist/runtime/server/tasks.js",
       "require": "./dist/runtime/server/tasks.js"
     },
-    "./data-graph": {
-      "types": "./dist/data-graph/index.d.ts",
-      "import": "./dist/data-graph/index.js",
-      "require": "./dist/data-graph/index.js"
-    },
     "./experimental/semantic-program": {
       "types": "./dist/semantic-program/experimental.d.ts",
       "import": "./dist/semantic-program/experimental.js",

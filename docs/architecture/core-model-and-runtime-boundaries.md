@@ -87,7 +87,7 @@ the one test-support module). Modules sharing a row have the same owner and dest
 | `in-memory/storage.ts`, `in-memory/runtime.ts`                                                                                                                                                     | Adapter                     | `runtime/storage/in-memory/`                                              | Concrete storage and runtime implementation.                                                                                                                      |
 | `in-memory/command.ts`, `in-memory/entity-mutation-command.ts`, `in-memory/relationship-command.ts`, `in-memory/ordered-relationship-command.ts`, `in-memory/many-to-many-relationship-command.ts` | Adapter                     | `runtime/storage/in-memory/command/`                                      | Concrete mutation execution.                                                                                                                                      |
 | `in-memory/query.ts`, `in-memory/selection.ts`, `in-memory/materialization.ts`, `in-memory/reflected-entity-data.ts`, `in-memory/observation.ts`                                                   | Adapter                     | `runtime/storage/in-memory/read/`                                         | Concrete reads, result materialization, and observation.                                                                                                          |
-| `index.ts`                                                                                                                                                                                         | Compatibility facade        | Retain `data-graph/index.ts` during migration                             | Package-root and `@ontahi/core/data-graph` compatibility re-exports. It must not gain new semantics.                                                              |
+| `index.ts`                                                                                                                                                                                         | Internal aggregation        | Retain `data-graph/index.ts` behind the package root                      | Package-root re-exports for implementations that still live under `data-graph`; it must not gain new semantics.                                                   |
 | `fixtures.test-support.ts`                                                                                                                                                                         | Portable model test support | Follow `model/entity/` tests                                              | Not production API; move only with the Entity test surface.                                                                                                       |
 
 ## Current dependency map
@@ -196,8 +196,9 @@ facades. Moving either large file unchanged would reproduce `data-graph` under a
 
 ## Compatibility and sequencing
 
-- Keep package-root exports and the documented `@ontahi/core/data-graph` export intact throughout
-  extraction. New internal destinations can be introduced behind those exports.
+- Keep package-root exports intact throughout extraction. The historical
+  `@ontahi/core/data-graph` compatibility export was removed after first-party consumers moved to
+  the package root and focused model, computation, value, and runtime entrypoints.
 - Do not promise compatibility for undocumented source-file paths. Repository consumers should be
   migrated to package exports before the old implementation files disappear.
 - Start slice 2 with the Entity kernel inside `definitions.ts`: value-schema primitives are a
@@ -259,9 +260,9 @@ runtime owners directly.
 The reference in-memory implementation now lives under `runtime/storage/in-memory`. Its storage
 factory, execution runtime, observation hub, read/materialization implementation, and mutation
 command executors move together as one adapter boundary. Historical `data-graph/in-memory` modules
-contain re-exports only, so existing package-root and `@ontahi/core/data-graph` consumers preserve
-their API while new internal dependencies can recognize the implementation as a concrete runtime
-adapter rather than portable model semantics.
+contain re-exports only, so package-root consumers preserve their API while internal dependencies
+can recognize the implementation as a concrete runtime adapter rather than portable model
+semantics.
 
 ## Slice 5 progress
 

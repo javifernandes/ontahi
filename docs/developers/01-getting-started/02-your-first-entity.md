@@ -3,7 +3,7 @@
 An \concept{Entity} declares a named kind of thing.
 
 ```ts
-import { defineGraphReadPolicy, field as f } from '@ontahi/core/data-graph';
+import { defineGraphReadPolicy, field as f } from '@ontahi/core';
 import { entity } from '@ontahi/core/entity';
 
 export const TodoList = entity({

@@ -1,4 +1,4 @@
-import type { RelationConstraintRejection } from '@ontahi/core/data-graph';
+import type { RelationConstraintRejection } from '@ontahi/core';
 export type MysqlDataGraphErrorReason =
   | 'execution_failed'
   | 'invalid_command'

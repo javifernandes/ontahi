@@ -5,7 +5,7 @@ import {
   type AnyEntityDefinition,
   type DataGraphMappingNaming,
   type DataGraphMappingOverrides,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 export type SqlEntityMapping<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   entity: TEntity;

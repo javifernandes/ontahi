@@ -10,7 +10,7 @@ import {
   graphSchema,
   withContextualSelections,
   withSelectionFactories,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { compilePostgresQuery } from '@ontahi/postgres';

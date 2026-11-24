@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnyEntityRef, ReflectedEntityDataFilterOperator } from '@ontahi/core/data-graph';
+import type { AnyEntityRef, ReflectedEntityDataFilterOperator } from '@ontahi/core';
 import { useGraphExecutorCapability } from '@ontahi/react/graph';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent } from 'react';

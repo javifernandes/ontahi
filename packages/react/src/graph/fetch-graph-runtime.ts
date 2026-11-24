@@ -1,6 +1,5 @@
 'use client';
 
-import { Stream } from '@ontahi/core/computation/stream';
 import {
   createRemoteDataGraphRuntime,
   isGraphCommandRejection,
@@ -20,7 +19,8 @@ import {
   type OrderedRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
   type RelationshipCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
+import { Stream } from '@ontahi/core/computation/stream';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import {
   createRuntimeProtocolExchange,

@@ -5,7 +5,7 @@ import {
   type AnyEntityDefinition,
   RelationQueryBuilder,
   type SelectionValue,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { EntityRow, IncludeShape, SelectionShape } from './types.js';
 

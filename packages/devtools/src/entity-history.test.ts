@@ -1,10 +1,4 @@
-import {
-  createEntityRef,
-  createGraphClientCache,
-  entity,
-  field,
-  graphOutput,
-} from '@ontahi/core/data-graph';
+import { createEntityRef, createGraphClientCache, entity, field, graphOutput } from '@ontahi/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createEntityHistory, historyFieldChanges } from './entity-history.js';

@@ -4,7 +4,7 @@ import {
   graphSchemaDescriptorToJsonSchema,
   type GraphSchemaDescriptor,
   type GraphSchemaDefinition,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type {
   ExplorerSchemaDescriptor,

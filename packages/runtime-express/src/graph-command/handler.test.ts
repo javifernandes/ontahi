@@ -1,4 +1,4 @@
-import { graphCommandProtocolError, type GraphCommandDispatcher } from '@ontahi/core/data-graph';
+import { graphCommandProtocolError, type GraphCommandDispatcher } from '@ontahi/core';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 

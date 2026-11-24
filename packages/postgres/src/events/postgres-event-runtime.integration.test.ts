@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { graphSchema } from '@ontahi/core/data-graph';
+import { graphSchema } from '@ontahi/core';
 import {
   eventDeclaration,
   eventEgressSubscription,

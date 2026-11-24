@@ -1,6 +1,6 @@
 'use client';
 
-import type { GraphClientCache } from '@ontahi/core/data-graph';
+import type { GraphClientCache } from '@ontahi/core';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { useOntahiClientContext } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';

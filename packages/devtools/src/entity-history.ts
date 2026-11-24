@@ -1,4 +1,4 @@
-import { normalizeEntityRef, type GraphClientCache } from '@ontahi/core/data-graph';
+import { normalizeEntityRef, type GraphClientCache } from '@ontahi/core';
 import { hasOwn } from '@ontahi/core/value/object';
 
 import { cloneDiagnosticValue } from './diagnostics.js';

@@ -1,4 +1,4 @@
-import type { ContextualSelectionDescriptor } from '@ontahi/core/data-graph';
+import type { ContextualSelectionDescriptor } from '@ontahi/core';
 
 import type {
   ConsoleGraphReadSyntax,

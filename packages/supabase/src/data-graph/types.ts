@@ -6,7 +6,7 @@ import type {
   GraphExecutionAuthorityOptions,
   RelationQueryBuilder,
   SelectionValue,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { Effect } from 'effect';
 
 import type { ContextualSelectionPlan } from './contextual-selection.js';

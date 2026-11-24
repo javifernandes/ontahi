@@ -13,7 +13,7 @@ import {
   graphSchema,
   withSelectionFactories,
   withContextualSelections,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {

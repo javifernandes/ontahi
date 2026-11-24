@@ -9,7 +9,7 @@ import {
   Selection,
   toGraphCommandRequest,
   type GraphCommandSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   runtimeProtocolError,

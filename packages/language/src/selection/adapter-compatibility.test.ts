@@ -1,4 +1,4 @@
-import { compileSelectionExpression, entity, field, mapEntity } from '@ontahi/core/data-graph';
+import { compileSelectionExpression, entity, field, mapEntity } from '@ontahi/core';
 import {
   applySupabaseSelection,
   compileSupabaseSelection,

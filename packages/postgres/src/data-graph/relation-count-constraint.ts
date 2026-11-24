@@ -3,7 +3,7 @@ import {
   selectionReferences,
   type AnyEntityRef,
   type RelationshipCommand,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { PostgresEntityMapping } from './mapping.js';
 import { compilePostgresSelection, quotePostgresIdentifier } from './sql.js';

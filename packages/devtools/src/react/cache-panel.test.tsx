@@ -1,10 +1,4 @@
-import {
-  createEntityRef,
-  createGraphClientCache,
-  entity,
-  field,
-  graphOutput,
-} from '@ontahi/core/data-graph';
+import { createEntityRef, createGraphClientCache, entity, field, graphOutput } from '@ontahi/core';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 

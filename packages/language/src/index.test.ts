@@ -1,4 +1,4 @@
-import { createInMemoryDataGraphRuntime, entity, field, query } from '@ontahi/core/data-graph';
+import { createInMemoryDataGraphRuntime, entity, field, query } from '@ontahi/core';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 

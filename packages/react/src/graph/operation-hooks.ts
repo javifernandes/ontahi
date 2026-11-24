@@ -6,8 +6,8 @@ import type {
   GraphSchemaLike,
   GraphSchemaParseResult,
   OperationInputSchema,
-} from '@ontahi/core/data-graph';
-import { normalizeGraphSchemaClientInput } from '@ontahi/core/data-graph';
+} from '@ontahi/core';
+import { normalizeGraphSchemaClientInput } from '@ontahi/core';
 import { operationInputInvalid } from '@ontahi/core/runtime/contracts';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {

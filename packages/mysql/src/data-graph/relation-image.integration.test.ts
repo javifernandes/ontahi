@@ -5,7 +5,7 @@ import {
   field,
   Selection,
   type GraphReadPolicy,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect, Stream } from 'effect';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

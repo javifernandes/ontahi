@@ -1,4 +1,4 @@
-import { entity, field, mapEntity, mapRelation, modelExpression } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation, modelExpression } from '@ontahi/core';
 
 import { postgresMapping } from './index.js';
 

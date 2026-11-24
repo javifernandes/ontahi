@@ -3,7 +3,7 @@ import {
   type CompiledSelectionExpression,
   type RelationConstraintRejection,
   type ResolvedRelationConstraint,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 export type SupabaseRelationParticipantConstraint = {
   participant: 'source' | 'target';

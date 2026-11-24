@@ -1,4 +1,4 @@
-import type { ReflectedEntityDataReader, ReflectedOperationInvoker } from '@ontahi/core/data-graph';
+import type { ReflectedEntityDataReader, ReflectedOperationInvoker } from '@ontahi/core';
 import { OntahiGraphProvider } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';

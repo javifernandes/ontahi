@@ -1,4 +1,4 @@
-import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core/data-graph';
+import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 

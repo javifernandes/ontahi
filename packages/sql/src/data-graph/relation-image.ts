@@ -2,7 +2,7 @@ import {
   resolveRelationFields,
   getEntityIdentityLocator,
   type SelectionExpression,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { SqlDialect } from './dialect.js';
 import type { SqlEntityMapping } from './mapping.js';

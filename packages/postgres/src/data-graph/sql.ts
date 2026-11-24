@@ -2,7 +2,7 @@ import {
   lowerEntityReferenceRecord,
   isDerivedFieldDefinition,
   type GraphCommandSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createSqlQueryCompiler, type ParameterizedSql } from '@ontahi/sql';
 
 import { postgresDialect } from './dialect.js';

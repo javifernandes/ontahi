@@ -10,8 +10,8 @@ import type {
   ReflectedOperationInvoker,
   RemoteDataGraphError,
   RuntimeBoundDataGraphApi,
-} from '@ontahi/core/data-graph';
-import { createGraphClientCache, createRuntimeBoundDataGraphApi } from '@ontahi/core/data-graph';
+} from '@ontahi/core';
+import { createGraphClientCache, createRuntimeBoundDataGraphApi } from '@ontahi/core';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 
 import {

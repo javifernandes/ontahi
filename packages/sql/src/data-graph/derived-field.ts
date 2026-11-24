@@ -3,7 +3,7 @@ import {
   type AnyEntityDefinition,
   type ModelExpression,
   type ModelExpressionProgram,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type { SqlDialect } from './dialect.js';
 import type { SqlEntityMapping } from './mapping.js';

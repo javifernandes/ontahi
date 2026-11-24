@@ -4,7 +4,7 @@ import {
   type EntityMutationAffordanceDescriptor,
   type EntityMutationCommandAction,
   type RelationshipCommandAffordanceDescriptor,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolExchange,
   isConfigurableRuntimeTransport,

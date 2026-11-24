@@ -1,4 +1,4 @@
-import type { AnyEntityRef } from '@ontahi/core/data-graph';
+import type { AnyEntityRef } from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import type { ExplorerOperationDescriptor } from '../contracts/index.js';

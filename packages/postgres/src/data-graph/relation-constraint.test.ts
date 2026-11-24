@@ -8,7 +8,7 @@ import {
   type PortableSelectionExpression,
   type RelationConstraintRejection,
   type SelectionExpression,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { describe, expect, it } from 'vitest';
 
 import type { PostgresEntityMapping } from './mapping.js';

@@ -4,7 +4,7 @@ import {
   compileSelectionExpression,
   selectionAnd,
   type CompiledIncludePlan,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect } from 'effect';
 
 import { applyContextualSelection, compileContextualSelection } from './contextual-selection.js';
@@ -114,7 +114,7 @@ type HydrateSupabaseEntityRowsInput<TClient extends SupabaseLikeClient, TError> 
     },
   ) => Effect.Effect<EntityRow[], TError>;
   createError: SupabaseErrorFactory<TError>;
-  entities?: readonly import('@ontahi/core/data-graph').AnyEntityDefinition[];
+  entities?: readonly import('@ontahi/core').AnyEntityDefinition[];
 };
 
 type RelationNode = ReturnType<IncludeShape[string]['toNodeSpec']>;

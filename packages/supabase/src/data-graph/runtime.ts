@@ -23,7 +23,7 @@ import {
   type QuerySpec,
   type RelatedRootReadMode,
   type RelatedRootReadSpec,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { Effect, Stream } from 'effect';
 
 import { executeSupabaseGraphCommandEffect } from './command.js';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { GraphReadRequestV1, SelectionAst } from '@ontahi/core/data-graph';
+import type { GraphReadRequestV1, SelectionAst } from '@ontahi/core';
 import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
 import {
   analyzeSelectionDocument,

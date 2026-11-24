@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  mayAffectGraphRead,
-  type CommittedMutationSet,
-  type GraphReadRequest,
-} from '@ontahi/core/data-graph';
+import { mayAffectGraphRead, type CommittedMutationSet, type GraphReadRequest } from '@ontahi/core';
 import type { RuntimeProtocolGraphRefreshCause } from '@ontahi/core/runtime/protocol';
 import type { QueryClient, QueryKey, QueryMeta } from '@tanstack/react-query';
 

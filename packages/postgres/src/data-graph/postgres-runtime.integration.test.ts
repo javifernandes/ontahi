@@ -25,7 +25,7 @@ import {
   type InMemoryDataset,
   type QuerySpec,
   type RuntimeBoundClientEntity,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import { createDataGraphArchitectureAdapter, layer } from '@ontahi/core/runtime/server';
 import { createExpressGraphReadHandler } from '@ontahi/runtime-express/graph-read';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';

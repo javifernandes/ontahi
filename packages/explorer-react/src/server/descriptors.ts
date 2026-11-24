@@ -7,7 +7,7 @@ import {
   type AnyEntityDefinition,
   type ReflectedSchemaRelation,
   type PortableOperationConditions,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 import type {
   ExplorerEntityDescriptor,

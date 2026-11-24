@@ -1,7 +1,4 @@
-import type {
-  ReflectedEntityDataReader,
-  ReflectedRelatedEntityDataReader,
-} from '@ontahi/core/data-graph';
+import type { ReflectedEntityDataReader, ReflectedRelatedEntityDataReader } from '@ontahi/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';

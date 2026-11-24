@@ -1,4 +1,4 @@
-import type { GraphClientCache } from '@ontahi/core/data-graph';
+import type { GraphClientCache } from '@ontahi/core';
 import {
   isConfigurableRuntimeTransport,
   type RuntimeTransport,

@@ -2,7 +2,7 @@ import { isJsonValue } from '@ontahi/core';
 import type {
   EntityMutationAffordanceDescriptor,
   RelationshipCommandAffordanceDescriptor,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 import {
   createRuntimeProtocolResponse,
   createRuntimeTransportRouter,

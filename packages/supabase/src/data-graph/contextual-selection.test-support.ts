@@ -5,7 +5,7 @@ import {
   mapRelation,
   Selection,
   withContextualSelections,
-} from '@ontahi/core/data-graph';
+} from '@ontahi/core';
 
 export const contextualModel = () => {
   const NodeBase = entity('ContextNode', {
