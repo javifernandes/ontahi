@@ -11,6 +11,7 @@ supports:
 relatedPlans:
   - ontahi://plans/164-derived-models-projections-and-provenance
   - ontahi://plans/169-replicated-versioned-models-kernel-and-materializer-spi
+  - ontahi://plans/172-replicated-collection-observer-and-acceptance-runner
   - atlas://plans/153-replication-and-adaptive-materialization
   - atlas://plans/156-adaptive-materialization-policy
 ---
@@ -65,6 +66,22 @@ organization does not become a consumer migration.
 Full rebuild, incremental update, validation, and repair are distinct operations over the same
 logical model. Full rebuild remains the recovery path and equivalence oracle after incremental
 maintenance becomes primary.
+
+A provider-neutral Replicated Collection Observer precedes materialization when the source is an
+independently versioned collection. It observes from an accepted opaque frontier in `bootstrap`,
+`incremental`, `validation`, or `repair` mode and returns idempotent positive or negative record
+changes, a target frontier, diagnostics, and fetched work. The reference acceptance runner applies
+those changes to an isolated candidate, reports fetched, changed, reused, and resulting counts,
+and exposes only a detached complete snapshot after acceptance. Complete validation compares
+without mutation; a delayed writer cannot replace state advanced from the frontier it originally
+read.
+
+Replica records are internal persisted records by default rather than implicitly addressable
+Entities. The acceptance runner persists them through a store-owned revision and atomic
+compare-and-swap port. Composition resolves that port from the application's active Entity storage
+by default while keeping replica namespaces and semantics distinct; the in-memory Entity storage
+provides the reference capability. A custom storage adapter is an escape hatch for stores that
+cannot provide the capability, not the default application setup.
 
 A future declarative Entity API may name recurring source/output identities, dependencies,
 versions, and consistency requirements after Atlas and BookOps prove their common shape. That

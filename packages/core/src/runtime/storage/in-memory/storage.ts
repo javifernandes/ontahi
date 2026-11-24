@@ -1,5 +1,9 @@
 import type { AnyEntityDefinition } from '../../../model/entity/definition.js';
 import type { RelationshipFact } from '../../../model/relation/command.js';
+import {
+  createInMemoryReplicatedCollectionStorage,
+  type ReplicatedCollectionStorage,
+} from '../../../model/replication/collection-observer.js';
 import type { DataGraphDefaultStorage } from '../contract.js';
 import { createRuntimeReflectedRelatedEntityDataReader } from '../reflected-related-entity-data.js';
 
@@ -16,6 +20,7 @@ export type InMemoryDataGraphStorage = DataGraphDefaultStorage<
   kind: 'in-memory';
   dataset: InMemoryDataset;
   relationships: RelationshipFact[];
+  replicatedCollectionStorage: ReplicatedCollectionStorage;
 };
 
 export const createInMemoryDataGraphStorage = (
@@ -28,6 +33,7 @@ export const createInMemoryDataGraphStorage = (
 ): InMemoryDataGraphStorage => {
   const dataset = options.dataset ?? {};
   const relationships = options.relationships ?? [];
+  const replicatedCollectionStorage = createInMemoryReplicatedCollectionStorage();
   let entities = options.entities;
   const getEntities = () => {
     if (!entities) {
@@ -43,6 +49,7 @@ export const createInMemoryDataGraphStorage = (
     graphReadCapabilities: { relationSelections: true },
     dataset,
     relationships,
+    replicatedCollectionStorage,
     bindEntities: declarations => {
       entities = declarations;
     },

@@ -5,7 +5,8 @@ PostgreSQL-backed runtime capabilities for Ontahi applications.
 This package is not a generic SQL client and installing it does not activate one monolithic
 adapter. It provides independently composable implementations of Ontahi concerns. Import the Data
 Graph storage from `@ontahi/postgres/data-graph`, Task Storage from `@ontahi/postgres/tasks`, and
-the durable Event Runtime from `@ontahi/postgres/events`; applications may use any subset with
+the durable Event Runtime from `@ontahi/postgres/events`; the Data Graph storage also provides
+replicated collection persistence through the same pool. Applications may use any subset with
 unrelated implementations for their other runtime concerns.
 
 See the canonical [Relations](../../docs/developers/02-core-concepts/03-relations.md) and
@@ -104,6 +105,39 @@ query-only, transaction-scoped `PoolClient` to the lower-level runtime. Only a `
 compositional transaction capability because it can check out and own a connection lifetime.
 
 Migration generation and schema evolution remain host responsibilities.
+
+### Replicated collections
+
+`createPostgresDataGraphStorage({ pool })` exposes the replicated collection CAS capability from the
+same active Entity storage. The acceptance runner stores internal accepted snapshots and a
+store-owned revision in `ontahi_replicated_collections`; these rows are not addressable Entities and
+do not acquire domain relations, operations, or public query semantics.
+
+The host applies `createPostgresReplicatedCollectionSchemaSql()` through its migration system:
+
+```ts
+import { createReplicatedCollectionAcceptanceRunner } from '@ontahi/core';
+import {
+  createPostgresDataGraphStorage,
+  createPostgresReplicatedCollectionSchemaSql,
+} from '@ontahi/postgres';
+
+for (const statement of createPostgresReplicatedCollectionSchemaSql()) {
+  await pool.query(statement);
+}
+
+const storage = createPostgresDataGraphStorage({ pool });
+const runner = createReplicatedCollectionAcceptanceRunner(observer, {
+  activeStorage: storage,
+  collectionId: 'repository-evidence',
+});
+```
+
+Acceptance uses a conditional revision update or conflict-safe first insert. A delayed process
+receives the winning stored snapshot instead of replacing it. Construction never creates or alters
+the internal table, and `replicatedCollections.tables.snapshots` can override its name. A custom
+replica adapter remains available at runner composition when an application intentionally keeps
+replicas outside its Entity storage.
 
 ## Durable Events
 

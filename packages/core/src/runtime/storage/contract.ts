@@ -1,4 +1,5 @@
 import type { AnyEntityDefinition } from '../../model/entity/definition.js';
+import type { ReplicatedCollectionStorageCapability } from '../../model/replication/collection-observer.js';
 import type { DataGraphExecutionRuntime } from '../data/runtime.js';
 import type {
   ReflectedEntityDataReader,
@@ -19,4 +20,4 @@ export type DataGraphDefaultStorage<
   createRuntime: () => TRuntime;
   readEntityData: ReflectedEntityDataReader['readEntityData'];
   readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
-};
+} & Partial<ReplicatedCollectionStorageCapability>;
