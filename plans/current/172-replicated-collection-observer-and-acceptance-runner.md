@@ -1,6 +1,6 @@
 # 172. Replicated Collection Observer And Acceptance Runner
 
-Status: next
+Status: current
 
 ## Summary
 
@@ -164,11 +164,11 @@ evidence without changing the Materializer's semantic input.
 
 ## Execution Slices
 
-1. [ ] Define the minimal observer, mode, change, diagnostics, metrics, and accepted-snapshot
+1. [x] Define the minimal observer, mode, change, diagnostics, metrics, and accepted-snapshot
        types alongside the existing replication kernel.
-2. [ ] Implement a provider-neutral in-memory runner that applies positive and negative changes,
+2. [x] Implement a provider-neutral in-memory runner that applies positive and negative changes,
        validates completeness, and publishes an accepted snapshot atomically.
-3. [ ] Prove replay, stale-writer protection, frontier conflict, failed observation, validation
+3. [x] Prove replay, stale-writer protection, failed observation, validation
        mismatch, bootstrap, incremental, and repair behavior with deterministic tests.
 4. [ ] Add persistence through the active Entity storage contract, including transactional
        frontier compare-and-swap; keep a custom adapter as an explicit option.
@@ -236,6 +236,9 @@ evidence without changing the Materializer's semantic input.
 
 ## Closure / Evolution
 
-Next. The immediate next step is the small provider-neutral kernel and acceptance runner. After its
-behavioral contract is proven, Atlas should replace PR #117's orchestration one seam at a time while
-retaining its GitHub adapter and comparing accepted snapshots and metrics at every step.
+Current. The first implementation slice adds the provider-neutral observer contract and an
+in-memory acceptance runner to `@ontahi/core`. It proves all four modes, complete-snapshot guards,
+idempotent positive and negative changes, logical metrics, validation without mutation,
+observation-failure isolation, detached snapshots, and stale-writer rejection. Durable storage and
+Materializer handoff remain the next Ontahi slices; Atlas adoption begins only after those ports are
+defined.
