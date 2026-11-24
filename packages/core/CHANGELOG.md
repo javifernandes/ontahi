@@ -1,5 +1,23 @@
 # @ontahi/core
 
+## 1.0.0-alpha.26
+
+### Major Changes
+
+- 2f681d3: Remove the deprecated `@ontahi/core/data-graph` package export. Import portable graph APIs from
+  `@ontahi/core` and focused runtime APIs from their documented `@ontahi/core/runtime/*` entrypoints.
+  This completes `ontahi://plans/171a-data-graph-consumer-migration-and-compatibility-retirement` and
+  the compatibility retirement described by `ontahi.source-code-organization`.
+
+### Minor Changes
+
+- 9759e4c: Add a provider-neutral replicated collection observer contract and in-memory acceptance runner with
+  bootstrap, incremental, validation, repair, idempotent change application, and stale-writer
+  protection. Persist accepted snapshots through a storage-owned compare-and-swap port, selecting the
+  active Entity storage by default while retaining a custom-adapter escape hatch. This begins
+  `ontahi://plans/172-replicated-collection-observer-and-acceptance-runner` and evolves
+  `ontahi.model.replicated-versioned-model`.
+
 ## 1.0.0-alpha.25
 
 ## 1.0.0-alpha.24

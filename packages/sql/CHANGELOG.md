@@ -1,5 +1,13 @@
 # @ontahi/sql
 
+## 1.0.0-alpha.26
+
+### Patch Changes
+
+- Updated dependencies [9759e4c]
+- Updated dependencies [2f681d3]
+  - @ontahi/core@1.0.0-alpha.26
+
 ## 1.0.0-alpha.25
 
 ### Patch Changes

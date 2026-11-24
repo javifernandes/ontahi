@@ -1,5 +1,23 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.26
+
+### Minor Changes
+
+- 9759e4c: Add a provider-neutral replicated collection observer contract and in-memory acceptance runner with
+  bootstrap, incremental, validation, repair, idempotent change application, and stale-writer
+  protection. Persist accepted snapshots through a storage-owned compare-and-swap port, selecting the
+  active Entity storage by default while retaining a custom-adapter escape hatch. This begins
+  `ontahi://plans/172-replicated-collection-observer-and-acceptance-runner` and evolves
+  `ontahi.model.replicated-versioned-model`.
+
+### Patch Changes
+
+- Updated dependencies [9759e4c]
+- Updated dependencies [2f681d3]
+  - @ontahi/core@1.0.0-alpha.26
+  - @ontahi/sql@1.0.0-alpha.26
+
 ## 1.0.0-alpha.25
 
 ### Patch Changes
