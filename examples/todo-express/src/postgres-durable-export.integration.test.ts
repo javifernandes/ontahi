@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 
-import { createEntityRef, createInMemoryDataGraphStorage } from '@ontahi/core/data-graph';
+import { createEntityRef, createInMemoryDataGraphStorage } from '@ontahi/core';
 import {
   createTaskDefinitionFromDurableDomainOperation,
   inProcessTasks,
