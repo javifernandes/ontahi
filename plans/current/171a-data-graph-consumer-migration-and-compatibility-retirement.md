@@ -35,16 +35,27 @@ compatibility namespace in an explicit breaking release.
 - Atlas `origin/main`: no legacy imports.
 - Bartlet `origin/main`: no legacy imports.
 - Todo and Classroom on Ontahí `origin/main`: migrated to the package root.
-- BookOps PR [#532](https://github.com/javifernandes/bookops/pull/532): migrates the final fifteen
-  imports after PR #531 established the current Sonar baseline.
+- BookOps PR [#532](https://github.com/javifernandes/bookops/pull/532) merged the final fifteen
+  import migrations.
+- The audit of the primary branches of Atlas, Bartlett, BookOps, Todo, and Classroom found no
+  imports from the retired subpath.
+- [Ontahi 1.0.0-alpha.26](https://github.com/javifernandes/ontahi/releases/tag/v1.0.0-alpha.26)
+  published the breaking removal. Todo and Classroom follow the framework version through
+  `workspace:*`. Standalone copies with the published version pinned reproduced the checked-in
+  generated files using the repository formatter configuration.
+- Both standalone examples passed codegen freshness, typecheck, and production builds.
+  Classroom passed 8 tests, with the 5 PostgreSQL integration tests skipped in that run.
+- The host upgrades are tracked by [Atlas #122](https://github.com/javifernandes/atlas/pull/122),
+  [Bartlett #13](https://github.com/javifernandes/ppb-bartlett-test-reconstruccion-memoria/pull/13),
+  and [BookOps #533](https://github.com/javifernandes/bookops/pull/533).
 - Ontahí package sources, fixtures, current documentation, and clean-consumer proofs use the
   package root; historical completed plans retain their original references.
 
 ## Acceptance Checklist
 
-- [ ] Atlas, Bartlet, Todo, Classroom, and BookOps use the replacement public imports.
+- [x] Atlas, Bartlet, Todo, Classroom, and BookOps use the replacement public imports.
 - [ ] The named applications pass their relevant builds and tests on the same Ontahí release.
-- [ ] A repository and consumer audit finds no first-party `data-graph` subpath imports.
+- [x] A repository and consumer audit finds no first-party `data-graph` subpath imports.
 - [x] Residual Core implementation has an explicit internal owner and is not a public subpath.
 - [x] The `data-graph` compatibility package export is removed.
 - [x] Release notes identify replacement imports and the breaking removal.
