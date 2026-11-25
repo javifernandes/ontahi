@@ -9,10 +9,10 @@ import {
   type TaskDefinition,
   type TaskRunIdentity,
 } from '@ontahi/core/runtime/server/tasks';
-import { Effect } from 'effect';
-import type { Pool } from 'pg';
+import { Cause, Effect } from 'effect';
+import type { Pool, PoolClient } from 'pg';
 
-import { createPostgresEventRuntime } from '../events/runtime.js';
+import { createTaskWorkerEventRuntime } from '../events/runtime.js';
 import type { PostgresEventTableNames } from '../events/schema.js';
 
 import { createLeasedPostgresTaskStorage } from './runtime.js';
@@ -32,6 +32,18 @@ type PostgresTaskWorkerOptions = {
   createExecutionContext?: Parameters<
     typeof createInProcessTaskRuntime
   >[0]['createExecutionContext'];
+};
+
+const transaction = async <T>(client: PoolClient, work: () => Promise<T>): Promise<T> => {
+  await client.query('BEGIN');
+  try {
+    const result = await work();
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  }
 };
 
 /** Polls PostgreSQL for a deferred Task checkpoint and runs it under a fenced lease. */
@@ -56,9 +68,9 @@ export const createPostgresTaskWorker = ({
     cancel: async (ref: TaskRunIdentity): Promise<boolean> => {
       const client = await pool.connect();
       try {
-        await client.query('BEGIN');
-        const result = await client.query<{ checkpoint: TaskExecutionCheckpoint | null }>(
-          `WITH candidate AS (
+        return await transaction(client, async () => {
+          const result = await client.query<{ checkpoint: TaskExecutionCheckpoint | null }>(
+            `WITH candidate AS (
              SELECT task_id, run_id, status, checkpoint FROM "${table}"
              WHERE task_id = $1 AND run_id = $2 AND runtime ->> 'name' = $3
                AND status IN ('queued', 'running', 'waiting')
@@ -73,20 +85,16 @@ export const createPostgresTaskWorker = ({
                ELSE NULL END
            FROM candidate WHERE runs.task_id = candidate.task_id AND runs.run_id = candidate.run_id
            RETURNING candidate.checkpoint`,
-          [ref.taskId, ref.runId, deferredTaskRuntimeName],
-        );
-        const wait = result.rows[0]?.checkpoint?.eventWait;
-        if (wait && events) {
-          await createPostgresEventRuntime({
-            connection: client,
-            tables: events.tables,
-          }).durableDelivery!.cancel(taskEventWaitSubscriptionId(ref, wait.id));
-        }
-        await client.query('COMMIT');
-        return result.rowCount === 1;
-      } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw error;
+            [ref.taskId, ref.runId, deferredTaskRuntimeName],
+          );
+          const wait = result.rows[0]?.checkpoint?.eventWait;
+          if (wait && events) {
+            await createTaskWorkerEventRuntime(client, {
+              tables: events.tables,
+            }).durableDelivery!.cancel(taskEventWaitSubscriptionId(ref, wait.id));
+          }
+          return result.rowCount === 1;
+        });
       } finally {
         client.release();
       }
@@ -102,23 +110,41 @@ export const createPostgresTaskWorker = ({
       if (signal?.aborted) onAbort();
       try {
         const batchSize = 32;
-        for (let offset = 0; !controller.signal.aborted; offset += batchSize) {
-          const candidates = await client.query<{ task_id: string; run_id: string }>(
-            `SELECT task_id, run_id FROM "${table}"
+        let cursor: { task_id: string; run_id: string; created_at: string } | undefined;
+        while (!controller.signal.aborted) {
+          const candidates = await client.query<{
+            task_id: string;
+            run_id: string;
+            created_at: string;
+          }>(
+            `SELECT task_id, run_id, created_at::text FROM "${table}"
              WHERE task_id = ANY($1::text[]) AND ${eligible}
                AND (worker_lease_until IS NULL OR worker_lease_until <= clock_timestamp())
-             ORDER BY created_at, task_id, run_id LIMIT $2 OFFSET $3`,
-            [taskIds, batchSize, offset],
+               AND ($3::timestamptz IS NULL OR (created_at, task_id, run_id) > ($3, $4, $5))
+             ORDER BY "${table}".created_at, task_id, run_id LIMIT $2`,
+            [
+              taskIds,
+              batchSize,
+              cursor?.created_at ?? null,
+              cursor?.task_id ?? null,
+              cursor?.run_id ?? null,
+            ],
           );
           for (const candidate of candidates.rows) {
+            cursor = candidate;
             if (controller.signal.aborted) return undefined;
             const ref = { taskId: candidate.task_id, runId: candidate.run_id };
             const token = randomUUID();
             const claimed = await client.query(
-              `UPDATE "${table}" SET worker_token = $3,
+              `WITH candidate AS (
+                 SELECT task_id, run_id FROM "${table}" WHERE task_id = $1 AND run_id = $2
+                   AND ${eligible}
+                   AND (worker_lease_until IS NULL OR worker_lease_until <= clock_timestamp())
+                 FOR UPDATE SKIP LOCKED
+               )
+               UPDATE "${table}" AS runs SET worker_token = $3,
                  worker_lease_until = clock_timestamp() + ($4::bigint * interval '1 millisecond')
-               WHERE task_id = $1 AND run_id = $2 AND ${eligible}
-                 AND (worker_lease_until IS NULL OR worker_lease_until <= clock_timestamp())`,
+               FROM candidate WHERE runs.task_id = candidate.task_id AND runs.run_id = candidate.run_id`,
               [ref.taskId, ref.runId, token, leaseMs],
             );
             if (claimed.rowCount !== 1) continue;
@@ -126,38 +152,61 @@ export const createPostgresTaskWorker = ({
             const runtime = createInProcessTaskRuntime({
               storage,
               deferExplicitExecution: true,
+              withEventWaitTransaction: (eventRef, work) =>
+                transaction(client, async () => {
+                  const lease = await client.query(
+                    `SELECT 1 FROM "${table}" WHERE task_id = $1 AND run_id = $2
+                     AND worker_token = $3 AND worker_lease_until > clock_timestamp() FOR UPDATE`,
+                    [eventRef.taskId, eventRef.runId, token],
+                  );
+                  if (!lease.rowCount) {
+                    throw {
+                      reason: 'task_worker_lease_lost',
+                      message: 'The Task worker no longer owns this run.',
+                    };
+                  }
+                  return work();
+                }),
               createExecutionContext,
               ...(events
                 ? {
                     events: {
-                      runtime: createPostgresEventRuntime({
-                        connection: client,
-                        tables: events.tables,
-                      }),
+                      runtime: createTaskWorkerEventRuntime(client, { tables: events.tables }),
                       declarations: events.declarations,
                     },
                   }
                 : {}),
             });
             tasks.forEach(task => runtime.register?.(task));
-            try {
-              const outcome = await Effect.runPromise(Effect.either(runtime.runCheckpoint(ref)), {
-                signal: controller.signal,
-              });
-              if (outcome._tag === 'Left') {
-                if (outcome.left.reason !== 'task_worker_lease_lost') throw outcome.left;
-              } else if (outcome.right) return ref;
-            } finally {
-              try {
-                await client.query(
+            const execution = await Effect.runPromiseExit(runtime.runCheckpoint(ref), {
+              signal: controller.signal,
+            });
+            const release = await Effect.runPromiseExit(
+              Effect.tryPromise(() =>
+                client.query(
                   `UPDATE "${table}" SET worker_token = NULL, worker_lease_until = NULL
-                   WHERE task_id = $1 AND run_id = $2 AND worker_token = $3`,
+               WHERE task_id = $1 AND run_id = $2 AND worker_token = $3`,
                   [ref.taskId, ref.runId, token],
+                ),
+              ),
+            );
+            const failure =
+              execution._tag === 'Failure' ? Cause.failureOption(execution.cause) : undefined;
+            const lostLease =
+              failure?._tag === 'Some' && failure.value.reason === 'task_worker_lease_lost';
+            if (execution._tag === 'Failure' && !lostLease) {
+              if (release._tag === 'Failure') {
+                // Preserve the execution failure. The enclosing catch discards the connection.
+                const error = new AggregateError(
+                  [Cause.squash(execution.cause), Cause.squash(release.cause)],
+                  'Task checkpoint execution failed and its lease could not be released.',
                 );
-              } catch (error) {
-                if (!controller.signal.aborted) throw error;
+                throw error;
               }
+              throw Cause.squash(execution.cause);
             }
+            if (release._tag === 'Failure') throw Cause.squash(release.cause);
+            if (execution._tag === 'Success' && execution.value) return ref;
           }
           if (candidates.rows.length < batchSize) return undefined;
         }

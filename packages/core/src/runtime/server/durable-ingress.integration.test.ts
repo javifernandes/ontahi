@@ -27,9 +27,10 @@ describe('durable Operation admission from HTTP ingress', () => {
     { policy: 'reuse-running', expired: false },
     { policy: 'skip-if-completed', expired: false },
     { policy: 'skip-if-completed', expired: true },
+    { policy: 'skip-if-completed', expired: false, providerTimeout: true },
   ] as const)(
     'selects the expected run with $policy after losing a response (expired=$expired)',
-    async ({ policy, expired }) => {
+    async ({ policy, expired, providerTimeout = false }) => {
       const admissionSpans: Record<string, unknown>[] = [];
       configureServerRuntime({
         telemetry: {
@@ -58,7 +59,10 @@ describe('durable Operation admission from HTTP ingress', () => {
           const created = { name, id: `remote-${customers.size + 1}` };
           customers.set(key, created);
           // The remote commit survives while the original worker never receives a response.
-          return requests.length === 1 ? Effect.never : Effect.succeed(created);
+          if (requests.length !== 1) return Effect.succeed(created);
+          return providerTimeout
+            ? Effect.fail({ reason: 'remote_timeout', message: 'Response lost' })
+            : Effect.never;
         });
       const remoteCreate = defineIdempotentTaskEffect({
         id: 'create-remote-customer',
@@ -168,6 +172,20 @@ describe('durable Operation admission from HTTP ingress', () => {
       const { taskId, runId } = first.results[0] as { taskId: string; runId: string };
       const run = { taskId, runId };
       for (const result of first.results) expect(result).toMatchObject(run);
+      if (providerTimeout) {
+        await vi.waitFor(async () => {
+          expect(await initialApplication.getTaskSnapshot(run)).toMatchObject({
+            status: 'failed',
+            error: { code: 'task_effect_outcome_ambiguous' },
+          });
+        });
+        const retry = ingressFor(initialApplication);
+        expect((await deliver(retry.handle)).status).toBe(200);
+        expect(retry.results[0]).toMatchObject({ ...run, admission: 'reconciliation-required' });
+        expect((await Effect.runPromise(storage.loadSource(run))).checkpoint).toBeDefined();
+        expect(requests).toHaveLength(1);
+        return;
+      }
       expect(first.results).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ admission: 'created' }),

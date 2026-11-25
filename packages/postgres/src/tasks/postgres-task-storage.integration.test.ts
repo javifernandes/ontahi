@@ -180,6 +180,18 @@ describe('PostgreSQL Task Storage', () => {
         runId: 'cancel-waiting',
       }),
     );
+    const locking = await pool.connect();
+    try {
+      await locking.query('BEGIN');
+      await locking.query(
+        `SELECT 1 FROM ${taskTables.runs} WHERE task_id = $1 AND run_id = $2 FOR UPDATE`,
+        [pending.taskId, pending.runId],
+      );
+      expect(await worker.runOnce()).toBeUndefined();
+    } finally {
+      await locking.query('ROLLBACK');
+      locking.release();
+    }
     await worker.runOnce();
     expect(await worker.cancel(pending)).toBe(true);
     await expect(Effect.runPromise(runtime.getSnapshot(pending))).resolves.toMatchObject({
@@ -413,7 +425,7 @@ describe('PostgreSQL Task Storage', () => {
     }
   });
 
-  it.each(['while waiting', 'after persisting the claim'] as const)(
+  it.each(['while waiting', 'after persisting the claim', 'after timeout cleanup fails'] as const)(
     'resumes a retained Event once after restarting the queue worker %s',
     async restart => {
       const Ready = defineEvent({
@@ -469,6 +481,45 @@ describe('PostgreSQL Task Storage', () => {
         waitingOn: { kind: 'event', eventId: Ready.id },
       });
       expect(continued).not.toHaveBeenCalled();
+
+      if (restart === 'after timeout cleanup fails') {
+        const worker = createWorker();
+        expect(await worker.runOnce()).toBeUndefined();
+        const store = storage();
+        const source = await Effect.runPromise(store.loadSource(ref));
+        await Effect.runPromise(
+          store.update(ref, {
+            checkpoint: {
+              ...source.checkpoint!,
+              eventWait: { ...source.checkpoint!.eventWait!, timeoutAt: new Date(0).toISOString() },
+            },
+          }),
+        );
+        await pool.query(`
+          CREATE FUNCTION reject_event_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'Injected Event cleanup failure'; END
+          $$;
+          CREATE TRIGGER reject_event_cleanup BEFORE UPDATE OF active ON ${eventTables.subscriptions}
+            FOR EACH ROW WHEN (NEW.active = false) EXECUTE FUNCTION reject_event_cleanup();
+        `);
+        try {
+          await expect(worker.runOnce()).rejects.toMatchObject({ reason: 'task_failed' });
+          await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+            status: 'waiting',
+          });
+        } finally {
+          await pool.query(`
+            DROP TRIGGER reject_event_cleanup ON ${eventTables.subscriptions};
+            DROP FUNCTION reject_event_cleanup();
+          `);
+        }
+        expect(await worker.runOnce()).toEqual(ref);
+        await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+          status: 'failed',
+          error: { code: 'task_event_wait_timed_out' },
+        });
+        return;
+      }
 
       // No worker or subscription is active when the external delivery arrives.
       const producer = createPostgresEventRuntime({ pool, tables: eventTables });

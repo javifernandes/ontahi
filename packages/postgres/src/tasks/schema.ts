@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { deferredTaskRuntimeName } from '@ontahi/core/runtime/server/tasks';
 
 export type PostgresTaskTableNames = { readonly runs?: string };
@@ -5,7 +7,7 @@ export type PostgresTaskTableNames = { readonly runs?: string };
 const DEFAULT_TASK_RUNS_TABLE = 'ontahi_task_runs';
 
 const requireIdentifier = (value: string) => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+  if (value.length > 63 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
     throw new TypeError(`Invalid PostgreSQL Task table name: ${value}.`);
   }
   return value;
@@ -14,8 +16,15 @@ const requireIdentifier = (value: string) => {
 export const resolvePostgresTaskTableName = (tables?: PostgresTaskTableNames) =>
   requireIdentifier(tables?.runs ?? DEFAULT_TASK_RUNS_TABLE);
 
+const derivedName = (table: string, suffix: string) => {
+  const name = `${table}_${suffix}`;
+  if (name.length <= 63) return name;
+  const hash = createHash('sha256').update(name).digest('hex').slice(0, 16);
+  return `${name.slice(0, 46)}_${hash}`;
+};
+
 export const resolveTaskObservationTableName = (tables?: PostgresTaskTableNames) =>
-  `${resolvePostgresTaskTableName(tables)}_observations`;
+  derivedName(resolvePostgresTaskTableName(tables), 'observations');
 
 export const taskAdmissionIndexPredicate = `admission_key IS NOT NULL AND (
   status IN ('queued', 'running', 'waiting')
@@ -35,7 +44,7 @@ export const waitingTaskEventPredicate = `runtime ->> 'name' = '${deferredTaskRu
 export const createPostgresTaskSchemaSql = (tables?: PostgresTaskTableNames): readonly string[] => {
   const runs = `"${resolvePostgresTaskTableName(tables)}"`;
   const observations = `"${resolveTaskObservationTableName(tables)}"`;
-  const recordSnapshot = `"${resolvePostgresTaskTableName(tables)}_record_snapshot"`;
+  const recordSnapshot = `"${derivedName(resolvePostgresTaskTableName(tables), 'record_snapshot')}"`;
   return [
     `CREATE TABLE IF NOT EXISTS ${runs} (
       task_id text NOT NULL,
@@ -60,11 +69,11 @@ export const createPostgresTaskSchemaSql = (tables?: PostgresTaskTableNames): re
       ADD COLUMN IF NOT EXISTS admission_policy text,
       ADD COLUMN IF NOT EXISTS worker_token text,
       ADD COLUMN IF NOT EXISTS worker_lease_until timestamptz`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "${resolvePostgresTaskTableName(tables)}_admission_uidx"
+    `CREATE UNIQUE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'admission_uidx')}"
       ON ${runs} (task_id, admission_policy, admission_key) WHERE ${taskAdmissionIndexPredicate}`,
-    `CREATE INDEX IF NOT EXISTS "${resolvePostgresTaskTableName(tables)}_runnable_idx"
+    `CREATE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'runnable_idx')}"
       ON ${runs} (task_id, created_at, run_id) WHERE ${runnableTaskCheckpointPredicate}`,
-    `CREATE INDEX IF NOT EXISTS "${resolvePostgresTaskTableName(tables)}_event_wait_idx"
+    `CREATE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'event_wait_idx')}"
       ON ${runs} (task_id, created_at, run_id) WHERE ${waitingTaskEventPredicate}`,
     `CREATE TABLE IF NOT EXISTS ${observations} (
       task_id text NOT NULL,
@@ -110,9 +119,9 @@ export const createPostgresTaskSchemaSql = (tables?: PostgresTaskTableNames): re
       AFTER INSERT OR UPDATE ON ${runs}
       FOR EACH ROW WHEN (NEW.runtime ->> 'name' = '${deferredTaskRuntimeName}')
       EXECUTE FUNCTION ${recordSnapshot}()`,
-    `CREATE INDEX IF NOT EXISTS "${resolvePostgresTaskTableName(tables)}_created_idx"
+    `CREATE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'created_idx')}"
       ON ${runs} (created_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS "${resolvePostgresTaskTableName(tables)}_actor_idx"
+    `CREATE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'actor_idx')}"
       ON ${runs} ((trigger -> 'actor' ->> 'kind'), (trigger -> 'actor' ->> 'id'), created_at DESC)`,
   ];
 };

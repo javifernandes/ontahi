@@ -336,4 +336,5 @@ export type InProcessTasksOptions = InProcessTaskExecutorOptions &
 export type InProcessTaskRuntimeOptions = InProcessTaskExecutorOptions &
   TaskRuntimeHostOptions & {
     storage: TaskStorage;
+    withEventWaitTransaction?: <T>(ref: TaskRunIdentity, work: () => Promise<T>) => Promise<T>;
   };

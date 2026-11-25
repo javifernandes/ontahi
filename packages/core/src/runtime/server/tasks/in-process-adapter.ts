@@ -133,6 +133,7 @@ export const createInProcessTaskRuntime = ({
   createExecutionContext,
   events,
   deferExplicitExecution = false,
+  withEventWaitTransaction = (_ref, work) => work(),
 }: InProcessTaskRuntimeOptions): TaskRuntime & {
   runCheckpoint(ref: TaskRunIdentity): Effect.Effect<boolean, TaskFailure>;
 } => {
@@ -144,7 +145,7 @@ export const createInProcessTaskRuntime = ({
   const eventDeclarations = new Map(
     events?.declarations.map(declaration => [declaration.id, declaration]),
   );
-  const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
+  const keyOf = (ref: TaskRunIdentity) => JSON.stringify([ref.taskId, ref.runId]);
   const withPendingInteraction = (snapshot: TaskSnapshot): TaskSnapshot => {
     const key = keyOf(snapshot);
     const pending = pendingInteractions.get(key)?.interaction;
@@ -648,10 +649,15 @@ export const createInProcessTaskRuntime = ({
         if (source.runtime?.name !== deferredTaskRuntimeName || !task?.execution) return false;
         if (source.status === 'waiting' && source.checkpoint?.eventWait) {
           const waiting = source;
-          const snapshot = yield* Effect.tryPromise({
-            try: () => pollTaskEventWait(storage, waiting, events?.runtime),
-            catch: toTaskFailure,
-          });
+          const snapshot = yield* Effect.uninterruptible(
+            Effect.tryPromise({
+              try: () =>
+                withEventWaitTransaction(ref, () =>
+                  pollTaskEventWait(storage, waiting, events?.runtime),
+                ),
+              catch: toTaskFailure,
+            }),
+          );
           if (!snapshot) return false;
           yield* taskRuns.publish(snapshot);
           if (snapshot.status === 'failed') return true;
@@ -660,10 +666,15 @@ export const createInProcessTaskRuntime = ({
         if (!canRunCheckpoint(source)) return false;
         if (source.checkpoint?.eventResume) {
           const checkpoint = source.checkpoint;
-          yield* Effect.tryPromise({
-            try: () => settleTaskEventCheckpoint(checkpoint, events?.runtime),
-            catch: toTaskFailure,
-          });
+          yield* Effect.uninterruptible(
+            Effect.tryPromise({
+              try: () =>
+                withEventWaitTransaction(ref, () =>
+                  settleTaskEventCheckpoint(checkpoint, events?.runtime),
+                ),
+              catch: toTaskFailure,
+            }),
+          );
         }
         if (source.status === 'queued') {
           yield* update(ref, { status: 'running', startedAt: now() });
@@ -673,10 +684,22 @@ export const createInProcessTaskRuntime = ({
         if (!execution) return false;
         yield* operationContext
           ? Effect.async<void, TaskFailure>(resume => {
+              let notifyExit!: () => void;
+              const exited = new Promise<void>(resolve => {
+                notifyExit = resolve;
+              });
               const cancel = operationRuntimeContextStorage.run(operationContext, () =>
-                Effect.runCallback(execution, { onExit: exit => resume(exit) }),
+                Effect.runCallback(execution, {
+                  onExit: exit => {
+                    notifyExit();
+                    resume(exit);
+                  },
+                }),
               );
-              return Effect.sync(() => cancel());
+              return Effect.promise(() => {
+                cancel();
+                return exited;
+              });
             })
           : execution;
         return true;

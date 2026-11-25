@@ -86,7 +86,9 @@ const reconcilable = <TInput extends JsonValue, TResult>({
         const reference = prepared.externalReference;
         const find = () =>
           lookup(input(), reference).pipe(
-            Effect.mapError(() => ambiguous('External reference lookup failed.')),
+            Effect.mapError(failure =>
+              ambiguous(`External reference lookup failed (${failure.reason}): ${failure.message}`),
+            ),
           );
         const reconcile = (whenAbsent: () => Effect.Effect<TResult, TaskFailure>) =>
           Effect.flatMap(find(), match => {

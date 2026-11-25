@@ -30,6 +30,8 @@ export const defineIdempotentTaskEffect = <TInput extends JsonValue, TResult>(de
   id: string;
   /** Conservative interval during which the provider guarantees key reuse. */
   retryWindowMs: number;
+  /** True only when the adapter can establish that the external write did not occur. */
+  isDefinitiveFailure?: (failure: TaskFailure) => boolean;
   execute: (input: TInput, providerKey: string) => Effect.Effect<TResult, TaskFailure>;
 }) => {
   if (!Number.isSafeInteger(definition.retryWindowMs) || definition.retryWindowMs <= 0) {
@@ -75,7 +77,16 @@ export const defineIdempotentTaskEffect = <TInput extends JsonValue, TResult>(de
           });
         }
         const input = JSON.parse(stringifyCanonicalJson(prepared.input)) as TInput;
-        return definition.execute(input, prepared.providerKey);
+        return definition.execute(input, prepared.providerKey).pipe(
+          Effect.mapError(failure =>
+            definition.isDefinitiveFailure?.(failure)
+              ? failure
+              : {
+                  reason: 'task_effect_outcome_ambiguous',
+                  message: `External write outcome could not be confirmed (${failure.reason}): ${failure.message}`,
+                },
+          ),
+        );
       }),
   };
 };

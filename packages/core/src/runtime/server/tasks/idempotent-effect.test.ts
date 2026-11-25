@@ -38,3 +38,19 @@ it('reuses prepared input and key, distinguishes occurrences and stops after exp
     now.mockRestore();
   }
 });
+
+it('retains definitive provider rejection as an ordinary Task failure', async () => {
+  const failure = { reason: 'provider_rejected', message: 'Rejected before writing' };
+  const effect = defineIdempotentTaskEffect({
+    id: 'create',
+    retryWindowMs: 60_000,
+    execute: (_input: string) => Effect.fail(failure),
+    isDefinitiveFailure: result => result.reason === failure.reason,
+  });
+  const prepared = effect.prepare(
+    { taskId: 'Customer.create', runId: 'rejected' },
+    'customer',
+    'Ada',
+  );
+  await expect(Effect.runPromise(Effect.flip(effect.run(prepared)))).resolves.toEqual(failure);
+});

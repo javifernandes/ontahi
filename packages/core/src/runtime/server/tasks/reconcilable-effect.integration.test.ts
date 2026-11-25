@@ -9,11 +9,30 @@ import {
   verifyTaskReconciliationConformance,
 } from './reconciliation-conformance.js';
 
-it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', row => {
+it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', async row => {
   const storage = createInMemoryTaskStorage();
-  return verifyTaskReconciliationConformance(row, {
+  await verifyTaskReconciliationConformance(row, {
     createStorage: () => storage,
     createRuntime: store => createInProcessTaskRuntime({ storage: store }),
+  });
+  const queuedStorage = createInMemoryTaskStorage();
+  const createRuntime = (store: typeof storage) =>
+    createInProcessTaskRuntime({ storage: store, deferExplicitExecution: true });
+  let worker = createRuntime(queuedStorage);
+  await verifyTaskReconciliationConformance(row, {
+    createStorage: () => queuedStorage,
+    createRuntime,
+    runWorker: async (task, signal) => {
+      worker.register?.(task);
+      const [run] = await Effect.runPromise(queuedStorage.listRecent());
+      try {
+        if (run && (await Effect.runPromise(worker.runCheckpoint(run), { signal }))) return run;
+      } catch (error) {
+        if (!signal?.aborted) throw error;
+        worker = createRuntime(queuedStorage);
+      }
+      return undefined;
+    },
   });
 });
 

@@ -258,8 +258,8 @@ definitions and poll with `createPostgresTaskWorker({ pool, tasks }).runOnce(sig
 Use a direct or session-pooled PostgreSQL connection. The worker claims a run with a database
 lease and checks the lease before starting a step or writing a checkpoint. Another worker can
 recover the last checkpoint after the lease expires, even if the earlier session is still open.
-Set `leaseMs` to fit the longest expected interval between claims. The default is 60 seconds and
-a claim has a fixed deadline. External writes still need provider idempotency or reconciliation
+Set `leaseMs` to cover the longest execution from claim to its final checkpoint or wait write,
+including provider calls. The fixed deadline defaults to 60 seconds and does not renew during execution. External writes still need provider idempotency or reconciliation
 if a worker loses its lease while a remote call is in flight.
 
 A trusted host can call `worker.cancel(ref)` for a queued, waiting, or running deferred run.

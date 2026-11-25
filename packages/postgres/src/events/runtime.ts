@@ -22,15 +22,15 @@ import {
 
 type EventConnection = Pick<PoolClient, 'query'>;
 
-export type PostgresEventRuntimeOptions = (
-  | { readonly pool: Pick<Pool, 'connect' | 'query'>; readonly connection?: never }
-  /** Use a caller-owned connection for serialized operations, such as one Task claim. */
-  | { readonly connection: EventConnection; readonly pool?: never }
-) & {
+type EventRuntimeSettings = {
   readonly tables?: PostgresEventTableNames;
   readonly now?: () => Date;
   readonly createId?: () => string;
   readonly onSubscriberError?: (cause: unknown, delivery: EventDelivery) => void;
+};
+
+export type PostgresEventRuntimeOptions = EventRuntimeSettings & {
+  readonly pool: Pick<Pool, 'connect' | 'query'>;
 };
 
 let identitySequence = 0;
@@ -69,11 +69,10 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
 });
 
 const inTransaction = async <T>(
-  options: PostgresEventRuntimeOptions,
+  pool: Pick<Pool, 'connect'>,
   work: (client: EventConnection) => Promise<T>,
 ) => {
-  const borrowed = await options.pool?.connect();
-  const client = borrowed ?? options.connection!;
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await work(client);
@@ -87,15 +86,18 @@ const inTransaction = async <T>(
     }
     throw cause;
   } finally {
-    borrowed?.release();
+    client.release();
   }
 };
 
 const lockEventWriter = (client: EventConnection, namespace: string) =>
   client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [namespace]);
 
-export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions): EventRuntime => {
-  const connection = options.connection ?? options.pool;
+const createEventRuntime = (
+  options: EventRuntimeSettings,
+  connection: EventConnection,
+  transaction: <T>(work: (client: EventConnection) => Promise<T>) => Promise<T>,
+): EventRuntime => {
   const tableNames = resolvePostgresEventTableNames(options.tables);
   const tables = quotePostgresEventTableNames(tableNames);
   const writerLockNamespace = `ontahi.events:${tableNames.occurrences}:${tableNames.subscriptions}:${tableNames.deliveries}`;
@@ -113,7 +115,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       ...(emission.causation ? { causation: emission.causation } : {}),
       ...(emission.correlation ? { correlation: emission.correlation } : {}),
     });
-    await inTransaction(options, async client => {
+    await transaction(async client => {
       await lockEventWriter(client, writerLockNamespace);
       await client.query(
         `INSERT INTO ${tables.occurrences}
@@ -181,7 +183,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     if (subscription.correlation !== undefined && !isJsonValue(subscription.correlation)) {
       throw new TypeError('Durable Event correlation must be JSON-safe.');
     }
-    await inTransaction(options, async client => {
+    await transaction(async client => {
       await lockEventWriter(client, writerLockNamespace);
       await client.query(
         `INSERT INTO ${tables.subscriptions}
@@ -396,3 +398,12 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     },
   };
 };
+
+export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions): EventRuntime =>
+  createEventRuntime(options, options.pool, work => inTransaction(options.pool, work));
+
+/** Worker-only runtime. Task and Event operations share the caller's fenced transaction. */
+export const createTaskWorkerEventRuntime = (
+  connection: EventConnection,
+  options: EventRuntimeSettings,
+): EventRuntime => createEventRuntime(options, connection, work => work(connection));

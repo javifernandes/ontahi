@@ -14,7 +14,7 @@ const isJsonValueAt = (value: unknown, ancestors: Set<object>): value is JsonVal
   if (ancestors.has(value)) return false;
 
   ancestors.add(value);
-  const entries = Array.isArray(value) ? value : Object.values(value);
+  const entries = Array.isArray(value) ? Array.from(value) : Object.values(value);
   const valid = entries.every(entry => isJsonValueAt(entry, ancestors));
   ancestors.delete(value);
 
@@ -38,7 +38,10 @@ export const stringifyCanonicalJson = (value: JsonValue): string =>
     isPlainObject(entry)
       ? Object.fromEntries(
           Object.keys(entry)
-            .sort()
+            .sort(
+              (left, right) =>
+                left.localeCompare(right, 'en') || (left < right ? -1 : left === right ? 0 : 1),
+            )
             .map(key => [key, entry[key]]),
         )
       : entry,

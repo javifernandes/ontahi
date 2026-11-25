@@ -68,7 +68,7 @@ export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperation
   return {
     ...(admit && {
       admit: (input, admission) =>
-        attempt('Failed to admit task run.', () => admit(input, admission)),
+        attempt('Failed to admit task run.', () => admit.call(operations, input, admission)),
     }),
     create: input => attempt('Failed to create task run.', () => operations.create(input)),
     update: (ref, patch) =>

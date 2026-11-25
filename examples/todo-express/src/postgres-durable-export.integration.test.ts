@@ -175,12 +175,18 @@ it('starts TodoList.export through Express and resumes it once in a new PostgreS
         });
 
         const output = { requestId, url: 'https://example.test/todo-export.zip' };
+        const occurrences: string[] = [];
         for (let attempt = 0; attempt < 2; attempt += 1) {
-          expect((await send('/export-ready', output, 'ready-1')).ok).toBe(true);
+          const response = await send('/export-ready', output, 'ready-1');
+          expect(response.ok).toBe(true);
+          const { occurrenceId } = (await response.json()) as { occurrenceId: string };
+          expect(occurrenceId).toBeTruthy();
+          occurrences.push(occurrenceId);
         }
+        expect(new Set(occurrences).size).toBe(2);
         const results = await Promise.all([createWorker().runOnce(), createWorker().runOnce()]);
         expect(results.filter(Boolean)).toEqual([ref]);
-        expect(continuations).toHaveBeenCalledTimes(1);
+        expect(continuations).toHaveBeenCalledExactlyOnceWith(occurrences[0]);
         await expect(app.getTaskSnapshot(ref)).resolves.toMatchObject({
           ...ref,
           status: 'completed',

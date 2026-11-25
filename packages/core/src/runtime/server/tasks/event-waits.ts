@@ -129,6 +129,12 @@ export const createTaskEventCheckpoint = (
   eventResume: createTaskEventResume(wait, claim),
 });
 
+const runTaskEffect = async <T>(effect: Effect.Effect<T, TaskFailure>): Promise<T> => {
+  const result = await Effect.runPromise(Effect.either(effect));
+  if (result._tag === 'Left') throw result.left;
+  return result.right;
+};
+
 /** Run one Event poll under the worker's exclusive Task claim. */
 export const pollTaskEventWait = async (
   storage: TaskStorage,
@@ -141,7 +147,7 @@ export const pollTaskEventWait = async (
   const delivery = requireTaskEventDelivery(runtime);
   const subscriptionId = taskEventWaitSubscriptionId(source, wait.id);
   if (wait.timeoutAt && Date.parse(wait.timeoutAt) <= Date.now()) {
-    const snapshot = await Effect.runPromise(
+    const snapshot = await runTaskEffect(
       storage.cancelEvent(source, wait.id, 'failed', {
         code: 'task_event_wait_timed_out',
         message: `Timed out waiting for Event ${wait.eventId}@${wait.eventVersion}.`,
@@ -168,9 +174,9 @@ export const pollTaskEventWait = async (
   }
 
   const next = createTaskEventCheckpoint(checkpoint, wait, claim);
-  const snapshot = await Effect.runPromise(storage.claimEvent(source, wait.id, next));
+  const snapshot = await runTaskEffect(storage.claimEvent(source, wait.id, next));
   if (!snapshot) {
-    const latest = await Effect.runPromise(storage.loadSource(source));
+    const latest = await runTaskEffect(storage.loadSource(source));
     if (latest.status === 'waiting' && latest.checkpoint?.eventWait?.id === wait.id) {
       await delivery.release(claim);
     } else {
