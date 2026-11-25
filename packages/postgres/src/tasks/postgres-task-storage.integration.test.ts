@@ -8,10 +8,14 @@ import {
 } from '@ontahi/core/runtime/server';
 import {
   createInProcessTaskRuntime,
+  createTaskEventResume,
+  taskEventWaitSubscriptionId,
+  taskReconciliationCases,
+  verifyTaskReconciliationConformance,
   verifyTaskStorageConformance,
 } from '@ontahi/core/runtime/server/tasks';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { Effect } from 'effect';
+import { Chunk, Deferred, Effect, Stream } from 'effect';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +24,7 @@ import { createPostgresEventSchemaSql } from '../events/schema.js';
 
 import { createPostgresTaskStorage } from './runtime.js';
 import { createPostgresTaskSchemaSql } from './schema.js';
+import { createPostgresTaskWorker } from './worker.js';
 
 const taskTables = { runs: 'ontahi_task_storage_test_runs' } as const;
 const eventTables = {
@@ -71,6 +76,177 @@ describe('PostgreSQL Task Storage', () => {
     });
   });
 
+  it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', row =>
+    verifyTaskReconciliationConformance(row, {
+      createStorage: storage,
+      createRuntime: store => createInProcessTaskRuntime({ storage: store }),
+    }),
+  );
+
+  it.each(taskReconciliationCases)(
+    'queue worker reconciles a remote Customer when $scenario',
+    row =>
+      verifyTaskReconciliationConformance(row, {
+        createStorage: storage,
+        createRuntime: store =>
+          createInProcessTaskRuntime({ storage: store, deferExplicitExecution: true }),
+        runWorker: (task, signal) =>
+          createPostgresTaskWorker({
+            pool,
+            tables: taskTables,
+            tasks: [task],
+          }).runOnce(signal),
+      }),
+  );
+
+  it('releases an approval wait and lets a worker resume the claimed response', async () => {
+    const task = defineTask<undefined, string>({
+      id: 'Customer.approval',
+      execution: defineTaskExecution<undefined, { step: string }, string>({
+        initial: () => ({ step: 'approve' }),
+        steps: {
+          approve: {
+            run: ({ response, state }) =>
+              Effect.succeed(
+                response && 'decision' in response
+                  ? { kind: 'complete', result: response.decision }
+                  : {
+                      kind: 'interaction',
+                      state,
+                      interaction: {
+                        id: 'customer-approval',
+                        prompt: 'Approve?',
+                        proposal: { id: 'proposal', summary: 'Approve customer', requests: [{}] },
+                      },
+                    },
+              ),
+          },
+        },
+      }),
+      run: () => Effect.dieMessage('Explicit execution required'),
+    });
+    const runtime = createInProcessTaskRuntime({
+      storage: storage(),
+      deferExplicitExecution: true,
+    });
+    const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
+    await Effect.runPromise(
+      storage().create({
+        taskId: task.id,
+        runId: 'inline-run',
+        checkpoint: { version: 1, state: { step: 'approve' } },
+      }),
+    );
+    expect(await worker.runOnce()).toBeUndefined();
+    const actor = { kind: 'system' } as const;
+    const queued = await Effect.runPromise(
+      runtime.start(task, undefined, { runId: 'cancel-queued' }),
+    );
+    expect(await worker.cancel(queued)).toBe(true);
+    await expect(Effect.runPromise(runtime.getSnapshot(queued))).resolves.toMatchObject({
+      status: 'cancelled',
+    });
+    expect(await worker.runOnce()).toBeUndefined();
+    const run = await Effect.runPromise(
+      runtime.start(task, undefined, {
+        trigger: { cause: 'system', actor },
+      }),
+    );
+    const ref = { taskId: run.taskId, runId: run.runId };
+    expect(await worker.runOnce()).toEqual(ref);
+    expect(await worker.runOnce()).toBeUndefined();
+    await expect(Effect.runPromise(runtime.getSnapshot(run))).resolves.toMatchObject({
+      status: 'waiting',
+      interaction: { id: 'customer-approval' },
+    });
+    await Effect.runPromise(
+      runtime.respondToInteraction!(
+        run,
+        { interactionId: 'customer-approval', decision: 'approve' },
+        { actor },
+      ),
+    );
+    await expect(Effect.runPromise(runtime.getSnapshot(run))).resolves.toMatchObject({
+      status: 'running',
+    });
+    expect(await worker.runOnce()).toEqual(ref);
+    await expect(Effect.runPromise(runtime.getSnapshot(run))).resolves.toMatchObject({
+      status: 'completed',
+      result: 'approve',
+    });
+    const pending = await Effect.runPromise(
+      runtime.start(task, undefined, {
+        trigger: { cause: 'system', actor },
+        runId: 'cancel-waiting',
+      }),
+    );
+    const locking = await pool.connect();
+    try {
+      await locking.query('BEGIN');
+      await locking.query(
+        `SELECT 1 FROM ${taskTables.runs} WHERE task_id = $1 AND run_id = $2 FOR UPDATE`,
+        [pending.taskId, pending.runId],
+      );
+      expect(await worker.runOnce()).toBeUndefined();
+    } finally {
+      await locking.query('ROLLBACK');
+      locking.release();
+    }
+    await worker.runOnce();
+    expect(await worker.cancel(pending)).toBe(true);
+    await expect(Effect.runPromise(runtime.getSnapshot(pending))).resolves.toMatchObject({
+      status: 'cancelled',
+    });
+    expect(await worker.runOnce()).toBeUndefined();
+  });
+
+  it.each(['reuse-running', 'skip-if-completed'] as const)(
+    'enforces %s across storage instances and lifecycle transitions',
+    async policy => {
+      const first = storage();
+      const second = storage();
+      const admit = (store: ReturnType<typeof storage>, runId: string) =>
+        Effect.runPromise(
+          store.admit!({ taskId: 'Customer.sync', runId }, { key: 'delivery', policy }),
+        );
+      const contenders = await Promise.all([
+        admit(first, 'candidate-a'),
+        admit(second, 'candidate-b'),
+      ]);
+      expect(contenders.filter(result => result.created)).toHaveLength(1);
+      expect(contenders[0].source.runId).toBe(contenders[1].source.runId);
+
+      let active = contenders[0].source;
+      for (const status of ['running', 'waiting'] as const) {
+        await Effect.runPromise(first.update(active, { status }));
+        const reused = await admit(second, `while-${status}`);
+        expect(reused.created).toBe(false);
+        expect(reused.source.runId).toBe(active.runId);
+      }
+      for (const status of ['failed', 'cancelled'] as const) {
+        await Effect.runPromise(first.update(active, { status }));
+        const replacement = await admit(second, `after-${status}`);
+        expect(replacement.created).toBe(true);
+        active = replacement.source;
+      }
+      await Effect.runPromise(first.update(active, { status: 'completed' }));
+      const afterCompletion = await admit(second, 'after-completed');
+      expect(afterCompletion.created).toBe(policy === 'reuse-running');
+      expect(afterCompletion.source.runId).toBe(
+        policy === 'reuse-running' ? 'after-completed' : active.runId,
+      );
+      await Effect.runPromise(
+        first.update(afterCompletion.source, {
+          status: 'failed',
+          error: { code: 'task_effect_outcome_ambiguous', message: 'Reconciliation needed' },
+        }),
+      );
+      const blocked = await admit(second, 'after-ambiguous');
+      expect(blocked.created).toBe(false);
+      expect(blocked.source.runId).toBe(afterCompletion.source.runId);
+    },
+  );
+
   it('atomically cancels an Event wait once', async () => {
     const store = storage();
     const ref = { taskId: 'TodoList.export', runId: 'cancel-run' };
@@ -110,6 +286,301 @@ describe('PostgreSQL Task Storage', () => {
       ),
     ).resolves.toMatchObject({ reason: 'task_run_not_found' });
   });
+
+  it.each(['expired', 'cancelled'] as const)(
+    'fences a held worker after its Task is %s',
+    async outcome => {
+      const entered = await Effect.runPromise(Deferred.make<void>());
+      const unblock = await Effect.runPromise(Deferred.make<void>());
+      let executions = 0;
+      const task = defineTask<undefined, string>({
+        id: 'Customer.workerLease',
+        execution: defineTaskExecution<undefined, { step: string }, string>({
+          initial: () => ({ step: 'run' }),
+          steps: {
+            run: {
+              run: () =>
+                Effect.gen(function* () {
+                  if (++executions === 1) {
+                    yield* Deferred.succeed(entered, undefined);
+                    yield* Deferred.await(unblock);
+                    return { kind: 'complete', result: 'stale' };
+                  }
+                  return { kind: 'complete', result: 'recovered' };
+                }),
+            },
+          },
+        }),
+        run: () => Effect.dieMessage('Explicit execution required'),
+      });
+      const api = createInProcessTaskRuntime({ storage: storage(), deferExplicitExecution: true });
+      const admission = { key: 'customer-lease', policy: 'skip-if-completed' } as const;
+      const run = await Effect.runPromise(api.start(task, undefined, { admission }));
+      const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
+      const previousWorker = worker.runOnce();
+      try {
+        await Effect.runPromise(Deferred.await(entered).pipe(Effect.timeout('5 seconds')));
+        expect(await worker.runOnce()).toBeUndefined();
+        if (outcome === 'expired') {
+          // Advance the persisted deadline without stopping the original worker or its session.
+          await pool.query(
+            `UPDATE ${taskTables.runs} SET worker_lease_until = clock_timestamp() - interval '1 second'
+             WHERE task_id = $1 AND run_id = $2`,
+            [run.taskId, run.runId],
+          );
+          expect(await worker.runOnce()).toEqual({ taskId: run.taskId, runId: run.runId });
+        } else {
+          expect(await worker.cancel(run)).toBe(true);
+          expect(await worker.cancel(run)).toBe(false);
+          const repeat = await Effect.runPromise(api.start(task, undefined, { admission }));
+          expect(repeat).toMatchObject({ runId: run.runId, admission: 'reconciliation-required' });
+          expect(await worker.runOnce()).toBeUndefined();
+        }
+      } finally {
+        await Effect.runPromise(Deferred.succeed(unblock, undefined));
+        expect(await previousWorker).toBeUndefined();
+      }
+      await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject(
+        outcome === 'expired'
+          ? { status: 'completed', result: 'recovered' }
+          : { status: 'cancelled', error: { code: 'task_effect_outcome_ambiguous' } },
+      );
+      expect(executions).toBe(outcome === 'expired' ? 2 : 1);
+    },
+  );
+
+  it('observes each committed lifecycle state across independent PostgreSQL adapters', async () => {
+    const task = defineTask({
+      id: 'Observation.task',
+      execution: defineTaskExecution<undefined, { step: string }, string>({
+        initial: () => ({ step: 'approve' }),
+        steps: {
+          approve: {
+            run: ({ state, response }) =>
+              Effect.succeed(
+                response && 'decision' in response
+                  ? { kind: 'complete', result: response.decision }
+                  : {
+                      kind: 'interaction',
+                      state,
+                      interaction: {
+                        id: 'observe-approval',
+                        prompt: 'Approve?',
+                        proposal: { id: 'proposal', summary: 'Approve', requests: [{}] },
+                      },
+                    },
+              ),
+          },
+        },
+      }),
+      run: () => Effect.dieMessage('Explicit execution required'),
+    });
+    const observer = createInProcessTaskRuntime({
+      storage: createPostgresTaskStorage({ pool, tables: taskTables, observationPollMs: 500 }),
+      deferExplicitExecution: true,
+    });
+    const actor = { kind: 'system' } as const;
+    const run = await Effect.runPromise(
+      observer.start(task, undefined, {
+        trigger: { cause: 'system', actor },
+      }),
+    );
+    const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
+    const listening = await Effect.runPromise(Deferred.make<void>());
+    const controller = new AbortController();
+    const result = Effect.runPromise(
+      observer.observe!(run).pipe(
+        Stream.tap(() => Deferred.succeed(listening, undefined)),
+        Stream.takeUntil(snapshot => snapshot.status === 'completed'),
+        Stream.runCollect,
+        Effect.timeout('5 seconds'),
+      ),
+      { signal: controller.signal },
+    );
+    try {
+      await Effect.runPromise(Deferred.await(listening).pipe(Effect.timeout('5 seconds')));
+      await worker.runOnce();
+      await Effect.runPromise(
+        observer.respondToInteraction!(
+          run,
+          { interactionId: 'observe-approval', decision: 'approve' },
+          { actor },
+        ),
+      );
+      await worker.runOnce();
+
+      const snapshots = Chunk.toReadonlyArray(await result);
+      expect(snapshots.map(snapshot => snapshot.status)).toEqual([
+        'queued',
+        'running',
+        'waiting',
+        'running',
+        'completed',
+      ]);
+      expect(snapshots[2]?.interaction).toMatchObject({ id: 'observe-approval' });
+      expect(snapshots.at(-1)?.result).toBe('approve');
+    } finally {
+      controller.abort();
+      await result.catch(() => {});
+    }
+  });
+
+  it.each(['while waiting', 'after persisting the claim', 'after timeout cleanup fails'] as const)(
+    'resumes a retained Event once after restarting the queue worker %s',
+    async restart => {
+      const Ready = defineEvent({
+        id: 'CustomerReady',
+        version: 1,
+        description: 'The remote customer is ready.',
+        payload: graphSchema.object({ customerId: graphSchema.string() }),
+      });
+      const continued = vi.fn();
+      const task = defineTask<{ requestId: string }, string>({
+        id: 'Customer.awaitReady',
+        execution: defineTaskExecution<{ requestId: string }, { step: 'wait' }, string>({
+          initial: () => ({ step: 'wait' }),
+          steps: {
+            wait: {
+              run: ({ input, state, event }) =>
+                Effect.sync(() => {
+                  if (event) {
+                    continued(event.occurrenceId);
+                    return {
+                      kind: 'complete',
+                      result: (event.payload as { customerId: string }).customerId,
+                    };
+                  }
+                  return {
+                    kind: 'event',
+                    state,
+                    event: {
+                      id: 'ready',
+                      declaration: Ready,
+                      correlation: { requestId: input.requestId },
+                    },
+                  };
+                }),
+            },
+          },
+        }),
+        run: () => Effect.dieMessage('Explicit execution required'),
+      });
+      const createWorker = () =>
+        createPostgresTaskWorker({
+          pool,
+          tables: taskTables,
+          tasks: [task],
+          events: { declarations: [Ready], tables: eventTables },
+        });
+      const api = createInProcessTaskRuntime({ storage: storage(), deferExplicitExecution: true });
+      const run = await Effect.runPromise(api.start(task, { requestId: 'request-1' }));
+      const ref = { taskId: run.taskId, runId: run.runId };
+      expect(await createWorker().runOnce()).toEqual(ref);
+      await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+        status: 'waiting',
+        waitingOn: { kind: 'event', eventId: Ready.id },
+      });
+      expect(continued).not.toHaveBeenCalled();
+
+      if (restart === 'after timeout cleanup fails') {
+        const worker = createWorker();
+        expect(await worker.runOnce()).toBeUndefined();
+        const store = storage();
+        const source = await Effect.runPromise(store.loadSource(ref));
+        await Effect.runPromise(
+          store.update(ref, {
+            checkpoint: {
+              ...source.checkpoint!,
+              eventWait: { ...source.checkpoint!.eventWait!, timeoutAt: new Date(0).toISOString() },
+            },
+          }),
+        );
+        await pool.query(`
+          CREATE FUNCTION reject_event_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'Injected Event cleanup failure'; END
+          $$;
+          CREATE TRIGGER reject_event_cleanup BEFORE UPDATE OF active ON ${eventTables.subscriptions}
+            FOR EACH ROW WHEN (NEW.active = false) EXECUTE FUNCTION reject_event_cleanup();
+        `);
+        try {
+          await expect(worker.runOnce()).rejects.toMatchObject({ reason: 'task_failed' });
+          await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+            status: 'waiting',
+          });
+        } finally {
+          await pool.query(`
+            DROP TRIGGER reject_event_cleanup ON ${eventTables.subscriptions};
+            DROP FUNCTION reject_event_cleanup();
+          `);
+        }
+        expect(await worker.runOnce()).toEqual(ref);
+        await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+          status: 'failed',
+          error: { code: 'task_event_wait_timed_out' },
+        });
+        return;
+      }
+
+      // No worker or subscription is active when the external delivery arrives.
+      const producer = createPostgresEventRuntime({ pool, tables: eventTables });
+      const events = createEventApplication({ runtime: producer, declarations: [Ready] }).api;
+      const ingest = (requestId: string, deliveryId: string, customerId: string) =>
+        events.ingest(Ready, {
+          payload: { customerId },
+          correlation: { requestId },
+          ingress: { provider: 'fixture', deliveryId, receivedAt: new Date().toISOString() },
+        });
+      await ingest('unrelated', 'other-delivery', 'wrong-customer');
+      const first = await ingest('request-1', 'duplicate-delivery', 'customer-1');
+      const duplicate = await ingest('request-1', 'duplicate-delivery', 'customer-1');
+      expect(duplicate.occurrenceId).not.toBe(first.occurrenceId);
+
+      if (restart === 'after persisting the claim') {
+        const waiting = await Effect.runPromise(storage().loadSource(ref));
+        const checkpoint = waiting.checkpoint!;
+        const wait = checkpoint.eventWait!;
+        const subscriptionId = taskEventWaitSubscriptionId(ref, wait.id);
+        const delivery = producer.durableDelivery!;
+        await delivery.register({
+          id: subscriptionId,
+          eventId: wait.eventId,
+          eventVersion: wait.eventVersion,
+          correlation: wait.correlation,
+        });
+        const claim = (await delivery.claim(subscriptionId, {
+          consumerId: 'stopped-worker',
+          leaseMs: 10_000,
+        }))!;
+        await Effect.runPromise(
+          storage().claimEvent(ref, wait.id, {
+            version: 1,
+            state: checkpoint.state,
+            eventOccurrence: claim.delivery.occurrence,
+            eventResume: createTaskEventResume(wait, claim),
+          }),
+        );
+        // The Task owns its continuation even though the original worker never acknowledged.
+      }
+
+      const outcomes = await Promise.all([createWorker().runOnce(), createWorker().runOnce()]);
+      expect(outcomes.filter(Boolean)).toEqual([ref]);
+      expect(continued).toHaveBeenCalledExactlyOnceWith(first.occurrenceId);
+      await expect(
+        producer.deliveryInspection!.inspect(taskEventWaitSubscriptionId(ref, 'ready'), {
+          states: ['acknowledged'],
+          limit: 10,
+        }),
+      ).resolves.toEqual([expect.objectContaining({ occurrenceId: first.occurrenceId })]);
+      await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'customer-1',
+      });
+
+      await ingest('request-1', 'duplicate-delivery', 'customer-1');
+      expect(await createWorker().runOnce()).toBeUndefined();
+      expect(continued).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('resumes a Todo Event wait after recreating both PostgreSQL-backed runtimes', async () => {
     const ExportReady = defineEvent({

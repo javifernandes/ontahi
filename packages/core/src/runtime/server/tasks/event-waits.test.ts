@@ -1,4 +1,4 @@
-import { Chunk, Effect, Stream } from 'effect';
+import { Chunk, Deferred, Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { graphSchema } from '../../../data-graph/index.js';
@@ -623,4 +623,112 @@ describe('durable Task Event waits', () => {
     expect(claim).toHaveBeenCalled();
     expect(claim).toHaveBeenCalledTimes(settledClaims);
   });
+});
+
+describe('deferred Event wait polling', () => {
+  it.each(['resume', 'timeout', 'unconfigured'] as const)(
+    'handles a deferred wait with %s',
+    async mode => {
+      let completions = 0;
+      const task = createExportTask(() => completions++, mode === 'timeout' ? 1 : undefined);
+      const events = createDurableRuntime();
+      const storage = createInMemoryTaskStorage();
+      const createWorker = () =>
+        createInProcessTaskRuntime({
+          storage,
+          deferExplicitExecution: true,
+          ...(mode === 'unconfigured'
+            ? {}
+            : { events: { runtime: events, declarations: [ExportReady] } }),
+        });
+      const worker = createWorker();
+      const ref = await Effect.runPromise(worker.start(task, { requestId: 'deferred-request' }));
+      expect(await Effect.runPromise(worker.runCheckpoint(ref))).toBe(true);
+      if (mode === 'unconfigured') {
+        expect(await Effect.runPromise(worker.getSnapshot(ref))).toMatchObject({
+          status: 'failed',
+          error: { code: 'task_event_runtime_unavailable' },
+        });
+        return;
+      }
+
+      expect(await Effect.runPromise(worker.getSnapshot(ref))).toMatchObject({ status: 'waiting' });
+      const recovered = createWorker();
+      recovered.register?.(task);
+      if (mode === 'timeout') {
+        await vi.waitFor(async () => {
+          await Effect.runPromise(recovered.runCheckpoint(ref));
+          expect(await Effect.runPromise(recovered.getSnapshot(ref))).toMatchObject({
+            status: 'failed',
+            error: { code: 'task_event_wait_timed_out' },
+          });
+        });
+      } else {
+        expect(await Effect.runPromise(recovered.runCheckpoint(ref))).toBe(false);
+        await events.accept({
+          ...ExportReady.emit({ requestId: 'deferred-request', url: 'https://example.com/export' }),
+          correlation: { requestId: 'deferred-request' },
+        });
+        expect(await Effect.runPromise(recovered.runCheckpoint(ref))).toBe(true);
+        expect(await Effect.runPromise(recovered.runCheckpoint(ref))).toBe(false);
+        expect(await Effect.runPromise(recovered.getSnapshot(ref))).toMatchObject({
+          status: 'completed',
+          result: { url: 'https://example.com/export' },
+        });
+        expect(completions).toBe(1);
+      }
+    },
+  );
+});
+
+it('holds deferred execution until a contextual step exits after interruption', async () => {
+  const entered = await Effect.runPromise(Deferred.make<void>());
+  const unblock = await Effect.runPromise(Deferred.make<void>());
+  const task = defineTask<undefined, string>({
+    id: 'contextual-abort',
+    execution: defineTaskExecution<undefined, { step: string }, string>({
+      initial: () => ({ step: 'wait' }),
+      steps: {
+        wait: {
+          run: () =>
+            Effect.uninterruptible(
+              Effect.gen(function* () {
+                yield* Deferred.succeed(entered, undefined);
+                yield* Deferred.await(unblock);
+                return { kind: 'complete', result: 'done' };
+              }),
+            ),
+        },
+      },
+    }),
+    run: () => Effect.dieMessage('Explicit execution required.'),
+  });
+  const runtime = createInProcessTaskRuntime({
+    storage: createInMemoryTaskStorage(),
+    deferExplicitExecution: true,
+    createExecutionContext: source => ({
+      scope: source.taskId,
+      telemetrySpanName: source.taskId,
+      resources: new Map(),
+    }),
+  });
+  const run = await Effect.runPromise(runtime.start(task, undefined));
+  const controller = new AbortController();
+  const execution = Effect.runPromiseExit(runtime.runCheckpoint(run), {
+    signal: controller.signal,
+  });
+  let stopped = false;
+  const settled = execution.then(exit => {
+    stopped = true;
+    return exit;
+  });
+  try {
+    await Effect.runPromise(Deferred.await(entered).pipe(Effect.timeout('5 seconds')));
+    controller.abort();
+    await Effect.runPromise(Effect.sleep('20 millis'));
+    expect(stopped).toBe(false);
+  } finally {
+    await Effect.runPromise(Deferred.succeed(unblock, undefined));
+    await settled;
+  }
 });

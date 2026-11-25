@@ -11,12 +11,17 @@ import type {
   TaskRunSource,
   TaskRuntimeRef,
   TaskSnapshot,
+  TaskStartAdmission,
   TaskStorage,
   TaskRunsBySubjectQuery,
 } from './types.js';
 
 export type TaskStorageAdapterOperations = {
   create(input: TaskRunCreateInput): Promise<TaskRunSource>;
+  admit?(
+    input: TaskRunCreateInput,
+    admission: TaskStartAdmission,
+  ): Promise<{ source: TaskRunSource; created: boolean }>;
   update(ref: TaskRunIdentity, patch: Partial<TaskRunSource>): Promise<TaskRunSource>;
   claim(
     ref: TaskRunIdentity,
@@ -59,7 +64,12 @@ export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperation
   const snapshot = (source: TaskRunSource | undefined) =>
     source === undefined ? undefined : projectTaskSnapshot(source);
 
+  const { admit } = operations;
   return {
+    ...(admit && {
+      admit: (input, admission) =>
+        attempt('Failed to admit task run.', () => admit.call(operations, input, admission)),
+    }),
     create: input => attempt('Failed to create task run.', () => operations.create(input)),
     update: (ref, patch) =>
       attempt('Failed to update task run.', async () =>

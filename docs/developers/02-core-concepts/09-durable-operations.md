@@ -208,3 +208,47 @@ input and output. Retry and replay remain explicit runtime or application operat
 hidden side effects of starting a durable operation. `cancelled` can already be observed in a
 snapshot, but Ontahí does not yet expose a cancellation request because its Task Runtimes do not
 share an enforceable cancellation capability.
+
+## Admit a run and protect its external effects
+
+A durable Operation can set `idempotency.policy` to `reuse-running` or `skip-if-completed`
+with the native executor and in-memory or PostgreSQL Task Storage. Both policies reuse a queued,
+running, or waiting run. After completion, only `skip-if-completed` reuses that run. An ordinary
+failed or cancelled run releases the key. A run with an ambiguous external effect retains the
+key and returns `reconciliation-required` on another matching invocation.
+
+Use `idempotency.key(input)` for a business-defined equivalence key. It takes precedence over a
+trusted webhook delivery identity. Keys are scoped by Operation and invocation authority. Run
+references distinguish `created`, `reused`, `already-completed`, and
+`reconciliation-required` for these policies. Apply the updated Task schema when using PostgreSQL.
+
+For a provider that accepts idempotency keys, declare the effect with
+`defineIdempotentTaskEffect({ id, retryWindowMs, execute })`. In explicit Task execution, call
+`prepare(context, occurrence, input)` and return a `continue` transition with the prepared
+value in its state. The next step calls `run(prepared)`. The persisted checkpoint carries the
+provider key and input across worker recreation. Give separate logical calls separate occurrence
+identities. Configure a conservative retry window supported by the provider.
+
+A worker can send the same effect request more than once. The provider must enforce its contract
+for the same key and input. If the window expires, the Task retains the checkpoint and records
+an ambiguous outcome for reconciliation. The effect declaration covers that capability's calls.
+List the helper's `metadata` in `durable.externalEffects` to expose that declared contract in
+reflection. Coverage of other effects in arbitrary TypeScript remains unverified.
+
+### Reconcile by external reference
+
+For an API with a reference lookup, use `effect.reconcilable({ lookup, execute })`.
+The declaration ID is optional. Give each logical use a stable occurrence unique within its Task
+run. For repeated uses, derive the occurrence from a business key. Persist the prepared value in
+an explicit Task checkpoint before running the effect. The helper
+looks up that reference before writing and recovers any matching record. After an uncertain
+write, it reconciles and issues at most one retry per execution of the helper. If that retry fails, it looks up the reference
+once more. An inconclusive or unavailable lookup leaves the Task pending reconciliation.
+
+Have the adapter report expected HTTP and transport failures in the Effect error channel.
+Return `confirmed-absent` only when the provider contract establishes that the record does
+not exist and no earlier write can still commit for that reference. A search miss after a
+timeout from an eventually consistent API is `unknown`. Compare the returned record and expected
+input before returning `found`. Lookup and creation are separate provider actions. Hosts that
+run competing workers need exclusive execution for the effect or a provider guarantee that
+prevents conflicting creates for the same reference.

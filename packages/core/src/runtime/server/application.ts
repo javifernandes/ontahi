@@ -83,7 +83,13 @@ export function defineOntahiApplication(
     | DefineOntahiApplicationOptions<AnyGraphApi>
     | DefineOntahiApplicationFromEntitiesOptions<Record<string, AnyApplicationEntity>>,
 ): OntahiApplication {
-  const graph = 'graph' in options ? options.graph : defineGraphApi({ entities: options.entities });
+  const graph =
+    'graph' in options
+      ? options.graph
+      : defineGraphApi({
+          entities: options.entities,
+          supportsAtomicTaskAdmission: options.runtime.task.supportsAtomicAdmission,
+        });
   const registeredEntityNames = new Set(
     graph
       .listEntities()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cloneJson, isJsonValue } from './json.js';
+import { cloneJson, isJsonValue, stringifyCanonicalJson } from './json.js';
 
 describe('isJsonValue', () => {
   it('accepts finite, nested JSON values', () => {
@@ -37,4 +37,19 @@ describe('cloneJson', () => {
       'Expected a finite, acyclic JSON value.',
     );
   });
+});
+
+it('rejects sparse arrays without conflating holes with explicit JSON nulls', () => {
+  const sparse = new Array(1);
+  expect(isJsonValue(sparse)).toBe(false);
+  expect(() => cloneJson(sparse)).toThrow(TypeError);
+  expect(cloneJson([null])).toEqual([null]);
+});
+
+it('canonicalizes differently ordered keys including canonically equivalent Unicode spellings', () => {
+  const composed = '\u00e9';
+  const decomposed = 'e\u0301';
+  expect(stringifyCanonicalJson({ [composed]: 1, [decomposed]: 2 })).toBe(
+    stringifyCanonicalJson({ [decomposed]: 2, [composed]: 1 }),
+  );
 });

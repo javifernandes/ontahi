@@ -12,7 +12,7 @@ Durable shapes:
 Related plans:
 
 1. [128. Ontahí Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
-2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+2. [132. Durable Invocation Identity And Idempotency](../done/132-durable-invocation-identity-and-idempotency.md)
 3. [146h. WebSocket Runtime Transport And Durable Progress](../done/146h-websocket-runtime-transport-and-durable-progress.md)
 4. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
 5. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)

@@ -7,6 +7,7 @@ import {
   type EventApplication,
   type EventOccurrence,
 } from './events/index.js';
+import { withInvocationContext } from './invocation-context.js';
 
 export type GraphHttpIngressAccepted = {
   kind: 'accepted';
@@ -15,6 +16,8 @@ export type GraphHttpIngressAccepted = {
   channel?: string;
   event: string | null;
   deliveryId: string | null;
+  /** Stable semantic request identity provided by a trusted receiver, when available. */
+  requestId?: string;
   payload?: unknown;
   correlation?: Readonly<Record<string, JsonValue>>;
   status?: number;
@@ -276,11 +279,24 @@ export const createGraphHttpIngressRoute =
 
     if (route && dispatch) {
       try {
-        await dispatch({
-          operationId: route.operationId,
-          payload: outcome.payload,
-          route,
-        });
+        const delivery =
+          outcome.kind === 'accepted' && outcome.deliveryId
+            ? {
+                transport: 'http' as const,
+                provider: outcome.providerKey ?? outcome.provider,
+                source: JSON.stringify([route.route, outcome.channel ?? route.channel ?? null]),
+                id: outcome.deliveryId,
+                ...(outcome.event === null ? {} : { event: outcome.event }),
+              }
+            : undefined;
+        const requestId = outcome.kind === 'accepted' ? outcome.requestId : undefined;
+        await withInvocationContext({ delivery, requestId }, () =>
+          dispatch({
+            operationId: route.operationId,
+            payload: outcome.payload,
+            route,
+          }),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Ingress operation failed';
 

@@ -198,6 +198,7 @@ export type TaskRunRef = {
   runId: string;
   status: TaskStatus;
   subject?: TaskSubject;
+  admission?: 'created' | 'reused' | 'already-completed' | 'reconciliation-required';
 };
 
 export type TaskRunIdentity = Pick<TaskRunRef, 'taskId' | 'runId'>;

@@ -20,12 +20,17 @@ import {
   type PostgresEventTableNames,
 } from './schema.js';
 
-export type PostgresEventRuntimeOptions = {
-  readonly pool: Pick<Pool, 'connect' | 'query'>;
+type EventConnection = Pick<PoolClient, 'query'>;
+
+type EventRuntimeSettings = {
   readonly tables?: PostgresEventTableNames;
   readonly now?: () => Date;
   readonly createId?: () => string;
   readonly onSubscriberError?: (cause: unknown, delivery: EventDelivery) => void;
+};
+
+export type PostgresEventRuntimeOptions = EventRuntimeSettings & {
+  readonly pool: Pick<Pool, 'connect' | 'query'>;
 };
 
 let identitySequence = 0;
@@ -65,7 +70,7 @@ const deliveryFromRow = (row: Record<string, unknown>): EventDelivery => ({
 
 const inTransaction = async <T>(
   pool: Pick<Pool, 'connect'>,
-  work: (client: PoolClient) => Promise<T>,
+  work: (client: EventConnection) => Promise<T>,
 ) => {
   const client = await pool.connect();
   try {
@@ -85,10 +90,14 @@ const inTransaction = async <T>(
   }
 };
 
-const lockEventWriter = (client: PoolClient, namespace: string) =>
+const lockEventWriter = (client: EventConnection, namespace: string) =>
   client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [namespace]);
 
-export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions): EventRuntime => {
+const createEventRuntime = (
+  options: EventRuntimeSettings,
+  connection: EventConnection,
+  transaction: <T>(work: (client: EventConnection) => Promise<T>) => Promise<T>,
+): EventRuntime => {
   const tableNames = resolvePostgresEventTableNames(options.tables);
   const tables = quotePostgresEventTableNames(tableNames);
   const writerLockNamespace = `ontahi.events:${tableNames.occurrences}:${tableNames.subscriptions}:${tableNames.deliveries}`;
@@ -106,7 +115,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       ...(emission.causation ? { causation: emission.causation } : {}),
       ...(emission.correlation ? { correlation: emission.correlation } : {}),
     });
-    await inTransaction(options.pool, async client => {
+    await transaction(async client => {
       await lockEventWriter(client, writerLockNamespace);
       await client.query(
         `INSERT INTO ${tables.occurrences}
@@ -174,7 +183,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     if (subscription.correlation !== undefined && !isJsonValue(subscription.correlation)) {
       throw new TypeError('Durable Event correlation must be JSON-safe.');
     }
-    await inTransaction(options.pool, async client => {
+    await transaction(async client => {
       await lockEventWriter(client, writerLockNamespace);
       await client.query(
         `INSERT INTO ${tables.subscriptions}
@@ -239,7 +248,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       throw new TypeError('Durable Event claim lease must be a positive safe integer.');
     }
     const claimId = createId();
-    const result = await options.pool.query(
+    const result = await connection.query(
       `WITH candidate AS (
          SELECT delivery.delivery_id
          FROM ${tables.deliveries} AS delivery
@@ -284,7 +293,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       retryAfterMs,
       failureReason = null,
     } = normalizeDurableEventDeliverySettlement(outcome);
-    const result = await options.pool.query(
+    const result = await connection.query(
       `UPDATE ${tables.deliveries}
        SET state = $1,
            acknowledged_at = CASE WHEN $1 = 'acknowledged' THEN now() ELSE NULL END,
@@ -323,7 +332,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       timestamp: isoDate,
       provider: 'PostgreSQL',
       loadRows: async query => {
-        const result = await options.pool.query(
+        const result = await connection.query(
           `SELECT delivery.delivery_id, delivery.subscription_id, delivery.occurrence_id,
                   occurrence.event_id, occurrence.event_version, delivery.state, delivery.attempt,
                   delivery.created_at, delivery.available_at, delivery.lease_expires_at,
@@ -381,7 +390,7 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
       fail: (claimValue, failure) => settle(claimValue, { kind: 'failed', reason: failure.reason }),
       cancel: async subscriptionId => {
         requireIdentity(subscriptionId, 'Durable Event subscription id');
-        await options.pool.query(
+        await connection.query(
           `UPDATE ${tables.subscriptions} SET active = false WHERE subscription_id = $1`,
           [subscriptionId],
         );
@@ -389,3 +398,12 @@ export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions)
     },
   };
 };
+
+export const createPostgresEventRuntime = (options: PostgresEventRuntimeOptions): EventRuntime =>
+  createEventRuntime(options, options.pool, work => inTransaction(options.pool, work));
+
+/** Worker-only runtime. Task and Event operations share the caller's fenced transaction. */
+export const createTaskWorkerEventRuntime = (
+  connection: EventConnection,
+  options: EventRuntimeSettings,
+): EventRuntime => createEventRuntime(options, connection, work => work(connection));

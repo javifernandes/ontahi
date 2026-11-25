@@ -35,6 +35,13 @@ cancellation. It does not imply idempotency, exactly-once effects, compensation,
 resume, or redrive. Failures after an external effect may have committed are ambiguous until an
 implementation supplies idempotency, reconciliation, or operation-owned compensation.
 
+A declared external effect can expose its recovery contract through an execution capability.
+A durable runtime can persist the logical effect occurrence before the call and reuse the same
+provider key and input across attempts when the provider contract permits it. Reconciliation
+resolves an uncertain outcome when the remote system supplies enough evidence. Compensation is a
+separate effect with its own retry and failure semantics. Reflection can report declared effect
+guarantees, while coverage of unrestricted implementation code remains unverified.
+
 Immediate and durable runtimes can interpret the same declaration with different guarantees. An
 immediate runtime may delay only while its process and invocation survive. A durable runtime may
 persist attempt state and scheduling. LangGraph, Temporal, Step Functions, Vercel Workflow, and

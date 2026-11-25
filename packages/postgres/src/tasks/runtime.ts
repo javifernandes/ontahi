@@ -4,17 +4,26 @@ import {
   duplicateTaskRunFailure,
   missingTaskRunFailure,
   normalizeTaskTrigger,
+  projectTaskSnapshot,
+  toTaskFailure,
   type TaskActor,
   type TaskExecutionCheckpoint,
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunSource,
+  type TaskStartAdmission,
   type TaskRunsBySubjectQuery,
   type TaskStatus,
 } from '@ontahi/core/runtime/server/tasks';
+import { Effect, Stream } from 'effect';
 import type { Pool } from 'pg';
 
-import { resolvePostgresTaskTableName, type PostgresTaskTableNames } from './schema.js';
+import {
+  resolvePostgresTaskTableName,
+  resolveTaskObservationTableName,
+  taskAdmissionIndexPredicate,
+  type PostgresTaskTableNames,
+} from './schema.js';
 
 type PostgresTaskRow = {
   task_id: string;
@@ -38,6 +47,7 @@ type PostgresTaskRow = {
 export type PostgresTaskStorageOptions = {
   readonly pool: Pick<Pool, 'query'>;
   readonly tables?: PostgresTaskTableNames;
+  readonly observationPollMs?: number;
   readonly now?: () => Date;
 };
 
@@ -64,19 +74,68 @@ const fromRow = (row: PostgresTaskRow): TaskRunSource => ({
 
 const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
 
-export const createPostgresTaskStorage = ({
-  pool,
-  tables,
-  now = () => new Date(),
-}: PostgresTaskStorageOptions) => {
+const createStorage = (
+  { pool, tables, now = () => new Date(), observationPollMs = 100 }: PostgresTaskStorageOptions,
+  leaseToken?: string,
+) => {
   const table = `"${resolvePostgresTaskTableName(tables)}"`;
+  if (!Number.isSafeInteger(observationPollMs) || observationPollMs <= 0) {
+    throw new RangeError('Task observation poll interval must be a positive integer.');
+  }
+  const observations = `"${resolveTaskObservationTableName(tables)}"`;
+  const observeSnapshots = (ref: TaskRunIdentity) =>
+    Stream.unwrap(
+      Effect.tryPromise({
+        try: async () => {
+          const parameters = [ref.taskId, ref.runId];
+          const initial = await pool.query<PostgresTaskRow & { cursor: string }>(
+            `SELECT runs.*, COALESCE((
+               SELECT MAX(sequence) FROM ${observations} WHERE task_id = $1 AND run_id = $2
+             ), 0)::text AS cursor
+             FROM ${table} AS runs WHERE task_id = $1 AND run_id = $2`,
+            parameters,
+          );
+          const current = initial.rows[0];
+          if (!current) throw missingTaskRunFailure(ref);
+          let cursor = current.cursor;
+          const readUpdates = Effect.tryPromise({
+            try: async () => {
+              const updates = await pool.query<{ sequence: string; snapshot: PostgresTaskRow }>(
+                `SELECT sequence::text, snapshot FROM ${observations}
+                 WHERE task_id = $1 AND run_id = $2 AND sequence > $3::bigint
+                 ORDER BY sequence LIMIT 64`,
+                [...parameters, cursor],
+              );
+              const last = updates.rows.at(-1);
+              if (last) cursor = last.sequence;
+              return updates.rows.map(row => projectTaskSnapshot(fromRow(row.snapshot)));
+            },
+            catch: toTaskFailure,
+          });
+          return Stream.concat(
+            Stream.succeed(projectTaskSnapshot(fromRow(current))),
+            Stream.repeatEffect(readUpdates.pipe(Effect.delay(observationPollMs))).pipe(
+              Stream.flatMap(rows => Stream.fromIterable(rows)),
+            ),
+          );
+        },
+        catch: toTaskFailure,
+      }),
+    );
+  const lease = (parameter: number) =>
+    leaseToken ? `AND worker_token = $${parameter} AND worker_lease_until > clock_timestamp()` : '';
+  const leaseParameters = leaseToken ? [leaseToken] : [];
+  const missingWrite = (ref: TaskRunIdentity) =>
+    leaseToken
+      ? { reason: 'task_worker_lease_lost', message: 'The Task worker no longer owns this run.' }
+      : missingTaskRunFailure(ref);
   const load = async (ref: TaskRunIdentity) => {
     const result = await pool.query<PostgresTaskRow>(
-      `SELECT * FROM ${table} WHERE task_id = $1 AND run_id = $2`,
-      [ref.taskId, ref.runId],
+      `SELECT * FROM ${table} WHERE task_id = $1 AND run_id = $2 ${lease(3)}`,
+      [ref.taskId, ref.runId, ...leaseParameters],
     );
     const row = result.rows[0];
-    if (!row) throw missingTaskRunFailure(ref);
+    if (!row) throw missingWrite(ref);
     return fromRow(row);
   };
 
@@ -89,7 +148,7 @@ export const createPostgresTaskStorage = ({
         runtime = $7::jsonb, progress = $8::jsonb, checkpoint = $9::jsonb,
         result = $10::jsonb, execution_metadata = $11::jsonb, error = $12::jsonb,
         started_at = $13, updated_at = $14, completed_at = $15
-       WHERE task_id = $1 AND run_id = $2 RETURNING *`,
+       WHERE task_id = $1 AND run_id = $2 ${lease(16)} RETURNING *`,
       [
         ref.taskId,
         ref.runId,
@@ -106,9 +165,12 @@ export const createPostgresTaskStorage = ({
         next.startedAt ?? null,
         next.updatedAt,
         next.completedAt ?? null,
+        ...leaseParameters,
       ],
     );
-    return fromRow(result.rows[0]!);
+    const row = result.rows[0];
+    if (!row) throw missingWrite(ref);
+    return fromRow(row);
   };
 
   const claim = async (
@@ -121,20 +183,26 @@ export const createPostgresTaskStorage = ({
       `UPDATE ${table}
        SET status = 'running', checkpoint = $4::jsonb, updated_at = $5
        WHERE task_id = $1 AND run_id = $2 AND status = 'waiting'
-         AND checkpoint -> $3 ->> 'id' = $6
+         AND checkpoint -> $3 ->> 'id' = $6 ${lease(7)}
        RETURNING *`,
-      [ref.taskId, ref.runId, waitColumn, json(checkpoint), now(), waitId],
+      [ref.taskId, ref.runId, waitColumn, json(checkpoint), now(), waitId, ...leaseParameters],
     );
     return result.rows[0] ? fromRow(result.rows[0]) : undefined;
   };
 
-  const create = async (input: TaskRunCreateInput) => {
-    const timestamp = now();
+  const insert = async (input: TaskRunCreateInput, admission?: TaskStartAdmission) => {
     try {
       const result = await pool.query<PostgresTaskRow>(
         `INSERT INTO ${table}
-          (task_id, run_id, status, input, trigger, subject, runtime, created_at, updated_at)
-         VALUES ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $7)
+          (task_id, run_id, status, input, trigger, subject, runtime, created_at, updated_at,
+           admission_policy, admission_key, checkpoint)
+         VALUES ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $7, $8, $9, $10::jsonb)
+         ${
+           admission
+             ? `ON CONFLICT (task_id, admission_policy, admission_key)
+                        WHERE ${taskAdmissionIndexPredicate} DO NOTHING`
+             : ''
+         }
          RETURNING *`,
         [
           input.taskId,
@@ -143,18 +211,38 @@ export const createPostgresTaskStorage = ({
           json(normalizeTaskTrigger(input.trigger)),
           json(input.subject),
           json(input.runtime),
-          timestamp,
+          now(),
+          admission?.policy ?? null,
+          admission?.key ?? null,
+          json(input.checkpoint),
         ],
       );
-      return fromRow(result.rows[0]!);
+      return result.rows[0];
     } catch (cause) {
       if ((cause as { code?: string }).code === '23505') throw duplicateTaskRunFailure(input);
       throw cause;
     }
   };
 
-  return createTaskStorageAdapter({
-    create,
+  const storage = createTaskStorageAdapter({
+    create: async input => fromRow((await insert(input))!),
+    admit: async (input, admission) => {
+      while (true) {
+        const created = await insert(input, admission);
+        if (created) return { source: fromRow(created), created: true };
+
+        // A new statement can see the row that caused the uniqueness conflict.
+        const existing = await pool.query<PostgresTaskRow>(
+          `SELECT * FROM ${table}
+           WHERE task_id = $1 AND admission_policy = $2 AND admission_key = $3
+             AND ${taskAdmissionIndexPredicate}`,
+          [input.taskId, admission.policy, admission.key],
+        );
+        const selected = existing.rows[0];
+        if (selected) return { source: fromRow(selected), created: false };
+        // A conflicting run that stopped qualifying leaves the key free for another insert.
+      }
+    },
     update,
     claim,
     cancelEvent: async (ref, waitId, status, error) => {
@@ -163,9 +251,9 @@ export const createPostgresTaskStorage = ({
            SET status = $4, checkpoint = NULL, error = $5::jsonb,
                completed_at = $6, updated_at = $6
            WHERE task_id = $1 AND run_id = $2 AND status = 'waiting'
-             AND checkpoint -> 'eventWait' ->> 'id' = $3
+             AND checkpoint -> 'eventWait' ->> 'id' = $3 ${lease(7)}
            RETURNING *`,
-        [ref.taskId, ref.runId, waitId, status, json(error), now()],
+        [ref.taskId, ref.runId, waitId, status, json(error), now(), ...leaseParameters],
       );
       return result.rows[0] ? fromRow(result.rows[0]) : undefined;
     },
@@ -205,4 +293,14 @@ export const createPostgresTaskStorage = ({
       return result.rows.map(fromRow);
     },
   });
+  return { ...storage, observeSnapshots };
 };
+
+export const createPostgresTaskStorage = (options: PostgresTaskStorageOptions) =>
+  createStorage(options);
+
+/** Bind worker writes to the active lease on the Task row. */
+export const createLeasedPostgresTaskStorage = (
+  options: PostgresTaskStorageOptions,
+  token: string,
+) => createStorage(options, token);

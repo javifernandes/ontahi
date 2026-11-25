@@ -27,7 +27,12 @@ export const startTask = <TInput, TResult>(
   task: TaskDefinition<TInput, TResult>,
   input: TInput,
   options?: TaskStartOptions,
-) => runtime.start(task, input, options);
+) =>
+  options?.admission && !runtime.supportsAtomicAdmission
+    ? Effect.fail(
+        createTaskFailure('task_admission_unavailable', 'Task runtime lacks atomic admission.'),
+      )
+    : runtime.start(task, input, options);
 
 export const getTaskSnapshot = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
   runtime.getSnapshot(ref);
@@ -86,6 +91,7 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
   };
 
   return {
+    supportsAtomicAdmission: configuredRuntime?.supportsAtomicAdmission === true,
     register,
     start,
     getSnapshot: (ref: TaskRunIdentity) =>

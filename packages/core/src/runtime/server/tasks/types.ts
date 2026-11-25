@@ -142,6 +142,7 @@ export type TaskExecutionDefinition<TInput, TState extends TaskExecutionState, T
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
 export type TaskRunCreateInput = TaskRunIdentity & {
+  checkpoint?: TaskExecutionCheckpoint;
   input?: unknown;
   trigger?: TaskTrigger;
   subject?: TaskSubject;
@@ -155,7 +156,19 @@ export type TaskRunsBySubjectQuery = {
   readonly statuses?: readonly TaskStatus[];
 };
 
+export type TaskStartAdmission = {
+  key: string;
+  policy: 'reuse-running' | 'skip-if-completed';
+};
+
 export type TaskStorageControl = {
+  /** Observe persisted snapshots written by any process. */
+  observeSnapshots?(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
+  /** Atomically selects an existing run or creates the proposed run. */
+  admit?(
+    input: TaskRunCreateInput,
+    admission: TaskStartAdmission,
+  ): Effect.Effect<{ source: TaskRunSource; created: boolean }, TaskFailure>;
   create(input: TaskRunCreateInput): Effect.Effect<TaskRunSource, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
@@ -254,6 +267,7 @@ export type TaskDefinitionDeclaration<TInput, TResult> = Omit<
 export type TaskDeclarations = Record<string, TaskDefinition<any, any>>;
 
 export type TaskStartOptions = {
+  admission?: TaskStartAdmission;
   runId?: string;
   trigger?: TaskTrigger;
   subject?: TaskSubject;
@@ -269,6 +283,7 @@ export type TaskMethods<TTasks extends TaskDeclarations> = {
 };
 
 export type TaskRuntime = {
+  supportsAtomicAdmission?: boolean;
   register?<TInput, TResult>(task: TaskDefinition<TInput, TResult>): void;
   start<TInput, TResult>(
     task: TaskDefinition<TInput, TResult>,
@@ -306,6 +321,8 @@ export type TaskConfig = {
 };
 
 export type InProcessTaskExecutorOptions = {
+  /** Persist explicit Tasks for an external worker. */
+  deferExplicitExecution?: boolean;
   sleep?: (milliseconds: number) => Promise<void>;
   createRunId?: () => string;
   onBackgroundError?: (error: unknown) => void;
@@ -319,4 +336,5 @@ export type InProcessTasksOptions = InProcessTaskExecutorOptions &
 export type InProcessTaskRuntimeOptions = InProcessTaskExecutorOptions &
   TaskRuntimeHostOptions & {
     storage: TaskStorage;
+    withEventWaitTransaction?: <T>(ref: TaskRunIdentity, work: () => Promise<T>) => Promise<T>;
   };

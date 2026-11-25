@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyTaskRunSourcePatch, createTaskStorageAdapter } from './storage-adapter.js';
-import type { TaskRunSource } from './types.js';
+import type { TaskRunCreateInput, TaskRunSource } from './types.js';
 
 const source = (): TaskRunSource => ({
   taskId: 'TodoList.export',
@@ -29,7 +29,10 @@ describe('Task Storage adapter facade', () => {
   it('projects promise operations through the complete Effect contract', async () => {
     const persisted = source();
     const operations = {
-      create: vi.fn(async () => persisted),
+      async admit(input: TaskRunCreateInput) {
+        return { source: await this.create(input), created: true };
+      },
+      create: vi.fn(async (_input: TaskRunCreateInput) => persisted),
       update: vi.fn(async () => persisted),
       claim: vi.fn(async () => persisted),
       cancelEvent: vi.fn(async () => persisted),
@@ -41,6 +44,9 @@ describe('Task Storage adapter facade', () => {
     const storage = createTaskStorageAdapter(operations);
     const ref = { taskId: persisted.taskId, runId: persisted.runId };
 
+    await expect(
+      Effect.runPromise(storage.admit!(ref, { policy: 'reuse-running', key: 'request' })),
+    ).resolves.toEqual({ source: persisted, created: true });
     await expect(Effect.runPromise(storage.create(ref))).resolves.toBe(persisted);
     await expect(
       Effect.runPromise(storage.update(ref, { status: 'running' })),
