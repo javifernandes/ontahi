@@ -45,6 +45,8 @@ compatibility namespace in an explicit breaking release.
   generated files using the repository formatter configuration.
 - Both standalone examples passed codegen freshness, typecheck, and production builds.
   Classroom passed 8 tests, with the 5 PostgreSQL integration tests skipped in that run.
+  Todo passed 182 tests in the full run, with one skipped. Its MySQL integration passed on an
+  isolated rerun after the full run failed in the MySQL child process.
 - The host upgrades are tracked by [Atlas #122](https://github.com/javifernandes/atlas/pull/122),
   [Bartlett #13](https://github.com/javifernandes/ppb-bartlett-test-reconstruccion-memoria/pull/13),
   and [BookOps #533](https://github.com/javifernandes/bookops/pull/533).
