@@ -209,7 +209,9 @@ const tasks = inProcessTasks({
 ```
 
 The host applies `createPostgresTaskSchemaSql()` through its migration system. Construction never
-creates or changes tables. Interaction responses and Event waits use conditional updates so one
+creates or changes tables. The schema adds the admission columns and partial unique index to
+existing Task tables. Apply it before upgrading the adapter. The index arbitrates concurrent
+starts for `reuse-running` and `skip-if-completed` across workers. Interaction responses and Event waits use conditional updates so one
 pending continuation has one successful claimant across concurrent processes. Runtime recreation
 loads the same private checkpoint; public snapshots and recent-run listings omit the stored input,
 and listings omit result payloads. `listBySubject` provides the same bounded exact-subject discovery
@@ -244,3 +246,36 @@ if (!inspection.ok) throw new Error(JSON.stringify(inspection.issues, null, 2));
 The first contract reports mapped tables and columns that do not exist. Extra database columns are
 allowed because an Entity may intentionally model a projection. Type, constraint, index, policy,
 and migration generation remain outside this initial check.
+
+### Run explicit Tasks in a PostgreSQL worker
+
+The application accepts runs with `inProcessTasks({ storage, deferExplicitExecution: true })`.
+Use PostgreSQL Task Storage on both sides. In the worker process, register the same explicit Task
+definitions and poll with `createPostgresTaskWorker({ pool, tasks }).runOnce(signal)`.
+`runOnce` returns the claimed run identity after a terminal state or a persisted wait, and returns
+`undefined` when it finds no work. The host controls polling delay and shutdown.
+
+Use a direct or session-pooled PostgreSQL connection. The worker claims a run with a database
+lease and checks the lease before starting a step or writing a checkpoint. Another worker can
+recover the last checkpoint after the lease expires, even if the earlier session is still open.
+Set `leaseMs` to fit the longest expected interval between claims. The default is 60 seconds and
+a claim has a fixed deadline. External writes still need provider idempotency or reconciliation
+if a worker loses its lease while a remote call is in flight.
+
+A trusted host can call `worker.cancel(ref)` for a queued, waiting, or running deferred run.
+Cancelling a running run revokes its lease and preserves the checkpoint as a potentially
+ambiguous external outcome. Matching admission requests return `reconciliation-required`.
+Cancellation prevents stale checkpoint writes. An external request already sent can still
+finish at the provider.
+
+For Event waits, pass `events: { declarations, tables }` to `createPostgresTaskWorker` and apply
+the PostgreSQL Event schema for those tables. Publish through the same Event tables. The worker
+persists the wait and releases its Task claim. Future polls can attach a retained occurrence,
+including one published while the worker was offline. The Task claims its continuation before
+acknowledging the Event delivery.
+
+Task observation streams use a PostgreSQL journal for deferred runs. Apply the updated Task
+schema so workers can record each snapshot atomically with the run update. Observers receive the
+current snapshot and poll for subsequent updates, including intermediate transitions committed
+between polls. The journal retains the latest 256 snapshots per run. Set
+`observationPollMs` on the server's Task Storage to change the default 100 ms interval.

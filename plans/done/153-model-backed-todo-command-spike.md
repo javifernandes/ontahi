@@ -78,7 +78,7 @@ a stale snapshot is not permission to mutate. Do not infer retry safety from the
   authorization hardening before broader or production use.
 - [153b](../backlog/153b-declarative-operation-context-scope.md) owns declarative graph context scope.
 - [153c](../done/153c-operation-interactions-and-resumption.md) owns implementation-neutral interactions.
-- [132](../next/132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
+- [132](132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
 
 Existing authorization and validation remain mandatory in the spike; comprehensive defenses are
 follow-up work, not implied by a successful demo. Use disposable local Todo data for the proof.

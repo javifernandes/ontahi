@@ -36,6 +36,7 @@ export {
 export {
   createInProcessTaskExecutor,
   createInProcessTaskRuntime,
+  deferredTaskRuntimeName,
 } from './tasks/in-process-adapter.js';
 export {
   isTaskExecutionState,
@@ -63,6 +64,8 @@ export {
   MAX_TASK_RUNS_BY_SUBJECT_LIMIT,
   normalizeTaskRunsBySubjectQuery,
 } from './tasks/subject-discovery.js';
+export { defineIdempotentTaskEffect } from './tasks/idempotent-effect.js';
+export { effect, type TaskEffectLookup } from './tasks/reconcilable-effect.js';
 export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
 export {
@@ -129,6 +132,7 @@ export type {
   TaskEventWaitRequest,
   TaskRuntimeRef,
   TaskSnapshot,
+  TaskStartAdmission,
   TaskStartOptions,
   TaskStorage,
   TaskStorageControl,
@@ -144,3 +148,8 @@ export type {
   TaskRuntime,
   TaskRuntimeHostOptions,
 } from './tasks/types.js';
+
+export {
+  taskReconciliationCases,
+  verifyTaskReconciliationConformance,
+} from './tasks/reconciliation-conformance.js';

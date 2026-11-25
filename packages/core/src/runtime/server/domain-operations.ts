@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Effect, Utils } from 'effect';
 
 import {
@@ -31,12 +33,14 @@ import {
 } from '../../model/entity/ref/input.js';
 import type { EntityRef, EntityRefLocator, SchemaEntityRef } from '../../model/entity/ref/model.js';
 import type { GraphOutputDescriptor } from '../../model/operation/output.js';
+import { isJsonValue, stringifyCanonicalJson } from '../../value/json.js';
 import { hasOwn } from '../../value/object.js';
 import {
   createRuntimeBoundDataGraphApi,
   type RuntimeBoundSelection,
 } from '../data/runtime-bound-api.js';
 import type { DataGraphExecutionRuntime } from '../data/runtime.js';
+import { anonymousExecutionIdentity, executionIdentityCacheKey } from '../identity.js';
 import {
   resolveDomainOperations,
   type DurableOperationDeclarationMetadata as PortableDurableOperationDeclarationMetadata,
@@ -95,6 +99,7 @@ import type {
   TaskSubject,
   TaskTrigger,
 } from './tasks/types.js';
+import { markRuntimeSuccess, withRuntimeSpan } from './telemetry.js';
 
 export type OperationSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
@@ -1008,25 +1013,28 @@ const resolveDurableOperationTrigger = <TInput extends OperationInput>(
   const durable = operation.durable;
   const declaredTrigger =
     typeof durable?.trigger === 'function' ? durable.trigger(input) : durable?.trigger;
-  const principal = getCurrentInvocationContext()?.principal;
-  const baseTrigger: TaskTrigger =
-    declaredTrigger ??
-    (principal
-      ? {
-          cause: 'user_request',
-          actor: { kind: principal.kind, id: principal.subject },
-        }
-      : { cause: 'system' });
+  const { principal, delivery, requestId } = getCurrentInvocationContext() ?? {};
+  const baseTrigger: TaskTrigger = declaredTrigger ?? {
+    cause: delivery ? 'external_event' : principal ? 'user_request' : 'system',
+    ...(principal ? { actor: { kind: principal.kind, id: principal.subject } } : {}),
+  };
+  const ingress = delivery
+    ? { ...baseTrigger.ingress, kind: delivery.transport, deliveryId: delivery.id }
+    : baseTrigger.ingress;
 
-  return durable?.source
-    ? {
-        ...baseTrigger,
-        source: {
-          ...baseTrigger.source,
-          ...durable.source,
-        },
-      }
-    : baseTrigger;
+  return {
+    ...baseTrigger,
+    ...(ingress ? { ingress: { ...ingress, ...(requestId ? { requestId } : {}) } } : {}),
+    ...(delivery || durable?.source
+      ? {
+          source: {
+            ...(delivery ? { provider: delivery.provider, event: delivery.event } : {}),
+            ...baseTrigger.source,
+            ...durable?.source,
+          },
+        }
+      : {}),
+  };
 };
 
 const resolveDurableOperationSubject = <TInput extends OperationInput>(
@@ -1064,9 +1072,74 @@ const resolveDurableDomainOperationRunner = <
   const runner = layer(operation.layer).operation(
     operation.name,
     (input: TInput) =>
-      startDurableOperation(createTaskDefinitionFromDurableDomainOperation(operation), input, {
-        trigger: resolveDurableOperationTrigger(operation, input),
-        subject: resolveDurableOperationSubject(operation, input),
+      Effect.suspend(() => {
+        const idempotency = operation.durable?.idempotency;
+        const settings = {
+          trigger: resolveDurableOperationTrigger(operation, input),
+          subject: resolveDurableOperationSubject(operation, input),
+        };
+        const task = createTaskDefinitionFromDurableDomainOperation(operation);
+        if (!idempotency || idempotency.policy === 'allow-concurrent') {
+          return startDurableOperation(task, input, settings);
+        }
+        const policy = idempotency.policy;
+        if (policy !== 'reuse-running' && policy !== 'skip-if-completed') {
+          return Effect.fail({
+            reason: 'task_admission_unavailable',
+            message: `Durable admission policy "${policy}" is unavailable.`,
+          });
+        }
+        const invocation = getCurrentInvocationContext();
+        const delivery = invocation?.delivery;
+        const declaredKey = idempotency.key?.(input);
+        const identity =
+          declaredKey !== undefined
+            ? ['declared', declaredKey]
+            : delivery && ['delivery', delivery.provider, delivery.source, delivery.id];
+        if (!identity) {
+          return Effect.fail({
+            reason: 'task_admission_key_missing',
+            message: 'Durable admission requires a declared key or a trusted delivery identity.',
+          });
+        }
+        if (!isJsonValue(identity)) {
+          return Effect.fail({
+            reason: 'task_admission_key_invalid',
+            message: 'Durable admission identity must be JSON-serializable.',
+          });
+        }
+        const key = createHash('sha256')
+          .update(
+            stringifyCanonicalJson([
+              operation.id,
+              executionIdentityCacheKey(invocation ?? anonymousExecutionIdentity),
+              identity,
+            ]),
+          )
+          .digest('hex');
+        return startDurableOperation(task, input, { ...settings, admission: { key, policy } }).pipe(
+          Effect.tap(run =>
+            Effect.tryPromise(() =>
+              withRuntimeSpan(
+                'ontahi.task.admission',
+                {
+                  attributes: {
+                    'ontahi.operation.id': operation.id,
+                    'ontahi.task.id': run.taskId,
+                    'ontahi.task.run_id': run.runId,
+                    'ontahi.task.admission_key': key,
+                    'ontahi.task.admission_policy': policy,
+                    ...(delivery ? { 'ontahi.ingress.delivery_id': delivery.id } : {}),
+                    ...(invocation?.requestId
+                      ? { 'ontahi.invocation.request_id': invocation.requestId }
+                      : {}),
+                  },
+                },
+                span => markRuntimeSuccess(span, { 'ontahi.task.admission': run.admission }),
+              ),
+            ).pipe(Effect.catchAll(() => Effect.void)),
+          ),
+        );
       }),
     {
       defectLogMessage: operation.defectLogMessage,

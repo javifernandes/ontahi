@@ -5,7 +5,9 @@ import { normalizeTaskRunsBySubjectQuery } from './subject-discovery.js';
 import { normalizeTaskTrigger, taskTriggerActorMatches } from './triggers.js';
 import type {
   TaskActor,
+  TaskFailure,
   TaskRunIdentity,
+  TaskRunCreateInput,
   TaskRunListItem,
   TaskRunSource,
   TaskSnapshot,
@@ -54,32 +56,56 @@ const compareByCreatedAtDescending = (left: TaskRunSource, right: TaskRunSource)
 
 export const createInMemoryTaskStorage = (): TaskStorage => {
   const runs = new Map<string, TaskRunSource>();
-  const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
+  const keyOf = (ref: TaskRunIdentity) => JSON.stringify([ref.taskId, ref.runId]);
+
+  const admissions = new Map<string, TaskRunIdentity>();
+  const insert = (input: TaskRunCreateInput, key: string): TaskRunSource => {
+    const createdAt = now();
+    const source: TaskRunSource = {
+      taskId: input.taskId,
+      runId: input.runId,
+      status: 'queued',
+      ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
+      input: input.input,
+      trigger: normalizeTaskTrigger(input.trigger),
+      subject: input.subject,
+      runtime: input.runtime,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    runs.set(key, source);
+    return source;
+  };
 
   return {
     create: input =>
-      Effect.gen(function* () {
+      Effect.suspend(() => {
         const key = keyOf(input);
-
-        if (runs.has(key)) {
-          return yield* Effect.fail(duplicateTaskRunFailure(input));
+        return runs.has(key)
+          ? Effect.fail(duplicateTaskRunFailure(input))
+          : Effect.succeed(insert(input, key));
+      }),
+    admit: (input, admission) =>
+      Effect.suspend<{ source: TaskRunSource; created: boolean }, TaskFailure, never>(() => {
+        const key = JSON.stringify([input.taskId, admission.policy, admission.key]);
+        const previous = admissions.get(key);
+        const source = previous && runs.get(keyOf(previous));
+        if (
+          source &&
+          (source.status === 'queued' ||
+            source.status === 'running' ||
+            source.status === 'waiting' ||
+            (source.status === 'failed' &&
+              source.error?.code === 'task_effect_outcome_ambiguous') ||
+            (admission.policy === 'skip-if-completed' && source.status === 'completed'))
+        ) {
+          return Effect.succeed({ source, created: false });
         }
-
-        const createdAt = now();
-        const source = {
-          taskId: input.taskId,
-          runId: input.runId,
-          status: 'queued',
-          input: input.input,
-          trigger: normalizeTaskTrigger(input.trigger),
-          subject: input.subject,
-          runtime: input.runtime,
-          createdAt,
-          updatedAt: createdAt,
-        } satisfies TaskRunSource;
-
-        runs.set(key, source);
-        return source;
+        const proposed = keyOf(input);
+        if (runs.has(proposed)) return Effect.fail(duplicateTaskRunFailure(input));
+        const created = insert(input, proposed);
+        admissions.set(key, created);
+        return Effect.succeed({ source: created, created: true });
       }),
     update: (ref, patch) =>
       Effect.gen(function* () {

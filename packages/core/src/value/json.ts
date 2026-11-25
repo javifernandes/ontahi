@@ -31,3 +31,15 @@ export const cloneJson = <TValue>(value: TValue): TValue => {
 
   return JSON.parse(JSON.stringify(value)) as TValue;
 };
+
+/** Serialize a JSON value with stable object key ordering at every depth. */
+export const stringifyCanonicalJson = (value: JsonValue): string =>
+  JSON.stringify(value, (_key, entry: unknown) =>
+    isPlainObject(entry)
+      ? Object.fromEntries(
+          Object.keys(entry)
+            .sort()
+            .map(key => [key, entry[key]]),
+        )
+      : entry,
+  );

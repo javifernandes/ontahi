@@ -23,7 +23,7 @@ Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 Related plans:
 
 1. [128. Ontahi Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
-2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+2. [132. Durable Invocation Identity And Idempotency](132-durable-invocation-identity-and-idempotency.md)
 3. [138b. Conditional Exact Entity Mutations](../done/138b-conditional-exact-entity-mutations.md)
 4. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 
@@ -328,7 +328,7 @@ historical activity timeline that Atlas did not observe.
 3. Stop before Event transport work until
    [Plan 146j](./146j-first-class-events-runtime-protocol-gate.md) establishes Events as
    first-class semantic values.
-4. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
+4. Pull [Plan 132](132-durable-invocation-identity-and-idempotency.md) when durable retry
    identity becomes the next runtime pressure, or
    [Plan 145](../done/145-ordered-relations-and-sequence-commands.md) when ordered membership becomes
    the next Relation pressure.

@@ -106,6 +106,10 @@ export type DurableOperationIdempotencyMetadata<TInput = unknown> = {
   key?: (input: TInput) => string | readonly unknown[];
 };
 
+export type DurableExternalEffectMetadata =
+  | { readonly id: string; readonly replay: 'provider-idempotency'; readonly retryWindowMs: number }
+  | { readonly id?: string; readonly replay: 'external-reference-reconciliation' };
+
 export type DurableOperationMetadata<TInput = unknown, TResult = unknown> = {
   runtime: DurableOperationRuntime;
   taskId?: string;
@@ -116,6 +120,7 @@ export type DurableOperationMetadata<TInput = unknown, TResult = unknown> = {
   source?: DurableOperationTrigger['source'];
   steps?: ReadonlyArray<DurableOperationStepDefinitionLike<any, any>>;
   idempotency?: DurableOperationIdempotencyMetadata<TInput>;
+  externalEffects?: readonly DurableExternalEffectMetadata[];
 };
 
 export type DurableOperationDefaults = Partial<Pick<DurableOperationMetadata<any, any>, 'runtime'>>;

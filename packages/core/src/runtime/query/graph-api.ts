@@ -31,6 +31,7 @@ import type {
   DomainOperationReceiverDescriptor,
   DurableOperationIdempotencyPolicy,
   DurableOperationMetadata,
+  DurableExternalEffectMetadata,
   DurableOperationRuntime,
   GraphEntityExposure,
   GraphOperationAuthority,
@@ -343,6 +344,7 @@ type AnyGraphApiEntity = object;
 
 export type GraphApiDefinition<TEntities extends Record<string, AnyGraphApiEntity>> = {
   entities: TEntities;
+  supportsAtomicTaskAdmission?: boolean;
 };
 
 type GraphOperationsOf<TEntity> = TEntity extends {
@@ -431,6 +433,9 @@ type GraphApiDurableOperationSummary = {
   hasFinalOutput: boolean;
   hasSubject: boolean;
   idempotencyPolicy?: DurableOperationIdempotencyPolicy;
+  idempotencyEnforced?: boolean;
+  externalEffects?: readonly DurableExternalEffectMetadata[];
+  externalEffectCoverage?: 'unverified';
 };
 
 type GraphApiIngressSummary = {
@@ -1172,6 +1177,27 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
           hasFinalOutput: 'finalOutput' in durable,
           hasSubject: Boolean(durable.subject),
           idempotencyPolicy: durable.idempotency?.policy,
+          ...(durable.externalEffects?.length
+            ? {
+                externalEffects: durable.externalEffects.map(effect =>
+                  effect.replay === 'provider-idempotency'
+                    ? { id: effect.id, replay: effect.replay, retryWindowMs: effect.retryWindowMs }
+                    : {
+                        ...(effect.id === undefined ? {} : { id: effect.id }),
+                        replay: effect.replay,
+                      },
+                ),
+                externalEffectCoverage: 'unverified' as const,
+              }
+            : {}),
+          ...(durable.idempotency && definition.supportsAtomicTaskAdmission !== undefined
+            ? {
+                idempotencyEnforced:
+                  definition.supportsAtomicTaskAdmission &&
+                  (durable.idempotency.policy === 'reuse-running' ||
+                    durable.idempotency.policy === 'skip-if-completed'),
+              }
+            : {}),
         };
       }),
       ingress: listHttpIngress(),

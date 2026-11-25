@@ -11,14 +11,14 @@ Shapes: [Operation Interaction](../../atlas/items/model/operation-interaction.md
 Related plans:
 
 1. [125. Ontahí AI Operations](../research/125-ontahi-ai-operations.md)
-2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+2. [132. Durable Invocation Identity And Idempotency](132-durable-invocation-identity-and-idempotency.md)
 3. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 4. [153. Model-Backed Todo Command Spike](../done/153-model-backed-todo-command-spike.md)
 5. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
 6. [153b. Declarative Operation Context Scope](../backlog/153b-declarative-operation-context-scope.md)
 7. [153d. LangGraph Task Runtime Comparison](../done/153d-langgraph-task-runtime-comparison.md)
 8. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
-9. [153f. Queue-Backed Task Runtime](../backlog/153f-queue-backed-task-runtime.md)
+9. [153f. Queue-Backed Task Runtime](../current/153f-queue-backed-task-runtime.md)
 
 ## Summary And Research Question
 

@@ -12,7 +12,10 @@ import {
 } from '../unit-of-work.js';
 
 import {
-  createTaskEventResume,
+  createTaskEventCheckpoint,
+  pollTaskEventWait,
+  requireTaskEventDelivery,
+  settleTaskEventCheckpoint,
   eventWaitMatchesOccurrence,
   materializeTaskEventWait,
   taskEventWaitSubscriptionId,
@@ -44,6 +47,7 @@ import type {
   TaskDefinition,
   TaskApprovalDecision,
   TaskFailure,
+  TaskExecutionCheckpoint,
   TaskExecutionInteractionRequest,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
@@ -119,6 +123,8 @@ const toTaskRunRef = (snapshot: TaskSnapshot): TaskRunRef => ({
   ...(snapshot.subject ? { subject: snapshot.subject } : {}),
 });
 
+export const deferredTaskRuntimeName = 'deferred-worker';
+
 export const createInProcessTaskRuntime = ({
   storage,
   sleep = milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
@@ -126,7 +132,10 @@ export const createInProcessTaskRuntime = ({
   onBackgroundError,
   createExecutionContext,
   events,
-}: InProcessTaskRuntimeOptions): TaskRuntime => {
+  deferExplicitExecution = false,
+}: InProcessTaskRuntimeOptions): TaskRuntime & {
+  runCheckpoint(ref: TaskRunIdentity): Effect.Effect<boolean, TaskFailure>;
+} => {
   const taskRuns = getInMemoryTaskRunProjection(storage);
   const pendingInteractions = getPendingInteractions(storage);
   const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
@@ -165,16 +174,7 @@ export const createInProcessTaskRuntime = ({
 
     let delivery;
     try {
-      delivery = events.runtime.durableDelivery;
-      if (
-        !delivery ||
-        !events.runtime.capabilities.retention ||
-        !events.runtime.capabilities.durableAcceptance ||
-        !events.runtime.capabilities.durableDelivery ||
-        !events.runtime.capabilities.acknowledgement
-      ) {
-        throw new TypeError('The configured Event Runtime does not support durable delivery.');
-      }
+      delivery = requireTaskEventDelivery(events.runtime);
     } catch (error) {
       void Effect.runPromise(
         update(source, {
@@ -243,12 +243,7 @@ export const createInProcessTaskRuntime = ({
             await retryDelay();
             continue;
           }
-          const checkpoint = {
-            version: 1 as const,
-            state: source.checkpoint!.state,
-            eventOccurrence: cloneJson(claim.delivery.occurrence),
-            eventResume: createTaskEventResume(wait, claim),
-          };
+          const checkpoint = createTaskEventCheckpoint(source.checkpoint!, wait, claim);
           const snapshot = await Effect.runPromise(storage.claimEvent(source, wait.id, checkpoint));
           if (!snapshot) {
             const latest = await Effect.runPromise(storage.loadSource(source));
@@ -467,14 +462,13 @@ export const createInProcessTaskRuntime = ({
     };
     return context;
   };
-  const launchExplicitExecution = (
+  const prepareExplicitExecution = (
     ref: TaskRunIdentity,
     task: TaskDefinition<any, any>,
     source: TaskRunSource,
-    operationContext?: OperationRuntimeContext,
   ) => {
     const executionKey = keyOf(ref);
-    if (activeExplicitExecutions.has(executionKey)) return false;
+    if (activeExplicitExecutions.has(executionKey)) return undefined;
     activeExplicitExecutions.add(executionKey);
 
     const definition = task.execution!;
@@ -493,6 +487,7 @@ export const createInProcessTaskRuntime = ({
             ),
           );
         }
+        if (deferExplicitExecution) yield* storage.loadSource(ref);
         const step = definition.steps[checkpoint.state.step];
         if (!step) {
           return yield* Effect.fail(missingTaskStepFailure(task.id, checkpoint.state.step));
@@ -544,6 +539,15 @@ export const createInProcessTaskRuntime = ({
         }
 
         if (transition.kind === 'event') {
+          if (deferExplicitExecution) {
+            yield* Effect.try({
+              try: () => requireTaskEventDelivery(events?.runtime),
+              catch: error => ({
+                reason: 'task_event_runtime_unavailable',
+                message: String(error),
+              }),
+            });
+          }
           const eventWait = yield* Effect.try({
             try: () => materializeTaskEventWait(ref, transition.event, eventDeclarations),
             catch: toTaskFailure,
@@ -556,7 +560,7 @@ export const createInProcessTaskRuntime = ({
             ...(executionMetadata ? { executionMetadata } : {}),
           });
           const waitingSource = { ...source, status: 'waiting' as const, checkpoint };
-          observeEventWait(waitingSource);
+          if (!deferExplicitExecution) observeEventWait(waitingSource);
           return;
         }
 
@@ -572,13 +576,17 @@ export const createInProcessTaskRuntime = ({
       }
     }).pipe(
       Effect.catchAllCause(cause => {
+        if (deferExplicitExecution && Cause.isInterruptedOnly(cause))
+          return Effect.failCause(cause);
         const error = taskFailureFromCause(cause);
         return Effect.sync(captureExecutionMetadata).pipe(
           Effect.flatMap(executionMetadata =>
             update(ref, {
               status: 'failed',
               completedAt: now(),
-              checkpoint: undefined,
+              ...(error.reason === 'task_effect_outcome_ambiguous'
+                ? {}
+                : { checkpoint: undefined }),
               ...(executionMetadata ? { executionMetadata } : {}),
               error: {
                 code: error.reason,
@@ -591,47 +599,147 @@ export const createInProcessTaskRuntime = ({
       Effect.ensuring(Effect.sync(() => activeExplicitExecutions.delete(executionKey))),
     );
 
-    const run = () => Effect.runPromise(background).catch(error => onBackgroundError?.(error));
+    return background;
+  };
+  const launchExplicitExecution = (
+    ref: TaskRunIdentity,
+    task: TaskDefinition<any, any>,
+    source: TaskRunSource,
+    operationContext?: OperationRuntimeContext,
+  ) => {
+    if (deferExplicitExecution || source.runtime?.name === deferredTaskRuntimeName) return false;
+    const execution = prepareExplicitExecution(ref, task, source);
+    if (!execution) return false;
+    const run = () => Effect.runPromise(execution).catch(error => onBackgroundError?.(error));
     if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
     else void run();
     return true;
   };
-  const recoverExplicitExecution = (source: TaskRunSource) => {
-    const checkpoint = source.checkpoint;
-    const task = taskDefinitions.get(source.taskId);
-    if (
-      source.status !== 'running' ||
-      !checkpoint ||
-      checkpoint.interaction ||
-      checkpoint.eventWait ||
-      !task?.execution
-    ) {
-      return false;
-    }
+  const canRunCheckpoint = (source: TaskRunSource) =>
+    (source.status === 'queued' || source.status === 'running') &&
+    source.checkpoint &&
+    !source.checkpoint.interaction &&
+    !source.checkpoint.eventWait;
 
+  const recoverExplicitExecution = (source: TaskRunSource) => {
+    const task = taskDefinitions.get(source.taskId);
+    if (source.status !== 'running' || !canRunCheckpoint(source) || !task?.execution) return false;
     return launchExplicitExecution(source, task, source, createTaskOperationContext(source));
   };
   resumeEventWait = recoverExplicitExecution;
   const recoverEventWait = (source: TaskRunSource) =>
-    source.status === 'waiting' && source.checkpoint?.eventWait ? observeEventWait(source) : false;
+    !deferExplicitExecution &&
+    source.runtime?.name !== deferredTaskRuntimeName &&
+    source.status === 'waiting' &&
+    source.checkpoint?.eventWait
+      ? observeEventWait(source)
+      : false;
 
   return {
+    supportsAtomicAdmission: storage.admit !== undefined,
     register: task => {
       taskDefinitions.set(task.id, task);
     },
+    runCheckpoint: ref =>
+      Effect.gen(function* () {
+        if (!deferExplicitExecution) return false;
+        let source = yield* storage.loadSource(ref);
+        const task = taskDefinitions.get(ref.taskId);
+        if (source.runtime?.name !== deferredTaskRuntimeName || !task?.execution) return false;
+        if (source.status === 'waiting' && source.checkpoint?.eventWait) {
+          const waiting = source;
+          const snapshot = yield* Effect.tryPromise({
+            try: () => pollTaskEventWait(storage, waiting, events?.runtime),
+            catch: toTaskFailure,
+          });
+          if (!snapshot) return false;
+          yield* taskRuns.publish(snapshot);
+          if (snapshot.status === 'failed') return true;
+          source = yield* storage.loadSource(ref);
+        }
+        if (!canRunCheckpoint(source)) return false;
+        if (source.checkpoint?.eventResume) {
+          const checkpoint = source.checkpoint;
+          yield* Effect.tryPromise({
+            try: () => settleTaskEventCheckpoint(checkpoint, events?.runtime),
+            catch: toTaskFailure,
+          });
+        }
+        if (source.status === 'queued') {
+          yield* update(ref, { status: 'running', startedAt: now() });
+        }
+        const operationContext = createTaskOperationContext(source);
+        const execution = prepareExplicitExecution(ref, task, source);
+        if (!execution) return false;
+        yield* operationContext
+          ? Effect.async<void, TaskFailure>(resume => {
+              const cancel = operationRuntimeContextStorage.run(operationContext, () =>
+                Effect.runCallback(execution, { onExit: exit => resume(exit) }),
+              );
+              return Effect.sync(() => cancel());
+            })
+          : execution;
+        return true;
+      }),
     start: (task, input, options) =>
       Effect.gen(function* () {
         taskDefinitions.set(task.id, task);
         const parsedInput = yield* validateTaskInput(task, input);
         const runId = options?.runId ?? createConfiguredRunId();
         const ref = { taskId: task.id, runId };
-        const snapshot = yield* storage.create({
+        let initialCheckpoint: TaskExecutionCheckpoint | undefined;
+        if (deferExplicitExecution) {
+          const state = task.execution?.initial(parsedInput);
+          if (!isTaskExecutionState(state)) {
+            return yield* Effect.fail(
+              invalidTaskDefinitionFailure(
+                task.id,
+                'Worker execution requires a valid explicit Task.',
+                {},
+              ),
+            );
+          }
+          initialCheckpoint = { version: 1, state: cloneJson(state) };
+        }
+        const createInput = {
           ...ref,
           input: parsedInput,
           trigger: options?.trigger,
           subject: options?.subject,
-        });
+          ...(initialCheckpoint
+            ? { checkpoint: initialCheckpoint, runtime: { name: deferredTaskRuntimeName } }
+            : {}),
+        };
+        let snapshot;
+        if (options?.admission) {
+          if (!storage.admit) {
+            return yield* Effect.fail({
+              reason: 'task_admission_unavailable',
+              message: 'Task storage does not support atomic admission.',
+            });
+          }
+          const admitted = yield* storage.admit(createInput, options.admission);
+          if (!admitted.created) {
+            return {
+              ...toTaskRunRef(admitted.source),
+              admission:
+                admitted.source.error?.code === 'task_effect_outcome_ambiguous'
+                  ? 'reconciliation-required'
+                  : admitted.source.status === 'completed'
+                    ? 'already-completed'
+                    : 'reused',
+            };
+          }
+          snapshot = admitted.source;
+        } else {
+          snapshot = yield* storage.create(createInput);
+        }
         yield* taskRuns.publish(snapshot);
+        const startedRef: TaskRunRef = {
+          ...toTaskRunRef(snapshot),
+          ...(options?.admission ? { admission: 'created' } : {}),
+        };
+        if (deferExplicitExecution) return startedRef;
         const source = yield* storage.loadSource(ref);
         const context = createTaskContext(task, source);
         const operationContext = createTaskOperationContext(source);
@@ -664,7 +772,7 @@ export const createInProcessTaskRuntime = ({
           );
 
           void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
-          return toTaskRunRef(snapshot);
+          return startedRef;
         }
         const background = Effect.gen(function* () {
           yield* Effect.sync(() => restoreCommittedMutations(source));
@@ -713,7 +821,7 @@ export const createInProcessTaskRuntime = ({
         const run = () => Effect.runPromise(background).catch(error => onBackgroundError?.(error));
         if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
         else void run();
-        return toTaskRunRef(snapshot);
+        return startedRef;
       }),
     getSnapshot: ref =>
       Effect.gen(function* () {
@@ -845,6 +953,9 @@ export const createInProcessTaskRuntime = ({
       Stream.unwrap(
         Effect.gen(function* () {
           const source = yield* storage.loadSource(ref);
+          if (source.runtime?.name === deferredTaskRuntimeName && storage.observeSnapshots) {
+            return storage.observeSnapshots(ref);
+          }
           recoverExplicitExecution(source);
           recoverEventWait(source);
           const snapshot = withPendingInteraction(yield* storage.getSnapshot(ref));

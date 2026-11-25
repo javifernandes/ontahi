@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { JsonValue } from '../../value/json.js';
 import { hasOwn } from '../../value/object.js';
-import type { ResourceEvidenceDisclosure } from '../contracts.js';
+import type { ResourceEvidenceDisclosure, TaskTrigger } from '../contracts.js';
 import type { ExecutionIdentity } from '../identity.js';
 
 export type { ExecutionIdentity, Principal } from '../identity.js';
@@ -21,7 +21,17 @@ import {
   type SemanticExecutionOrigin,
 } from './semantic-execution.js';
 
+export type InvocationDelivery = {
+  transport: NonNullable<TaskTrigger['ingress']>['kind'];
+  provider: string;
+  source: string;
+  id: string;
+  event?: string;
+};
+
 export type InvocationContext = ExecutionIdentity & {
+  requestId?: string;
+  delivery?: InvocationDelivery;
   resources: ServerRuntimeResourceMap;
   resourceBindings: ResourceBindingRegistry;
   resourceBindingScope?: JsonValue;
@@ -30,6 +40,9 @@ export type InvocationContext = ExecutionIdentity & {
 
 export type InvocationContextInput = {
   principal?: ExecutionIdentity['principal'];
+  /** Trusted provenance established by the ingress adapter. */
+  requestId?: string;
+  delivery?: InvocationDelivery;
   cacheScope?: JsonValue;
   resources?: ServerRuntimeResourceMap;
   /** Host-owned configured Resource resolvers. Ordinary inputs cannot select these bindings. */
@@ -67,6 +80,8 @@ const resolveInvocationContext = (input: InvocationContextInput): InvocationCont
   return {
     principal: hasPrincipal(input) ? (input.principal ?? null) : (parent?.principal ?? null),
     ...(cacheScope === undefined ? {} : { cacheScope }),
+    requestId: hasOwn(input, 'requestId') ? input.requestId : parent?.requestId,
+    delivery: hasOwn(input, 'delivery') ? input.delivery : parent?.delivery,
     resources: input.resources ?? parent?.resources ?? createServerRuntimeResources(),
     resourceBindings,
     ...(resourceBindingScope === undefined ? {} : { resourceBindingScope }),

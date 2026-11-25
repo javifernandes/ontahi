@@ -8,7 +8,9 @@ describe('PostgreSQL Task schema', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ontahi_task_runs"');
     expect(sql).toContain('PRIMARY KEY (task_id, run_id)');
     expect(sql).toContain('checkpoint jsonb');
-    expect(createPostgresTaskSchemaSql()).toHaveLength(3);
+    expect(sql).toContain('ontahi_task_runs_admission_uidx');
+    expect(sql).toContain('ontahi_task_runs_runnable_idx');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ontahi_task_runs_observations"');
   });
 
   it('accepts a focused table override and rejects unsafe identifiers', () => {

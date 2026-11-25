@@ -1,8 +1,13 @@
+import { Effect } from 'effect';
+
 import { cloneJson } from '../../../value/json.js';
-import type { EventDeliveryClaim, EventOccurrence } from '../events/types.js';
+import type { EventDeliveryClaim, EventOccurrence, EventRuntime } from '../events/types.js';
 
 import type {
   TaskEventWaitRequest,
+  TaskExecutionCheckpoint,
+  TaskRunSource,
+  TaskStorage,
   TaskFailure,
   TaskPendingEventWait,
   TaskEventResume,
@@ -99,3 +104,107 @@ export const createTaskEventResume = (
       }
     : {}),
 });
+
+export const requireTaskEventDelivery = (runtime: EventRuntime | undefined) => {
+  if (
+    !runtime?.durableDelivery ||
+    !runtime.capabilities.retention ||
+    !runtime.capabilities.durableAcceptance ||
+    !runtime.capabilities.durableDelivery ||
+    !runtime.capabilities.acknowledgement
+  ) {
+    throw new TypeError('A durable Event Runtime with retention and acknowledgement is required.');
+  }
+  return runtime.durableDelivery;
+};
+
+export const createTaskEventCheckpoint = (
+  checkpoint: TaskExecutionCheckpoint,
+  wait: TaskPendingEventWait,
+  claim: EventDeliveryClaim,
+): TaskExecutionCheckpoint => ({
+  version: 1,
+  state: checkpoint.state,
+  eventOccurrence: cloneJson(claim.delivery.occurrence),
+  eventResume: createTaskEventResume(wait, claim),
+});
+
+/** Run one Event poll under the worker's exclusive Task claim. */
+export const pollTaskEventWait = async (
+  storage: TaskStorage,
+  source: TaskRunSource,
+  runtime: EventRuntime | undefined,
+) => {
+  const checkpoint = source.checkpoint;
+  const wait = checkpoint?.eventWait;
+  if (!wait) return undefined;
+  const delivery = requireTaskEventDelivery(runtime);
+  const subscriptionId = taskEventWaitSubscriptionId(source, wait.id);
+  if (wait.timeoutAt && Date.parse(wait.timeoutAt) <= Date.now()) {
+    const snapshot = await Effect.runPromise(
+      storage.cancelEvent(source, wait.id, 'failed', {
+        code: 'task_event_wait_timed_out',
+        message: `Timed out waiting for Event ${wait.eventId}@${wait.eventVersion}.`,
+      }),
+    );
+    await delivery.cancel(subscriptionId);
+    return snapshot;
+  }
+
+  await delivery.register({
+    id: subscriptionId,
+    eventId: wait.eventId,
+    eventVersion: wait.eventVersion,
+    ...(wait.correlation ? { correlation: wait.correlation } : {}),
+  });
+  const claim = await delivery.claim(subscriptionId, {
+    consumerId: `task-runtime:${source.taskId}:${source.runId}`,
+    leaseMs: 1_000,
+  });
+  if (!claim) return undefined;
+  if (!eventWaitMatchesOccurrence(wait, claim.delivery.occurrence)) {
+    await delivery.release(claim);
+    return undefined;
+  }
+
+  const next = createTaskEventCheckpoint(checkpoint, wait, claim);
+  const snapshot = await Effect.runPromise(storage.claimEvent(source, wait.id, next));
+  if (!snapshot) {
+    const latest = await Effect.runPromise(storage.loadSource(source));
+    if (latest.status === 'waiting' && latest.checkpoint?.eventWait?.id === wait.id) {
+      await delivery.release(claim);
+    } else {
+      await delivery.cancel(subscriptionId);
+    }
+  }
+  return snapshot;
+};
+
+/** Settle the delivery recorded by the Task before running its continuation. */
+export const settleTaskEventCheckpoint = async (
+  checkpoint: TaskExecutionCheckpoint | undefined,
+  runtime: EventRuntime | undefined,
+) => {
+  const resume = checkpoint?.eventResume;
+  const occurrence = checkpoint?.eventOccurrence;
+  if (!resume || !occurrence) return;
+  const delivery = requireTaskEventDelivery(runtime);
+  await delivery
+    .acknowledge({
+      claimId: resume.claimId,
+      consumerId: resume.consumerId,
+      leaseExpiresAt: resume.leaseExpiresAt,
+      delivery: {
+        kind: 'event-delivery',
+        deliveryId: resume.deliveryId,
+        subscriptionId: resume.subscriptionId,
+        attempt: resume.attempt,
+        occurrence,
+      },
+    })
+    .catch(() => {
+      // A previous worker may already have acknowledged the claim, or its lease may have expired.
+      // The persisted checkpoint is authoritative. Cancel routing before continuing.
+    });
+  await delivery.cancel(resume.subscriptionId);
+};

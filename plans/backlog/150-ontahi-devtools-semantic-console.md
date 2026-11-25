@@ -9,7 +9,7 @@ Related plans:
 1. [100f. Operation Invocation Capability](../done/100f-operation-invocation-capability.md)
 2. [118. Ontahí Selection Language Editor](../done/118-ontahi-selection-language-editor.md)
 3. [128. Ontahí Data Graph Execution Bridge](../backlog/128-ontahi-data-graph-execution-bridge.md)
-4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+4. [132. Durable Invocation Identity And Idempotency](../done/132-durable-invocation-identity-and-idempotency.md)
 5. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 6. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 7. [147. Application-Bound Headless Graph Reads](../done/147-application-bound-headless-graph-reads.md)

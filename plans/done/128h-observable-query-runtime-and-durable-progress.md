@@ -10,7 +10,7 @@ Related plans:
 
 1. [146h. WebSocket Runtime Transport And Durable Progress](./146h-websocket-runtime-transport-and-durable-progress.md)
 2. [146j. First-Class Events And Configurable Event Runtime](./146j-first-class-events-runtime-protocol-gate.md)
-3. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+3. [132. Durable Invocation Identity And Idempotency](132-durable-invocation-identity-and-idempotency.md)
 
 ## Summary
 

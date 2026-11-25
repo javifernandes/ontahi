@@ -536,7 +536,7 @@ Plan 128 remains current only for the graph-specific gaps that were deliberately
 3. shape authority-derived atomic scopes before generic bulk update, upsert, or delete variants;
 4. evaluate hybrid graph routing when a concrete segmented topology exists.
 
-[Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) owns durable invocation
+[Plan 132](../done/132-durable-invocation-identity-and-idempotency.md) owns durable invocation
 identity and idempotency. [Plan 145](../done/145-ordered-relations-and-sequence-commands.md) owns
 ordered Relation mutations. Neither is hidden completion work for this Plan.
 

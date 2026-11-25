@@ -164,6 +164,7 @@ export {
   withInvocationContext,
   type InvocationContext,
   type InvocationContextInput,
+  type InvocationDelivery,
   type Principal,
 } from './invocation-context.js';
 export {
@@ -397,6 +398,8 @@ export {
   verifyTaskStorageConformance,
   createInProcessTaskExecutor,
   createInProcessTaskRuntime,
+  defineIdempotentTaskEffect,
+  effect,
   defineTaskExecution,
   defineTaskExecutionStep,
   createConfiguredTaskFacade,
@@ -431,6 +434,7 @@ export {
   type TaskDeclarations,
   type TaskDefinition,
   type TaskDefinitionDeclaration,
+  type TaskEffectLookup,
   type TaskExecutionDefinition,
   type TaskExecutionMetadata,
   type TaskExecutionInteractionRequest,
@@ -456,6 +460,7 @@ export {
   type TaskPendingInteraction,
   type TaskRuntimeRef,
   type TaskSnapshot,
+  type TaskStartAdmission,
   type TaskStartOptions,
   type TaskStorage,
   type TaskStorageConformanceHarness,

@@ -13,7 +13,7 @@ Depends on:
 
 Related future work:
 
-1. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+1. [132. Durable Invocation Identity And Idempotency](132-durable-invocation-identity-and-idempotency.md)
 
 ## Summary
 

@@ -12,7 +12,7 @@ Related plans:
 1. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 2. [135. Applied Mutation Outcomes And Reactions](../done/135-applied-mutation-outcomes-and-reactions.md)
 3. [135b. Declarative Reaction Authoring And Registration](../done/135b-declarative-reaction-authoring-and-registration.md)
-4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
+4. [132. Durable Invocation Identity And Idempotency](132-durable-invocation-identity-and-idempotency.md)
 5. [153c. Interactive And Resumable Operation Execution](./153c-operation-interactions-and-resumption.md)
 6. [154. Semantic Program Kernel And Distributed Evaluation](../research/154-semantic-program-kernel-and-distributed-evaluation.md)
 7. [154d. Semantic Mutation Journal And Query Invalidation](../done/154d-semantic-mutation-journal-and-query-invalidation.md)
