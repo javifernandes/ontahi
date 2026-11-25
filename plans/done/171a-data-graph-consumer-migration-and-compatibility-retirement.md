@@ -1,6 +1,6 @@
 # 171a. Data Graph Consumer Migration And Compatibility Retirement
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/171a-data-graph-consumer-migration-and-compatibility-retirement`
 
@@ -47,16 +47,18 @@ compatibility namespace in an explicit breaking release.
   Classroom passed 8 tests, with the 5 PostgreSQL integration tests skipped in that run.
   Todo passed 182 tests in the full run, with one skipped. Its MySQL integration passed on an
   isolated rerun after the full run failed in the MySQL child process.
-- The host upgrades are tracked by [Atlas #122](https://github.com/javifernandes/atlas/pull/122),
+- The host upgrades merged in [Atlas #122](https://github.com/javifernandes/atlas/pull/122),
   [Bartlett #13](https://github.com/javifernandes/ppb-bartlett-test-reconstruccion-memoria/pull/13),
-  and [BookOps #533](https://github.com/javifernandes/bookops/pull/533).
+  and [BookOps #533](https://github.com/javifernandes/bookops/pull/533). Atlas and Bartlett passed
+  their verification workflows. BookOps passed quality checks, tests and coverage, Codecov patch,
+  and SonarCloud.
 - Ontahí package sources, fixtures, current documentation, and clean-consumer proofs use the
   package root; historical completed plans retain their original references.
 
 ## Acceptance Checklist
 
 - [x] Atlas, Bartlet, Todo, Classroom, and BookOps use the replacement public imports.
-- [ ] The named applications pass their relevant builds and tests on the same Ontahí release.
+- [x] The named applications pass their relevant builds and tests on the same Ontahí release.
 - [x] A repository and consumer audit finds no first-party `data-graph` subpath imports.
 - [x] Residual Core implementation has an explicit internal owner and is not a public subpath.
 - [x] The `data-graph` compatibility package export is removed.

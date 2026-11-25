@@ -8,7 +8,7 @@ Related plans:
 
 1. [169. Replicated Versioned Models Kernel And Materializer SPI](../current/169-replicated-versioned-models-kernel-and-materializer-spi.md)
 2. [160. Semantic Modules, Composition And System Boundaries](../research/160-semantic-modules-composition-and-system-boundaries.md)
-3. [171a. Data Graph Consumer Migration And Compatibility Retirement](../backlog/171a-data-graph-consumer-migration-and-compatibility-retirement.md)
+3. [171a. Data Graph Consumer Migration And Compatibility Retirement](./171a-data-graph-consumer-migration-and-compatibility-retirement.md)
 
 ## Summary
 
