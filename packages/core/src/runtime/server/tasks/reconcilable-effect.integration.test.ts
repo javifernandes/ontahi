@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 import { createInProcessTaskRuntime } from './in-process-adapter.js';
 import { createInMemoryTaskStorage } from './memory-store.js';
@@ -49,4 +49,21 @@ it('derives stable, distinct references from run and occurrence without a declar
   expect(declare().prepare(run, 'contact', 'Ada').externalReference).not.toBe(
     prepared.externalReference,
   );
+});
+
+it('rejects a damaged reconciliation checkpoint before consulting the provider', async () => {
+  const lookup = vi.fn(() => Effect.succeed({ kind: 'confirmed-absent' } as const));
+  const execute = vi.fn((input: string) => Effect.succeed(input));
+  const atom = effect.reconcilable({ id: 'remote', lookup, execute });
+  const prepared = atom.prepare({ taskId: 'Customer.create', runId: 'run-1' }, 'customer', 'Ada');
+  for (const corrupt of [
+    { ...prepared, effectId: 'wrong' },
+    { ...prepared, input: 'Tampered' },
+  ]) {
+    await expect(Effect.runPromise(Effect.flip(atom.run(corrupt)))).resolves.toMatchObject({
+      reason: 'task_effect_checkpoint_invalid',
+    });
+  }
+  expect(lookup).not.toHaveBeenCalled();
+  expect(execute).not.toHaveBeenCalled();
 });

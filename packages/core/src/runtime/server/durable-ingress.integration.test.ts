@@ -15,6 +15,7 @@ import {
   defineIdempotentTaskEffect,
   defineTaskExecution,
   defineTaskExecutionStep,
+  effect,
   entity,
   inProcessTasks,
   ontahi,
@@ -268,4 +269,133 @@ describe('durable Operation admission from HTTP ingress', () => {
       }
     },
   );
+});
+
+describe('durable Operation admission failures', () => {
+  afterEach(resetServerRuntimeForTests);
+
+  it.each([
+    { policy: 'reuse-running', key: undefined, expected: 'task_admission_key_missing' },
+    { policy: 'reuse-running', key: () => new Array(1), expected: 'task_admission_key_invalid' },
+    { policy: 'replace-running', key: () => 'customer', expected: 'task_admission_unavailable' },
+    {
+      policy: 'queue-after-current',
+      key: () => 'customer',
+      expected: 'task_admission_unavailable',
+    },
+  ] as const)('rejects $expected from $policy before creating a run', async row => {
+    const storage = createInMemoryTaskStorage();
+    const Customer = entity({
+      name: 'AdmissionCustomer',
+      fields: { id: field.id() },
+      operations: ({ operation }) => ({
+        sync: operation({
+          durable: { runtime: 'in-process', idempotency: { policy: row.policy, key: row.key } },
+          run: () => Effect.succeed(undefined),
+        }),
+      }),
+    });
+    const app = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      tasks: inProcessTasks({ storage }),
+      entities: [Customer],
+    });
+    const response = await createOperationInvocationDispatcher(app)({
+      kind: 'invoke',
+      operationId: 'AdmissionCustomer.sync',
+      input: {},
+    });
+    expect(response).toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: false, kind: 'failed', failure: { reason: row.expected } },
+    });
+    expect(await Effect.runPromise(storage.listRecent())).toEqual([]);
+  });
+
+  it('reflects named and unnamed reconciliation contracts, and allows distinct runs without an admission key', async () => {
+    const storage = createInMemoryTaskStorage();
+    const lookup = () => Effect.succeed({ kind: 'confirmed-absent' } as const);
+    const execute = (input: string) => Effect.succeed(input);
+    const named = effect.reconcilable({ id: 'named', lookup, execute });
+    const unnamed = effect.reconcilable({ lookup, execute });
+    const Customer = entity({
+      name: 'ConcurrentCustomer',
+      fields: { id: field.id() },
+      operations: ({ operation }) => ({
+        sync: operation({
+          durable: {
+            runtime: 'in-process',
+            idempotency: { policy: 'allow-concurrent' },
+            externalEffects: [named.metadata, unnamed.metadata],
+          },
+          run: () => Effect.succeed(undefined),
+        }),
+      }),
+    });
+    const app = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      tasks: inProcessTasks({ storage }),
+      entities: [Customer],
+    });
+    expect(app.graph.describe().durableOperations).toEqual([
+      expect.objectContaining({
+        idempotencyEnforced: false,
+        externalEffects: [
+          { id: 'named', replay: 'external-reference-reconciliation' },
+          { replay: 'external-reference-reconciliation' },
+        ],
+        externalEffectCoverage: 'unverified',
+      }),
+    ]);
+    const dispatch = createOperationInvocationDispatcher(app);
+    const request = { kind: 'invoke', operationId: 'ConcurrentCustomer.sync', input: {} } as const;
+    const first = await dispatch(request);
+    const second = await dispatch(request);
+    expect(first).toMatchObject({ result: { ok: true } });
+    expect(second).toMatchObject({ result: { ok: true } });
+    expect(await Effect.runPromise(storage.listRecent())).toHaveLength(2);
+  });
+
+  it('returns the accepted run when admission telemetry fails', async () => {
+    const storage = createInMemoryTaskStorage();
+    configureServerRuntime({
+      telemetry: {
+        withSpan: async (name, _options, run) => {
+          if (name === 'ontahi.task.admission') throw new Error('Telemetry backend unavailable');
+          return run({});
+        },
+        markSuccess: () => {},
+        markFailure: () => {},
+        getRuntimeAttributes: () => ({}),
+      },
+    });
+    const Customer = entity({
+      name: 'TracedCustomer',
+      fields: { id: field.id() },
+      operations: ({ operation }) => ({
+        sync: operation({
+          durable: {
+            runtime: 'in-process',
+            idempotency: { policy: 'skip-if-completed', key: () => 'customer' },
+          },
+          run: () => Effect.succeed(undefined),
+        }),
+      }),
+    });
+    const app = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      tasks: inProcessTasks({ storage }),
+      entities: [Customer],
+    });
+    const response = await createOperationInvocationDispatcher(app)({
+      kind: 'invoke',
+      operationId: 'TracedCustomer.sync',
+      input: {},
+    });
+    expect(response).toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, value: { taskId: 'TracedCustomer.sync', admission: 'created' } },
+    });
+    expect(await Effect.runPromise(storage.listRecent())).toHaveLength(1);
+  });
 });

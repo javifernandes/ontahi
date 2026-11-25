@@ -14,6 +14,7 @@ import {
   createGraphHttpIngressRoute,
   createGraphHttpIngressRouter,
 } from './ingress.js';
+import { getCurrentInvocationContext } from './invocation-context.js';
 
 const ExportReady = eventDeclaration.define({
   id: 'TodoListExportReady',
@@ -26,6 +27,38 @@ const ExportReady = eventDeclaration.define({
 });
 
 describe('createGraphHttpIngressRoute', () => {
+  it.each(['accepted', 'ignored'] as const)(
+    'scopes delivery provenance for an %s outcome with no Event name',
+    async kind => {
+      const dispatch = vi.fn(async () => getCurrentInvocationContext());
+      const route = createGraphHttpIngressRoute({
+        provider: {
+          receive: async () => ({
+            kind,
+            provider: 'fixture',
+            event: null,
+            deliveryId: 'delivery-without-event',
+          }),
+        },
+        routes: [{ operationId: 'Todo.sync', method: 'POST', route: '/fixture' }],
+        dispatch,
+      });
+      const response = await route(new Request('http://localhost/fixture', { method: 'POST' }));
+      expect(response.ok).toBe(true);
+      const context = await dispatch.mock.results[0]?.value;
+      expect(context?.delivery).toEqual(
+        kind === 'accepted'
+          ? {
+              transport: 'http',
+              provider: 'fixture',
+              source: '["/fixture",null]',
+              id: 'delivery-without-event',
+            }
+          : undefined,
+      );
+    },
+  );
+
   it('returns accepted provider outcomes as JSON responses', async () => {
     const route = createGraphHttpIngressRoute({
       provider: {

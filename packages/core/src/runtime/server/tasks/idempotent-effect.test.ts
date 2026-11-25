@@ -54,3 +54,13 @@ it('retains definitive provider rejection as an ordinary Task failure', async ()
   );
   await expect(Effect.runPromise(Effect.flip(effect.run(prepared)))).resolves.toEqual(failure);
 });
+
+it('rejects a retry window outside the provider contract', () => {
+  expect(() =>
+    defineIdempotentTaskEffect({
+      id: 'create',
+      retryWindowMs: 0,
+      execute: () => Effect.succeed(undefined),
+    }),
+  ).toThrow(RangeError);
+});
