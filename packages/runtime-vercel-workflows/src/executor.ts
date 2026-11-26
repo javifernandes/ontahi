@@ -35,6 +35,7 @@ import type {
 } from './contracts.js';
 import { waitForVercelWorkflowEvent } from './event-waits.js';
 import { vercelInteractionHookToken, vercelInteractionId } from './interactions.js';
+import { isActiveVercelTask, updateVercelTask } from './lifecycle.js';
 
 export type {
   VercelTaskStepRunner,
@@ -149,8 +150,14 @@ export const createVercelWorkflowTaskExecutor = ({
 }: VercelWorkflowTaskExecutorOptions) => {
   const loadTaskRunSource = (ref: TaskRunIdentity) => runTaskEffect(taskRunStore.loadSource(ref));
 
-  const updateTaskRun = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
-    runTaskEffect(taskRunStore.update(ref, patch));
+  const updateTaskRun = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) => {
+    if (!taskRunStore.updateIfStatus) return runTaskEffect(taskRunStore.update(ref, patch));
+    const snapshot = await runTaskEffect(
+      updateVercelTask(taskRunStore, ref, isActiveVercelTask, () => patch),
+    );
+    if (snapshot) return snapshot;
+    throw createTaskWorkflowFailure('task_execution_stopped', 'Task run is no longer active.');
+  };
 
   const withExecutionContext = async <TValue>(
     ref: TaskRunIdentity,
@@ -348,6 +355,9 @@ export const createVercelWorkflowTaskExecutor = ({
     response?: TaskInteractionResponse,
     event?: EventOccurrence,
   ): Promise<unknown> => {
+    if (taskRunStore.updateIfStatus && !isActiveVercelTask(await loadTaskRunSource(ref))) {
+      throw createTaskWorkflowFailure('task_execution_stopped', 'Task run is no longer active.');
+    }
     const step = task.execution?.steps[state.step];
     if (!step) throw missingTaskStepFailure(task.id, state.step);
     const stimulusWasConsumed = response !== undefined || event !== undefined;
@@ -384,7 +394,18 @@ export const createVercelWorkflowTaskExecutor = ({
         ref,
         state: nextState,
         request: transition.event,
-        store: taskRunStore,
+        store: {
+          loadSource: waitRef => taskRunStore.loadSource(waitRef),
+          claimEvent: (waitRef, waitId, checkpoint) =>
+            taskRunStore.claimEvent(waitRef, waitId, checkpoint),
+          cancelEvent: (waitRef, waitId, status, error) =>
+            taskRunStore.cancelEvent(waitRef, waitId, status, error),
+          update: (waitRef, patch) =>
+            Effect.tryPromise({
+              try: () => updateTaskRun(waitRef, patch),
+              catch: toTaskFailure,
+            }),
+        },
         events,
         sleep: workflowSleep,
       });
@@ -449,6 +470,13 @@ export const createVercelWorkflowTaskExecutor = ({
       runId: input.runId,
     };
     const existing = await loadTaskRunSource(ref);
+    if (existing.status === 'failed') {
+      throw createTaskWorkflowFailure(
+        existing.error?.code ?? 'task_failed',
+        existing.error?.message ?? 'Task failed.',
+      );
+    }
+    if (!isActiveVercelTask(existing)) return existing.result;
     if (existing.status !== 'waiting') {
       const startedAt = now();
       await updateTaskRun(ref, {
@@ -460,7 +488,7 @@ export const createVercelWorkflowTaskExecutor = ({
 
     try {
       if (task.execution) {
-        return runExplicitTask(task, ref, runStep);
+        return await runExplicitTask(task, ref, runStep);
       }
       const source = await loadTaskRunSource(ref);
       const context = createTaskContext(source, task, runStep);

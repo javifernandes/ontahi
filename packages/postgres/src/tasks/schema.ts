@@ -117,7 +117,7 @@ export const createPostgresTaskSchemaSql = (tables?: PostgresTaskTableNames): re
     $$`,
     `CREATE OR REPLACE TRIGGER ontahi_record_task_snapshot
       AFTER INSERT OR UPDATE ON ${runs}
-      FOR EACH ROW WHEN (NEW.runtime ->> 'name' = '${deferredTaskRuntimeName}')
+      FOR EACH ROW WHEN (NEW.runtime ->> 'name' IN ('${deferredTaskRuntimeName}', 'vercel-workflow'))
       EXECUTE FUNCTION ${recordSnapshot}()`,
     `CREATE INDEX IF NOT EXISTS "${derivedName(resolvePostgresTaskTableName(tables), 'created_idx')}"
       ON ${runs} (created_at DESC)`,

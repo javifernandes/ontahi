@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  projectTaskSnapshot,
   type TaskFailure,
   type TaskRunSource,
   type TaskStorage,
@@ -217,7 +218,7 @@ const toRuntimeTerminalPatch = (
 
 export const reconcileTaskRunSource = (
   source: TaskRunSource,
-  store: Pick<TaskStorage, 'update'>,
+  store: Pick<TaskStorage, 'update' | 'updateIfStatus'> & Partial<Pick<TaskStorage, 'loadSource'>>,
 ): Effect.Effect<TaskRunSource, TaskFailure> => {
   if (!shouldAttemptTaskRunReconciliation(source)) {
     return Effect.succeed(source);
@@ -239,26 +240,36 @@ export const reconcileTaskRunSource = (
       return source;
     }
 
+    if (
+      source.status === 'waiting' &&
+      (source.checkpoint?.interaction || source.checkpoint?.eventWait) &&
+      (runtime.status === 'queued' || runtime.status === 'running')
+    ) {
+      return source;
+    }
+
+    const update = (patch: Partial<TaskRunSource>) =>
+      store.updateIfStatus
+        ? store.updateIfStatus(source, source.status, patch)
+        : store.update(source, patch);
+
     if (runtime.status === source.status) {
       if (runtime.status !== 'failed' || !runtime.error || !canEnrichFailedRuntimeError(source)) {
         return source;
       }
 
-      const snapshot = yield* store.update(source, {
+      const snapshot = yield* update({
         error: runtime.error,
         updatedAt: source.updatedAt,
       });
 
-      return {
-        ...source,
-        ...snapshot,
-      };
+      if (!snapshot) return store.loadSource ? yield* store.loadSource(source) : source;
+      return { ...source, ...snapshot };
     }
 
     const completedAt =
       runtime.completedAt ?? (isTerminalStatus(runtime.status) ? now() : source.completedAt);
-    const snapshot = yield* store.update(
-      source,
+    const snapshot = yield* update(
       runtime.status === 'failed'
         ? toRuntimeTerminalPatch(runtime, completedAt ?? now())
         : {
@@ -269,6 +280,7 @@ export const reconcileTaskRunSource = (
           },
     );
 
+    if (!snapshot) return store.loadSource ? yield* store.loadSource(source) : source;
     return {
       ...source,
       ...snapshot,
@@ -279,16 +291,6 @@ export const reconcileTaskRunSource = (
 
 export const reconcileTaskSnapshot = (
   source: TaskRunSource,
-  store: Pick<TaskStorage, 'update'>,
+  store: Pick<TaskStorage, 'update' | 'updateIfStatus'> & Partial<Pick<TaskStorage, 'loadSource'>>,
 ): Effect.Effect<TaskSnapshot, TaskFailure> =>
-  Effect.map(reconcileTaskRunSource(source, store), reconciled => ({
-    taskId: reconciled.taskId,
-    runId: reconciled.runId,
-    status: reconciled.status,
-    subject: reconciled.subject,
-    startedAt: reconciled.startedAt,
-    updatedAt: reconciled.updatedAt,
-    completedAt: reconciled.completedAt,
-    progress: reconciled.progress,
-    error: reconciled.error,
-  }));
+  Effect.map(reconcileTaskRunSource(source, store), projectTaskSnapshot);

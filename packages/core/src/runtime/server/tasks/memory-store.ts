@@ -77,6 +77,37 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
     return source;
   };
 
+  const update = (
+    ref: TaskRunIdentity,
+    patch: Partial<TaskRunSource>,
+    status?: TaskRunSource['status'],
+  ) =>
+    Effect.gen(function* () {
+      const current = runs.get(keyOf(ref));
+
+      if (!current) {
+        return yield* Effect.fail(missingTaskRunFailure(ref));
+      }
+
+      if (status && current.status !== status) return undefined;
+
+      const next = {
+        ...current,
+        ...patch,
+        taskId: current.taskId,
+        runId: current.runId,
+        input: patch.input === undefined ? current.input : patch.input,
+        trigger: patch.trigger ?? current.trigger,
+        subject: patch.subject === undefined ? current.subject : patch.subject,
+        runtime: patch.runtime === undefined ? current.runtime : patch.runtime,
+        progress: patch.progress ? { ...current.progress, ...patch.progress } : current.progress,
+        updatedAt: patch.updatedAt ?? now(),
+      } satisfies TaskRunSource;
+
+      runs.set(keyOf(ref), next);
+      return projectTaskSnapshot(next);
+    });
+
   return {
     create: input =>
       Effect.suspend(() => {
@@ -95,7 +126,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
           (source.status === 'queued' ||
             source.status === 'running' ||
             source.status === 'waiting' ||
-            (source.status === 'failed' &&
+            ((source.status === 'failed' || source.status === 'cancelled') &&
               source.error?.code === 'task_effect_outcome_ambiguous') ||
             (admission.policy === 'skip-if-completed' && source.status === 'completed'))
         ) {
@@ -107,30 +138,8 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         admissions.set(key, created);
         return Effect.succeed({ source: created, created: true });
       }),
-    update: (ref, patch) =>
-      Effect.gen(function* () {
-        const current = runs.get(keyOf(ref));
-
-        if (!current) {
-          return yield* Effect.fail(missingTaskRunFailure(ref));
-        }
-
-        const next = {
-          ...current,
-          ...patch,
-          taskId: current.taskId,
-          runId: current.runId,
-          input: patch.input === undefined ? current.input : patch.input,
-          trigger: patch.trigger ?? current.trigger,
-          subject: patch.subject === undefined ? current.subject : patch.subject,
-          runtime: patch.runtime === undefined ? current.runtime : patch.runtime,
-          progress: patch.progress ? { ...current.progress, ...patch.progress } : current.progress,
-          updatedAt: patch.updatedAt ?? now(),
-        } satisfies TaskRunSource;
-
-        runs.set(keyOf(ref), next);
-        return projectTaskSnapshot(next);
-      }),
+    update: (ref, patch) => update(ref, patch).pipe(Effect.map(snapshot => snapshot!)),
+    updateIfStatus: (ref, status, patch) => update(ref, patch, status),
     claimInteraction: (ref, interactionId, checkpoint) =>
       Effect.gen(function* () {
         const key = keyOf(ref);
@@ -139,7 +148,8 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         if (!current) {
           return yield* Effect.fail(missingTaskRunFailure(ref));
         }
-        if (current.checkpoint?.interaction?.id !== interactionId) return undefined;
+        if (current.status !== 'waiting' || current.checkpoint?.interaction?.id !== interactionId)
+          return undefined;
 
         const next = {
           ...current,
