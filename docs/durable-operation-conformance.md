@@ -31,9 +31,7 @@ also exercises admission and approval through independent runtime instances shar
 Lease renewal, timed scheduling, replacement, and queueing are follow-up guarantees.
 
 The Vercel tests execute the actual Ontahí runtime and executor with a controlled Workflow SDK
-and in-memory fixture stores. They verify adapter behavior at the SDK boundary. Hosted
-durability and recovery after a crash between Task admission and Workflow submission remain
-unverified. An ambiguous submission retains the admission key for reconciliation.
+and in-memory fixture stores. They verify adapter behavior at the SDK boundary. Recovery after a crash between Task admission and Workflow submission remains unverified. An ambiguous submission retains the admission key for reconciliation.
 
 Vercel uses `observeSnapshots` for ordered observation and `updateIfStatus` for fenced
 cancellation. PostgreSQL Task Storage supplies both when the updated Task schema is applied.
@@ -62,5 +60,10 @@ the customer and keeps the response open. The restarted Local World retries the 
 Workflow step. The Ontahí executor reads the prepared effect from its checkpoint, recovers the
 customer by external reference, and completes the original run with one provider write.
 
-Both proofs use actual Workflow DevKit processes and the Local World backend. The hosted Vercel
-backend remains a distinct configuration to verify.
+Both adapter proofs use actual Workflow DevKit processes and the Local World backend.
+
+A synthetic probe on the managed Vercel backend persisted a Workflow step result and killed the
+Node process with `SIGKILL` in the following step. Vercel recorded the process exit, then the
+original Workflow run completed on attempt 2 with the persisted checkpoint. The hosted probe
+exercises the Workflow engine and its managed backend. The adapter and HTTP provider are exercised
+by the Local World tests above.
