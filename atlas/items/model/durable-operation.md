@@ -60,10 +60,12 @@ publish.
 
 Some workflow engines require a lightweight generated task artifact. That artifact must be a complete mechanical projection of the durable operation contract and must never become a separately authored model.
 
-The current runtime reflects declared durable idempotency policies but does not yet enforce them
-when starting a task. A start without an explicit `runId` receives a fresh identity, and HTTP
-ingress delivery identity does not yet reach the operation invocation. Therefore
-`allow-concurrent`, `reuse-running`, `skip-if-completed`, `replace-running`, and
-`queue-after-current` are descriptive metadata today, not runtime guarantees. Plan 132 owns the
-identity, deduplication, retry, and external-effect semantics required to make those declarations
-enforceable.
+Durable admission distinguishes trusted delivery identity, the admission key, and the run ID.
+The native executor enforces `reuse-running` and `skip-if-completed` with atomic storage.
+`replace-running` and `queue-after-current` remain separate coordination work. A runtime reports
+its configured enforcement capabilities through reflection.
+
+The [Durable Operation conformance contract](../../../docs/durable-operation-conformance.md)
+defines runnable cases for admission, waits, checkpoint recovery, fencing, cancellation, effect
+reconciliation, and observation. Evidence applies to the tested combination of executor, Task
+Storage, and Event Runtime.

@@ -9,6 +9,8 @@ import {
 import {
   createInProcessTaskRuntime,
   createTaskEventResume,
+  durableOperationConformanceCases,
+  verifyDurableOperationConformance,
   taskEventWaitSubscriptionId,
   taskReconciliationCases,
   verifyTaskReconciliationConformance,
@@ -74,6 +76,41 @@ describe('PostgreSQL Task Storage', () => {
       createStorage: storage,
       identityPrefix: 'postgres-conformance',
     });
+  });
+
+  it('fences concurrent transitions within the same transaction', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const store = createPostgresTaskStorage({ pool: client, tables: taskTables });
+      const ref = { taskId: 'Customer.transaction-fence', runId: 'run' };
+      const runtime = { name: 'vercel-workflow' };
+      await Effect.runPromise(store.create({ ...ref, runtime }));
+      await Effect.runPromise(
+        store.updateIfStatus!(
+          ref,
+          'queued',
+          { runtime: { ...runtime, runId: 'provider' } },
+          { runtime },
+        ),
+      );
+      expect((await Effect.runPromise(store.loadSource(ref))).runtime?.runId).toBe('provider');
+      expect(
+        await Effect.runPromise(
+          store.updateIfStatus!(ref, 'queued', { status: 'cancelled' }, { runtime }),
+        ),
+      ).toBeUndefined();
+      const transitions = await Promise.all([
+        Effect.runPromise(store.updateIfStatus!(ref, 'queued', { status: 'cancelled' })),
+        Effect.runPromise(store.updateIfStatus!(ref, 'queued', { status: 'completed' })),
+      ]);
+      const committed = transitions.filter(snapshot => snapshot !== undefined);
+      expect(committed).toHaveLength(1);
+      expect((await Effect.runPromise(store.getSnapshot(ref))).status).toBe(committed[0]?.status);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
   });
 
   it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', row =>
@@ -287,143 +324,94 @@ describe('PostgreSQL Task Storage', () => {
     ).resolves.toMatchObject({ reason: 'task_run_not_found' });
   });
 
-  it.each(['expired', 'cancelled'] as const)(
-    'fences a held worker after its Task is %s',
-    async outcome => {
-      const entered = await Effect.runPromise(Deferred.make<void>());
-      const unblock = await Effect.runPromise(Deferred.make<void>());
-      let executions = 0;
-      const task = defineTask<undefined, string>({
-        id: 'Customer.workerLease',
-        execution: defineTaskExecution<undefined, { step: string }, string>({
-          initial: () => ({ step: 'run' }),
-          steps: {
-            run: {
-              run: () =>
-                Effect.gen(function* () {
-                  if (++executions === 1) {
-                    yield* Deferred.succeed(entered, undefined);
-                    yield* Deferred.await(unblock);
-                    return { kind: 'complete', result: 'stale' };
-                  }
-                  return { kind: 'complete', result: 'recovered' };
-                }),
-            },
-          },
-        }),
-        run: () => Effect.dieMessage('Explicit execution required'),
-      });
-      const api = createInProcessTaskRuntime({ storage: storage(), deferExplicitExecution: true });
-      const admission = { key: 'customer-lease', policy: 'skip-if-completed' } as const;
-      const run = await Effect.runPromise(api.start(task, undefined, { admission }));
-      const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
-      const previousWorker = worker.runOnce();
-      try {
-        await Effect.runPromise(Deferred.await(entered).pipe(Effect.timeout('5 seconds')));
-        expect(await worker.runOnce()).toBeUndefined();
-        if (outcome === 'expired') {
-          // Advance the persisted deadline without stopping the original worker or its session.
-          await pool.query(
-            `UPDATE ${taskTables.runs} SET worker_lease_until = clock_timestamp() - interval '1 second'
-             WHERE task_id = $1 AND run_id = $2`,
-            [run.taskId, run.runId],
-          );
-          expect(await worker.runOnce()).toEqual({ taskId: run.taskId, runId: run.runId });
-        } else {
-          expect(await worker.cancel(run)).toBe(true);
-          expect(await worker.cancel(run)).toBe(false);
-          const repeat = await Effect.runPromise(api.start(task, undefined, { admission }));
-          expect(repeat).toMatchObject({ runId: run.runId, admission: 'reconciliation-required' });
-          expect(await worker.runOnce()).toBeUndefined();
-        }
-      } finally {
-        await Effect.runPromise(Deferred.succeed(unblock, undefined));
-        expect(await previousWorker).toBeUndefined();
-      }
-      await expect(Effect.runPromise(api.getSnapshot(run))).resolves.toMatchObject(
-        outcome === 'expired'
-          ? { status: 'completed', result: 'recovered' }
-          : { status: 'cancelled', error: { code: 'task_effect_outcome_ambiguous' } },
-      );
-      expect(executions).toBe(outcome === 'expired' ? 2 : 1);
-    },
-  );
-
-  it('observes each committed lifecycle state across independent PostgreSQL adapters', async () => {
-    const task = defineTask({
-      id: 'Observation.task',
-      execution: defineTaskExecution<undefined, { step: string }, string>({
-        initial: () => ({ step: 'approve' }),
-        steps: {
-          approve: {
-            run: ({ state, response }) =>
-              Effect.succeed(
-                response && 'decision' in response
-                  ? { kind: 'complete', result: response.decision }
-                  : {
-                      kind: 'interaction',
-                      state,
-                      interaction: {
-                        id: 'observe-approval',
-                        prompt: 'Approve?',
-                        proposal: { id: 'proposal', summary: 'Approve', requests: [{}] },
-                      },
-                    },
-              ),
-          },
-        },
-      }),
-      run: () => Effect.dieMessage('Explicit execution required'),
-    });
-    const observer = createInProcessTaskRuntime({
-      storage: createPostgresTaskStorage({ pool, tables: taskTables, observationPollMs: 500 }),
-      deferExplicitExecution: true,
-    });
-    const actor = { kind: 'system' } as const;
-    const run = await Effect.runPromise(
-      observer.start(task, undefined, {
-        trigger: { cause: 'system', actor },
-      }),
-    );
-    const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
-    const listening = await Effect.runPromise(Deferred.make<void>());
+  it('journals Vercel snapshots and rejects a stale completion after cancellation', async () => {
+    const writer = storage();
+    const reader = storage();
+    const ref = { taskId: 'Vercel.export', runId: 'workflow-run' };
+    await Effect.runPromise(writer.create({ ...ref, runtime: { name: 'vercel-workflow' } }));
+    const subscribed = await Effect.runPromise(Deferred.make<void>());
     const controller = new AbortController();
-    const result = Effect.runPromise(
-      observer.observe!(run).pipe(
-        Stream.tap(() => Deferred.succeed(listening, undefined)),
-        Stream.takeUntil(snapshot => snapshot.status === 'completed'),
+    const observed = Effect.runPromise(
+      reader.observeSnapshots(ref).pipe(
+        Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+        Stream.takeUntil(snapshot => snapshot.status === 'cancelled'),
         Stream.runCollect,
         Effect.timeout('5 seconds'),
       ),
       { signal: controller.signal },
     );
     try {
-      await Effect.runPromise(Deferred.await(listening).pipe(Effect.timeout('5 seconds')));
-      await worker.runOnce();
-      await Effect.runPromise(
-        observer.respondToInteraction!(
-          run,
-          { interactionId: 'observe-approval', decision: 'approve' },
-          { actor },
+      await Effect.runPromise(Deferred.await(subscribed).pipe(Effect.timeout('5 seconds')));
+      await Effect.runPromise(writer.updateIfStatus!(ref, 'queued', { status: 'running' }));
+      await Effect.runPromise(writer.updateIfStatus!(ref, 'running', { status: 'cancelled' }));
+      await expect(
+        Effect.runPromise(
+          writer.updateIfStatus!(ref, 'running', { status: 'completed', result: 'late' }),
         ),
-      );
-      await worker.runOnce();
-
-      const snapshots = Chunk.toReadonlyArray(await result);
-      expect(snapshots.map(snapshot => snapshot.status)).toEqual([
+      ).resolves.toBeUndefined();
+      expect(Chunk.toReadonlyArray(await observed).map(snapshot => snapshot.status)).toEqual([
         'queued',
         'running',
-        'waiting',
-        'running',
-        'completed',
+        'cancelled',
       ]);
-      expect(snapshots[2]?.interaction).toMatchObject({ id: 'observe-approval' });
-      expect(snapshots.at(-1)?.result).toBe('approve');
+      await expect(Effect.runPromise(reader.getSnapshot(ref))).resolves.toMatchObject({
+        status: 'cancelled',
+        result: undefined,
+      });
     } finally {
       controller.abort();
-      await result.catch(() => {});
+      await observed.catch(() => {});
     }
   });
+
+  it.each(durableOperationConformanceCases)('satisfies the durable contract for %s', scenario =>
+    verifyDurableOperationConformance(scenario, {
+      open: (task, declarations) => {
+        const runtime = createInProcessTaskRuntime({
+          storage: storage(),
+          deferExplicitExecution: true,
+        });
+        runtime.register?.(task);
+        const worker = createPostgresTaskWorker({
+          pool,
+          tables: taskTables,
+          tasks: [task],
+          ...(declarations ? { events: { tables: eventTables, declarations } } : {}),
+        });
+        return {
+          runtime,
+          drive: async () => {
+            await worker.runOnce();
+          },
+        };
+      },
+      publish: async (declaration, requestId) => {
+        const runtime = createPostgresEventRuntime({ pool, tables: eventTables });
+        const occurrence = await createEventApplication({
+          runtime,
+          declarations: [declaration],
+        }).api.ingest(declaration, {
+          payload: { requestId },
+          correlation: { requestId },
+          ingress: {
+            provider: 'conformance',
+            deliveryId: requestId,
+            receivedAt: new Date().toISOString(),
+          },
+        });
+        return occurrence.occurrenceId;
+      },
+      expireClaim: async ref => {
+        // Move the persisted deadline without stopping the original worker.
+        await pool.query(
+          `UPDATE ${taskTables.runs} SET worker_lease_until = clock_timestamp() - interval '1 second'
+           WHERE task_id = $1 AND run_id = $2`,
+          [ref.taskId, ref.runId],
+        );
+      },
+      cancel: ref => createPostgresTaskWorker({ pool, tables: taskTables, tasks: [] }).cancel(ref),
+    }),
+  );
 
   it.each(['while waiting', 'after persisting the claim', 'after timeout cleanup fails'] as const)(
     'resumes a retained Event once after restarting the queue worker %s',

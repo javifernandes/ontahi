@@ -467,14 +467,20 @@ export const createInProcessTaskRuntime = ({
     ref: TaskRunIdentity,
     task: TaskDefinition<any, any>,
     source: TaskRunSource,
+    refresh = false,
   ) => {
     const executionKey = keyOf(ref);
     if (activeExplicitExecutions.has(executionKey)) return undefined;
     activeExplicitExecutions.add(executionKey);
 
     const definition = task.execution!;
-    const context = createTaskContext(task, source);
     const background = Effect.gen(function* () {
+      if (refresh) {
+        // The previous execution may have settled after the caller read its checkpoint.
+        source = yield* storage.loadSource(ref);
+        if (source.status !== 'running' || !canRunCheckpoint(source)) return;
+      }
+      const context = createTaskContext(task, source);
       yield* Effect.sync(() => restoreCommittedMutations(source));
       let checkpoint = source.checkpoint!;
 
@@ -607,9 +613,10 @@ export const createInProcessTaskRuntime = ({
     task: TaskDefinition<any, any>,
     source: TaskRunSource,
     operationContext?: OperationRuntimeContext,
+    refresh = false,
   ) => {
     if (deferExplicitExecution || source.runtime?.name === deferredTaskRuntimeName) return false;
-    const execution = prepareExplicitExecution(ref, task, source);
+    const execution = prepareExplicitExecution(ref, task, source, refresh);
     if (!execution) return false;
     const run = () => Effect.runPromise(execution).catch(error => onBackgroundError?.(error));
     if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
@@ -625,7 +632,7 @@ export const createInProcessTaskRuntime = ({
   const recoverExplicitExecution = (source: TaskRunSource) => {
     const task = taskDefinitions.get(source.taskId);
     if (source.status !== 'running' || !canRunCheckpoint(source) || !task?.execution) return false;
-    return launchExplicitExecution(source, task, source, createTaskOperationContext(source));
+    return launchExplicitExecution(source, task, source, createTaskOperationContext(source), true);
   };
   resumeEventWait = recoverExplicitExecution;
   const recoverEventWait = (source: TaskRunSource) =>

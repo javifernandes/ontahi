@@ -113,12 +113,19 @@ export const waitForVercelWorkflowEvent = async ({
     }),
   );
   if (!pendingWait) {
-    await runTaskEffect(
-      store.update(ref, {
-        status: 'waiting',
-        checkpoint: { version: 1, state: cloneJson(state), eventWait: wait },
-      }),
+    const written = await Effect.runPromise(
+      store
+        .update(ref, {
+          status: 'waiting',
+          checkpoint: { version: 1, state: cloneJson(state), eventWait: wait },
+        })
+        .pipe(Effect.either),
     );
+    if (written._tag === 'Left') {
+      if (written.left.reason !== 'task_execution_stopped') throw written.left;
+      await retry(() => delivery.cancel(subscriptionId));
+      return { kind: 'stopped' };
+    }
   }
 
   const poll = async (): Promise<EventWaitResult> => {

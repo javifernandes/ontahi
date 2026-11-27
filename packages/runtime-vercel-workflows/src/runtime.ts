@@ -13,11 +13,12 @@ import {
   validateTaskInteractionResponse,
 } from '@ontahi/core/runtime/server/tasks';
 import { cloneJson } from '@ontahi/core/value/json';
-import { Effect } from 'effect';
-import { resumeHook, start } from 'workflow/api';
+import { Effect, Stream } from 'effect';
+import { getRun, resumeHook, start } from 'workflow/api';
 
-import type { VercelWorkflowTaskRuntimeOptions } from './contracts.js';
+import type { VercelTaskWorkflowInput, VercelWorkflowTaskRuntimeOptions } from './contracts.js';
 import { vercelInteractionHookToken } from './interactions.js';
+import { isActiveVercelTask, updateVercelTask } from './lifecycle.js';
 import { mapVercelWorkflowStatus, reconcileTaskSnapshot } from './reconciliation.js';
 
 const now = () => new Date().toISOString();
@@ -25,6 +26,22 @@ const now = () => new Date().toISOString();
 const toTaskFailure = (reason: string, message: string, error?: unknown): TaskFailure =>
   createOperationFailure(reason, message, {
     cause: error instanceof Error ? error.message : error == null ? undefined : String(error),
+  });
+
+const cancelWorkflow = (runId: string) =>
+  Effect.tryPromise({
+    try: async () => {
+      const run = getRun(runId);
+      if (isActiveVercelTask({ status: mapVercelWorkflowStatus(await run.status) })) {
+        await run.cancel();
+      }
+    },
+    catch: error =>
+      toTaskFailure(
+        'task_provider_cancellation_failed',
+        'Vercel Workflow cancellation could not be confirmed.',
+        error,
+      ),
   });
 
 const defaultCreateRunId = () =>
@@ -36,60 +53,193 @@ export const createVercelWorkflowTaskRuntime = ({
   resolveWorkflow,
   createRunId = defaultCreateRunId,
 }: VercelWorkflowTaskRuntimeOptions): TaskRuntime => ({
+  supportsAtomicAdmission: taskRunStore.admit !== undefined,
+  ...(taskRunStore.observeSnapshots && {
+    observe: (ref: VercelTaskWorkflowInput) =>
+      taskRunStore.observeSnapshots!(ref).pipe(
+        Stream.drainFork(
+          Stream.repeatEffect(
+            Effect.flatMap(taskRunStore.loadSource(ref), source =>
+              reconcileTaskSnapshot(source, taskRunStore, { terminalOnly: true }),
+            ).pipe(Effect.delay('1 second')),
+          ).pipe(Stream.takeUntil(snapshot => !isActiveVercelTask(snapshot))),
+        ),
+      ),
+  }),
+  ...(taskRunStore.updateIfStatus && {
+    cancel: (ref: VercelTaskWorkflowInput) =>
+      Effect.gen(function* () {
+        const snapshot = yield* updateVercelTask(
+          taskRunStore,
+          ref,
+          source =>
+            source.runtime?.name === 'vercel-workflow' &&
+            isActiveVercelTask(source) &&
+            !source.checkpoint?.eventWait,
+          source => ({
+            status: 'cancelled',
+            completedAt: now(),
+            ...(source.status !== 'queued' ||
+            source.runtime?.runId ||
+            source.runtime?.submissionPending
+              ? {
+                  error: {
+                    code: 'task_effect_outcome_ambiguous',
+                    message: 'Workflow cancelled before confirming its external effects.',
+                  },
+                }
+              : {}),
+          }),
+        );
+        const source = yield* taskRunStore.loadSource(ref);
+        if (source.status === 'waiting' && source.checkpoint?.eventWait) {
+          return yield* Effect.fail(
+            toTaskFailure(
+              'task_event_wait_cancel_required',
+              'Use Event-wait cancellation while this Task is waiting for an Event.',
+            ),
+          );
+        }
+        if (
+          source.status === 'cancelled' &&
+          source.runtime?.name === 'vercel-workflow' &&
+          source.runtime.runId
+        ) {
+          yield* cancelWorkflow(source.runtime.runId);
+        }
+        return snapshot;
+      }),
+  }),
   start: (task, input, options) =>
     Effect.gen(function* () {
       const parsedInput = yield* validateTaskInput(task, input);
       const runId = options?.runId ?? createRunId();
-      const source = yield* taskRunStore.create({
+      const createInput = {
         taskId: task.id,
         runId,
         input: parsedInput,
         trigger: options?.trigger,
         subject: options?.subject,
-      });
-      const workflowRun = yield* Effect.tryPromise({
-        try: async () => {
-          const workflow = resolveWorkflow(task.id);
-
-          if (!workflow) {
-            throw new Error(`Task "${task.id}" does not have a Vercel workflow.`);
-          }
-
-          return start(workflow, [
-            {
-              taskId: task.id,
-              runId,
-            },
-          ]);
-        },
-        catch: error => toTaskFailure('task_start_failed', 'Failed to start task.', error),
+        ...(taskRunStore.updateIfStatus || taskRunStore.observeSnapshots
+          ? { runtime: { name: 'vercel-workflow' } }
+          : {}),
+      };
+      const admission = options?.admission;
+      if (admission && !taskRunStore.admit) {
+        return yield* Effect.fail(
+          toTaskFailure(
+            'task_admission_unavailable',
+            'Task storage does not support atomic admission.',
+          ),
+        );
+      }
+      const stored = admission
+        ? yield* taskRunStore.admit!(createInput, admission)
+        : { created: true, source: yield* taskRunStore.create(createInput) };
+      const { source } = stored;
+      if (!stored.created) {
+        return {
+          taskId: source.taskId,
+          runId: source.runId,
+          status: source.status,
+          ...(source.subject ? { subject: source.subject } : {}),
+          admission:
+            source.error?.code === 'task_effect_outcome_ambiguous'
+              ? ('reconciliation-required' as const)
+              : source.status === 'completed'
+                ? ('already-completed' as const)
+                : ('reused' as const),
+        };
+      }
+      const guarded = taskRunStore.updateIfStatus !== undefined;
+      const workflowRun = yield* Effect.gen(function* () {
+        const workflow = yield* Effect.try({
+          try: () => {
+            const workflow = resolveWorkflow(task.id);
+            if (!workflow) throw new Error(`Task "${task.id}" does not have a Vercel workflow.`);
+            return workflow;
+          },
+          catch: error => toTaskFailure('task_start_failed', 'Failed to start task.', error),
+        });
+        if (guarded) {
+          const submitting = yield* updateVercelTask(
+            taskRunStore,
+            source,
+            candidate => candidate.status === 'queued',
+            () => ({ runtime: { name: 'vercel-workflow', submissionPending: true } }),
+          );
+          if (!submitting) return undefined;
+        }
+        return yield* Effect.tryPromise({
+          try: () => start(workflow, [{ taskId: task.id, runId }]),
+          catch: error =>
+            admission
+              ? toTaskFailure(
+                  'task_effect_outcome_ambiguous',
+                  'Vercel Workflow start could not be confirmed.',
+                  error,
+                )
+              : toTaskFailure('task_start_failed', 'Failed to start task.', error),
+        });
       }).pipe(
-        Effect.tapError(error =>
-          taskRunStore.update(source, {
-            status: 'failed',
+        Effect.tapError(error => {
+          const patch = {
+            status: 'failed' as const,
             completedAt: now(),
-            error: {
-              code: error.reason,
-              message: error.message,
-            },
-          }),
-        ),
+            error: { code: error.reason, message: error.message },
+          };
+          return guarded
+            ? updateVercelTask(
+                taskRunStore,
+                source,
+                candidate => candidate.status === 'queued',
+                () => patch,
+              )
+            : taskRunStore.update(source, patch);
+        }),
       );
-      const status = mapVercelWorkflowStatus(yield* Effect.promise(() => workflowRun.status));
-      const snapshot = yield* taskRunStore.attachRuntimeRef(source, {
-        name: 'vercel-workflow',
-        runId: workflowRun.runId,
-      });
+      const started = {
+        taskId: task.id,
+        runId,
+        ...(admission ? { admission: 'created' as const } : {}),
+        ...(source.subject ? { subject: source.subject } : {}),
+      };
+      if (!workflowRun) {
+        return { ...started, status: (yield* taskRunStore.loadSource(source)).status };
+      }
+      const runtime = { name: 'vercel-workflow', runId: workflowRun.runId };
+      const snapshot = taskRunStore.updateIfStatus
+        ? (yield* updateVercelTask(
+            taskRunStore,
+            source,
+            () => true,
+            () => ({ runtime }),
+          ))!
+        : yield* taskRunStore.attachRuntimeRef(source, runtime);
+      if (snapshot.status === 'cancelled') yield* cancelWorkflow(workflowRun.runId);
+      const status =
+        snapshot.status === 'queued'
+          ? mapVercelWorkflowStatus(yield* Effect.promise(() => workflowRun.status))
+          : snapshot.status;
 
-      if (status !== snapshot.status) {
-        yield* taskRunStore.update(source, { status });
+      if (snapshot.status === 'queued' && status !== 'queued') {
+        const updated = guarded
+          ? yield* updateVercelTask(
+              taskRunStore,
+              source,
+              candidate => candidate.status === 'queued',
+              () => ({ status }),
+            )
+          : yield* taskRunStore.update(source, { status });
+        return { ...started, status: (updated ?? (yield* taskRunStore.loadSource(source))).status };
       }
 
       return {
-        taskId: task.id,
-        runId,
-        status,
-        ...(source.subject ? { subject: source.subject } : {}),
+        ...started,
+        status:
+          guarded && snapshot.status === 'queued'
+            ? (yield* taskRunStore.loadSource(source)).status
+            : status,
       };
     }).pipe(
       Effect.mapError(error =>
@@ -168,14 +318,17 @@ export const createVercelWorkflowTaskRuntime = ({
       }).pipe(
         Effect.tapError(error => {
           const completedAt = now();
-          return taskRunStore
-            .update(ref, {
-              status: 'failed',
-              completedAt,
-              updatedAt: completedAt,
-              error: { code: error.reason, message: error.message },
-            })
-            .pipe(Effect.catchAll(() => Effect.void));
+          const patch = {
+            status: 'failed' as const,
+            completedAt,
+            updatedAt: completedAt,
+            error: { code: error.reason, message: error.message },
+          };
+          return (
+            taskRunStore.updateIfStatus
+              ? updateVercelTask(taskRunStore, ref, isActiveVercelTask, () => patch)
+              : taskRunStore.update(ref, patch)
+          ).pipe(Effect.catchAll(() => Effect.void));
         }),
       );
       return snapshot;

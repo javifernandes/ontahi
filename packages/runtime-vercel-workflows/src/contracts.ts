@@ -28,6 +28,9 @@ export type VercelTaskStepRunner = (input: VercelTaskStepWorkflowInput) => Promi
 
 export type VercelWorkflowTaskStorage = Pick<
   TaskStorage,
+  | 'admit'
+  | 'observeSnapshots'
+  | 'updateIfStatus'
   | 'create'
   | 'attachRuntimeRef'
   | 'update'
@@ -47,7 +50,7 @@ export type VercelWorkflowTaskRuntimeOptions = {
 
 export type VercelWorkflowTaskExecutorStore = Pick<
   TaskStorage,
-  'loadSource' | 'update' | 'claimEvent' | 'cancelEvent'
+  'loadSource' | 'update' | 'updateIfStatus' | 'claimEvent' | 'cancelEvent'
 >;
 
 export type VercelWorkflowTaskEvents = {

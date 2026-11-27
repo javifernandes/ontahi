@@ -153,3 +153,10 @@ export {
   taskReconciliationCases,
   verifyTaskReconciliationConformance,
 } from './tasks/reconciliation-conformance.js';
+
+export {
+  durableOperationConformanceCases,
+  verifyDurableOperationConformance,
+  type DurableOperationConformanceCase,
+  type DurableOperationConformanceHarness,
+} from './tasks/durable-operation-conformance.js';

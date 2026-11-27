@@ -1,7 +1,11 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyTaskRunSourcePatch, createTaskStorageAdapter } from './storage-adapter.js';
+import {
+  applyTaskRunSourcePatch,
+  createTaskStorageAdapter,
+  type TaskStorageAdapterOperations,
+} from './storage-adapter.js';
 import type { TaskRunCreateInput, TaskRunSource } from './types.js';
 
 const source = (): TaskRunSource => ({
@@ -34,6 +38,9 @@ describe('Task Storage adapter facade', () => {
       },
       create: vi.fn(async (_input: TaskRunCreateInput) => persisted),
       update: vi.fn(async () => persisted),
+      updateIfStatus: vi.fn<NonNullable<TaskStorageAdapterOperations['updateIfStatus']>>(
+        async () => persisted,
+      ),
       claim: vi.fn(async () => persisted),
       cancelEvent: vi.fn(async () => persisted),
       load: vi.fn(async () => persisted),
@@ -51,6 +58,16 @@ describe('Task Storage adapter facade', () => {
     await expect(
       Effect.runPromise(storage.update(ref, { status: 'running' })),
     ).resolves.toMatchObject({ taskId: ref.taskId, status: 'waiting' });
+    const expected = { runtime: persisted.runtime };
+    const patch = { status: 'cancelled' } as const;
+    await expect(
+      Effect.runPromise(storage.updateIfStatus!(ref, 'waiting', patch, expected)),
+    ).resolves.toMatchObject({ status: 'waiting' });
+    expect(operations.updateIfStatus).toHaveBeenCalledWith(ref, 'waiting', patch, expected);
+    operations.updateIfStatus.mockResolvedValueOnce(undefined);
+    await expect(
+      Effect.runPromise(storage.updateIfStatus!(ref, 'running', patch)),
+    ).resolves.toBeUndefined();
     await Effect.runPromise(storage.claimInteraction(ref, 'approval', persisted.checkpoint!));
     await Effect.runPromise(storage.claimEvent(ref, 'event-wait', persisted.checkpoint!));
     await Effect.runPromise(storage.cancelEvent(ref, 'event-wait', 'cancelled'));
