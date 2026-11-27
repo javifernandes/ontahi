@@ -1,7 +1,9 @@
 import { MemorySaver } from '@langchain/langgraph';
 import { graphSchema } from '@ontahi/core';
 import {
+  configureServerRuntime,
   createEventApplication,
+  resetServerRuntimeForTests,
   defineEvent,
   type AnyEventDeclaration,
   type EventOccurrence,
@@ -617,4 +619,63 @@ it('recovers an approval reached by an Event after losing the provider thread', 
 
 it('rejects an invalid execution lease duration', () => {
   expect(() => createHarness(0).createRuntime()).toThrow(RangeError);
+});
+
+it('links LangGraph attempt telemetry to admission and records success and failure', async () => {
+  const enqueue = { traceId: '1'.repeat(32), spanId: '2'.repeat(16), traceFlags: 1 };
+  const span = {};
+  const markSuccess = vi.fn();
+  const markFailure = vi.fn();
+  const withSpan = vi.fn(async (_name, _options, run) => run(span));
+  configureServerRuntime({
+    telemetry: {
+      captureTraceContext: () => enqueue,
+      getRuntimeAttributes: () => ({}),
+      withSpan,
+      markSuccess,
+      markFailure,
+    },
+  });
+  try {
+    const { storage, createRuntime } = createHarness();
+    const runtime = createRuntime();
+    const task = defineTask<boolean, string>({
+      id: 'LangGraph.attempt-telemetry',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'work' }),
+        steps: {
+          work: {
+            run: ({ input, context }) =>
+              input
+                ? Effect.fail({ reason: 'fixture_failed', message: 'Fixture failed' })
+                : context
+                    .progress({ message: 'Working' })
+                    .pipe(Effect.as({ kind: 'complete', result: 'finished' })),
+          },
+        },
+      }),
+      run: () => Effect.dieMessage('Explicit execution required'),
+    });
+    const success = await Effect.runPromise(runtime.start(task, false));
+    const failure = await Effect.runPromise(runtime.start(task, true));
+    await vi.waitFor(async () => {
+      expect(await Effect.runPromise(storage.getSnapshot(success))).toMatchObject({
+        status: 'completed',
+        progress: { message: 'Working' },
+      });
+      expect(await Effect.runPromise(storage.getSnapshot(failure))).toMatchObject({
+        status: 'failed',
+      });
+      expect(markSuccess).toHaveBeenCalledWith(span, undefined);
+      expect(markFailure).toHaveBeenCalledWith(span, 'task_attempt_failed', undefined);
+    });
+    expect(withSpan.mock.calls.map(([name, options]) => [name, options])).toEqual(
+      Array.from({ length: 2 }, () => [
+        'ontahi.runtime.task.attempt',
+        { attributes: { 'ontahi.task.runtime': 'langgraph' }, links: [enqueue] },
+      ]),
+    );
+  } finally {
+    resetServerRuntimeForTests();
+  }
 });

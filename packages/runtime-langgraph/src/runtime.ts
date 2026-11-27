@@ -11,7 +11,11 @@ import {
   type BaseCheckpointSaver,
 } from '@langchain/langgraph';
 import {
+  getServerRuntimeConfig,
+  markRuntimeFailure,
+  markRuntimeSuccess,
   serverContext,
+  withRuntimeSpan,
   type EventOccurrence,
   type OperationRuntimeContext,
   type TaskRuntimeRef,
@@ -521,7 +525,22 @@ const createLangGraphTaskRuntime = (
                 return;
               }
             }
-            await invocationFor(getGraph(task), claimed, fresh);
+            await withRuntimeSpan(
+              'ontahi.runtime.task.attempt',
+              {
+                attributes: { 'ontahi.task.runtime': 'langgraph' },
+                ...(claimed.enqueueTrace ? { links: [claimed.enqueueTrace] } : {}),
+              },
+              async span => {
+                try {
+                  await invocationFor(getGraph(task), claimed, fresh);
+                  markRuntimeSuccess(span);
+                } catch (error) {
+                  markRuntimeFailure(span, 'task_attempt_failed');
+                  throw error;
+                }
+              },
+            );
           } catch (error) {
             const failure = toTaskFailure(error);
             if (failure.reason === 'task_worker_lease_lost') return;
@@ -673,6 +692,7 @@ const createLangGraphTaskRuntime = (
             trigger: options?.trigger,
             subject: options?.subject,
             runtime: { name: 'langgraph', runId: threadIdOf(ref) },
+            enqueueTrace: getServerRuntimeConfig().telemetry.captureTraceContext?.(),
           };
           const { source, created } = admission
             ? await runTaskEffect(storage.admit!(createInput, admission))
