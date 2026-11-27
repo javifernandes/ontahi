@@ -182,12 +182,12 @@ export type TaskStorageControl = {
 };
 
 export type TaskStorageEngine = {
-  /** Apply the patch atomically if the lifecycle state and any supplied runtime reference match. */
+  /** Apply the patch atomically if the lifecycle state and any supplied runtime reference match, optionally checking execution lease availability. */
   updateIfStatus?(
     ref: TaskRunIdentity,
     status: TaskStatus,
     patch: Partial<TaskRunSource>,
-    expected?: { runtime: TaskRuntimeRef | undefined },
+    expected?: { runtime: TaskRuntimeRef | undefined; leaseState?: 'live' | 'available' },
   ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
   loadSource(ref: TaskRunIdentity): Effect.Effect<TaskRunSource, TaskFailure>;
   attachRuntimeRef(

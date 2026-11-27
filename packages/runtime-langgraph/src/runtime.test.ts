@@ -929,7 +929,7 @@ describe('LangGraph Task Runtime', () => {
     });
   });
 
-  it('rejects native durable Event waits explicitly', async () => {
+  it('rejects durable Event waits without a durable Event runtime', async () => {
     const Ready = event.define({
       id: 'LangGraphReady',
       version: 1,
@@ -955,7 +955,7 @@ describe('LangGraph Task Runtime', () => {
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
         status: 'failed',
-        error: { code: 'task_definition_invalid' },
+        error: { code: 'task_event_runtime_unavailable' },
       });
     });
   });

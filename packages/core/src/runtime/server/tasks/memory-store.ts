@@ -82,7 +82,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
     status?: TaskRunSource['status'],
-    expected?: { runtime: TaskRunSource['runtime'] },
+    expected?: { runtime: TaskRunSource['runtime']; leaseState?: 'live' | 'available' },
   ) =>
     Effect.gen(function* () {
       const current = runs.get(keyOf(ref));
@@ -97,9 +97,17 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         expected &&
         (current.runtime?.name !== expected.runtime?.name ||
           current.runtime?.runId !== expected.runtime?.runId ||
-          current.runtime?.submissionPending !== expected.runtime?.submissionPending)
+          current.runtime?.submissionPending !== expected.runtime?.submissionPending ||
+          current.runtime?.executionLease?.token !== expected.runtime?.executionLease?.token ||
+          current.runtime?.executionLease?.expiresAt !==
+            expected.runtime?.executionLease?.expiresAt)
       )
         return undefined;
+
+      if (expected?.leaseState) {
+        const live = Date.parse(current.runtime?.executionLease?.expiresAt ?? '') > Date.now();
+        if (live !== (expected.leaseState === 'live')) return undefined;
+      }
 
       const next = {
         ...current,

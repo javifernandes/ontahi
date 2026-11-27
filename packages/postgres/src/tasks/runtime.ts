@@ -149,7 +149,7 @@ const createStorage = (
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
     status?: TaskStatus,
-    expected?: { runtime: TaskRunSource['runtime'] },
+    expected?: { runtime: TaskRunSource['runtime']; leaseState?: 'live' | 'available' },
   ) => {
     const row = await loadRow(ref);
     const current = fromRow(row);
@@ -170,6 +170,8 @@ const createStorage = (
        WHERE task_id = $1 AND run_id = $2 ${lease(16)}
          ${status ? `AND status = $${firstGuard} AND (xmin::text || ctid::text) = $${firstGuard + 1}` : ''}
          ${expected ? `AND runtime IS NOT DISTINCT FROM $${firstGuard + 2}::jsonb` : ''}
+         ${expected?.leaseState === 'live' ? "AND (runtime -> 'executionLease' ->> 'expiresAt')::timestamptz > clock_timestamp()" : ''}
+         ${expected?.leaseState === 'available' ? "AND COALESCE((runtime -> 'executionLease' ->> 'expiresAt')::timestamptz <= clock_timestamp(), true)" : ''}
        RETURNING *`,
       [
         ref.taskId,
