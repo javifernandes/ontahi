@@ -7,6 +7,7 @@ import {
   validateTaskInputInteractionRequest,
   validateTaskInteractionResponse,
 } from './tasks/execution-interactions.js';
+import { createConfiguredTaskFacade } from './tasks/facade.js';
 import { COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY } from './unit-of-work.js';
 
 import {
@@ -47,6 +48,24 @@ const createDeferred = () => {
 };
 
 describe('tasks', () => {
+  it('delegates cancellation only when the configured runtime supports it', async () => {
+    const storage = createInMemoryTaskStorage();
+    const runtime = createInProcessTaskRuntime({ storage });
+    const ref = { taskId: 'fixture.cancel', runId: 'run' };
+    await Effect.runPromise(storage.create(ref));
+    const unsupported = createConfiguredTaskFacade({ runtime });
+    await expect(Effect.runPromise(Effect.flip(unsupported.cancel(ref)))).resolves.toMatchObject({
+      reason: 'task_cancellation_unavailable',
+    });
+
+    const cancel = vi.fn(() => storage.update(ref, { status: 'cancelled' }));
+    const supported = createConfiguredTaskFacade({ runtime: { ...runtime, cancel } });
+    await expect(Effect.runPromise(supported.cancel(ref))).resolves.toMatchObject({
+      status: 'cancelled',
+    });
+    expect(cancel).toHaveBeenCalledWith(ref);
+  });
+
   it('isolates durable execution journals and accumulates mutations across interactions', async () => {
     const deliver = vi.fn();
     type State = { readonly step: 'choose' } | { readonly step: 'finish' };

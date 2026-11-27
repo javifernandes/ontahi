@@ -480,3 +480,61 @@ it('skips Workflow submission when cancellation wins before the submission fence
   expect(cancelled.error).toBeUndefined();
   expect(sdk.start).not.toHaveBeenCalled();
 });
+
+it('uses Event-wait cancellation when a Workflow owns a pending subscription', async () => {
+  const storage = createInMemoryTaskStorage();
+  const ref = { taskId: 'Conformance.cancel-event', runId: 'run' };
+  await Effect.runPromise(storage.create({ ...ref, runtime: { name: 'vercel-workflow' } }));
+  await Effect.runPromise(
+    storage.update(ref, {
+      status: 'waiting',
+      checkpoint: {
+        version: 1,
+        state: { step: 'wait' },
+        eventWait: {
+          id: 'wait-id',
+          kind: 'event',
+          eventId: 'Ready',
+          eventVersion: 1,
+          createdAt: new Date().toISOString(),
+        },
+      },
+    }),
+  );
+  const host = createVercelWorkflowTaskRuntime({
+    taskRunStore: storage,
+    resolveWorkflow: () => undefined,
+  });
+  await expect(Effect.runPromise(Effect.flip(host.cancel!(ref)))).resolves.toMatchObject({
+    reason: 'task_event_wait_cancel_required',
+  });
+  await expect(Effect.runPromise(host.cancelEventWait!(ref))).resolves.toMatchObject({
+    status: 'cancelled',
+  });
+});
+
+it('cancels the provider when its run ID arrives after local cancellation', async () => {
+  const storage = createInMemoryTaskStorage();
+  const task = { id: 'Conformance.late-provider-id', run: () => Effect.void };
+  const ref = { taskId: task.id, runId: 'run' };
+  const host = createVercelWorkflowTaskRuntime({
+    taskRunStore: storage,
+    resolveWorkflow: () => async () => undefined,
+  });
+  const cancel = vi.fn(async () => {});
+  sdk.getRun.mockReturnValue({ status: Promise.resolve('running'), cancel });
+  sdk.start.mockReset();
+  sdk.start.mockImplementationOnce(async () => {
+    await Effect.runPromise(host.cancel!(ref));
+    return { runId: 'provider-run', status: Promise.resolve('running') };
+  });
+  await expect(Effect.runPromise(host.start(task, undefined, ref))).resolves.toMatchObject({
+    status: 'cancelled',
+  });
+  const source = await Effect.runPromise(storage.loadSource(ref));
+  expect(source).toMatchObject({
+    runtime: { runId: 'provider-run' },
+    error: { code: 'task_effect_outcome_ambiguous' },
+  });
+  expect(cancel).toHaveBeenCalledOnce();
+});
