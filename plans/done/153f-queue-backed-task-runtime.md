@@ -1,10 +1,10 @@
 # 153f. Queue-Backed Task Runtime
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/153f-queue-backed-task-runtime`
 
-Parent: [153c. Interactive And Resumable Operation Execution](../done/153c-operation-interactions-and-resumption.md)
+Parent: [153c. Interactive And Resumable Operation Execution](153c-operation-interactions-and-resumption.md)
 
 Shapes: [Operation Interaction](../../atlas/items/model/operation-interaction.md),
 [Durable Operation](../../atlas/items/model/durable-operation.md).
@@ -70,3 +70,22 @@ registration, Event declarations, and the authorization boundary for cancellatio
 The PostgreSQL worker runs the shared [Durable Operation conformance contract](../../docs/durable-operation-conformance.md).
 Provider-specific transaction failure and stale Event delivery cases remain in the PostgreSQL
 integration suite.
+
+## Closure
+
+[PR #357](https://github.com/javifernandes/ontahi/pull/357) delivered the PostgreSQL worker
+reference, with the Task run table as its runnable queue. [PR #359](https://github.com/javifernandes/ontahi/pull/359)
+extracted the shared contract and exercised Vercel Workflow. [PR #361](https://github.com/javifernandes/ontahi/pull/361)
+exercised LangGraph, including a process restart with PostgreSQL Task Storage and Event
+Runtime and a SQLite checkpointer. The [conformance matrix](../../docs/durable-operation-conformance.md)
+records the guarantees and evidence for each configuration.
+
+The implemented queue is the PostgreSQL run table and host polling. Broker-backed wakeups,
+timed scheduling, PostgreSQL worker lease renewal, and remaining Vercel recovery evidence
+move to [153g](../backlog/153g-durable-runtime-follow-ups.md). Replacement and queue-after-current
+policies remain in [132a](../backlog/132a-durable-replacement-and-queueing.md). The original research
+questions remain above as context for the reference implementation.
+
+The reference covers idempotent provider requests and reconciliation of uncertain external effects.
+The full retry-policy split across reads, idempotent commands, non-idempotent effects, Interactions,
+and timers remains open in [153g](../backlog/153g-durable-runtime-follow-ups.md).

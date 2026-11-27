@@ -142,9 +142,9 @@ identity:
 
 The response is a versioned `snapshot` containing queued, running, waiting, completed, failed, or
 cancelled state plus progress, a pending Interaction, result, or error when present. `waiting`
-means execution has checkpointed one exact typed Interaction and cannot continue until an
-authorized response is claimed. Claiming that response returns the run to `running` before its
-continuation executes. Progress, Interaction, and result are snapshot states, not commands.
+means execution has checkpointed either an Interaction or an Event wait. Inspect
+`snapshot.waitingOn` to distinguish them. An authorized Interaction response or a matching
+retained Event must claim that checkpoint before the run returns to `running`. Progress, Interaction, and result are snapshot states, not commands.
 Repeating `inspect` is the portable polling primitive.
 
 The React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
@@ -185,35 +185,136 @@ request-context factory before mounting that path; it does not expose Task state
 The legacy Task snapshot GET remains only as a bounded compatibility surface during endpoint
 migration.
 
-## The runtime defines the guarantee
+## Configure the execution runtime
 
-`inProcessTasks()` is the smallest executable runtime. Ordinary task functions still depend on the
-process that started them. Explicit step executions persist a versioned JSON checkpoint, including
-pending interactions, through the configured `TaskStorage`. A pending Interaction is exposed as a
-`waiting` run rather than as contradictory running progress. With persistent storage, a freshly
-started application can register the same Task definitions and resume an interaction response from
-that checkpoint. Inspecting or observing a running execution also resumes a checkpoint that was
-persisted just before the previous process stopped. Interaction responses are claimed once through
-the task store, atomically returning the run to `running`, before execution continues. A step can
-be evaluated again after a crash, so side effects still need the same idempotency care as other
-retryable work.
+Choose an executor, a Task Storage implementation, and, for Event waits, a durable Event
+Runtime. Data Graph storage is an independent setting. Start and observe runs through the same
+Operation contract in every configuration. See the [adapter capability matrix](../03-runtimes/05-adapter-capability-matrix.md)
+for the tested combinations.
 
-A persistent executor and task store can carry the same lifecycle across retries, processes, and
-deployments. Ontahí's Vercel Workflow adapter is one such runtime. The host owns provider setup,
-persistent task storage, credentials, and deployment artifacts; the durable operation remains the
-semantic source for its lifecycle schemas.
+For local development, start with `inProcessTasks()`. Its default Task Storage lives in memory.
+Use an explicit `durable.execution` when a run must resume across a process boundary or wait for
+an Interaction or Event. An explicit step returns a transition with JSON-safe state, or it
+returns the final result. A worker may evaluate a step again after a crash.
 
-Use durable steps only where the workflow has a real internal boundary that needs its own typed
-input and output. Retry and replay remain explicit runtime or application operations; they are not
-hidden side effects of starting a durable operation. `cancelled` can already be observed in a
-snapshot, but Ontahí does not yet expose a cancellation request because its Task Runtimes do not
-share an enforceable cancellation capability.
+### PostgreSQL worker
+
+Apply the Task schema with `createPostgresTaskSchemaSql` and, for retained Events, apply
+`createPostgresEventSchemaSql`. The application accepts the run and the worker polls the same
+Task tables.
+
+```ts
+import { inProcessTasks, ontahi } from '@ontahi/core/runtime/server';
+import { createPostgresEventRuntime } from '@ontahi/postgres/events';
+import { createPostgresTaskStorage, createPostgresTaskWorker } from '@ontahi/postgres/tasks';
+
+const taskStorage = createPostgresTaskStorage({ pool });
+const eventRuntime = createPostgresEventRuntime({ pool });
+
+const application = ontahi({
+  storage,
+  entities,
+  tasks: inProcessTasks({ storage: taskStorage, deferExplicitExecution: true }),
+  eventRuntime,
+  events: declarations,
+});
+
+// Run this in the worker host with the projected Task definitions.
+const worker = createPostgresTaskWorker({
+  pool,
+  tasks: taskDefinitions,
+  events: { declarations },
+});
+
+const claimedRun = await worker.runOnce(signal);
+```
+
+Use a direct or session-pooled connection. The worker uses a fixed database-clock lease.
+Set `leaseMs` to cover the longest attempt through its next persisted wait or terminal state.
+Loop over `runOnce` in the worker host, back off when it returns `undefined`, and pass a shutdown
+signal. The [Todo export integration](../../../examples/todo-express/src/postgres-durable-export.integration.test.ts)
+shows how to project a domain Operation into a worker Task definition.
+
+### LangGraph
+
+Use persistent Task Storage and provide a LangGraph checkpointer. This configuration pairs the
+same PostgreSQL Tasks and Events with the SQLite saver used by the restart test.
+
+```ts
+import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
+import { langGraphTasks } from '@ontahi/runtime-langgraph';
+
+const tasks = langGraphTasks({
+  storage: taskStorage,
+  createExecutionContext,
+  checkpointer: SqliteSaver.fromConnString(sqlitePath),
+  events: { runtime: eventRuntime, declarations },
+});
+
+const application = ontahi({ storage, entities, tasks, eventRuntime, events: declarations });
+```
+
+Each replacement host opens the same persisted Task state and checkpointer. Supply
+`createExecutionContext` if resumed steps read server context resources. The factory rehydrates
+those resources from the Task source in the replacement host. Task Storage with
+conditional writes enables lease renewal, takeover, cancellation, and Event waits.
+Snapshot reads and active observation drive Event polling. Schedule those reads in a host
+that needs to advance waits while nobody is observing a run. `MemorySaver` is suitable for
+process-local development. See the [LangGraph adapter README](../../../packages/runtime-langgraph/README.md).
+
+### Vercel Workflow
+
+Generate the workflow and step modules from the analyzed application with
+`renderVercelWorkflowModules`. Connect the generated `getTaskWorkflow` resolver to
+`createVercelWorkflowTaskRuntime` and pass `tasks: { runtime }` to `ontahi`. In the host worker
+module, export the executor functions imported by the generated entrypoints. Both use the
+same persistent Task Storage.
+
+```ts
+import { createVercelWorkflowTaskRuntime } from '@ontahi/runtime-vercel-workflows/runtime';
+import { createVercelWorkflowTaskExecutor } from '@ontahi/runtime-vercel-workflows/executor';
+
+const runtime = createVercelWorkflowTaskRuntime({
+  taskRunStore: taskStorage,
+  resolveWorkflow: getTaskWorkflow,
+});
+const application = ontahi({
+  storage,
+  entities,
+  tasks: { runtime },
+  eventRuntime,
+  events: declarations,
+});
+
+// In the host module imported by the generated worker entrypoints.
+const executor = createVercelWorkflowTaskExecutor({
+  taskRunStore: taskStorage,
+  getTaskDefinition,
+  createExecutionContext,
+  events: { runtime: eventRuntime, declarations },
+});
+export const runTaskInVercelWorkflow = executor.runTask;
+export const runTaskStepInVercelWorkflow = executor.runTaskStep;
+```
+
+Supply the application Task definitions through `getTaskDefinition` and rehydrate graph resources
+with `createExecutionContext`. Tag the Operations selected by the generator with `durable.runtime: 'vercel-workflow'` and
+deploy the generated modules through the host's Vercel Workflow build integration.
+See the [Vercel Workflow adapter README](../../../packages/runtime-vercel-workflows/README.md).
+
+### Cancel from a trusted server
+
+For the deferred PostgreSQL setup, use `worker.cancel(ref)`. With Vercel Workflow or LangGraph
+and conditional Task Storage, use the configured Task runtime's `cancel(ref)`. Use
+`cancelEventWait(ref)` for a pending Event subscription in those adapters. Authorize the caller
+in your host before exposing either action. Cancellation fences later Task writes. An external
+request already sent can still commit and may need reconciliation.
 
 ## Admit a run and protect its external effects
 
 A durable Operation can set `idempotency.policy` to `reuse-running` or `skip-if-completed`
-with the native executor and in-memory or PostgreSQL Task Storage. Both policies reuse a queued,
-running, or waiting run. After completion, only `skip-if-completed` reuses that run. An ordinary
+with a compatible executor and atomic Task Storage. Both policies reuse a queued, running,
+or waiting run. After completion, only `skip-if-completed` reuses that run. An ordinary
 failed or cancelled run releases the key. A run with an ambiguous external effect retains the
 key and returns `reconciliation-required` on another matching invocation.
 
@@ -243,7 +344,9 @@ run. For repeated uses, derive the occurrence from a business key. Persist the p
 an explicit Task checkpoint before running the effect. The helper
 looks up that reference before writing and recovers any matching record. After an uncertain
 write, it reconciles and issues at most one retry per execution of the helper. If that retry fails, it looks up the reference
-once more. An inconclusive or unavailable lookup leaves the Task pending reconciliation.
+once more. An inconclusive or unavailable lookup leaves a failed run with
+`task_effect_outcome_ambiguous` and its prepared checkpoint. Starting with the same key returns
+the original run with `reconciliation-required`, without launching another execution.
 
 Have the adapter report expected HTTP and transport failures in the Effect error channel.
 Return `confirmed-absent` only when the provider contract establishes that the record does
@@ -252,3 +355,6 @@ timeout from an eventually consistent API is `unknown`. Compare the returned rec
 input before returning `found`. Lookup and creation are separate provider actions. Hosts that
 run competing workers need exclusive execution for the effect or a provider guarantee that
 prevents conflicting creates for the same reference.
+
+For an executable example with the prepare and write steps, see the
+[shared reconciliation fixture](../../../packages/core/src/runtime/server/tasks/reconciliation-conformance.ts).

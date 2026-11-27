@@ -166,5 +166,5 @@ unless the execution boundary enforces that all relevant effects go through decl
   uses the existing `TodoList.export` definition behind an authenticated fixture webhook. A
   separate worker persists the Event wait; a recreated worker completes the same run once after
   duplicate callbacks while the worker was offline.
-- [153f](../current/153f-queue-backed-task-runtime.md) retains worker lifecycle, observation, and
-  broader coordination work. Coverage of unrestricted Operation code remains unverified.
+- [153f](153f-queue-backed-task-runtime.md) delivered the reference worker lifecycle and observation.
+  [153g](../backlog/153g-durable-runtime-follow-ups.md) tracks the remaining runtime work. Coverage of unrestricted Operation code remains unverified.

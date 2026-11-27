@@ -20,6 +20,8 @@ relatedPlans:
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/154f-wait-and-continuation-semantics
   - ontahi://plans/146j-first-class-events-runtime-protocol-gate
+  - ontahi://plans/153f-queue-backed-task-runtime
+  - ontahi://plans/153g-durable-runtime-follow-ups
   - ontahi://plans/155a-vercel-workflow-event-waits
   - bookops://plans/75c-durable-operation-result-contracts
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
@@ -44,9 +46,8 @@ Event reactions.
 A serializable Event wait is a separate `waiting` reason beside an Interaction. Its checkpoint
 names one registered Event declaration version, stable wait identity, optional JSON correlation,
 and optional timeout. A durable Event Runtime owns the retained delivery while Task Storage
-atomically selects the single continuation winner. The native executor and Vercel Workflow preserve
-this contract; LangGraph rejects the transition until its adapter can prove the same claim
-semantics. Timeout and cancellation end the waiter subscription without deleting the occurrence.
+atomically selects the single continuation winner. The PostgreSQL worker, Vercel Workflow and LangGraph preserve this contract with a configured
+durable Event Runtime. Timeout and cancellation end the waiter subscription without deleting the occurrence.
 
 Cache invalidation associated with a durable operation occurs when the run completes, rather than when the runtime merely accepts the start request.
 
@@ -61,7 +62,8 @@ publish.
 Some workflow engines require a lightweight generated task artifact. That artifact must be a complete mechanical projection of the durable operation contract and must never become a separately authored model.
 
 Durable admission distinguishes trusted delivery identity, the admission key, and the run ID.
-The native executor enforces `reuse-running` and `skip-if-completed` with atomic storage.
+The native executor, Vercel Workflow and LangGraph enforce `reuse-running` and
+`skip-if-completed` when paired with atomic Task Storage.
 `replace-running` and `queue-after-current` remain separate coordination work. A runtime reports
 its configured enforcement capabilities through reflection.
 

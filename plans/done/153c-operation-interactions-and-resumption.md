@@ -18,7 +18,7 @@ Related plans:
 6. [153b. Declarative Operation Context Scope](../backlog/153b-declarative-operation-context-scope.md)
 7. [153d. LangGraph Task Runtime Comparison](../done/153d-langgraph-task-runtime-comparison.md)
 8. [153e. Vercel Workflow Interaction Resumption](../done/153e-vercel-workflow-interaction-resumption.md)
-9. [153f. Queue-Backed Task Runtime](../current/153f-queue-backed-task-runtime.md)
+9. [153f. Queue-Backed Task Runtime](153f-queue-backed-task-runtime.md)
 
 ## Summary And Research Question
 
