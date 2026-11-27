@@ -51,6 +51,9 @@ candidate release reconcile its code and documentation in the same review.
 16. [Authentication and Principals](03-runtimes/04-authentication-and-principals.md)
 17. [Adapter Capability Matrix](03-runtimes/05-adapter-capability-matrix.md)
 
+Also in this part: [Observability](03-runtimes/06-observability.md) and
+[Integrations by concern](03-runtimes/07-integrations.md).
+
 ### Part IV — Reflection and Clients
 
 18. [Reflection and Explorer](04-reflection-and-clients/01-reflection-and-explorer.md)

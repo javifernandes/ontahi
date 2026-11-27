@@ -1,6 +1,6 @@
 # 173. Unit of Work Observability
 
-Status: current
+Status: done
 
 ## Summary
 
@@ -244,6 +244,15 @@ read and command, and parent IDs entirely within that invocation's trace.
 - Add a span for committed mutation delivery and bounded counts per Unit of Work.
 - Evaluate span boundaries for streams and long-lived observations.
 - Validate the same durable attempt contract if another Task runtime adopts persisted trace links.
+
+## Closure
+
+[PR #360](https://github.com/javifernandes/ontahi/pull/360) shipped the first tracing
+contract for Operations, Units of Work, reads, commands, transactions, model attempts,
+and durable Task execution. Atlas and BookOps rehearsed it with local tarballs.
+The [developer guide](../../docs/developers/03-runtimes/06-observability.md) documents
+host setup and the trace contract. Remaining instrumentation is tracked in
+[173a. Observability coverage follow-up](../backlog/173a-observability-coverage.md).
 
 ## Non-Goals
 
