@@ -85,3 +85,7 @@ timed scheduling, PostgreSQL worker lease renewal, and remaining Vercel recovery
 move to [153g](../backlog/153g-durable-runtime-follow-ups.md). Replacement and queue-after-current
 policies remain in [132a](../backlog/132a-durable-replacement-and-queueing.md). The original research
 questions remain above as context for the reference implementation.
+
+The reference covers idempotent provider requests and reconciliation of uncertain external effects.
+The full retry-policy split across reads, idempotent commands, non-idempotent effects, Interactions,
+and timers remains open in [153g](../backlog/153g-durable-runtime-follow-ups.md).

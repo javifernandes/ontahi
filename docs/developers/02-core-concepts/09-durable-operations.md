@@ -246,6 +246,7 @@ import { langGraphTasks } from '@ontahi/runtime-langgraph';
 
 const tasks = langGraphTasks({
   storage: taskStorage,
+  createExecutionContext,
   checkpointer: SqliteSaver.fromConnString(sqlitePath),
   events: { runtime: eventRuntime, declarations },
 });
@@ -253,7 +254,9 @@ const tasks = langGraphTasks({
 const application = ontahi({ storage, entities, tasks, eventRuntime, events: declarations });
 ```
 
-Each replacement host opens the same persisted Task state and checkpointer. Task Storage with
+Each replacement host opens the same persisted Task state and checkpointer. Supply
+`createExecutionContext` if resumed steps read server context resources. The factory rehydrates
+those resources from the Task source in the replacement host. Task Storage with
 conditional writes enables lease renewal, takeover, cancellation, and Event waits.
 Snapshot reads and active observation drive Event polling. Schedule those reads in a host
 that needs to advance waits while nobody is observing a run. `MemorySaver` is suitable for
