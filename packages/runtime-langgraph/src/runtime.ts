@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import {
   Annotation,
   Command,
@@ -8,14 +10,28 @@ import {
   interrupt,
   type BaseCheckpointSaver,
 } from '@langchain/langgraph';
-import { serverContext, type OperationRuntimeContext } from '@ontahi/core/runtime/server';
+import {
+  getServerRuntimeConfig,
+  markRuntimeFailure,
+  markRuntimeSuccess,
+  serverContext,
+  withRuntimeSpan,
+  type EventOccurrence,
+  type OperationRuntimeContext,
+  type TaskRuntimeRef,
+} from '@ontahi/core/runtime/server';
 import {
   createInMemoryTaskStorage,
   createInProcessTaskExecutor,
   getInMemoryTaskRunProjection,
   invalidTaskDefinitionFailure,
   isTaskExecutionState,
+  materializeTaskEventWait,
   materializeTaskExecutionInteraction,
+  pollTaskEventWait,
+  requireTaskEventDelivery,
+  settleTaskEventCheckpoint,
+  taskEventWaitSubscriptionId,
   missingTaskStepFailure,
   taskInteractionAccessDeniedFailure,
   taskInteractionMismatchFailure,
@@ -46,13 +62,16 @@ import {
   type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
 import { cloneJson } from '@ontahi/core/value/json';
-import { Effect, Stream } from 'effect';
+import { Effect, Fiber, Schedule, Stream } from 'effect';
+
+import { createExecutionLease, executionLeaseLost } from './execution-lease.js';
 
 const LangGraphState = Annotation.Root({
   taskId: Annotation<string>(),
   runId: Annotation<string>(),
   input: Annotation<unknown>(),
   executionState: Annotation<TaskExecutionState>(),
+  eventOccurrence: Annotation<EventOccurrence | null>(),
   done: Annotation<boolean>(),
   result: Annotation<unknown>(),
 });
@@ -66,10 +85,13 @@ type LangGraphReplayEntry = {
 type LangGraphTaskExecutionCheckpoint = TaskExecutionCheckpoint & {
   /** Adapter-private responses needed to reconstruct a missing provider thread deterministically. */
   replay?: LangGraphReplayEntry[];
+  replayEvent?: { state: TaskExecutionState; occurrence: EventOccurrence };
 };
 
 export type LangGraphTaskExecutorOptions = InProcessTaskExecutorOptions & {
   checkpointer?: BaseCheckpointSaver;
+  /** Time a worker can go without renewing its lease before another worker may recover the run. */
+  executionLeaseMs?: number;
 };
 
 export type LangGraphTasksOptions = LangGraphTaskExecutorOptions &
@@ -98,8 +120,8 @@ const interactionIdOf = (
   }
   return `langgraph-${(hash >>> 0).toString(36)}`;
 };
-const graphConfig = (ref: TaskRunIdentity) => ({
-  configurable: { thread_id: threadIdOf(ref) },
+const graphConfig = (source: TaskRunSource) => ({
+  configurable: { thread_id: source.runtime?.runId ?? threadIdOf(source) },
   durability: 'sync' as const,
 });
 
@@ -129,11 +151,17 @@ const createLangGraphTaskRuntime = (
   host: TaskRuntimeHostOptions,
   {
     checkpointer = new MemorySaver(),
+    executionLeaseMs = 60_000,
     sleep = milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
     createRunId: createConfiguredRunId = createRunId,
     onBackgroundError,
   }: LangGraphTaskExecutorOptions,
 ): TaskRuntime => {
+  if (!Number.isSafeInteger(executionLeaseMs) || executionLeaseMs <= 0) {
+    throw new RangeError('LangGraph execution lease must be a positive integer in milliseconds.');
+  }
+  const lease = createExecutionLease(storage, executionLeaseMs, threadIdOf);
+  const execution = new AsyncLocalStorage<{ runtime: TaskRuntimeRef | undefined }>();
   const projection = getInMemoryTaskRunProjection(storage);
   const legacyRuntime = createInProcessTaskExecutor({
     sleep,
@@ -142,6 +170,17 @@ const createLangGraphTaskRuntime = (
   }).createRuntime(storage, host);
   const tasks = new Map<string, TaskDefinition<any, any>>();
   const graphs = new Map<string, LangGraphRunnable>();
+  const eventDeclarations = new Map(host.events?.declarations.map(event => [event.id, event]));
+  const eventDelivery = () => {
+    try {
+      return requireTaskEventDelivery(host.events?.runtime);
+    } catch {
+      throw {
+        reason: 'task_event_runtime_unavailable',
+        message: 'A durable Event Runtime with retention and acknowledgement is required.',
+      } satisfies TaskFailure;
+    }
+  };
   const activeRuns = new Map<string, string | undefined>();
   const pendingLaunches = new Map<string, () => void>();
 
@@ -151,14 +190,23 @@ const createLangGraphTaskRuntime = (
   };
   const update = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     publish(await runTaskEffect(storage.update(ref, patch)));
+  const updateOwned = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
+    lease.update(ref, execution.getStore()?.runtime, patch).pipe(
+      Effect.flatMap(snapshot =>
+        snapshot ? Effect.succeed(snapshot) : Effect.fail(executionLeaseLost()),
+      ),
+      Effect.tap(projection.publish),
+    );
   const checkpointOf = (source: TaskRunSource) =>
     source.checkpoint as LangGraphTaskExecutionCheckpoint | undefined;
   const replayOf = (source: TaskRunSource) => checkpointOf(source)?.replay ?? [];
   const withReplay = (
     checkpoint: TaskExecutionCheckpoint,
     replay: readonly LangGraphReplayEntry[],
+    replayEvent?: LangGraphTaskExecutionCheckpoint['replayEvent'],
   ): LangGraphTaskExecutionCheckpoint => ({
     ...checkpoint,
+    ...(replayEvent ? { replayEvent: cloneJson(replayEvent) } : {}),
     ...(replay.length > 0 ? { replay: cloneJson(replay) as LangGraphReplayEntry[] } : {}),
   });
 
@@ -170,8 +218,7 @@ const createLangGraphTaskRuntime = (
     createdAt: source.createdAt,
     progress: (progress: NonNullable<TaskSnapshot['progress']>) =>
       validateTaskProgress(task, progress).pipe(
-        Effect.flatMap(parsedProgress => storage.update(source, { progress: parsedProgress })),
-        Effect.tap(projection.publish),
+        Effect.flatMap(parsedProgress => updateOwned(source, { progress: parsedProgress })),
       ),
     sleep: (milliseconds: number) =>
       Effect.tryPromise({ try: () => sleep(milliseconds), catch: toTaskFailure }),
@@ -181,6 +228,7 @@ const createLangGraphTaskRuntime = (
     ref: TaskRunIdentity,
     state: TaskExecutionState,
     request: TaskExecutionInteractionRequest,
+    replayEvent?: LangGraphTaskExecutionCheckpoint['replayEvent'],
   ) => {
     const persisted = await runTaskEffect(storage.loadSource(ref));
     const sameState = JSON.stringify(persisted.checkpoint?.state) === JSON.stringify(state);
@@ -195,13 +243,16 @@ const createLangGraphTaskRuntime = (
         );
 
     if (persistedCheckpoint?.response?.interactionId !== interaction.id) {
-      await update(ref, {
-        status: 'waiting',
-        checkpoint: withReplay(
-          { version: 1, state: cloneJson(state), interaction },
-          replayOf(persisted),
-        ),
-      });
+      await runTaskEffect(
+        updateOwned(ref, {
+          status: 'waiting',
+          checkpoint: withReplay(
+            { version: 1, state: cloneJson(state), interaction },
+            replayOf(persisted),
+            persistedCheckpoint?.replayEvent ?? replayEvent,
+          ),
+        }),
+      );
     }
     return interaction;
   };
@@ -214,12 +265,14 @@ const createLangGraphTaskRuntime = (
     const ref = { taskId: source.taskId, runId: source.runId };
     if (transition.kind === 'complete') {
       const result = await runTaskEffect(validateTaskOutput(task, transition.result));
-      await update(ref, {
-        status: 'completed',
-        completedAt: now(),
-        result,
-        checkpoint: undefined,
-      });
+      await runTaskEffect(
+        updateOwned(ref, {
+          status: 'completed',
+          completedAt: now(),
+          result,
+          checkpoint: undefined,
+        }),
+      );
       return { done: true, result };
     }
     if (!isTaskExecutionState(transition.state)) {
@@ -235,16 +288,32 @@ const createLangGraphTaskRuntime = (
       return { executionState, done: false };
     }
     if (transition.kind === 'event') {
-      throw invalidTaskDefinitionFailure(
-        task.id,
-        'LangGraph Task Runtime does not support durable Event waits.',
-        { eventId: transition.event.declaration.id },
+      eventDelivery();
+      if (!storage.updateIfStatus) {
+        throw {
+          reason: 'task_event_runtime_unavailable',
+          message: 'LangGraph Event waits require Task Storage with conditional writes.',
+        } satisfies TaskFailure;
+      }
+      const eventWait = materializeTaskEventWait(ref, transition.event, eventDeclarations);
+      await runTaskEffect(
+        updateOwned(ref, {
+          status: 'waiting',
+          checkpoint: { version: 1, state: executionState, eventWait },
+        }),
       );
+      return { done: true, eventOccurrence: null };
     }
-    await update(ref, {
-      checkpoint: withReplay({ version: 1, state: executionState }, replayOf(source)),
-    });
-    return { executionState, done: false };
+    await runTaskEffect(
+      updateOwned(ref, {
+        checkpoint: withReplay(
+          { version: 1, state: executionState },
+          replayOf(source),
+          checkpointOf(source)?.replayEvent,
+        ),
+      }),
+    );
+    return { executionState, done: false, eventOccurrence: null };
   };
 
   const getGraph = (task: TaskDefinition<any, any>) => {
@@ -262,6 +331,7 @@ const createLangGraphTaskRuntime = (
     const graph = createGraphBuilder(async state => {
       const ref = { taskId: state.taskId, runId: state.runId };
       const source = await runTaskEffect(storage.loadSource(ref));
+      if (!lease.owns(execution.getStore()?.runtime, source)) throw executionLeaseLost();
       if (!isTaskExecutionState(state.executionState)) {
         throw invalidTaskDefinitionFailure(task.id, 'LangGraph execution state is invalid.', {});
       }
@@ -269,7 +339,12 @@ const createLangGraphTaskRuntime = (
       if (!step) throw missingTaskStepFailure(task.id, state.executionState.step);
       const context = createStepContext(task, source);
       let transition = await runTaskEffect(
-        step.run({ input: state.input, state: state.executionState, context }),
+        step.run({
+          input: state.input,
+          state: state.executionState,
+          ...(state.eventOccurrence ? { event: state.eventOccurrence } : {}),
+          context,
+        }),
       );
 
       while (transition.kind === 'interaction') {
@@ -280,7 +355,14 @@ const createLangGraphTaskRuntime = (
             { stepId: state.executionState.step },
           );
         }
-        const interaction = await prepareInteraction(ref, transition.state, transition.interaction);
+        const interaction = await prepareInteraction(
+          ref,
+          transition.state,
+          transition.interaction,
+          state.eventOccurrence
+            ? { state: state.executionState, occurrence: state.eventOccurrence }
+            : undefined,
+        );
         const response = interrupt<TaskPendingInteraction, TaskInteractionResponse>(interaction);
         await runTaskEffect(validateTaskInteractionResponse(ref, interaction, response));
         transition = await runTaskEffect(
@@ -306,6 +388,7 @@ const createLangGraphTaskRuntime = (
     executionState: source.checkpoint!.state as TaskExecutionState,
     done: false,
     result: undefined,
+    eventOccurrence: source.checkpoint?.eventOccurrence ?? null,
   });
 
   const pendingProviderInteractionId = (
@@ -341,16 +424,21 @@ const createLangGraphTaskRuntime = (
 
   const rebuildProviderThread = async (graph: LangGraphRunnable, source: TaskRunSource) => {
     await checkpointer.getTuple(graphConfig(source));
-    await checkpointer.deleteThread(threadIdOf(source));
+    await checkpointer.deleteThread(graphConfig(source).configurable.thread_id);
     const config = graphConfig(source);
     const replay = replayOf(source);
-    const replaySource =
-      replay.length > 0
-        ? {
-            ...source,
-            checkpoint: { version: 1 as const, state: replay[0]!.state },
-          }
-        : source;
+    const replayEvent = checkpointOf(source)?.replayEvent;
+    const firstState = replayEvent?.state ?? replay[0]?.state;
+    const replaySource = firstState
+      ? {
+          ...source,
+          checkpoint: {
+            version: 1 as const,
+            state: firstState,
+            ...(replayEvent ? { eventOccurrence: replayEvent.occurrence } : {}),
+          },
+        }
+      : source;
     let result = await graph.invoke(initialGraphState(replaySource), config);
     for (const entry of replay) {
       const graphState = await graph.getState(config);
@@ -368,7 +456,7 @@ const createLangGraphTaskRuntime = (
 
   const invocationFor = async (graph: LangGraphRunnable, source: TaskRunSource, fresh: boolean) => {
     const config = graphConfig(source);
-    if (fresh) return rebuildProviderThread(graph, source);
+    if (fresh || source.checkpoint?.eventOccurrence) return rebuildProviderThread(graph, source);
 
     const graphState = await graph.getState(config);
     const providerMatches = providerStateMatches(graphState, source);
@@ -398,14 +486,82 @@ const createLangGraphTaskRuntime = (
     activeRuns.set(key, responseId);
     const run = async () => {
       try {
-        await invocationFor(getGraph(task), source, fresh);
-      } catch (error) {
-        const failure = toTaskFailure(error);
-        await update(source, {
-          status: 'failed',
-          completedAt: now(),
-          checkpoint: undefined,
-          error: { code: failure.reason, message: failure.message },
+        let claimed = await runTaskEffect(lease.claim(source));
+        while (!claimed && responseId) {
+          const latest = await runTaskEffect(storage.loadSource(source));
+          if (
+            latest.status !== 'running' ||
+            latest.checkpoint?.response?.interactionId !== responseId ||
+            !latest.runtime?.executionLease
+          )
+            return;
+          await new Promise(resolve => setTimeout(resolve, 10));
+          claimed = await runTaskEffect(lease.claim(source));
+        }
+        if (!claimed) return;
+        await execution.run({ runtime: claimed.runtime }, async () => {
+          const runtime = claimed.runtime;
+          const renewal = runtime?.executionLease
+            ? Effect.runFork(
+                Effect.sleep(Math.max(1, Math.floor(executionLeaseMs / 3))).pipe(
+                  Effect.zipRight(lease.renew(claimed, runtime)),
+                  Effect.map(snapshot => snapshot !== undefined),
+                  Effect.catchAll(error =>
+                    Effect.sync(() => {
+                      onBackgroundError?.(error);
+                      return true;
+                    }),
+                  ),
+                  Effect.repeat(Schedule.recurWhile(Boolean)),
+                ),
+              )
+            : undefined;
+          try {
+            if (claimed.checkpoint?.eventOccurrence) {
+              try {
+                await settleTaskEventCheckpoint(claimed.checkpoint, host.events?.runtime);
+              } catch (error) {
+                onBackgroundError?.(toTaskFailure(error));
+                return;
+              }
+            }
+            await withRuntimeSpan(
+              'ontahi.runtime.task.attempt',
+              {
+                attributes: { 'ontahi.task.runtime': 'langgraph' },
+                ...(claimed.enqueueTrace ? { links: [claimed.enqueueTrace] } : {}),
+              },
+              async span => {
+                try {
+                  await invocationFor(getGraph(task), claimed, fresh);
+                  markRuntimeSuccess(span);
+                } catch (error) {
+                  markRuntimeFailure(span, 'task_attempt_failed');
+                  throw error;
+                }
+              },
+            );
+          } catch (error) {
+            const failure = toTaskFailure(error);
+            if (failure.reason === 'task_worker_lease_lost') return;
+            const snapshot = await runTaskEffect(
+              lease.update(claimed, claimed.runtime, {
+                status: 'failed',
+                completedAt: now(),
+                ...(failure.reason === 'task_effect_outcome_ambiguous'
+                  ? {}
+                  : { checkpoint: undefined }),
+                error: { code: failure.reason, message: failure.message },
+              }),
+            );
+            if (snapshot) await publish(snapshot);
+          } finally {
+            if (renewal) await Effect.runPromise(Fiber.interrupt(renewal));
+            if (claimed.runtime?.executionLease) {
+              const { executionLease: _released, ...runtime } = claimed.runtime;
+              await runTaskEffect(lease.update(claimed, claimed.runtime, { runtime }, true));
+            }
+          }
         });
       } finally {
         activeRuns.delete(key);
@@ -434,7 +590,79 @@ const createLangGraphTaskRuntime = (
     return launch(source, task, host.createExecutionContext?.(source));
   };
 
+  const refresh = (ref: TaskRunIdentity) =>
+    Effect.gen(function* () {
+      let source = yield* storage.loadSource(ref);
+      if (source.status === 'waiting' && source.checkpoint?.eventWait && host.events) {
+        const waiting = source;
+        const snapshot = yield* Effect.tryPromise({
+          try: () => pollTaskEventWait(storage, waiting, host.events?.runtime),
+          catch: toTaskFailure,
+        });
+        if (snapshot) yield* projection.publish(snapshot);
+        source = yield* storage.loadSource(ref);
+      }
+      recover(source);
+      const snapshot = yield* storage.getSnapshot(ref);
+      yield* projection.publish(snapshot);
+      return snapshot;
+    });
+
+  const updateQueued = async (source: TaskRunSource, patch: Partial<TaskRunSource>) => {
+    if (!storage.updateIfStatus) return update(source, patch);
+    const snapshot = await runTaskEffect(
+      storage.updateIfStatus(source, 'queued', patch, { runtime: source.runtime }),
+    );
+    return snapshot ? publish(snapshot) : runTaskEffect(storage.getSnapshot(source));
+  };
+
   const runtime: TaskRuntime = {
+    supportsAtomicAdmission: storage.admit !== undefined,
+    ...(storage.updateIfStatus && {
+      cancel: (ref: TaskRunIdentity) =>
+        Effect.gen(function* () {
+          while (true) {
+            const source = yield* storage.loadSource(ref);
+            if (
+              source.runtime?.name !== 'langgraph' ||
+              (source.status !== 'queued' &&
+                source.status !== 'running' &&
+                source.status !== 'waiting')
+            )
+              return undefined;
+            if (source.checkpoint?.eventWait) {
+              return yield* Effect.fail({
+                reason: 'task_event_wait_cancel_required',
+                message: 'Use Event-wait cancellation while this Task is waiting for an Event.',
+              } satisfies TaskFailure);
+            }
+            const { executionLease: _revoked, ...runtime } = source.runtime;
+            const snapshot = yield* storage.updateIfStatus!(
+              ref,
+              source.status,
+              {
+                status: 'cancelled',
+                completedAt: now(),
+                runtime,
+                ...(source.status === 'queued'
+                  ? {}
+                  : {
+                      error: {
+                        code: 'task_effect_outcome_ambiguous',
+                        message:
+                          'LangGraph execution cancelled before confirming its external effects.',
+                      },
+                    }),
+              },
+              { runtime: source.runtime },
+            );
+            if (snapshot) {
+              yield* projection.publish(snapshot);
+              return snapshot;
+            }
+          }
+        }),
+    }),
     register: task => {
       tasks.set(task.id, task);
       legacyRuntime.register?.(task);
@@ -451,18 +679,37 @@ const createLangGraphTaskRuntime = (
           const parsedInput = await runTaskEffect(validateTaskInput(task, input));
           const runId = options?.runId ?? createConfiguredRunId();
           const ref = { taskId: task.id, runId };
-          const source = await runTaskEffect(
-            storage.create({
-              ...ref,
-              input: parsedInput,
-              trigger: options?.trigger,
-              subject: options?.subject,
-            }),
-          );
+          const admission = options?.admission;
+          if (admission && !storage.admit) {
+            throw {
+              reason: 'task_admission_unavailable',
+              message: 'Task storage does not support atomic admission.',
+            } satisfies TaskFailure;
+          }
+          const createInput = {
+            ...ref,
+            input: parsedInput,
+            trigger: options?.trigger,
+            subject: options?.subject,
+            runtime: { name: 'langgraph', runId: threadIdOf(ref) },
+            enqueueTrace: getServerRuntimeConfig().telemetry.captureTraceContext?.(),
+          };
+          const { source, created } = admission
+            ? await runTaskEffect(storage.admit!(createInput, admission))
+            : { source: await runTaskEffect(storage.create(createInput)), created: true };
+          if (!created) {
+            return {
+              ...toTaskRunRef(source),
+              admission:
+                source.error?.code === 'task_effect_outcome_ambiguous'
+                  ? ('reconciliation-required' as const)
+                  : source.status === 'completed'
+                    ? ('already-completed' as const)
+                    : ('reused' as const),
+            };
+          }
+          const admissionResult = admission ? { admission: 'created' as const } : {};
           await publish(await runTaskEffect(storage.getSnapshot(ref)));
-          await runTaskEffect(
-            storage.attachRuntimeRef(ref, { name: 'langgraph', runId: threadIdOf(ref) }),
-          );
           let state: TaskExecutionState;
           try {
             const initial = task.execution!.initial(parsedInput);
@@ -476,19 +723,20 @@ const createLangGraphTaskRuntime = (
             state = initial;
           } catch (error) {
             const failure = toTaskFailure(error);
-            const failed = await update(ref, {
+            const failed = await updateQueued(source, {
               status: 'failed',
               completedAt: now(),
               error: { code: failure.reason, message: failure.message },
             });
-            return toTaskRunRef(failed);
+            return { ...toTaskRunRef(failed), ...admissionResult };
           }
           const checkpoint = { version: 1 as const, state: cloneJson(state) };
-          const running = await update(ref, {
+          const running = await updateQueued(source, {
             status: 'running',
             startedAt: now(),
             checkpoint,
           });
+          if (running.status !== 'running') return { ...toTaskRunRef(running), ...admissionResult };
           const runningSource = { ...source, ...running, checkpoint, input: parsedInput };
           launch(
             runningSource,
@@ -496,19 +744,36 @@ const createLangGraphTaskRuntime = (
             serverContext.current() ?? host.createExecutionContext?.(runningSource),
             true,
           );
-          return toTaskRunRef(running);
+          return { ...toTaskRunRef(running), ...admissionResult };
         },
         catch: toTaskFailure,
       });
     },
     getSnapshot: ref =>
+      tasks.get(ref.taskId)?.execution ? refresh(ref) : legacyRuntime.getSnapshot(ref),
+    cancelEventWait: ref =>
       Effect.gen(function* () {
-        const task = tasks.get(ref.taskId);
-        if (!task?.execution) return yield* legacyRuntime.getSnapshot(ref);
+        if (!tasks.get(ref.taskId)?.execution && legacyRuntime.cancelEventWait) {
+          return yield* legacyRuntime.cancelEventWait(ref);
+        }
         const source = yield* storage.loadSource(ref);
-        recover(source);
-        const snapshot = yield* storage.getSnapshot(ref);
+        const wait = source.checkpoint?.eventWait;
+        const snapshot =
+          source.status === 'waiting' && wait
+            ? yield* storage.cancelEvent(ref, wait.id, 'cancelled')
+            : undefined;
+        if (!wait || !snapshot) {
+          return yield* Effect.fail({
+            reason: 'task_event_wait_not_pending',
+            message: 'Task run has no pending Event wait.',
+            ...ref,
+          } satisfies TaskFailure);
+        }
         yield* projection.publish(snapshot);
+        yield* Effect.tryPromise({
+          try: () => eventDelivery().cancel(taskEventWaitSubscriptionId(ref, wait.id)),
+          catch: toTaskFailure,
+        }).pipe(Effect.retry(Schedule.recurs(2)));
         return snapshot;
       }),
     listRecent: limit => storage.listRecent(limit),
@@ -553,6 +818,7 @@ const createLangGraphTaskRuntime = (
               response: cloneJson(response),
             },
           ],
+          checkpointOf(source)?.replayEvent,
         );
         const snapshot = yield* storage.claimInteraction(
           ref,
@@ -574,11 +840,30 @@ const createLangGraphTaskRuntime = (
         Effect.gen(function* () {
           const task = tasks.get(ref.taskId);
           if (!task?.execution && legacyRuntime.observe) return legacyRuntime.observe(ref);
-          const source = yield* storage.loadSource(ref);
-          recover(source);
-          const snapshot = yield* storage.getSnapshot(ref);
-          yield* projection.publish(snapshot);
-          return projection.observe(ref);
+          yield* refresh(ref);
+          const snapshots = projection.observe(ref);
+          if (!host.events) return snapshots;
+          return snapshots.pipe(
+            Stream.drainFork(
+              Stream.repeatEffect(
+                refresh(ref).pipe(
+                  Effect.delay('250 millis'),
+                  Effect.catchAll(error =>
+                    Effect.sync(() => {
+                      onBackgroundError?.(error);
+                      return undefined;
+                    }),
+                  ),
+                ),
+              ).pipe(
+                Stream.takeUntil(
+                  snapshot =>
+                    snapshot !== undefined &&
+                    ['completed', 'failed', 'cancelled'].includes(snapshot.status),
+                ),
+              ),
+            ),
+          );
         }),
       ),
   };
@@ -595,9 +880,10 @@ export const createLangGraphTaskExecutor = (
 export const langGraphTasks = ({
   storage = createInMemoryTaskStorage(),
   createExecutionContext,
+  events,
   ...executorOptions
 }: LangGraphTasksOptions = {}): TaskConfig => ({
   executor: createLangGraphTaskExecutor(executorOptions),
   storage,
-  ...(createExecutionContext ? { host: { createExecutionContext } } : {}),
+  ...(createExecutionContext || events ? { host: { createExecutionContext, events } } : {}),
 });

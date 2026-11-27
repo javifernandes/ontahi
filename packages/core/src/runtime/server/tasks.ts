@@ -22,6 +22,9 @@ export {
   createTaskEventResume,
   eventWaitMatchesOccurrence,
   materializeTaskEventWait,
+  pollTaskEventWait,
+  requireTaskEventDelivery,
+  settleTaskEventCheckpoint,
   taskEventWaitSubscriptionId,
 } from './tasks/event-waits.js';
 export {

@@ -139,6 +139,77 @@ describe('PostgreSQL Task Storage', () => {
     }
   });
 
+  it('rejects an expired runtime lease and writes from its former owner after takeover', async () => {
+    const store = storage();
+    const ref = { taskId: 'Customer.runtime-lease', runId: 'run' };
+    const expired = {
+      name: 'langgraph',
+      runId: 'original-thread',
+      executionLease: { token: 'first', expiresAt: '2000-01-01T00:00:00Z' },
+    };
+    await Effect.runPromise(store.create({ ...ref, runtime: expired }));
+    await Effect.runPromise(store.update(ref, { status: 'running' }));
+    const finish = { status: 'completed', result: 'stale' } as const;
+    await expect(
+      Effect.runPromise(
+        store.updateIfStatus!(ref, 'running', finish, {
+          runtime: expired,
+          leaseState: 'live',
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    const current = {
+      ...expired,
+      runId: 'recovered-thread',
+      executionLease: { token: 'second', expiresAt: '2099-01-01T00:00:00Z' },
+    };
+    await expect(
+      Effect.runPromise(
+        store.updateIfStatus!(
+          ref,
+          'running',
+          { runtime: current },
+          { runtime: expired, leaseState: 'available' },
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 'running' });
+    await expect(
+      Effect.runPromise(
+        store.updateIfStatus!(
+          ref,
+          'running',
+          { runtime: expired },
+          {
+            runtime: current,
+            leaseState: 'available',
+          },
+        ),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(
+        store.updateIfStatus!(ref, 'running', finish, {
+          runtime: expired,
+          leaseState: 'live',
+        }),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(
+        store.updateIfStatus!(
+          ref,
+          'running',
+          { ...finish, result: 'recovered' },
+          {
+            runtime: current,
+            leaseState: 'live',
+          },
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 'completed', result: 'recovered' });
+  });
+
   it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', row =>
     verifyTaskReconciliationConformance(row, {
       createStorage: storage,

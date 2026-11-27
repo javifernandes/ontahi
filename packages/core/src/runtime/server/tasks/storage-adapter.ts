@@ -29,7 +29,7 @@ export type TaskStorageAdapterOperations = {
     ref: TaskRunIdentity,
     status: TaskStatus,
     patch: Partial<TaskRunSource>,
-    expected?: { runtime: TaskRuntimeRef | undefined },
+    expected?: { runtime: TaskRuntimeRef | undefined; leaseState?: 'live' | 'available' },
   ): Promise<TaskRunSource | undefined>;
   claim(
     ref: TaskRunIdentity,

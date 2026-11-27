@@ -192,6 +192,7 @@ export type TaskRuntimeRef = {
   name: string;
   runId?: string;
   submissionPending?: boolean;
+  executionLease?: { token: string; expiresAt: string };
 };
 
 export type TaskRunRef = {
