@@ -1,3 +1,4 @@
+import { trace, type Span, type Tracer } from '@opentelemetry/api';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -114,8 +115,9 @@ describe('OpenTelemetry adapter', () => {
     ).rejects.toThrow('boom');
   });
 
-  it('creates an Ontahi runtime telemetry adapter', () => {
+  it('creates an Ontahi runtime telemetry adapter', async () => {
     const adapter = createOpenTelemetryServerRuntimeTelemetryAdapter();
+    await expect(adapter.withSpan('tasks.start', {}, () => 'ok')).resolves.toBe('ok');
 
     expect(
       adapter.getRuntimeAttributes({
@@ -126,5 +128,64 @@ describe('OpenTelemetry adapter', () => {
       'ontahi.scope': 'tasks.start',
       'ontahi.runtime': 'effect',
     });
+  });
+
+  it('captures only the identifiers needed to link a durable attempt', () => {
+    const adapter = createOpenTelemetryServerRuntimeTelemetryAdapter();
+    const enqueue = {
+      traceId: '00000000000000000000000000000001',
+      spanId: '0000000000000002',
+      traceFlags: 1,
+    };
+    const spanContext = vi.fn().mockReturnValue({ ...enqueue, isRemote: false });
+    const active = vi
+      .spyOn(trace, 'getActiveSpan')
+      .mockReturnValue({ spanContext } as unknown as Span);
+    try {
+      expect(adapter.captureTraceContext?.()).toEqual(enqueue);
+      spanContext.mockReturnValue({ ...enqueue, spanId: '0000000000000000' });
+      expect(adapter.captureTraceContext?.()).toBeUndefined();
+      active.mockReturnValue(undefined);
+      expect(adapter.captureTraceContext?.()).toBeUndefined();
+    } finally {
+      active.mockRestore();
+    }
+  });
+
+  it('adds valid remote links and preserves native span options', async () => {
+    const adapter = createOpenTelemetryServerRuntimeTelemetryAdapter();
+    const enqueue = {
+      traceId: '00000000000000000000000000000001',
+      spanId: '0000000000000002',
+      traceFlags: 1,
+    };
+    const nativeLink = { context: { ...enqueue, spanId: '0000000000000003' } };
+    const span = { end: vi.fn() };
+    const startActiveSpan = vi.fn((_name, _options, run: (span: unknown) => unknown) => run(span));
+    const tracer = vi
+      .spyOn(trace, 'getTracer')
+      .mockReturnValue({ startActiveSpan } as unknown as Tracer);
+    try {
+      await expect(
+        adapter.withSpan(
+          'task.attempt',
+          {
+            spanOptions: { links: [nativeLink] },
+            links: [enqueue, { ...enqueue, spanId: '0000000000000000' }],
+          },
+          () => 'ok',
+        ),
+      ).resolves.toBe('ok');
+      expect(startActiveSpan).toHaveBeenCalledWith(
+        'task.attempt',
+        {
+          links: [nativeLink, { context: { ...enqueue, isRemote: true } }],
+        },
+        expect.any(Function),
+      );
+      expect(span.end).toHaveBeenCalledOnce();
+    } finally {
+      tracer.mockRestore();
+    }
   });
 });
