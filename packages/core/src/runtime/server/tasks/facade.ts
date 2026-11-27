@@ -101,6 +101,14 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
       }),
     observe: (ref: TaskRunIdentity) =>
       Stream.unwrap(Effect.map(getRuntime(), runtime => observeTaskRun(runtime, ref))),
+    cancel: (ref: TaskRunIdentity) =>
+      Effect.gen(function* () {
+        const runtime = yield* getRuntime();
+        if (runtime.cancel) return yield* runtime.cancel(ref);
+        return yield* Effect.fail(
+          createTaskFailure('task_cancellation_unavailable', 'Task cancellation is unavailable.'),
+        );
+      }),
     cancelEventWait: (ref: TaskRunIdentity) =>
       Effect.gen(function* () {
         const runtime = yield* getRuntime();

@@ -1,6 +1,6 @@
 import { field, value } from '@ontahi/core';
 import { defineEvent, type EventOccurrence, type EventRuntime } from '@ontahi/core/runtime/server';
-import type { TaskRunSource } from '@ontahi/core/runtime/server/tasks';
+import type { TaskRunSource, TaskStorage } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -83,7 +83,7 @@ const createHarness = ({
   const acknowledge = vi.fn(() => Promise.resolve());
   const release = vi.fn(() => Promise.resolve());
   const cancel = vi.fn(() => Promise.resolve());
-  const update = vi.fn((_identity, patch) => {
+  const update = vi.fn<TaskStorage['update']>((_identity, patch) => {
     source = { ...source, ...patch };
     return Effect.succeed(source);
   });
@@ -158,6 +158,24 @@ describe('Vercel Workflow Event waits', () => {
       expect.objectContaining({ id: 'task:fixture.wait:run-1:event-wait:wait-1' }),
     );
   });
+
+  it.each(['task_execution_stopped', 'task_storage_failed'])(
+    'cleans up a new subscription only when the checkpoint is definitively rejected (%s)',
+    async reason => {
+      const harness = createHarness();
+      harness.update.mockReturnValueOnce(Effect.fail({ reason, message: reason }));
+
+      if (reason === 'task_execution_stopped') {
+        await expect(wait(harness)).resolves.toEqual({ kind: 'stopped' });
+        expect(harness.cancel).toHaveBeenCalledWith(harness.claim.delivery.subscriptionId);
+      } else {
+        await expect(wait(harness)).rejects.toMatchObject({ reason });
+        expect(harness.cancel).not.toHaveBeenCalled();
+      }
+      expect(harness.register).toHaveBeenCalledOnce();
+      expect(harness.claimDelivery).not.toHaveBeenCalled();
+    },
+  );
 
   it('acknowledges a delivery that lost the atomic Task Storage claim', async () => {
     const harness = createHarness({ claimWinner: false });

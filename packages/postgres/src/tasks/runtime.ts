@@ -133,26 +133,44 @@ const createStorage = (
     leaseToken
       ? { reason: 'task_worker_lease_lost', message: 'The Task worker no longer owns this run.' }
       : missingTaskRunFailure(ref);
-  const load = async (ref: TaskRunIdentity) => {
-    const result = await pool.query<PostgresTaskRow>(
-      `SELECT * FROM ${table} WHERE task_id = $1 AND run_id = $2 ${lease(3)}`,
+  // xmin stays constant for writes in one transaction. ctid identifies the tuple version.
+  const loadRow = async (ref: TaskRunIdentity) => {
+    const result = await pool.query<PostgresTaskRow & { revision: string }>(
+      `SELECT *, (xmin::text || ctid::text) AS revision FROM ${table} WHERE task_id = $1 AND run_id = $2 ${lease(3)}`,
       [ref.taskId, ref.runId, ...leaseParameters],
     );
     const row = result.rows[0];
     if (!row) throw missingWrite(ref);
-    return fromRow(row);
+    return row;
   };
+  const load = async (ref: TaskRunIdentity) => fromRow(await loadRow(ref));
 
-  const update = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) => {
-    const current = await load(ref);
+  const write = async (
+    ref: TaskRunIdentity,
+    patch: Partial<TaskRunSource>,
+    status?: TaskStatus,
+    expected?: { runtime: TaskRunSource['runtime'] },
+  ) => {
+    const row = await loadRow(ref);
+    const current = fromRow(row);
+    if (status && row.status !== status) return undefined;
     const next = applyTaskRunSourcePatch(current, patch, patch.updatedAt ?? now().toISOString());
+    const guardParameters = [
+      ...leaseParameters,
+      ...(status ? [status, row.revision] : []),
+      ...(expected ? [json(expected.runtime)] : []),
+    ];
+    const firstGuard = 16 + leaseParameters.length;
     const result = await pool.query<PostgresTaskRow>(
       `UPDATE ${table} SET
         status = $3, input = $4::jsonb, trigger = $5::jsonb, subject = $6::jsonb,
         runtime = $7::jsonb, progress = $8::jsonb, checkpoint = $9::jsonb,
         result = $10::jsonb, execution_metadata = $11::jsonb, error = $12::jsonb,
         started_at = $13, updated_at = $14, completed_at = $15
-       WHERE task_id = $1 AND run_id = $2 ${lease(16)} RETURNING *`,
+       WHERE task_id = $1 AND run_id = $2 ${lease(16)}
+         ${status ? `AND status = $${firstGuard} AND (xmin::text || ctid::text) = $${firstGuard + 1}` : ''}
+         ${expected ? `AND runtime IS NOT DISTINCT FROM $${firstGuard + 2}::jsonb` : ''}
+       RETURNING *`,
       [
         ref.taskId,
         ref.runId,
@@ -169,12 +187,12 @@ const createStorage = (
         next.startedAt ?? null,
         next.updatedAt,
         next.completedAt ?? null,
-        ...leaseParameters,
+        ...guardParameters,
       ],
     );
-    const row = result.rows[0];
-    if (!row) throw missingWrite(ref);
-    return fromRow(row);
+    const written = result.rows[0];
+    if (!written && !status) throw missingWrite(ref);
+    return written && fromRow(written);
   };
 
   const claim = async (
@@ -257,7 +275,8 @@ const createStorage = (
         // A conflicting run that stopped qualifying leaves the key free for another insert.
       }
     },
-    update,
+    update: async (ref, patch) => (await write(ref, patch))!,
+    updateIfStatus: (ref, status, patch, expected) => write(ref, patch, status, expected),
     claim,
     cancelEvent: async (ref, waitId, status, error) => {
       const result = await pool.query<PostgresTaskRow>(

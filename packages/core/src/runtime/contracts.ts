@@ -191,6 +191,7 @@ export type TaskTrigger = {
 export type TaskRuntimeRef = {
   name: string;
   runId?: string;
+  submissionPending?: boolean;
 };
 
 export type TaskRunRef = {

@@ -182,6 +182,13 @@ export type TaskStorageControl = {
 };
 
 export type TaskStorageEngine = {
+  /** Apply the patch atomically if the lifecycle state and any supplied runtime reference match. */
+  updateIfStatus?(
+    ref: TaskRunIdentity,
+    status: TaskStatus,
+    patch: Partial<TaskRunSource>,
+    expected?: { runtime: TaskRuntimeRef | undefined },
+  ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
   loadSource(ref: TaskRunIdentity): Effect.Effect<TaskRunSource, TaskFailure>;
   attachRuntimeRef(
     ref: TaskRunIdentity,
@@ -294,6 +301,7 @@ export type TaskRuntime = {
   ): Effect.Effect<TaskRunRef, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
+  cancel?(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
   cancelEventWait?(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   respondToInteraction?(
     ref: TaskRunIdentity,

@@ -66,3 +66,7 @@ preserves unresolved effect evidence and prevents duplicate admission under the 
 
 Timed scheduling and lease renewal remain open. Host applications own polling, Task
 registration, Event declarations, and the authorization boundary for cancellation.
+
+The PostgreSQL worker runs the shared [Durable Operation conformance contract](../../docs/durable-operation-conformance.md).
+Provider-specific transaction failure and stale Event delivery cases remain in the PostgreSQL
+integration suite.
