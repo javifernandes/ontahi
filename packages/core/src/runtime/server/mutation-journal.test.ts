@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   createInMemoryDataGraphStorage,
@@ -123,6 +123,51 @@ const runWithMutationBudget = async <TValue>(
 };
 
 describe('UnitOfWork mutation journal', () => {
+  it('marks a transaction committed before running post-commit work', async () => {
+    const transactionSpan = {};
+    const childSpan = {};
+    const markSuccess = vi.fn();
+    const markFailure = vi.fn();
+    configureServerRuntime({
+      telemetry: {
+        withSpan: async (name, _options, run) => {
+          if (name === 'ontahi.runtime.transaction') return run(transactionSpan);
+          if (name === 'ontahi.runtime.unit_of_work') return run(childSpan);
+          return run({});
+        },
+        getRuntimeAttributes: () => ({}),
+        markSuccess,
+        markFailure,
+      },
+    });
+
+    const postCommit = vi.fn(async () => {
+      throw new Error('post-commit failed');
+    });
+    try {
+      const result = await runWithRuntime(
+        transaction(Effect.sync(() => deferDataGraphPostCommitWork(postCommit))).pipe(Effect.exit),
+      );
+      expect(result._tag).toBe('Failure');
+      expect(postCommit).toHaveBeenCalledOnce();
+      expect(markFailure).not.toHaveBeenCalled();
+      expect(markSuccess).toHaveBeenCalledWith(childSpan);
+      expect(markSuccess).toHaveBeenCalledWith(transactionSpan, {
+        'ontahi.transaction.outcome': 'committed',
+      });
+      const commitCall = markSuccess.mock.calls.findIndex(([span]) => span === transactionSpan);
+      expect(markSuccess.mock.invocationCallOrder[commitCall]).toBeLessThan(
+        postCommit.mock.invocationCallOrder[0]!,
+      );
+
+      await runWithRuntime(transaction(Effect.fail('rollback')).pipe(Effect.either));
+      expect(markFailure).toHaveBeenCalledWith(transactionSpan, 'transaction_failed');
+      expect(markFailure).toHaveBeenCalledWith(childSpan, 'unit_of_work_failed');
+    } finally {
+      resetServerRuntimeForTests();
+    }
+  });
+
   it('publishes a sealed child journal only after its transaction commits', async () => {
     const observed = await runWithRuntime(
       Effect.gen(function* () {

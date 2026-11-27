@@ -1,8 +1,10 @@
 import { Cause, Effect, Option, Stream } from 'effect';
 
 import { cloneJson } from '../../../value/json.js';
+import { getConfiguredRuntimeTelemetry } from '../config.js';
 import type { OperationRuntimeContext } from '../context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from '../context.js';
+import { traceRuntimeEffect } from '../telemetry.js';
 import {
   commitMutationSetToCurrentUnitOfWork,
   createCommittedMutationCommit,
@@ -463,6 +465,21 @@ export const createInProcessTaskRuntime = ({
     };
     return context;
   };
+  const traceExecution = <TValue, TError>(
+    source: TaskRunSource,
+    work: Effect.Effect<TValue, TError>,
+  ) =>
+    Effect.suspend(() => {
+      if (!getConfiguredRuntimeTelemetry() || !storage.beginExecution) return work;
+      return storage.beginExecution(source).pipe(
+        Effect.flatMap(ordinal =>
+          traceRuntimeEffect('ontahi.runtime.task.attempt', work, undefined, {
+            attributes: { 'ontahi.task.execution.ordinal': ordinal },
+            ...(source.enqueueTrace ? { links: [source.enqueueTrace] } : {}),
+          }),
+        ),
+      );
+    });
   const prepareExplicitExecution = (
     ref: TaskRunIdentity,
     task: TaskDefinition<any, any>,
@@ -474,108 +491,111 @@ export const createInProcessTaskRuntime = ({
 
     const definition = task.execution!;
     const context = createTaskContext(task, source);
-    const background = Effect.gen(function* () {
-      yield* Effect.sync(() => restoreCommittedMutations(source));
-      let checkpoint = source.checkpoint!;
+    const background = traceExecution(
+      source,
+      Effect.gen(function* () {
+        yield* Effect.sync(() => restoreCommittedMutations(source));
+        let checkpoint = source.checkpoint!;
 
-      while (true) {
-        if (checkpoint.version !== 1 || !isTaskExecutionState(checkpoint.state)) {
-          return yield* Effect.fail(
-            invalidTaskDefinitionFailure(
-              task.id,
-              'Persisted explicit execution state is invalid.',
-              {},
-            ),
-          );
-        }
-        if (deferExplicitExecution) yield* storage.loadSource(ref);
-        const step = definition.steps[checkpoint.state.step];
-        if (!step) {
-          return yield* Effect.fail(missingTaskStepFailure(task.id, checkpoint.state.step));
-        }
-        const transition = yield* step.run({
-          input: source.input,
-          state: checkpoint.state,
-          ...(checkpoint.response ? { response: checkpoint.response } : {}),
-          ...(checkpoint.eventOccurrence ? { event: checkpoint.eventOccurrence } : {}),
-          context,
-        });
-
-        if (transition.kind === 'complete') {
-          const result = yield* validateTaskOutput(task, transition.result);
-          const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
-          yield* update(ref, {
-            status: 'completed',
-            completedAt: now(),
-            result,
-            ...(executionMetadata ? { executionMetadata } : {}),
-            checkpoint: undefined,
-          });
-          if (executionMetadata?.committedMutations) {
-            yield* Effect.sync(() =>
-              deliverCommittedMutationsToCurrentRuntime({
-                id:
-                  executionMetadata.mutationCommitId ??
-                  createCommittedMutationCommit(executionMetadata.committedMutations).id,
-                mutations: executionMetadata.committedMutations,
-              }),
+        while (true) {
+          if (checkpoint.version !== 1 || !isTaskExecutionState(checkpoint.state)) {
+            return yield* Effect.fail(
+              invalidTaskDefinitionFailure(
+                task.id,
+                'Persisted explicit execution state is invalid.',
+                {},
+              ),
             );
           }
-          return;
-        }
-        if (!isTaskExecutionState(transition.state)) {
-          return yield* Effect.fail(
-            invalidTaskDefinitionFailure(
-              task.id,
-              'Explicit execution step returned an invalid JSON-safe state.',
-              { stepId: checkpoint.state.step },
-            ),
-          );
-        }
-
-        if (transition.kind === 'continue') {
-          checkpoint = { version: 1, state: cloneJson(transition.state) };
-          yield* update(ref, { checkpoint });
-          continue;
-        }
-
-        if (transition.kind === 'event') {
-          if (deferExplicitExecution) {
-            yield* Effect.try({
-              try: () => requireTaskEventDelivery(events?.runtime),
-              catch: error => ({
-                reason: 'task_event_runtime_unavailable',
-                message: String(error),
-              }),
-            });
+          if (deferExplicitExecution) yield* storage.loadSource(ref);
+          const step = definition.steps[checkpoint.state.step];
+          if (!step) {
+            return yield* Effect.fail(missingTaskStepFailure(task.id, checkpoint.state.step));
           }
-          const eventWait = yield* Effect.try({
-            try: () => materializeTaskEventWait(ref, transition.event, eventDeclarations),
-            catch: toTaskFailure,
+          const transition = yield* step.run({
+            input: source.input,
+            state: checkpoint.state,
+            ...(checkpoint.response ? { response: checkpoint.response } : {}),
+            ...(checkpoint.eventOccurrence ? { event: checkpoint.eventOccurrence } : {}),
+            context,
           });
-          checkpoint = { version: 1, state: cloneJson(transition.state), eventWait };
+
+          if (transition.kind === 'complete') {
+            const result = yield* validateTaskOutput(task, transition.result);
+            const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
+            yield* update(ref, {
+              status: 'completed',
+              completedAt: now(),
+              result,
+              ...(executionMetadata ? { executionMetadata } : {}),
+              checkpoint: undefined,
+            });
+            if (executionMetadata?.committedMutations) {
+              yield* Effect.sync(() =>
+                deliverCommittedMutationsToCurrentRuntime({
+                  id:
+                    executionMetadata.mutationCommitId ??
+                    createCommittedMutationCommit(executionMetadata.committedMutations).id,
+                  mutations: executionMetadata.committedMutations,
+                }),
+              );
+            }
+            return;
+          }
+          if (!isTaskExecutionState(transition.state)) {
+            return yield* Effect.fail(
+              invalidTaskDefinitionFailure(
+                task.id,
+                'Explicit execution step returned an invalid JSON-safe state.',
+                { stepId: checkpoint.state.step },
+              ),
+            );
+          }
+
+          if (transition.kind === 'continue') {
+            checkpoint = { version: 1, state: cloneJson(transition.state) };
+            yield* update(ref, { checkpoint });
+            continue;
+          }
+
+          if (transition.kind === 'event') {
+            if (deferExplicitExecution) {
+              yield* Effect.try({
+                try: () => requireTaskEventDelivery(events?.runtime),
+                catch: error => ({
+                  reason: 'task_event_runtime_unavailable',
+                  message: String(error),
+                }),
+              });
+            }
+            const eventWait = yield* Effect.try({
+              try: () => materializeTaskEventWait(ref, transition.event, eventDeclarations),
+              catch: toTaskFailure,
+            });
+            checkpoint = { version: 1, state: cloneJson(transition.state), eventWait };
+            const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
+            yield* update(ref, {
+              status: 'waiting',
+              checkpoint,
+              ...(executionMetadata ? { executionMetadata } : {}),
+            });
+            const waitingSource = { ...source, status: 'waiting' as const, checkpoint };
+            if (!deferExplicitExecution) observeEventWait(waitingSource);
+            return;
+          }
+
+          const interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
+          checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
           const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
           yield* update(ref, {
             status: 'waiting',
             checkpoint,
             ...(executionMetadata ? { executionMetadata } : {}),
           });
-          const waitingSource = { ...source, status: 'waiting' as const, checkpoint };
-          if (!deferExplicitExecution) observeEventWait(waitingSource);
           return;
         }
-
-        const interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
-        checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
-        const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
-        yield* update(ref, {
-          status: 'waiting',
-          checkpoint,
-          ...(executionMetadata ? { executionMetadata } : {}),
-        });
-        return;
-      }
-    }).pipe(
+      }),
+    ).pipe(
       Effect.catchAllCause(cause => {
         if (deferExplicitExecution && Cause.isInterruptedOnly(cause))
           return Effect.failCause(cause);
@@ -724,7 +744,9 @@ export const createInProcessTaskRuntime = ({
           }
           initialCheckpoint = { version: 1, state: cloneJson(state) };
         }
+        const enqueueTrace = getConfiguredRuntimeTelemetry()?.captureTraceContext?.();
         const createInput = {
+          ...(enqueueTrace ? { enqueueTrace } : {}),
           ...ref,
           input: parsedInput,
           trigger: options?.trigger,
@@ -797,32 +819,35 @@ export const createInProcessTaskRuntime = ({
           void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
           return startedRef;
         }
-        const background = Effect.gen(function* () {
-          yield* Effect.sync(() => restoreCommittedMutations(source));
-          yield* update(ref, {
-            status: 'running',
-            startedAt: now(),
-          });
-          const result = yield* task.run(parsedInput, context);
-          const parsedResult = yield* validateTaskOutput(task, result);
-          const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
-          yield* update(ref, {
-            status: 'completed',
-            completedAt: now(),
-            result: parsedResult,
-            ...(executionMetadata ? { executionMetadata } : {}),
-          });
-          if (executionMetadata?.committedMutations) {
-            yield* Effect.sync(() =>
-              deliverCommittedMutationsToCurrentRuntime({
-                id:
-                  executionMetadata.mutationCommitId ??
-                  createCommittedMutationCommit(executionMetadata.committedMutations).id,
-                mutations: executionMetadata.committedMutations,
-              }),
-            );
-          }
-        }).pipe(
+        const background = traceExecution(
+          source,
+          Effect.gen(function* () {
+            yield* Effect.sync(() => restoreCommittedMutations(source));
+            yield* update(ref, {
+              status: 'running',
+              startedAt: now(),
+            });
+            const result = yield* task.run(parsedInput, context);
+            const parsedResult = yield* validateTaskOutput(task, result);
+            const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
+            yield* update(ref, {
+              status: 'completed',
+              completedAt: now(),
+              result: parsedResult,
+              ...(executionMetadata ? { executionMetadata } : {}),
+            });
+            if (executionMetadata?.committedMutations) {
+              yield* Effect.sync(() =>
+                deliverCommittedMutationsToCurrentRuntime({
+                  id:
+                    executionMetadata.mutationCommitId ??
+                    createCommittedMutationCommit(executionMetadata.committedMutations).id,
+                  mutations: executionMetadata.committedMutations,
+                }),
+              );
+            }
+          }),
+        ).pipe(
           Effect.catchAllCause(cause => {
             const error = taskFailureFromCause(cause);
             return Effect.sync(captureExecutionMetadata).pipe(

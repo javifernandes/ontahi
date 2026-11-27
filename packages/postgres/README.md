@@ -208,7 +208,7 @@ const tasks = inProcessTasks({
 });
 ```
 
-The host applies `createPostgresTaskSchemaSql()` through its migration system. Construction never
+The host applies `createPostgresTaskSchemaSql()` through its migration system. Reapply the updated statements to existing Task tables before using durable trace correlation. Construction never
 creates or changes tables. The schema adds the admission columns and partial unique index to
 existing Task tables. Apply it before upgrading the adapter. The index arbitrates concurrent
 starts for `reuse-running` and `skip-if-completed` across workers. Interaction responses and Event waits use conditional updates so one

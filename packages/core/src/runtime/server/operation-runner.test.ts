@@ -8,7 +8,9 @@ import { getCurrentSemanticExecutionContext } from './semantic-execution.js';
 
 import {
   authenticated,
+  configureServerRuntime,
   getCurrentOperationExecutionAttempt,
+  resetServerRuntimeForTests,
   runServerEffect,
   withInvocationContext,
   type LayerConcern,
@@ -56,6 +58,32 @@ const createRunOperationEffect = () =>
   ) as unknown as RunOperationEffect & ReturnType<typeof vi.fn>;
 
 describe('createOperationRunner', () => {
+  it('traces the root Unit of Work when an invocation supplies resources', async () => {
+    const names: string[] = [];
+    configureServerRuntime({
+      telemetry: {
+        withSpan: async (name, _options, run) => {
+          names.push(name);
+          return run({});
+        },
+        getRuntimeAttributes: () => ({}),
+        markSuccess: () => {},
+        markFailure: () => {},
+      },
+    });
+    try {
+      const runner = createOperationRunner(
+        () => Effect.succeed({ title: 'Book' }),
+        { scope: 'Book.fetch' },
+        runServerOperation,
+      );
+      await withInvocationContext({ principal: null }, () => runner({}));
+      expect(names).toEqual(['Book.fetch', 'ontahi.runtime.unit_of_work']);
+    } finally {
+      resetServerRuntimeForTests();
+    }
+  });
+
   it('gives every execution attempt a stable ordinal and unique identity', async () => {
     const attempts: Array<ReturnType<typeof getCurrentOperationExecutionAttempt>> = [];
     const runner = createOperationRunner<BookInput, BookResult, OperationFailure>(

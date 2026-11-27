@@ -11,7 +11,7 @@ import type {
 import { toGraphCommandRequest, type GraphCommandRequest } from '../protocol/command/protocol.js';
 import type { AppliedMutationOutcome } from '../reaction/mutation.js';
 
-import { getServerRuntimeConfig } from './config.js';
+import { getConfiguredRuntimeTelemetry, getServerRuntimeConfig } from './config.js';
 import {
   createContextResourceApi,
   type ServerContextResourceApi,
@@ -380,5 +380,24 @@ export const withChildUnitOfWork = <TValue, TError, TRequirements>(
     for (const key of options.isolatedResources ?? []) resources.delete(key);
     for (const [key, value] of options.resources ?? []) resources.set(key, value);
 
-    return runInOperationContext({ ...parent, resources }, effect);
+    const child = runInOperationContext({ ...parent, resources }, effect);
+    const telemetry = getConfiguredRuntimeTelemetry();
+    if (!telemetry) return child;
+
+    return Effect.runtime<TRequirements>().pipe(
+      Effect.flatMap(runtime =>
+        Effect.promise(signal =>
+          telemetry.withSpan('ontahi.runtime.unit_of_work', {}, async span => {
+            const exit = await Runtime.runPromiseExit(runtime)(child, { signal });
+            if (Exit.isSuccess(exit)) {
+              telemetry.markSuccess(span);
+            } else {
+              telemetry.markFailure(span, 'unit_of_work_failed');
+            }
+            return exit;
+          }),
+        ),
+      ),
+      Effect.flatten,
+    );
   });

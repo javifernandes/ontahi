@@ -365,6 +365,9 @@ export type TaskSnapshot<TResult = unknown> = {
 };
 
 export type TaskRunSource = TaskSnapshot & {
+  /** Private enqueue trace context and durable execution count. */
+  enqueueTrace?: { traceId: string; spanId: string; traceFlags: number };
+  executionOrdinal?: number;
   input: unknown;
   trigger: TaskTrigger;
   runtime?: TaskRuntimeRef;

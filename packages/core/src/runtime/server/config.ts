@@ -52,6 +52,9 @@ const DEFAULT_RUNTIME_CONFIG: Required<
 
 let runtimeConfig: ServerRuntimeConfig<unknown> | undefined;
 
+export const getConfiguredRuntimeTelemetry = (): ServerRuntimeTelemetryAdapter | undefined =>
+  runtimeConfig?.telemetry;
+
 export const configureServerRuntime = <TEvent = unknown>(
   config: ServerRuntimeConfig<TEvent>,
 ): void => {

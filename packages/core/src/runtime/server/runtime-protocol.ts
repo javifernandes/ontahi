@@ -47,6 +47,7 @@ import {
   projectCurrentResourceEvidence,
   toModelCommandResourceEvidence,
 } from './resource-evidence.js';
+import { withRuntimeSpan } from './telemetry.js';
 import {
   COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY,
   createCommittedMutationCommit,
@@ -226,19 +227,20 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             telemetrySpanName: scope,
             resources,
           },
-          async () => {
-            const unitOfWork = getRequiredUnitOfWork();
-            const body = await run();
-            const committedMutations = sealUnitOfWorkMutationJournal(unitOfWork);
-            const commit = createCommittedMutationCommit(committedMutations);
-            delivery(commit);
-            return withRuntimeProtocolMetadata(
-              body,
-              committedMutations.mutations.length === 0
-                ? undefined
-                : { committedMutations, mutationCommitId: commit.id },
-            );
-          },
+          () =>
+            withRuntimeSpan('ontahi.runtime.unit_of_work', {}, async () => {
+              const unitOfWork = getRequiredUnitOfWork();
+              const body = await run();
+              const committedMutations = sealUnitOfWorkMutationJournal(unitOfWork);
+              const commit = createCommittedMutationCommit(committedMutations);
+              delivery(commit);
+              return withRuntimeProtocolMetadata(
+                body,
+                committedMutations.mutations.length === 0
+                  ? undefined
+                  : { committedMutations, mutationCommitId: commit.id },
+              );
+            }),
         ),
       );
     });

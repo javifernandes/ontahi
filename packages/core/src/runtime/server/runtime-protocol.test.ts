@@ -2,8 +2,10 @@ import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createInMemoryDataGraphStorage,
   field,
   value,
+  type GraphCommandDispatchResponse,
   type GraphReadDispatchContext,
   type GraphReadObservationResponse,
 } from '../../data-graph/index.js';
@@ -15,6 +17,8 @@ import {
   toOperationProtocolRequest,
 } from '../protocol/index.js';
 
+import { getRequiredOperationRuntimeContext } from './context.js';
+import { DATA_GRAPH_RUNTIME_RESOURCE_KEY, withDataGraphTransaction } from './data-graph.js';
 import type { EventDelivery } from './events/index.js';
 import {
   getCurrentInvocationContext,
@@ -598,7 +602,7 @@ describe('application Runtime Protocol', () => {
     await expect(iterator.next()).resolves.toMatchObject({ done: true });
   });
 
-  it('does not refresh active Graph Reads when mutation execution fails', async () => {
+  it('refreshes an active Graph Read after commit and skips rolled-back mutations', async () => {
     const { application } = createApplication();
     const read = vi.fn(async () => ({
       kind: 'graph-read-result' as const,
@@ -617,13 +621,29 @@ describe('application Runtime Protocol', () => {
           else signal.addEventListener('abort', () => resolve(), { once: true });
         });
       }) as Application['createGraphReadObserver'];
+    const storage = createInMemoryDataGraphStorage();
+    let shouldRollback = true;
     application.createGraphCommandDispatcher = vi.fn(() => async () => {
-      declareSelectionChange({
-        kind: 'selection',
-        entityName: 'Todo',
-        expression: { kind: 'all' },
-      });
-      throw new Error('rolled back');
+      getRequiredOperationRuntimeContext().resources.set(
+        DATA_GRAPH_RUNTIME_RESOURCE_KEY,
+        storage.createRuntime(),
+      );
+      return Effect.runPromise(
+        withDataGraphTransaction(
+          Effect.gen(function* () {
+            declareSelectionChange({
+              kind: 'selection',
+              entityName: 'Todo',
+              expression: { kind: 'all' },
+            });
+            if (shouldRollback) return yield* Effect.fail(new Error('rolled back'));
+            return {
+              kind: 'graph-command-result',
+              value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
+            } satisfies GraphCommandDispatchResponse;
+          }),
+        ),
+      );
     });
     const protocol = createApplicationRuntimeProtocol({
       application,
@@ -649,29 +669,40 @@ describe('application Runtime Protocol', () => {
       [Symbol.asyncIterator]();
     await iterator.next();
 
-    await protocol.dispatcher(
-      request('graph.command', {
-        version: 3,
-        kind: 'graph-command',
-        command: {
-          kind: 'entity-mutation-command',
-          action: 'update',
+    const command = request('graph.command', {
+      version: 3,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Todo',
+        target: {
+          kind: 'selection',
           entityName: 'Todo',
-          target: {
-            kind: 'selection',
-            entityName: 'Todo',
-            expression: { kind: 'all' },
-          },
-          values: { completed: true },
+          expression: { kind: 'all' },
         },
-      }),
-      context,
-    );
-    await Promise.resolve();
+        values: { completed: true },
+      },
+    });
+    try {
+      await protocol.dispatcher(command, context);
+      expect(read).not.toHaveBeenCalled();
 
-    expect(read).not.toHaveBeenCalled();
-    controller.abort();
-    await expect(iterator.next()).resolves.toMatchObject({ done: true });
+      shouldRollback = false;
+      await protocol.dispatcher(command, context);
+      await expect(iterator.next()).resolves.toMatchObject({
+        done: false,
+        value: {
+          kind: 'graph-read-result',
+          value: [{ revision: 1 }],
+          causedBy: { kind: 'committed-mutations' },
+        },
+      });
+      expect(read).toHaveBeenCalledOnce();
+    } finally {
+      controller.abort();
+      await iterator.return?.();
+    }
   });
 
   it('keeps semantic observation active after its native source ends', async () => {

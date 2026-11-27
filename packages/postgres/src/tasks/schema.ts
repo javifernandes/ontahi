@@ -65,7 +65,9 @@ export const createPostgresTaskSchemaSql = (tables?: PostgresTaskTableNames): re
       completed_at timestamptz,
       PRIMARY KEY (task_id, run_id)
     )`,
-    `ALTER TABLE ${runs} ADD COLUMN IF NOT EXISTS admission_key text,
+    `ALTER TABLE ${runs} ADD COLUMN IF NOT EXISTS enqueue_trace jsonb,
+      ADD COLUMN IF NOT EXISTS execution_ordinal integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS admission_key text,
       ADD COLUMN IF NOT EXISTS admission_policy text,
       ADD COLUMN IF NOT EXISTS worker_token text,
       ADD COLUMN IF NOT EXISTS worker_lease_until timestamptz`,

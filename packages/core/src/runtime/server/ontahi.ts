@@ -80,6 +80,7 @@ import {
   type ContextualMutationReactionExecutorOptions,
 } from './mutation-reaction.js';
 import type { TaskConfig, TaskRunSource } from './tasks.js';
+import { traceRuntimeEffect } from './telemetry.js';
 import { getCurrentUnitOfWork, recordAppliedGraphCommand } from './unit-of-work.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
@@ -344,6 +345,13 @@ export const ontahi = <
     const mutationRuntime = runtime as unknown as EntityMutationCommandExecutionRuntime<unknown>;
     return new Proxy(runtime, {
       get(target, property, receiver) {
+        if (property === 'get' || property === 'run' || property === 'count') {
+          const read = Reflect.get(target, property, receiver) as (
+            ...args: unknown[]
+          ) => Effect.Effect<unknown, unknown>;
+          return (...args: unknown[]) =>
+            traceRuntimeEffect('ontahi.runtime.read', read.apply(target, args));
+        }
         if (property === 'transaction') {
           if (insideTransaction) return undefined;
           const transaction = Reflect.get(target, property, receiver) as
@@ -371,7 +379,10 @@ export const ontahi = <
             command: Parameters<AnyDataGraphRuntime['runCommand']>[0],
             commandOptions: Parameters<AnyDataGraphRuntime['runCommand']>[1],
           ) =>
-            runCommand.call(target, command, commandOptions).pipe(
+            traceRuntimeEffect(
+              'ontahi.runtime.command',
+              runCommand.call(target, command, commandOptions),
+            ).pipe(
               Effect.tap(() =>
                 Effect.sync(() =>
                   getCurrentUnitOfWork()?.mutations.changed({
@@ -395,119 +406,122 @@ export const ontahi = <
           command: Parameters<typeof mutationRuntime.runEntityMutationCommand>[0],
           commandOptions: Parameters<typeof mutationRuntime.runEntityMutationCommand>[1],
         ) =>
-          Effect.gen(function* () {
-            let executableCommand: EntityMutationCommand = command;
-            if (command.action === 'update') {
-              const entityDefinition = semanticEntities.find(
-                entity => entity.name === command.entityName,
-              );
-              const generatedFieldName = Object.keys(command.values).find(
-                fieldName => entityDefinition?.fields[fieldName]?.generatedBy !== undefined,
-              );
-              if (generatedFieldName) {
-                throw new Error(
-                  `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${generatedFieldName}.`,
+          traceRuntimeEffect(
+            'ontahi.runtime.command',
+            Effect.gen(function* () {
+              let executableCommand: EntityMutationCommand = command;
+              if (command.action === 'update') {
+                const entityDefinition = semanticEntities.find(
+                  entity => entity.name === command.entityName,
                 );
-              }
-            }
-            if (command.action === 'create') {
-              const entityDefinition = semanticEntities.find(
-                entity => entity.name === command.entityName,
-              );
-              if (!entityDefinition) {
-                throw new Error(`Unknown Entity ${command.entityName}.`);
-              }
-              const values = { ...command.values };
-              for (const [fieldName, field] of Object.entries(entityDefinition.fields)) {
-                if (!field.generatedBy) continue;
-                if (Object.prototype.hasOwnProperty.call(values, fieldName)) {
-                  throw new Error(
-                    `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${fieldName}.`,
-                  );
-                }
-                const generator =
-                  field.generatedBy === 'uuid'
-                    ? () => globalThis.crypto.randomUUID()
-                    : options.fieldGenerators?.[field.generatedBy];
-                if (!generator) {
-                  throw new Error(
-                    `No Field generator ${JSON.stringify(field.generatedBy)} is configured for ${command.entityName}.${fieldName}.`,
-                  );
-                }
-                const generated = generator({
-                  entityName: command.entityName,
-                  fieldName,
-                  values,
-                });
-                if (!safeParseGraphSchema(field, generated).success) {
-                  throw new Error(
-                    `Field generator ${JSON.stringify(field.generatedBy)} returned an invalid value for ${command.entityName}.${fieldName}.`,
-                  );
-                }
-                values[fieldName] = generated;
-              }
-              executableCommand = { ...command, values };
-            }
-
-            if (executableCommand.action !== 'delete') {
-              const entityDefinition = semanticEntities.find(
-                entity => entity.name === executableCommand.entityName,
-              );
-              if (!entityDefinition) {
-                throw new Error(`Unknown Entity ${executableCommand.entityName}.`);
-              }
-              for (const [fieldName, value] of Object.entries(executableCommand.values)) {
-                const field = entityDefinition.fields[fieldName];
-                if (
-                  !field ||
-                  !isReferenceFieldDefinition(field) ||
-                  field.mutationRequirement !== 'existing' ||
-                  !isEntityRef(value)
-                ) {
-                  continue;
-                }
-                const count = yield* target.count(query(field.target).where(value), undefined);
-                if (count === 1) continue;
-
-                const error = new Error(
-                  `${command.entityName}.${fieldName} references a missing ${field.target.name}.`,
+                const generatedFieldName = Object.keys(command.values).find(
+                  fieldName => entityDefinition?.fields[fieldName]?.generatedBy !== undefined,
                 );
-                Object.assign(error, {
-                  diagnostic: entityMutationReferenceNotFoundDiagnostic(
-                    executableCommand,
+                if (generatedFieldName) {
+                  throw new Error(
+                    `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${generatedFieldName}.`,
+                  );
+                }
+              }
+              if (command.action === 'create') {
+                const entityDefinition = semanticEntities.find(
+                  entity => entity.name === command.entityName,
+                );
+                if (!entityDefinition) {
+                  throw new Error(`Unknown Entity ${command.entityName}.`);
+                }
+                const values = { ...command.values };
+                for (const [fieldName, field] of Object.entries(entityDefinition.fields)) {
+                  if (!field.generatedBy) continue;
+                  if (Object.prototype.hasOwnProperty.call(values, fieldName)) {
+                    throw new Error(
+                      `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${fieldName}.`,
+                    );
+                  }
+                  const generator =
+                    field.generatedBy === 'uuid'
+                      ? () => globalThis.crypto.randomUUID()
+                      : options.fieldGenerators?.[field.generatedBy];
+                  if (!generator) {
+                    throw new Error(
+                      `No Field generator ${JSON.stringify(field.generatedBy)} is configured for ${command.entityName}.${fieldName}.`,
+                    );
+                  }
+                  const generated = generator({
+                    entityName: command.entityName,
                     fieldName,
-                    field.target.name,
-                  ),
-                });
-                throw error;
+                    values,
+                  });
+                  if (!safeParseGraphSchema(field, generated).success) {
+                    throw new Error(
+                      `Field generator ${JSON.stringify(field.generatedBy)} returned an invalid value for ${command.entityName}.${fieldName}.`,
+                    );
+                  }
+                  values[fieldName] = generated;
+                }
+                executableCommand = { ...command, values };
               }
-            }
 
-            const execution = yield* executeEntityMutationLifecycle(
-              target as never,
-              semanticEntities,
-              executableCommand,
-              commandOptions,
-            );
-            for (const outcome of execution.outcomes) {
-              if (outcome.kind === 'entity') {
-                yield* applyContextualEntityMutationReactions(
-                  outcome.command,
-                  outcome.delta,
-                  commandOptions,
-                  mutationReactionConfiguration,
+              if (executableCommand.action !== 'delete') {
+                const entityDefinition = semanticEntities.find(
+                  entity => entity.name === executableCommand.entityName,
                 );
-              } else {
-                yield* applyContextualRelationshipMutationReactions(
-                  outcome.command,
-                  outcome.result,
-                  commandOptions,
-                  mutationReactionConfiguration,
-                );
+                if (!entityDefinition) {
+                  throw new Error(`Unknown Entity ${executableCommand.entityName}.`);
+                }
+                for (const [fieldName, value] of Object.entries(executableCommand.values)) {
+                  const field = entityDefinition.fields[fieldName];
+                  if (
+                    !field ||
+                    !isReferenceFieldDefinition(field) ||
+                    field.mutationRequirement !== 'existing' ||
+                    !isEntityRef(value)
+                  ) {
+                    continue;
+                  }
+                  const count = yield* target.count(query(field.target).where(value), undefined);
+                  if (count === 1) continue;
+
+                  const error = new Error(
+                    `${command.entityName}.${fieldName} references a missing ${field.target.name}.`,
+                  );
+                  Object.assign(error, {
+                    diagnostic: entityMutationReferenceNotFoundDiagnostic(
+                      executableCommand,
+                      fieldName,
+                      field.target.name,
+                    ),
+                  });
+                  throw error;
+                }
               }
-            }
-            return execution.delta;
-          });
+
+              const execution = yield* executeEntityMutationLifecycle(
+                target as never,
+                semanticEntities,
+                executableCommand,
+                commandOptions,
+              );
+              for (const outcome of execution.outcomes) {
+                if (outcome.kind === 'entity') {
+                  yield* applyContextualEntityMutationReactions(
+                    outcome.command,
+                    outcome.delta,
+                    commandOptions,
+                    mutationReactionConfiguration,
+                  );
+                } else {
+                  yield* applyContextualRelationshipMutationReactions(
+                    outcome.command,
+                    outcome.result,
+                    commandOptions,
+                    mutationReactionConfiguration,
+                  );
+                }
+              }
+              return execution.delta;
+            }),
+          );
       },
     }) as unknown as StorageRuntime<TStorage>;
   };
