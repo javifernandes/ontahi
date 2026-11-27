@@ -39,9 +39,13 @@ producing mutations. Return puts, removes, and counts for reused rows. Prefer a 
 projection when equality only requires metadata or digests.
 
 The application supplies completeness by scope. A positive row is eligible for a put even when
-its scope has no complete observation. An omitted current row is eligible for removal only when
-the corresponding scope is complete. Explicit provider deletions, if needed, should be evaluated
-against the accepted-collection contract before adding a second deletion mechanism here.
+its scope has no complete observation. An omission can remove a current row only when the scope
+observation is complete and its coverage is ordered after the last accepted positive event for
+that row. If the event is newer or ordering cannot be established, retain the row or reject the
+candidate. A source watermark, an observation base revision, or a check against accepted event
+positions at publication can establish coverage without relying on wall-clock order. Explicit
+provider deletions should be evaluated against the accepted-collection contract before adding a
+second deletion mechanism here.
 
 For example, with accepted rows `A/keep`, `A/old`, and `B/keep`, a complete observation of A
 can supply `A/keep` and `A/new`. If B failed and a trusted event separately supplies `B/new`,
@@ -49,7 +53,10 @@ publication keeps `A/keep` and `B/keep`, removes `A/old`, and puts `A/new` and `
 
 Apply the diff in the existing Unit of Work against the same state used for comparison. Use the
 host's existing publication lock or a storage-owned revision guard. A stale candidate cannot
-overwrite a newer publication. Maintain explicit dependency order for the first implementation.
+overwrite a newer publication. Check observation coverage against the accepted rows used for the
+diff. The revision guard protects the interval from comparison to commit, while the coverage
+check also accounts for events accepted between capture and comparison. Maintain explicit
+dependency order for the first implementation.
 Apply child removals before parent removals and parent puts before dependent puts. Publish the
 accepted revision only after the complete write batch succeeds.
 
@@ -69,7 +76,10 @@ accepted revision only after the complete write batch succeeds.
 - [ ] Equal rows emit no mutation. Additions, changed persisted fields, and valid omissions
       produce the expected puts and removes. Replay is idempotent.
 - [ ] An incomplete or failed scope cannot authorize a delete by omission. A successful empty
-      scope can. A positive observation has independent authority to put.
+      scope can when its coverage follows the last accepted positive event for that row. A
+      positive observation has independent authority to put.
+- [ ] A complete observation captured before a later accepted positive event cannot remove
+      that event's row, even when the diff runs after the event is accepted.
 - [ ] Results preserve foreign-key ordering and match a full rebuild for the three consumer cases.
 - [ ] A rollback or stale writer leaves the previously accepted publication visible.
 - [ ] The default path uses the active Entity store and transaction.
@@ -81,6 +91,9 @@ accepted revision only after the complete write batch succeeds.
 Run focused replication and Entity storage tests plus the PostgreSQL integration suite. Exercise
 bootstrap, no-op, provenance-only changes, mixed additions and removals, failed scope plus
 positive overlay, recovery to an empty scope, conflicting writers, and failure mid-batch.
+Capture a complete observation that omits a row, accept a positive event for that row, then
+compare and try to publish the earlier observation. Assert that the row survives. Repeat with
+a complete empty observation whose coverage follows the event and verify that removal is allowed.
 In Atlas, compare persisted rows and snapshot content with rebuild. Separate SQL writes avoided
 from any gain in end-to-end publication time.
 
