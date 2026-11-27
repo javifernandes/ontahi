@@ -28,10 +28,14 @@ idempotency or reconciliation contract.
 
 The PostgreSQL Task integration suite is the first persistent reference. The in-memory fixture
 also exercises admission and approval through independent runtime instances sharing memory.
-Lease renewal, timed scheduling, replacement, and queueing are follow-up guarantees.
+The PostgreSQL worker uses a fixed lease. Renewal, scheduling, and other follow-ups are tracked in
+[153g](../plans/backlog/153g-durable-runtime-follow-ups.md) and
+[132a](../plans/backlog/132a-durable-replacement-and-queueing.md).
 
 The Vercel tests execute the actual Ontahí runtime and executor with a controlled Workflow SDK
 and in-memory fixture stores. They verify adapter behavior at the SDK boundary. Recovery after a crash between Task admission and Workflow submission remains unverified. An ambiguous submission retains the admission key for reconciliation.
+
+For runtime configuration, see the [developer guide](developers/02-core-concepts/09-durable-operations.md).
 
 Vercel uses `observeSnapshots` for ordered observation and `updateIfStatus` for fenced
 cancellation. PostgreSQL Task Storage supplies both when the updated Task schema is applied.

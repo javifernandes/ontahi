@@ -7,16 +7,16 @@ shared transaction merely because another implementation uses the same infrastru
 
 ## Verified implementations
 
-| Adapter              | Data Graph                                                                               | Task Storage / execution                                                                 | Events                                                        | Host / transport                              |
-| -------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------- |
-| Core in-memory       | Complete reference execution, process-local state, compositional transaction unavailable | In-memory Task Storage and native in-process executor; process-local observation         | Ephemeral live Event Runtime                                  | Transport-neutral Runtime Protocol receiver   |
-| PostgreSQL           | Transactional SQL execution and compositional Data Graph transactions                    | Durable Task Storage; native in-process execution composes separately                    | Retained occurrences and leased durable delivery              | Not applicable                                |
-| MySQL 8.4 / InnoDB   | Transactional SQL execution with documented driver/schema limits                         | Durable Task Storage; native in-process execution composes separately                    | Retained occurrences and leased durable delivery              | Not applicable                                |
-| Supabase / PostgREST | Graph reads and focused invoker-rights mutation RPCs; no compositional transaction       | Durable Task Storage and atomic Interaction/Event-wait claim RPCs; no native observation | Not implemented                                               | Not applicable                                |
-| Express              | Uses the composed application runtime                                                    | Operation and Task observation host                                                      | Live browser subscription and authenticated Event ingress     | HTTP and WebSocket Runtime Protocol, Explorer |
-| Next.js App Router   | Uses an injected receiver/dispatcher                                                     | Operation and Runtime Protocol HTTP host                                                 | Authenticated Event ingress                                   | Fetch Runtime Protocol Route Handler          |
-| Vercel Workflow      | Uses host-provided execution context                                                     | Explicit durable Task executor with Interaction resumption                               | Durable Event waits through an injected durable Event Runtime | Not a general HTTP host                       |
-| LangGraph            | Uses host-provided execution context                                                     | Explicit Task executor with Interaction resumption and checkpoint recovery               | Event waits rejected explicitly                               | Not a general HTTP host                       |
+| Adapter              | Data Graph                                                                               | Task Storage / execution                                                                      | Events                                                        | Host / transport                              |
+| -------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------- |
+| Core in-memory       | Complete reference execution, process-local state, compositional transaction unavailable | In-memory Task Storage and native in-process executor; process-local observation              | Ephemeral live Event Runtime                                  | Transport-neutral Runtime Protocol receiver   |
+| PostgreSQL           | Transactional SQL execution and compositional Data Graph transactions                    | Durable Task Storage and deferred PostgreSQL worker                                           | Retained occurrences and leased durable delivery              | Not applicable                                |
+| MySQL 8.4 / InnoDB   | Transactional SQL execution with documented driver/schema limits                         | Durable Task Storage; native in-process execution composes separately                         | Retained occurrences and leased durable delivery              | Not applicable                                |
+| Supabase / PostgREST | Graph reads and focused invoker-rights mutation RPCs; no compositional transaction       | Durable Task Storage and atomic Interaction/Event-wait claim RPCs; no native observation      | Not implemented                                               | Not applicable                                |
+| Express              | Uses the composed application runtime                                                    | Operation and Task observation host                                                           | Live browser subscription and authenticated Event ingress     | HTTP and WebSocket Runtime Protocol, Explorer |
+| Next.js App Router   | Uses an injected receiver/dispatcher                                                     | Operation and Runtime Protocol HTTP host                                                      | Authenticated Event ingress                                   | Fetch Runtime Protocol Route Handler          |
+| Vercel Workflow      | Uses host-provided execution context                                                     | Explicit execution with admission, Interaction resumption, and fenced cancellation            | Durable Event waits through an injected durable Event Runtime | Not a general HTTP host                       |
+| LangGraph            | Uses host-provided execution context                                                     | Explicit execution with admission, Interaction resumption, renewable leases, and cancellation | Durable Event waits through an injected durable Event Runtime | Not a general HTTP host                       |
 
 The matrix is descriptive, not additive. Installing `@ontahi/postgres` does not enable every column.
 The host imports and configures `@ontahi/postgres`, `@ontahi/postgres/tasks`, and
@@ -78,9 +78,26 @@ normalization.
 
 Vercel Workflow and LangGraph adapt explicit Task execution while Task Storage remains the public
 lifecycle authority. Provider workflow IDs, hooks, checkpoint commands, and interrupt payloads stay
-private. Both support Interaction resumption. Vercel Workflow additionally preserves durable Event
-wait semantics; LangGraph rejects that transition until it can prove the same delivery and atomic
-Task-claim contract.
+private. Both support Interaction and retained Event waits with the required Task Storage and
+Event Runtime.
+
+### Durable execution configurations
+
+| Configuration                                                                          | Execution and recovery                                                                                                                                | Observation and cancellation                                                                                                                               |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-process with memory                                                                 | Local Tasks and explicit checkpoints held in one process                                                                                              | Process-local snapshots and streams                                                                                                                        |
+| PostgreSQL worker with PostgreSQL Tasks and Events                                     | Atomic admission, Interaction and retained Event resumption, external-effect reconciliation, fixed lease and takeover                                 | Ordered PostgreSQL journal, worker cancellation and stale-write fencing                                                                                    |
+| Vercel Workflow with compatible Task Storage and Event Runtime                         | Atomic admission and both waits. Local World proves adapter restart and external-write recovery. The managed probe proves Workflow engine restart     | Ordered streams with `observeSnapshots`. Active cancellation with `updateIfStatus`. The adapter exposes no worker lease takeover                           |
+| LangGraph with conditional Task Storage, durable Events, and a persistent checkpointer | Atomic admission, both waits, reconciliation, renewable lease and takeover. PostgreSQL plus SQLite passes a real process restart for a retained Event | Ordered observation verified with shared in-memory Task Storage. Snapshot reads and observation drive Event polling. Active cancellation revokes the lease |
+
+MySQL and Supabase have Task Storage implementations. The execution configurations above have
+their own capability requirements and evidence. SQLite is a LangGraph checkpointer in the tested
+configuration. DBOS, Restate and Temporal remain engine candidates. RabbitMQ, Redis/BullMQ and
+NATS JetStream remain transport candidates.
+
+See the [getting-started configurations](../02-core-concepts/09-durable-operations.md#configure-the-execution-runtime)
+and the [executable evidence matrix](../../durable-operation-conformance.md) for the precise
+guarantees tested on each stack.
 
 ## Compose concerns independently
 

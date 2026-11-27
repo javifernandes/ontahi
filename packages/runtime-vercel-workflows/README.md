@@ -43,3 +43,18 @@ provide `events` to the executor and Task Storage with `claimEvent` and `cancelE
 This mapping does not provide Event history, general replay, arbitrary predicates, or stronger
 guarantees than the configured Event Runtime. Cancellation and timeout end the waiter subscription;
 they do not erase the retained occurrence.
+
+## Storage and recovery
+
+Atomic admission requires `admit` on Task Storage. Ordered observation uses
+`observeSnapshots`, and active-run cancellation uses `updateIfStatus`. PostgreSQL Task Storage
+provides these capabilities with the current schema. Use `cancelEventWait(ref)` for a pending
+Event subscription.
+
+The full adapter recovery and external-write reconciliation cases run in Workflow DevKit Local
+World. The managed Vercel probe exercises Workflow's own checkpoint recovery. Recovery across
+the gap between Task admission and Workflow submission remains open.
+
+See the [Durable Operations guide](../../docs/developers/02-core-concepts/09-durable-operations.md)
+for host wiring and the [conformance matrix](../../docs/durable-operation-conformance.md) for
+the configurations exercised.

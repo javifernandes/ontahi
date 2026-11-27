@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/153d-langgraph-task-runtime-comparison
   - ontahi://plans/153e-vercel-workflow-interaction-resumption
   - ontahi://plans/153f-queue-backed-task-runtime
+  - ontahi://plans/153g-durable-runtime-follow-ups
   - ontahi://plans/155-adapter-capability-completeness
   - ontahi://plans/155a-vercel-workflow-event-waits
   - ontahi://plans/162-operation-execution-resilience
@@ -62,3 +63,10 @@ claim. Event waits retain their distinct semantics: the workflow registers and c
 Event Runtime delivery, Task Storage chooses the single continuation winner, and the canonical
 occurrence resumes the existing state machine. Provider identities remain adapter-private in both
 paths.
+
+The PostgreSQL worker uses the Task run table as its queue and checks a fixed database-clock
+lease on execution writes. LangGraph renews a storage-backed execution lease and uses a
+separate provider thread after takeover. Both can recover retained Event waits. A process-level
+LangGraph proof combines PostgreSQL Tasks and Events with a SQLite checkpointer. The
+[developer capability matrix](../../docs/developers/03-runtimes/05-adapter-capability-matrix.md)
+records the supported configurations and the boundaries of their evidence.

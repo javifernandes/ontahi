@@ -16,4 +16,4 @@ reflection and fail closed when the configured runtime cannot support the declar
 - For queueing, define whether repeated deliveries coalesce and how waiting, failed, cancelled,
   and completed runs release the next accepted run.
 - Prove concurrent admission and recovery with two workers. Use
-  [153f](../current/153f-queue-backed-task-runtime.md) for the worker coordination work.
+  [153f](../done/153f-queue-backed-task-runtime.md) for the worker coordination work.

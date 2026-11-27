@@ -44,7 +44,7 @@ Consumer evidence:
 Related framework direction:
 
 1. [Durable Invocation Identity And Idempotency](../done/132-durable-invocation-identity-and-idempotency.md)
-2. [Queue-Backed Task Runtime](153f-queue-backed-task-runtime.md)
+2. [Queue-Backed Task Runtime](../done/153f-queue-backed-task-runtime.md)
 3. [Durable Operations](../../docs/developers/02-core-concepts/09-durable-operations.md)
 4. [Events](../../docs/developers/02-core-concepts/10-events.md)
 

@@ -259,8 +259,8 @@ Use a direct or session-pooled PostgreSQL connection. The worker claims a run wi
 lease and checks the lease before starting a step or writing a checkpoint. Another worker can
 recover the last checkpoint after the lease expires, even if the earlier session is still open.
 Set `leaseMs` to cover the longest execution from claim to its final checkpoint or wait write,
-including provider calls. The fixed deadline defaults to 60 seconds and does not renew during execution. External writes still need provider idempotency or reconciliation
-if a worker loses its lease while a remote call is in flight.
+including provider calls. The fixed deadline defaults to 60 seconds. External writes in flight
+still need provider idempotency or reconciliation if a worker loses its lease.
 
 A trusted host can call `worker.cancel(ref)` for a queued, waiting, or running deferred run.
 Cancelling a running run revokes its lease and preserves the checkpoint as a potentially
@@ -279,3 +279,7 @@ schema so workers can record each snapshot atomically with the run update. Obser
 current snapshot and poll for subsequent updates, including intermediate transitions committed
 between polls. The journal retains the latest 256 snapshots per run. Set
 `observationPollMs` on the server's Task Storage to change the default 100 ms interval.
+
+See the [Durable Operations guide](../../docs/developers/02-core-concepts/09-durable-operations.md)
+for host composition and the [conformance matrix](../../docs/durable-operation-conformance.md)
+for tested execution guarantees.

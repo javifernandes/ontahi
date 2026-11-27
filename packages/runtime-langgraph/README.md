@@ -52,11 +52,24 @@ Explicit steps may be replayed after failure, so application effects still requi
 idempotency. The adapter is an execution comparison and does not add an LLM, agent loop, LangSmith,
 or model memory.
 
-## Event waits
+## Durable configuration
 
-The adapter rejects Event-wait transitions explicitly. A LangGraph interrupt does not by itself
-retain an Event delivery or preserve the atomic Task Storage claim that selects one continuation.
-Applications may keep the same Event declaration and explicit execution state machine, but must
-select the native Task Runtime or Vercel Workflow executor when that execution waits for a durable
-Event. LangGraph support can be added only when it preserves the same provider-neutral claim
-contract rather than translating an Event into an untracked provider interrupt.
+`langGraphTasks({ storage, checkpointer, events: { runtime, declarations } })` composes the
+executor with Task Storage and a durable Event Runtime. PostgreSQL Tasks and Events plus a
+SQLite checkpointer are exercised by the process-restart integration test. An independent host
+reopens the provider checkpoint and the same Task run after the first worker stops.
+
+Task Storage with atomic admission supports `reuse-running` and `skip-if-completed`. Ambiguous
+external effects retain their checkpoint and admission key for reconciliation. Conditional Task
+writes enable a renewable execution lease, fenced cancellation, and retained Event waits. Use
+`executionLeaseMs` to change the default 60-second lease. A worker that loses ownership cannot
+publish later Task progress or results.
+
+An Event wait persists in Task Storage. Reading a snapshot or maintaining an observation drives
+polling. Task Storage atomically claims the matched occurrence before the executor acknowledges
+delivery and resumes the checkpoint. A host can use `cancelEventWait(ref)` to remove a pending
+wait. Its retained occurrence stays available to other subscribers.
+
+For wiring and capability details, see the
+[Durable Operations guide](../../docs/developers/02-core-concepts/09-durable-operations.md) and
+[conformance matrix](../../docs/durable-operation-conformance.md).
