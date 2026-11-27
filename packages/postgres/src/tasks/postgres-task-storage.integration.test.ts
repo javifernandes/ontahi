@@ -78,6 +78,41 @@ describe('PostgreSQL Task Storage', () => {
     });
   });
 
+  it('fences concurrent transitions within the same transaction', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const store = createPostgresTaskStorage({ pool: client, tables: taskTables });
+      const ref = { taskId: 'Customer.transaction-fence', runId: 'run' };
+      const runtime = { name: 'vercel-workflow' };
+      await Effect.runPromise(store.create({ ...ref, runtime }));
+      await Effect.runPromise(
+        store.updateIfStatus!(
+          ref,
+          'queued',
+          { runtime: { ...runtime, runId: 'provider' } },
+          { runtime },
+        ),
+      );
+      expect((await Effect.runPromise(store.loadSource(ref))).runtime?.runId).toBe('provider');
+      expect(
+        await Effect.runPromise(
+          store.updateIfStatus!(ref, 'queued', { status: 'cancelled' }, { runtime }),
+        ),
+      ).toBeUndefined();
+      const transitions = await Promise.all([
+        Effect.runPromise(store.updateIfStatus!(ref, 'queued', { status: 'cancelled' })),
+        Effect.runPromise(store.updateIfStatus!(ref, 'queued', { status: 'completed' })),
+      ]);
+      const committed = transitions.filter(snapshot => snapshot !== undefined);
+      expect(committed).toHaveLength(1);
+      expect((await Effect.runPromise(store.getSnapshot(ref))).status).toBe(committed[0]?.status);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
   it.each(taskReconciliationCases)('reconciles a remote Customer when $scenario', row =>
     verifyTaskReconciliationConformance(row, {
       createStorage: storage,

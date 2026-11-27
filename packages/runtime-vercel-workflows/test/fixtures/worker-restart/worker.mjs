@@ -15,8 +15,9 @@ const server = createServer(async (incoming, outgoing) => {
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));
     outgoing.end(Buffer.from(await response.arrayBuffer()));
   } catch (error) {
+    console.error(error);
     outgoing.writeHead(500);
-    outgoing.end(error instanceof Error ? error.stack : JSON.stringify(error));
+    outgoing.end('Worker request failed.');
   }
 });
 

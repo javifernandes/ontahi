@@ -81,6 +81,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
     status?: TaskRunSource['status'],
+    expected?: { runtime: TaskRunSource['runtime'] },
   ) =>
     Effect.gen(function* () {
       const current = runs.get(keyOf(ref));
@@ -90,6 +91,14 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
       }
 
       if (status && current.status !== status) return undefined;
+
+      if (
+        expected &&
+        (current.runtime?.name !== expected.runtime?.name ||
+          current.runtime?.runId !== expected.runtime?.runId ||
+          current.runtime?.submissionPending !== expected.runtime?.submissionPending)
+      )
+        return undefined;
 
       const next = {
         ...current,
@@ -139,7 +148,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         return Effect.succeed({ source: created, created: true });
       }),
     update: (ref, patch) => update(ref, patch).pipe(Effect.map(snapshot => snapshot!)),
-    updateIfStatus: (ref, status, patch) => update(ref, patch, status),
+    updateIfStatus: (ref, status, patch, expected) => update(ref, patch, status, expected),
     claimInteraction: (ref, interactionId, checkpoint) =>
       Effect.gen(function* () {
         const key = keyOf(ref);

@@ -22,7 +22,9 @@ export const updateVercelTask = (
       const source = yield* storage.loadSource(ref);
       if (!canUpdate(source)) return undefined;
       const snapshot = storage.updateIfStatus
-        ? yield* storage.updateIfStatus(ref, source.status, patch(source))
+        ? yield* storage.updateIfStatus(ref, source.status, patch(source), {
+            runtime: source.runtime,
+          })
         : yield* storage.update(ref, patch(source));
       if (snapshot) return snapshot;
     }

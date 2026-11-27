@@ -219,6 +219,7 @@ const toRuntimeTerminalPatch = (
 export const reconcileTaskRunSource = (
   source: TaskRunSource,
   store: Pick<TaskStorage, 'update' | 'updateIfStatus'> & Partial<Pick<TaskStorage, 'loadSource'>>,
+  options?: { terminalOnly: boolean },
 ): Effect.Effect<TaskRunSource, TaskFailure> => {
   if (!shouldAttemptTaskRunReconciliation(source)) {
     return Effect.succeed(source);
@@ -236,7 +237,7 @@ export const reconcileTaskRunSource = (
       catch: () => undefined,
     }).pipe(Effect.catchAll(() => Effect.succeed(undefined)));
 
-    if (!runtime) {
+    if (!runtime || (options?.terminalOnly && !isTerminalStatus(runtime.status))) {
       return source;
     }
 
@@ -250,7 +251,7 @@ export const reconcileTaskRunSource = (
 
     const update = (patch: Partial<TaskRunSource>) =>
       store.updateIfStatus
-        ? store.updateIfStatus(source, source.status, patch)
+        ? store.updateIfStatus(source, source.status, patch, { runtime: source.runtime })
         : store.update(source, patch);
 
     if (runtime.status === source.status) {
@@ -292,5 +293,6 @@ export const reconcileTaskRunSource = (
 export const reconcileTaskSnapshot = (
   source: TaskRunSource,
   store: Pick<TaskStorage, 'update' | 'updateIfStatus'> & Partial<Pick<TaskStorage, 'loadSource'>>,
+  options?: { terminalOnly: boolean },
 ): Effect.Effect<TaskSnapshot, TaskFailure> =>
-  Effect.map(reconcileTaskRunSource(source, store), projectTaskSnapshot);
+  Effect.map(reconcileTaskRunSource(source, store, options), projectTaskSnapshot);

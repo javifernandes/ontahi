@@ -28,6 +28,7 @@ export type TaskStorageAdapterOperations = {
     ref: TaskRunIdentity,
     status: TaskStatus,
     patch: Partial<TaskRunSource>,
+    expected?: { runtime: TaskRuntimeRef | undefined },
   ): Promise<TaskRunSource | undefined>;
   claim(
     ref: TaskRunIdentity,
@@ -77,9 +78,9 @@ export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperation
         attempt('Failed to admit task run.', () => admit.call(operations, input, admission)),
     }),
     ...(updateIfStatus && {
-      updateIfStatus: (ref, status, patch) =>
+      updateIfStatus: (ref, status, patch, expected) =>
         attempt('Failed to conditionally update task run.', async () =>
-          snapshot(await updateIfStatus.call(operations, ref, status, patch)),
+          snapshot(await updateIfStatus.call(operations, ref, status, patch, expected)),
         ),
     }),
     create: input => attempt('Failed to create task run.', () => operations.create(input)),

@@ -115,8 +115,8 @@ const observedStorage = (): TaskStorage => {
   return {
     ...storage,
     update: (ref, patch) => storage.update(ref, patch).pipe(Effect.tap(record)),
-    updateIfStatus: (ref, status, patch) =>
-      storage.updateIfStatus!(ref, status, patch).pipe(Effect.tap(record)),
+    updateIfStatus: (ref, status, patch, expected) =>
+      storage.updateIfStatus!(ref, status, patch, expected).pipe(Effect.tap(record)),
     claimInteraction: (ref, id, checkpoint) =>
       storage.claimInteraction(ref, id, checkpoint).pipe(Effect.tap(record)),
     observeSnapshots: ref =>
@@ -289,7 +289,7 @@ it('rejects atomic admission before submitting when storage lacks that capabilit
   expect(sdk.start).not.toHaveBeenCalled();
 });
 
-// The controlled SDK has no process-loss replay. That case requires a hosted Workflow run.
+// The controlled SDK has no process-loss replay. The Local World integration covers SIGKILL.
 it.each(taskReconciliationCases.filter(row => row.scenario !== 'worker-recreated'))(
   'preserves external-effect reconciliation for $scenario inside a Workflow',
   row => {
@@ -354,4 +354,129 @@ it('keeps the cancellation fence when the provider rejects and lets the host ret
   });
   await expect(Effect.runPromise(runtime.cancel!(ref))).resolves.toBeUndefined();
   expect(cancel).toHaveBeenCalledTimes(2);
+});
+
+it('journals a provider-only failure for an active observer', async () => {
+  const storage = observedStorage();
+  const ref = { taskId: 'Conformance.provider-only-failure', runId: 'run' };
+  await Effect.runPromise(
+    storage.create({ ...ref, runtime: { name: 'vercel-workflow', runId: 'provider-run' } }),
+  );
+  await Effect.runPromise(storage.update(ref, { status: 'running' }));
+  sdk.getRun.mockReturnValue({ status: Promise.resolve('failed') });
+  const runtime = createVercelWorkflowTaskRuntime({
+    taskRunStore: storage,
+    resolveWorkflow: () => undefined,
+  });
+  const updates = await Effect.runPromise(
+    runtime.observe!(ref).pipe(Stream.take(2), Stream.runCollect, Effect.timeout('4 seconds')),
+  );
+  expect(Array.from(updates, snapshot => snapshot.status)).toEqual(['running', 'failed']);
+  expect(await Effect.runPromise(storage.getSnapshot(ref))).toMatchObject({ status: 'failed' });
+});
+
+it('retains admission when cancellation wins before a lost submission response', async () => {
+  const storage = createInMemoryTaskStorage();
+  const task = { id: 'Conformance.cancel-submission', run: () => Effect.void };
+  const ref = { taskId: task.id, runId: 'run' };
+  const admission = { key: 'callback', policy: 'skip-if-completed' } as const;
+  const runtime = createVercelWorkflowTaskRuntime({
+    taskRunStore: storage,
+    resolveWorkflow: () => async () => undefined,
+  });
+  sdk.start.mockReset();
+  sdk.start.mockImplementationOnce(async () => {
+    const cancelled = await Effect.runPromise(runtime.cancel!(ref));
+    expect(cancelled).toMatchObject({
+      status: 'cancelled',
+      error: { code: 'task_effect_outcome_ambiguous' },
+    });
+    expect(await Effect.runPromise(runtime.start(task, undefined, { admission }))).toMatchObject({
+      runId: ref.runId,
+      admission: 'reconciliation-required',
+    });
+    throw new Error('Workflow API response lost');
+  });
+  await expect(
+    Effect.runPromise(Effect.flip(runtime.start(task, undefined, { ...ref, admission }))),
+  ).resolves.toMatchObject({ reason: 'task_effect_outcome_ambiguous' });
+  expect(await Effect.runPromise(runtime.start(task, undefined, { admission }))).toMatchObject({
+    runId: ref.runId,
+    status: 'cancelled',
+    admission: 'reconciliation-required',
+  });
+  expect(sdk.start).toHaveBeenCalledTimes(1);
+});
+
+it('returns the stored cancellation when the initial provider status arrives late', async () => {
+  const storage = createInMemoryTaskStorage();
+  const task = { id: 'Conformance.cancel-status', run: () => Effect.void };
+  const ref = { taskId: task.id, runId: 'run' };
+  const runtime = createVercelWorkflowTaskRuntime({
+    taskRunStore: storage,
+    resolveWorkflow: () => async () => undefined,
+  });
+  const cancel = vi.fn(async () => {});
+  sdk.getRun.mockReturnValue({ status: Promise.resolve('running'), cancel });
+  sdk.start.mockReset();
+  sdk.start.mockResolvedValueOnce({
+    runId: 'provider-run',
+    get status() {
+      return Effect.runPromise(runtime.cancel!(ref)).then(() => 'running');
+    },
+  });
+  await expect(Effect.runPromise(runtime.start(task, undefined, ref))).resolves.toMatchObject({
+    status: 'cancelled',
+  });
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('recomputes cancellation when a queued Workflow acquires a provider run ID', async () => {
+  const storage = createInMemoryTaskStorage();
+  const ref = { taskId: 'Conformance.attach-during-cancel', runId: 'run' };
+  await Effect.runPromise(storage.create({ ...ref, runtime: { name: 'vercel-workflow' } }));
+  const cancel = vi.fn(async () => {});
+  sdk.getRun.mockReturnValue({ status: Promise.resolve('running'), cancel });
+  const updateIfStatus = vi.fn(storage.updateIfStatus!);
+  updateIfStatus.mockImplementationOnce((identity, status, patch, expected) =>
+    Effect.zipRight(
+      storage.attachRuntimeRef(ref, { name: 'vercel-workflow', runId: 'provider-run' }),
+      storage.updateIfStatus!(identity, status, patch, expected),
+    ),
+  );
+  const runtime = createVercelWorkflowTaskRuntime({
+    taskRunStore: { ...storage, updateIfStatus },
+    resolveWorkflow: () => undefined,
+  });
+  await expect(Effect.runPromise(runtime.cancel!(ref))).resolves.toMatchObject({
+    status: 'cancelled',
+    error: { code: 'task_effect_outcome_ambiguous' },
+  });
+  expect(updateIfStatus).toHaveBeenCalledTimes(2);
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('skips Workflow submission when cancellation wins before the submission fence', async () => {
+  const storage = createInMemoryTaskStorage();
+  const task = { id: 'Conformance.cancel-before-submission', run: () => Effect.void };
+  const ref = { taskId: task.id, runId: 'run' };
+  const admission = { key: 'callback', policy: 'skip-if-completed' } as const;
+  const updateIfStatus = vi.fn(storage.updateIfStatus!);
+  const runtime = createVercelWorkflowTaskRuntime({
+    taskRunStore: { ...storage, updateIfStatus },
+    resolveWorkflow: () => async () => undefined,
+  });
+  updateIfStatus.mockImplementationOnce((identity, status, patch, expected) =>
+    Effect.zipRight(
+      runtime.cancel!(ref),
+      storage.updateIfStatus!(identity, status, patch, expected),
+    ),
+  );
+  sdk.start.mockReset();
+  await expect(
+    Effect.runPromise(runtime.start(task, undefined, { runId: ref.runId, admission })),
+  ).resolves.toMatchObject({ status: 'cancelled' });
+  const cancelled = await Effect.runPromise(storage.loadSource(ref));
+  expect(cancelled.error).toBeUndefined();
+  expect(sdk.start).not.toHaveBeenCalled();
 });

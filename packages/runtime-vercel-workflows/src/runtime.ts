@@ -13,7 +13,7 @@ import {
   validateTaskInteractionResponse,
 } from '@ontahi/core/runtime/server/tasks';
 import { cloneJson } from '@ontahi/core/value/json';
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import { getRun, resumeHook, start } from 'workflow/api';
 
 import type { VercelTaskWorkflowInput, VercelWorkflowTaskRuntimeOptions } from './contracts.js';
@@ -55,7 +55,16 @@ export const createVercelWorkflowTaskRuntime = ({
 }: VercelWorkflowTaskRuntimeOptions): TaskRuntime => ({
   supportsAtomicAdmission: taskRunStore.admit !== undefined,
   ...(taskRunStore.observeSnapshots && {
-    observe: (ref: VercelTaskWorkflowInput) => taskRunStore.observeSnapshots!(ref),
+    observe: (ref: VercelTaskWorkflowInput) =>
+      taskRunStore.observeSnapshots!(ref).pipe(
+        Stream.drainFork(
+          Stream.repeatEffect(
+            Effect.flatMap(taskRunStore.loadSource(ref), source =>
+              reconcileTaskSnapshot(source, taskRunStore, { terminalOnly: true }),
+            ).pipe(Effect.delay('1 second')),
+          ).pipe(Stream.takeUntil(snapshot => !isActiveVercelTask(snapshot))),
+        ),
+      ),
   }),
   ...(taskRunStore.updateIfStatus && {
     cancel: (ref: VercelTaskWorkflowInput) =>
@@ -70,7 +79,9 @@ export const createVercelWorkflowTaskRuntime = ({
           source => ({
             status: 'cancelled',
             completedAt: now(),
-            ...(source.status !== 'queued' || source.runtime?.runId
+            ...(source.status !== 'queued' ||
+            source.runtime?.runId ||
+            source.runtime?.submissionPending
               ? {
                   error: {
                     code: 'task_effect_outcome_ambiguous',
@@ -140,31 +151,36 @@ export const createVercelWorkflowTaskRuntime = ({
                 : ('reused' as const),
         };
       }
-      let submitted = false;
-      const workflowRun = yield* Effect.tryPromise({
-        try: async () => {
-          const workflow = resolveWorkflow(task.id);
-
-          if (!workflow) {
-            throw new Error(`Task "${task.id}" does not have a Vercel workflow.`);
-          }
-
-          submitted = true;
-          return start(workflow, [
-            {
-              taskId: task.id,
-              runId,
-            },
-          ]);
-        },
-        catch: error =>
-          admission && submitted
-            ? toTaskFailure(
-                'task_effect_outcome_ambiguous',
-                'Vercel Workflow start could not be confirmed.',
-                error,
-              )
-            : toTaskFailure('task_start_failed', 'Failed to start task.', error),
+      const guarded = taskRunStore.updateIfStatus !== undefined;
+      const workflowRun = yield* Effect.gen(function* () {
+        const workflow = yield* Effect.try({
+          try: () => {
+            const workflow = resolveWorkflow(task.id);
+            if (!workflow) throw new Error(`Task "${task.id}" does not have a Vercel workflow.`);
+            return workflow;
+          },
+          catch: error => toTaskFailure('task_start_failed', 'Failed to start task.', error),
+        });
+        if (guarded) {
+          const submitting = yield* updateVercelTask(
+            taskRunStore,
+            source,
+            candidate => candidate.status === 'queued',
+            () => ({ runtime: { name: 'vercel-workflow', submissionPending: true } }),
+          );
+          if (!submitting) return undefined;
+        }
+        return yield* Effect.tryPromise({
+          try: () => start(workflow, [{ taskId: task.id, runId }]),
+          catch: error =>
+            admission
+              ? toTaskFailure(
+                  'task_effect_outcome_ambiguous',
+                  'Vercel Workflow start could not be confirmed.',
+                  error,
+                )
+              : toTaskFailure('task_start_failed', 'Failed to start task.', error),
+        });
       }).pipe(
         Effect.tapError(error => {
           const patch = {
@@ -172,7 +188,7 @@ export const createVercelWorkflowTaskRuntime = ({
             completedAt: now(),
             error: { code: error.reason, message: error.message },
           };
-          return taskRunStore.updateIfStatus
+          return guarded
             ? updateVercelTask(
                 taskRunStore,
                 source,
@@ -182,6 +198,15 @@ export const createVercelWorkflowTaskRuntime = ({
             : taskRunStore.update(source, patch);
         }),
       );
+      const started = {
+        taskId: task.id,
+        runId,
+        ...(admission ? { admission: 'created' as const } : {}),
+        ...(source.subject ? { subject: source.subject } : {}),
+      };
+      if (!workflowRun) {
+        return { ...started, status: (yield* taskRunStore.loadSource(source)).status };
+      }
       const runtime = { name: 'vercel-workflow', runId: workflowRun.runId };
       const snapshot = taskRunStore.updateIfStatus
         ? (yield* updateVercelTask(
@@ -198,22 +223,23 @@ export const createVercelWorkflowTaskRuntime = ({
           : snapshot.status;
 
       if (snapshot.status === 'queued' && status !== 'queued') {
-        if (taskRunStore.updateIfStatus) {
-          yield* updateVercelTask(
-            taskRunStore,
-            source,
-            candidate => candidate.status === 'queued',
-            () => ({ status }),
-          );
-        } else yield* taskRunStore.update(source, { status });
+        const updated = guarded
+          ? yield* updateVercelTask(
+              taskRunStore,
+              source,
+              candidate => candidate.status === 'queued',
+              () => ({ status }),
+            )
+          : yield* taskRunStore.update(source, { status });
+        return { ...started, status: (updated ?? (yield* taskRunStore.loadSource(source))).status };
       }
 
       return {
-        taskId: task.id,
-        runId,
-        status: snapshot.status === 'queued' ? status : snapshot.status,
-        ...(admission ? { admission: 'created' as const } : {}),
-        ...(source.subject ? { subject: source.subject } : {}),
+        ...started,
+        status:
+          guarded && snapshot.status === 'queued'
+            ? (yield* taskRunStore.loadSource(source)).status
+            : status,
       };
     }).pipe(
       Effect.mapError(error =>
