@@ -18,6 +18,7 @@ import type {
 } from './types.js';
 
 export type TaskStorageAdapterOperations = {
+  beginExecution?(ref: TaskRunIdentity): Promise<number>;
   create(input: TaskRunCreateInput): Promise<TaskRunSource>;
   admit?(
     input: TaskRunCreateInput,
@@ -68,6 +69,7 @@ const operationFailure = (message: string, cause: unknown): TaskFailure => {
 export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperations): TaskStorage => {
   const attempt = <T>(message: string, work: () => Promise<T>) =>
     Effect.tryPromise({ try: work, catch: cause => operationFailure(message, cause) });
+  const { beginExecution } = operations;
   const snapshot = (source: TaskRunSource | undefined) =>
     source === undefined ? undefined : projectTaskSnapshot(source);
 
@@ -76,6 +78,10 @@ export const createTaskStorageAdapter = (operations: TaskStorageAdapterOperation
     ...(admit && {
       admit: (input, admission) =>
         attempt('Failed to admit task run.', () => admit.call(operations, input, admission)),
+    }),
+    ...(beginExecution && {
+      beginExecution: (ref: TaskRunIdentity) =>
+        attempt('Failed to allocate task execution ordinal.', () => beginExecution(ref)),
     }),
     ...(updateIfStatus && {
       updateIfStatus: (ref, status, patch, expected) =>

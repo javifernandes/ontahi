@@ -12,6 +12,8 @@ describe('PostgreSQL Task schema', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ontahi_task_runs"');
     expect(sql).toContain('PRIMARY KEY (task_id, run_id)');
     expect(sql).toContain('checkpoint jsonb');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS enqueue_trace jsonb');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS execution_ordinal integer');
     expect(sql).toContain('ontahi_task_runs_admission_uidx');
     expect(sql).toContain('ontahi_task_runs_runnable_idx');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ontahi_task_runs_observations"');

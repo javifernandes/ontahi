@@ -26,6 +26,7 @@ import {
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
 import { withSemanticExecutionActivity } from '../semantic-execution.js';
+import { traceRuntimeEffect } from '../telemetry.js';
 
 import {
   buildOperationCacheEntryKey,
@@ -215,9 +216,12 @@ export const createOperationRunner = <
 
     return withSemanticExecutionActivity({ kind: 'operation', id: metadata.scope }, () =>
       operationRuntimeContextStorage.run(context, async () => {
+        const execution = applyOperationRetry(guardedEffect, metadata.execution?.retry, context);
         const runCurrentOperation = () =>
           runOperationEffect(
-            applyOperationRetry(guardedEffect, metadata.execution?.retry, context),
+            parentContext
+              ? execution
+              : traceRuntimeEffect('ontahi.runtime.unit_of_work', execution),
             {
               scope: metadata.scope,
               telemetrySpanName: metadata.telemetrySpanName,

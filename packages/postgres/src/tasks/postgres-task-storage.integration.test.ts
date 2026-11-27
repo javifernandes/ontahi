@@ -24,7 +24,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { createPostgresEventRuntime } from '../events/runtime.js';
 import { createPostgresEventSchemaSql } from '../events/schema.js';
 
-import { createPostgresTaskStorage } from './runtime.js';
+import { createLeasedPostgresTaskStorage, createPostgresTaskStorage } from './runtime.js';
 import { createPostgresTaskSchemaSql } from './schema.js';
 import { createPostgresTaskWorker } from './worker.js';
 
@@ -76,6 +76,32 @@ describe('PostgreSQL Task Storage', () => {
       createStorage: storage,
       identityPrefix: 'postgres-conformance',
     });
+  });
+
+  it('persists enqueue trace context and fences execution ordinals by lease', async () => {
+    const ref = { taskId: 'fixture.trace', runId: 'run' };
+    const enqueueTrace = { traceId: '1'.repeat(32), spanId: '2'.repeat(16), traceFlags: 1 };
+    await Effect.runPromise(storage().create({ ...ref, enqueueTrace }));
+    await expect(Effect.runPromise(storage().loadSource(ref))).resolves.toMatchObject({
+      enqueueTrace,
+    });
+
+    const claim = (token: string) =>
+      pool.query(
+        `UPDATE ${taskTables.runs} SET worker_token = $1,
+          worker_lease_until = clock_timestamp() + interval '1 minute'
+         WHERE task_id = $2 AND run_id = $3`,
+        [token, ref.taskId, ref.runId],
+      );
+    const worker = (token: string) =>
+      createLeasedPostgresTaskStorage({ pool, tables: taskTables }, token);
+    await claim('initial');
+    await expect(Effect.runPromise(worker('initial').beginExecution!(ref))).resolves.toBe(1);
+    await claim('replacement');
+    await expect(
+      Effect.runPromise(Effect.flip(worker('initial').beginExecution!(ref))),
+    ).resolves.toMatchObject({ reason: 'task_worker_lease_lost' });
+    await expect(Effect.runPromise(worker('replacement').beginExecution!(ref))).resolves.toBe(2);
   });
 
   it('fences concurrent transitions within the same transaction', async () => {

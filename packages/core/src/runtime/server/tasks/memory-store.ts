@@ -70,6 +70,7 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
       trigger: normalizeTaskTrigger(input.trigger),
       subject: input.subject,
       runtime: input.runtime,
+      ...(input.enqueueTrace ? { enqueueTrace: input.enqueueTrace } : {}),
       createdAt,
       updatedAt: createdAt,
     };
@@ -118,6 +119,15 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
     });
 
   return {
+    beginExecution: ref =>
+      Effect.gen(function* () {
+        const key = keyOf(ref);
+        const source = runs.get(key);
+        if (!source) return yield* Effect.fail(missingTaskRunFailure(ref));
+        const executionOrdinal = (source.executionOrdinal ?? 0) + 1;
+        runs.set(key, { ...source, executionOrdinal });
+        return executionOrdinal;
+      }),
     create: input =>
       Effect.suspend(() => {
         const key = keyOf(input);

@@ -37,4 +37,12 @@ Repository-wide expectations:
     `Atlas-Session: <uuid>` line once in every PR body for that work, including later PR edits.
     Never invent or infer a Session ID; omit the directive when no exact ID was provided.
 
+11. When adding or changing a runtime capability, review its telemetry at design and PR review.
+    For an independently meaningful execution boundary, such as external model calls, replicated
+    model materialization, or durable attempts, use the shared provider-neutral server runtime
+    telemetry adapter at the execution owner. Reuse an existing span when it already covers that
+    work. Use stable names and bounded attributes, keep payloads and credentials out, and leave
+    export and sampling to the host. For new spans, verify parentage and outcomes; record relevant
+    coverage or a follow-up in the plan or PR.
+
 More specific `AGENTS.md` files may refine these instructions for a subtree.

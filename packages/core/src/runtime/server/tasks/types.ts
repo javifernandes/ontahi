@@ -142,6 +142,7 @@ export type TaskExecutionDefinition<TInput, TState extends TaskExecutionState, T
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
 export type TaskRunCreateInput = TaskRunIdentity & {
+  enqueueTrace?: TaskRunSource['enqueueTrace'];
   checkpoint?: TaskExecutionCheckpoint;
   input?: unknown;
   trigger?: TaskTrigger;
@@ -162,6 +163,7 @@ export type TaskStartAdmission = {
 };
 
 export type TaskStorageControl = {
+  beginExecution?(ref: TaskRunIdentity): Effect.Effect<number, TaskFailure>;
   /** Observe persisted snapshots written by any process. */
   observeSnapshots?(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
   /** Atomically selects an existing run or creates the proposed run. */

@@ -10,11 +10,13 @@ export type ServerRuntimeTelemetryInput = {
 };
 
 export interface ServerRuntimeTelemetryAdapter {
+  captureTraceContext?: () => import('../contracts.js').TaskRunSource['enqueueTrace'];
   withSpan: <TValue>(
     name: string,
     options: {
       attributes?: Record<string, unknown>;
       spanOptions?: unknown;
+      links?: NonNullable<import('../contracts.js').TaskRunSource['enqueueTrace']>[];
     },
     fn: (span: unknown) => Promise<TValue> | TValue,
   ) => Promise<TValue>;

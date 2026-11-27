@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Exit, Runtime } from 'effect';
 
 import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
 import type { RelationshipCommandExecutor } from '../relation/command.js';
@@ -8,6 +8,7 @@ import {
   type DataGraphTransactionCapability,
 } from '../transaction.js';
 
+import { getConfiguredRuntimeTelemetry } from './config.js';
 import { getOperationRuntimeContext, getRequiredOperationRuntimeContext } from './context.js';
 import { createOperationFailure, failOperation, forbidOperationFailureRetry } from './failures.js';
 import type { LayerConcern, LayerConcernRuntime } from './layer-types.js';
@@ -64,6 +65,30 @@ export const getRequiredDataGraphRuntimeEffect = <TRuntime>() =>
 type DataGraphTransactionError<TRuntime> =
   TRuntime extends DataGraphTransactionCapability<any, infer TError> ? TError : never;
 
+const traceDataGraphTransaction = <TValue, TError, TRequirements>(
+  effect: Effect.Effect<TValue, TError, TRequirements>,
+): Effect.Effect<TValue, TError, TRequirements> => {
+  const telemetry = getConfiguredRuntimeTelemetry();
+  if (!telemetry) return effect;
+
+  return Effect.runtime<TRequirements>().pipe(
+    Effect.flatMap(runtime =>
+      Effect.promise(signal =>
+        telemetry.withSpan('ontahi.runtime.transaction', {}, async span => {
+          const exit = await Runtime.runPromiseExit(runtime)(effect, { signal });
+          if (Exit.isSuccess(exit)) {
+            telemetry.markSuccess(span, { 'ontahi.transaction.outcome': 'committed' });
+          } else {
+            telemetry.markFailure(span, 'transaction_failed');
+          }
+          return exit;
+        }),
+      ),
+    ),
+    Effect.flatten,
+  );
+};
+
 export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequirements = never>(
   effect: Effect.Effect<TValue, TError, TRequirements>,
 ): Effect.Effect<
@@ -78,8 +103,8 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
     }
 
     const postCommitWork: DataGraphPostCommitWork[] = [];
-    return runtime
-      .transaction(transactionRuntime =>
+    return traceDataGraphTransaction(
+      runtime.transaction(transactionRuntime =>
         withChildUnitOfWork(
           effect.pipe(
             Effect.map(value => ({
@@ -96,19 +121,19 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
             ],
           },
         ),
-      )
-      .pipe(
-        Effect.flatMap(({ value, mutations }) =>
-          Effect.sync(() => commitMutationSetToCurrentUnitOfWork(mutations)).pipe(
-            Effect.zipRight(
-              Effect.promise(async () => {
-                for (const work of postCommitWork) await work();
-                return value;
-              }),
-            ),
+      ),
+    ).pipe(
+      Effect.flatMap(({ value, mutations }) =>
+        Effect.sync(() => commitMutationSetToCurrentUnitOfWork(mutations)).pipe(
+          Effect.zipRight(
+            Effect.promise(async () => {
+              for (const work of postCommitWork) await work();
+              return value;
+            }),
           ),
         ),
-      );
+      ),
+    );
   }) as Effect.Effect<
     TValue,
     TError | DataGraphTransactionError<TRuntime> | DataGraphTransactionUnavailableError,

@@ -12,6 +12,7 @@ supports:
   - ontahi.model.unit-of-work
   - ontahi.authority-policies
 relatedPlans:
+  - ontahi://plans/173-unit-of-work-observability
   - ontahi://plans/158-semantic-execution-context-governance-and-evidence
   - ontahi://plans/158a-semantic-execution-context-propagation-proof
   - ontahi://plans/125a-model-execution-resource-governance
@@ -126,6 +127,11 @@ intents are not committed state history. Its current post-commit Event queue pro
 does not yet provide an atomic durable audit log or outbox.
 
 ## Optional Retention And Adapters
+
+Runtime telemetry follows execution ownership. Logical reads and commands have their own spans
+within the active execution scope. A transaction reports commit at the provider boundary before
+post-commit work. Durable Task executions carry a persisted ordinal and can link to the enqueue
+span across processes. These ordinals count Task executions separately from Operation retries.
 
 Ontahí should make semantic evidence observable without requiring every application to provision an
 audit database. A host may choose independently among:

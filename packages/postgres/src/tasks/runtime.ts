@@ -31,6 +31,8 @@ type PostgresTaskRow = {
   status: TaskStatus;
   input: unknown | null;
   trigger: TaskRunSource['trigger'];
+  enqueue_trace: TaskRunSource['enqueueTrace'] | null;
+  execution_ordinal: number;
   subject: TaskRunSource['subject'] | null;
   runtime: TaskRunSource['runtime'] | null;
   progress: TaskRunSource['progress'] | null;
@@ -59,6 +61,8 @@ const fromRow = (row: PostgresTaskRow): TaskRunSource => ({
   status: row.status,
   input: row.input ?? undefined,
   trigger: normalizeTaskTrigger(row.trigger),
+  enqueueTrace: row.enqueue_trace ?? undefined,
+  executionOrdinal: row.execution_ordinal || undefined,
   subject: row.subject ?? undefined,
   runtime: row.runtime ?? undefined,
   progress: row.progress ?? undefined,
@@ -213,8 +217,8 @@ const createStorage = (
       const result = await pool.query<PostgresTaskRow>(
         `INSERT INTO ${table}
           (task_id, run_id, status, input, trigger, subject, runtime, created_at, updated_at,
-           admission_policy, admission_key, checkpoint)
-         VALUES ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $7, $8, $9, $10::jsonb)
+           admission_policy, admission_key, checkpoint, enqueue_trace)
+         VALUES ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $7, $8, $9, $10::jsonb, $11::jsonb)
          ${
            admission
              ? `ON CONFLICT (task_id, admission_policy, admission_key)
@@ -233,6 +237,7 @@ const createStorage = (
           admission?.policy ?? null,
           admission?.key ?? null,
           json(input.checkpoint),
+          json(input.enqueueTrace),
         ],
       );
       return result.rows[0];
@@ -243,6 +248,15 @@ const createStorage = (
   };
 
   const storage = createTaskStorageAdapter({
+    beginExecution: async ref => {
+      const result = await pool.query<{ execution_ordinal: number }>(
+        `UPDATE ${table} SET execution_ordinal = execution_ordinal + 1
+         WHERE task_id = $1 AND run_id = $2 ${lease(3)} RETURNING execution_ordinal`,
+        [ref.taskId, ref.runId, ...leaseParameters],
+      );
+      if (!result.rows[0]) throw missingWrite(ref);
+      return result.rows[0].execution_ordinal;
+    },
     create: async input => fromRow((await insert(input))!),
     admit: async (input, admission) => {
       while (true) {

@@ -12,6 +12,7 @@ import { COMMITTED_MUTATION_DELIVERY_RESOURCE_KEY } from './unit-of-work.js';
 
 import {
   architecture,
+  configureServerRuntime,
   createInMemoryTaskStorage,
   createInProcessTaskExecutor,
   createInProcessTaskRuntime,
@@ -30,6 +31,7 @@ import {
   getOperationRuntimeContext,
   inProcessTasks,
   normalizeTaskTrigger,
+  resetServerRuntimeForTests,
   respondToTaskInteraction,
   startTask,
   taskTriggerActorMatches,
@@ -48,6 +50,90 @@ const createDeferred = () => {
 };
 
 describe('tasks', () => {
+  it('links resumed durable attempts to persisted enqueue context with distinct ordinals', async () => {
+    const enqueue = { traceId: '1'.repeat(32), spanId: '2'.repeat(16), traceFlags: 1 };
+    const attempts: unknown[] = [];
+    configureServerRuntime({
+      telemetry: {
+        captureTraceContext: () => enqueue,
+        withSpan: async (name, options, run) => {
+          if (name === 'ontahi.runtime.task.attempt') attempts.push(options);
+          return run({});
+        },
+        getRuntimeAttributes: () => ({}),
+        markSuccess: () => {},
+        markFailure: () => {},
+      },
+    });
+    try {
+      const task = defineTask({
+        id: 'fixture.trace',
+        execution: defineTaskExecution<{}, { step: 'choose' }, string>({
+          initial: () => ({ step: 'choose' }),
+          steps: {
+            choose: defineTaskExecutionStep({
+              run: ({ state, response }) =>
+                Effect.succeed(
+                  response && 'optionId' in response
+                    ? { kind: 'complete', result: response.optionId }
+                    : {
+                        kind: 'interaction',
+                        state,
+                        interaction: {
+                          id: 'choice',
+                          prompt: 'Choose',
+                          options: [{ id: 'one', label: 'One', value: 'one' }],
+                        },
+                      },
+                ),
+            }),
+          },
+        }),
+        run: () => Effect.dieMessage('Expected explicit execution'),
+      });
+      const storage = createInMemoryTaskStorage();
+      const first = createInProcessTaskRuntime({ storage, deferExplicitExecution: true });
+      const actor = { kind: 'system' } as const;
+      const ref = await Effect.runPromise(
+        startTask(
+          first,
+          task,
+          {},
+          {
+            trigger: { cause: 'system', actor },
+          },
+        ),
+      );
+      await Effect.runPromise(first.runCheckpoint(ref));
+      const second = createInProcessTaskRuntime({ storage, deferExplicitExecution: true });
+      second.register?.(task);
+      await Effect.runPromise(
+        respondToTaskInteraction(
+          second,
+          ref,
+          {
+            interactionId: 'choice',
+            optionId: 'one',
+          },
+          { actor },
+        ),
+      );
+      await Effect.runPromise(second.runCheckpoint(ref));
+      expect(await Effect.runPromise(getTaskSnapshot(second, ref))).toMatchObject({
+        status: 'completed',
+        result: 'one',
+      });
+      expect(attempts).toEqual(
+        [1, 2].map(ordinal => ({
+          attributes: { 'ontahi.task.execution.ordinal': ordinal },
+          links: [enqueue],
+        })),
+      );
+    } finally {
+      resetServerRuntimeForTests();
+    }
+  });
+
   it('delegates cancellation only when the configured runtime supports it', async () => {
     const storage = createInMemoryTaskStorage();
     const runtime = createInProcessTaskRuntime({ storage });

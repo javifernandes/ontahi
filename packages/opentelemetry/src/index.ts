@@ -5,6 +5,7 @@ import {
 import { toError, toErrorMessage } from '@ontahi/core/value/error';
 import {
   SpanStatusCode,
+  isSpanContextValid,
   trace,
   type AttributeValue,
   type Span,
@@ -209,8 +210,34 @@ export const createOpenTelemetryServerRuntimeTelemetryAdapter = (options?: {
   getRuntimeAttributes?: ServerRuntimeTelemetryAdapter['getRuntimeAttributes'];
 }): ServerRuntimeTelemetryAdapter =>
   createServerRuntimeTelemetryAdapter({
-    withSpan: (name, spanOptions, fn) =>
-      withOpenTelemetryServerSpan(name, spanOptions, fn, options?.tracerName),
+    captureTraceContext: () => {
+      const context = trace.getActiveSpan()?.spanContext();
+      if (!context || !isSpanContextValid(context)) return undefined;
+      const { traceId, spanId, traceFlags } = context;
+      return { traceId, spanId, traceFlags };
+    },
+    withSpan: (name, spanOptions, fn) => {
+      if (!spanOptions.links?.length)
+        return withOpenTelemetryServerSpan(name, spanOptions, fn, options?.tracerName);
+      const native = spanOptions.spanOptions as SpanOptions | undefined;
+      return withOpenTelemetryServerSpan(
+        name,
+        {
+          ...spanOptions,
+          spanOptions: {
+            ...native,
+            links: [
+              ...(native?.links ?? []),
+              ...spanOptions.links.filter(isSpanContextValid).map(context => ({
+                context: { ...context, isRemote: true },
+              })),
+            ],
+          },
+        },
+        fn,
+        options?.tracerName,
+      );
+    },
     markSuccess: markOpenTelemetrySpanSuccess,
     markFailure: markOpenTelemetrySpanFailure,
     getRuntimeAttributes: options?.getRuntimeAttributes ?? getOpenTelemetryRuntimeAttributes,
