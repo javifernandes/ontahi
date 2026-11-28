@@ -2,6 +2,8 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import {
+  applyEntityPublicationDiff,
+  diffEntityPublication,
   createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
   createEntityRef,
@@ -523,6 +525,132 @@ describe('PostgreSQL data graph runtime', () => {
       { id: 'todo-1', title: 'First', completed: false },
       { id: 'todo-2', title: 'Second', completed: false },
     ]);
+  });
+
+  it('publishes Entity diffs atomically in dependency order and rejects stale writers', async () => {
+    const Parent = entity('PublicationParent', { id: field.id(), label: field.string() });
+    const Link = entity('PublicationLink', { id: field.id(), parentId: field.string() });
+    const Head = entity('PublicationHead', { id: field.id(), revision: field.string() });
+    await pool.query(`
+      CREATE TABLE publication_parents (id text PRIMARY KEY, label text NOT NULL);
+      CREATE TABLE publication_links (
+        id text PRIMARY KEY, parent_id text NOT NULL REFERENCES publication_parents(id)
+      );
+      CREATE TABLE publication_heads (id text PRIMARY KEY, revision text NOT NULL);
+      INSERT INTO publication_parents VALUES ('old-parent', 'Old');
+      INSERT INTO publication_links VALUES ('old-link', 'old-parent');
+      INSERT INTO publication_heads VALUES ('projection', 'r0');
+    `);
+    const storage = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [
+        postgresMapping({
+          entity: Parent,
+          table: 'publication_parents',
+          columns: { id: 'id', label: 'label' },
+        }),
+        postgresMapping({
+          entity: Link,
+          table: 'publication_links',
+          columns: { id: 'id', parentId: 'parent_id' },
+        }),
+        postgresMapping({
+          entity: Head,
+          table: 'publication_heads',
+          columns: { id: 'id', revision: 'revision' },
+        }),
+      ],
+    });
+    const head = createEntityRef(Head, { id: 'projection' });
+    const parents = mutateEntity(Parent);
+    const links = mutateEntity(Link);
+    const publish = (revision: string, target: string, prepareCalled = () => {}) =>
+      Effect.runPromise(
+        applyEntityPublicationDiff(storage, {
+          claim: tx =>
+            tx
+              .runEntityMutationCommand(
+                mutateEntity(Head).update(head, { revision }, { if: { revision: 'r0' } }),
+              )
+              .pipe(
+                Effect.as(true),
+                Effect.catchAll(error =>
+                  error.reason === 'entity_mutation_condition_not_met'
+                    ? Effect.succeed(false)
+                    : Effect.fail(error),
+                ),
+              ),
+          prepare: tx =>
+            Effect.gen(function* () {
+              prepareCalled();
+              const currentParents = yield* tx.run(query(Parent), undefined);
+              const currentLinks = yield* tx.run(query(Link), undefined);
+              const coverage = new Map([['projection', () => true]]);
+              const parentDiff = diffEntityPublication({
+                current: currentParents,
+                candidate: [{ id: 'new-parent', label: revision }],
+                equals: (previous, next) => previous.label === next.label,
+                scopeOf: () => 'projection',
+                completeScopes: coverage,
+              });
+              const linkDiff = diffEntityPublication({
+                current: currentLinks,
+                candidate: [{ id: 'new-link', parentId: target }],
+                equals: (previous, next) => previous.parentId === next.parentId,
+                scopeOf: () => 'projection',
+                completeScopes: coverage,
+              });
+              return [
+                {
+                  remove: Effect.forEach(parentDiff.removes, id =>
+                    tx.runEntityMutationCommand(parents.delete(createEntityRef(Parent, { id }))),
+                  ),
+                  put: Effect.forEach(parentDiff.puts, row =>
+                    tx.runEntityMutationCommand(parents.create(row)),
+                  ),
+                },
+                {
+                  remove: Effect.forEach(linkDiff.removes, id =>
+                    tx.runEntityMutationCommand(links.delete(createEntityRef(Link, { id }))),
+                  ),
+                  put: Effect.forEach(linkDiff.puts, row =>
+                    tx.runEntityMutationCommand(links.create(row)),
+                  ),
+                },
+              ];
+            }),
+        }),
+      );
+    const readPublication = async () => {
+      const parentRows = await pool.query('SELECT * FROM publication_parents');
+      const linkRows = await pool.query('SELECT * FROM publication_links');
+      const headRows = await pool.query('SELECT revision FROM publication_heads');
+      return { parents: parentRows.rows, links: linkRows.rows, head: headRows.rows };
+    };
+    const initial = await readPublication();
+
+    // The link write fails after the deletes and parent insert have run.
+    await expect(publish('broken', 'missing-parent')).rejects.toThrow();
+    expect(await readPublication()).toEqual(initial);
+
+    const prepared: string[] = [];
+    const revisions = ['r1', 'r2'];
+    const attempts = await Promise.all(
+      revisions.map(revision => publish(revision, 'new-parent', () => prepared.push(revision))),
+    );
+    const winner = revisions.find((_, index) => attempts[index]?.status === 'published');
+    expect(attempts.map(attempt => attempt.status).sort()).toEqual(['conflict', 'published']);
+    expect(prepared).toEqual([winner]);
+    expect(await readPublication()).toEqual({
+      parents: [{ id: 'new-parent', label: winner }],
+      links: [{ id: 'new-link', parent_id: 'new-parent' }],
+      head: [{ revision: winner }],
+    });
+
+    await expect(publish('late', 'new-parent', () => prepared.push('late'))).resolves.toEqual({
+      status: 'conflict',
+    });
+    expect(prepared).toEqual([winner]);
   });
 
   it('routes bound application commands through the contextual transaction runtime', async () => {

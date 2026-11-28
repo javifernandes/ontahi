@@ -1,6 +1,6 @@
 # 174. Incremental Entity Publication
 
-Status: next
+Status: current
 
 ## Summary
 
@@ -62,9 +62,9 @@ accepted revision only after the complete write batch succeeds.
 
 ## Execution Slices
 
-1. [ ] Characterize the three Atlas fixtures and agree on identity, equality, and completeness.
-2. [ ] Prove the deterministic diff in Core with in-memory fixtures for row and scope semantics.
-3. [ ] Apply the diff using the active Entity store in one Unit of Work. Prove rollback, stale
+1. [x] Characterize the three Atlas fixtures and agree on identity, equality, and completeness.
+2. [x] Prove the deterministic diff in Core with in-memory fixtures for row and scope semantics.
+3. [x] Apply the diff using the active Entity store in one Unit of Work. Prove rollback, stale
        publication rejection, and dependency ordering in PostgreSQL.
 4. [ ] Replace one Atlas publication seam with the shared mechanism and compare it to rebuild.
        Adopt the other two cases where the contract fits without duplicating provider logic.
@@ -109,3 +109,11 @@ conditional writes using measured workload data.
 
 Close after all three semantics are proven and at least one real Atlas seam uses the shared
 contract. Record any remaining Atlas adoption and additional provider work as explicit follow-ups.
+
+The first slice exposes `diffEntityPublication` in Core. It uses stable row IDs and supplied
+equality and scope-coverage predicates. An unproven omission retains the current row. The
+storage-aware slice uses the active Data Graph transaction capability. The caller supplies a
+transactional compare-and-advance claim for the planned base revision and prepares batches in
+dependency order. Core runs child removals before parent removals and parent puts before child
+puts. PostgreSQL verifies rollback after a failed dependent insert and one winner when two
+writers claim the same base revision.

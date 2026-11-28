@@ -83,6 +83,13 @@ by default while keeping replica namespaces and semantics distinct; the in-memor
 provides the reference capability. A custom storage adapter is an escape hatch for stores that
 cannot provide the capability, not the default application setup.
 
+The [Entity publication plan](../../../plans/current/174-incremental-entity-publication.md) adds a
+pure diff between a publication candidate and current Entity rows. The host defines equality
+and proves deletion by omission using complete scope coverage ordered after each row's last
+accepted positive event. Core retains the row when that coverage is unproven. The publication
+coordinator uses the active Entity storage transaction to claim the expected revision, prepare
+diffs, and apply explicitly ordered batches. A failed batch rolls back the claim and all writes.
+
 A future declarative Entity API may name recurring source/output identities, dependencies,
 versions, and consistency requirements after Atlas and BookOps prove their common shape. That
 declaration compiles to the behavioral SPI; it does not replace application-specific behavior.
