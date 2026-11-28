@@ -24,6 +24,8 @@ import {
   type PostgresTaskTableNames,
 } from './schema.js';
 
+const maxTimerDelayMs = 2_147_483_647;
+
 type PostgresTaskWorkerOptions = {
   pool: Pick<Pool, 'connect'>;
   tasks: readonly TaskDefinition<any, any>[];
@@ -62,6 +64,7 @@ export const createPostgresTaskWorker = ({
   if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0) {
     throw new RangeError('Task worker lease must be a positive integer in milliseconds.');
   }
+  const renewalIntervalMs = Math.min(maxTimerDelayMs, Math.max(1, Math.floor(leaseMs / 3)));
   const eligible = `((${runnableTaskCheckpointPredicate})
     ${events ? `OR (${waitingTaskEventPredicate})` : ''})`;
   const worker = {
@@ -190,7 +193,7 @@ export const createPostgresTaskWorker = ({
             let lostByRenewal = false;
             const renewal = async () => {
               while (!stopRenewal.signal.aborted && !controller.signal.aborted) {
-                await delay(Math.max(1, Math.floor(leaseMs / 3)), undefined, {
+                await delay(renewalIntervalMs, undefined, {
                   signal: stopRenewal.signal,
                   ref: false,
                 });
@@ -281,7 +284,7 @@ export const createPostgresTaskWorker = ({
       if (
         !Number.isSafeInteger(pollIntervalMs) ||
         pollIntervalMs <= 0 ||
-        pollIntervalMs > 2_147_483_647
+        pollIntervalMs > maxTimerDelayMs
       ) {
         throw new RangeError(
           'Task worker poll interval must be between 1 and 2147483647 milliseconds.',
