@@ -25,7 +25,7 @@ import { createPostgresEventRuntime } from '../events/runtime.js';
 import { createPostgresEventSchemaSql } from '../events/schema.js';
 
 import { createLeasedPostgresTaskStorage, createPostgresTaskStorage } from './runtime.js';
-import { createPostgresTaskSchemaSql } from './schema.js';
+import { createPostgresTaskSchemaSql, resolveTaskObservationTableName } from './schema.js';
 import { createPostgresTaskWorker } from './worker.js';
 
 const taskTables = { runs: 'ontahi_task_storage_test_runs' } as const;
@@ -458,6 +458,50 @@ describe('PostgreSQL Task Storage', () => {
     } finally {
       controller.abort();
       await observed.catch(() => {});
+    }
+  });
+
+  it('emits a batch in numeric journal order when snapshot sequences cross 9', async () => {
+    await pool.query(`TRUNCATE "${resolveTaskObservationTableName(taskTables)}" RESTART IDENTITY`);
+    const reader = storage();
+    const ref = { taskId: 'Vercel.progress-order', runId: 'workflow-run' };
+    await Effect.runPromise(reader.create({ ...ref, runtime: { name: 'vercel-workflow' } }));
+
+    const subscribed = await Effect.runPromise(Deferred.make<void>());
+    const controller = new AbortController();
+    const observed = Effect.runPromise(
+      reader.observeSnapshots(ref).pipe(
+        Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+        Stream.takeUntil(snapshot => snapshot.status === 'completed'),
+        Stream.runCollect,
+        Effect.timeout('5 seconds'),
+      ),
+      { signal: controller.signal },
+    );
+    const client = await pool.connect();
+    let committed = false;
+    try {
+      await Effect.runPromise(Deferred.await(subscribed));
+      await client.query('BEGIN');
+      const writer = createPostgresTaskStorage({ pool: client, tables: taskTables });
+      for (let phase = 1; phase <= 12; phase++) {
+        await Effect.runPromise(
+          writer.update(ref, {
+            status: phase === 12 ? 'completed' : 'running',
+            progress: { phase: String(phase) },
+          }),
+        );
+      }
+      await client.query('COMMIT');
+      committed = true;
+      expect(
+        Chunk.toReadonlyArray(await observed).map(snapshot => snapshot.progress?.phase),
+      ).toEqual([undefined, ...Array.from({ length: 12 }, (_, index) => String(index + 1))]);
+    } finally {
+      controller.abort();
+      await observed.catch(() => {});
+      if (!committed) await client.query('ROLLBACK');
+      client.release();
     }
   });
 
