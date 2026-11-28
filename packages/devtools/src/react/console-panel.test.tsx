@@ -1674,14 +1674,17 @@ describe('Console bidirectional Query limit', uiTestOptions, () => {
     const { request, view, replaceSource, result, visibleNames, applyLimit } = mountConsole(source);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
+    expect(visibleNames()).toEqual(['Zulu', 'Middle', 'Alpha']);
     request.mockClear();
     const draft = source.replace('desc', 'asc');
     replaceSource(draft);
     applyLimit(2);
-    await waitFor(() => expect(visibleNames()).toEqual(['Alpha', 'Middle']));
+    await waitFor(() => {
+      expect(visibleNames()).toEqual(['Alpha', 'Middle']);
+      expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty('value', '2');
+    });
     const edited = draft.replace(') .many()', ').limit(2) .many()');
     expect(view.state.doc.toString()).toBe(edited);
-    expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty('value', '2');
     expect(request.mock.calls[0]![0].body).toMatchObject({
       limit: 2,
       orderBy: [{ fieldName: 'name', direction: 'asc' }],
