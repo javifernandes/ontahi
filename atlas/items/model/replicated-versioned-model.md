@@ -80,6 +80,10 @@ underneath the declaration. When the host observes a new
 revision, a changed declared input invalidates the derived checkpoint. In Atlas, renaming a Plan
 can re-resolve a binding even when the accepted GitHub record and frontier stay the same.
 
+An omitted nullable field is published as `null`. Clearing a previously stored non-nullable
+field requires a representation the Entity's schema supports. Publication rejects that omission
+before it applies commands.
+
 ## How the runners compose
 
 The runners below show the flow behind the declaration. The example uses the current Core APIs

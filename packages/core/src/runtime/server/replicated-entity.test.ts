@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -96,12 +98,14 @@ describe('replicated Entity lifecycle', () => {
   it('executes create, update, and delete as ordinary commands inside the application transaction', async () => {
     const Reference = entity({
       name: 'Reference',
-      fields: { id: field.id(), title: field.string() },
-      replicated: { source: (rows: readonly { id: string; title: string }[]) => rows },
+      fields: { id: field.id(), title: field.string(), note: field.nullable(field.string()) },
+      replicated: {
+        source: (rows: readonly { id: string; title: string; note?: string | null }[]) => rows,
+      },
     });
     const current = [
       { id: 'removed', title: 'Gone' },
-      { id: 'updated', title: 'Before' },
+      { id: 'updated', title: 'After', note: 'old note' },
     ];
     const observed = [
       { id: 'created', title: 'New' },
@@ -127,7 +131,7 @@ describe('replicated Entity lifecycle', () => {
     const publication = prepareReplicatedEntityPublication(Reference, {
       current,
       observed,
-      equals: (left, right) => left.title === right.title,
+      equals: isDeepStrictEqual,
       scopeOf: () => 'all',
       completeScopes: new Map([['all', () => true]]),
     });
@@ -138,6 +142,36 @@ describe('replicated Entity lifecycle', () => {
     );
     await publish();
     expect(app.storage.dataset.Reference).toHaveLength(observed.length);
-    expect(app.storage.dataset.Reference).toEqual(expect.arrayContaining(observed));
+    expect(app.storage.dataset.Reference).toEqual(
+      expect.arrayContaining(observed.map(row => ({ ...row, note: null }))),
+    );
+    const replay = prepareReplicatedEntityPublication(Reference, {
+      current: [
+        { id: 'created', title: 'New', note: null },
+        { id: 'updated', title: 'After' },
+      ],
+      observed,
+      equals: isDeepStrictEqual,
+      scopeOf: () => 'all',
+      completeScopes: new Map([['all', () => true]]),
+    });
+    expect(replay.diff.puts).toEqual([]);
   });
+});
+
+it('rejects omission of a stored optional non-nullable field', () => {
+  const Reference = entity({
+    name: 'NoteReference',
+    fields: { id: field.id(), note: field.optional(field.string()) },
+    replicated: { source: (rows: readonly { id: string; note?: string }[]) => rows },
+  });
+  expect(() =>
+    prepareReplicatedEntityPublication(Reference, {
+      current: [{ id: 'reference', note: 'stored' }],
+      observed: [{ id: 'reference' }],
+      equals: isDeepStrictEqual,
+      scopeOf: () => 'all',
+      completeScopes: new Map(),
+    }),
+  ).toThrow('Replicated Entity NoteReference cannot clear non-nullable field note.');
 });

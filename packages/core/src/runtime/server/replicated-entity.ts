@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import {
   createEntityIdentityRef,
+  isDerivedFieldDefinition,
   type AnyEntityDefinition,
   type EntityMutationCommand,
   type EntityMutationCommandExecutionRuntime,
@@ -52,8 +53,31 @@ export const prepareReplicatedEntityPublication = <TInput, TRow extends ReplicaR
     'source' in declaration
       ? declaration.source(input.observed)
       : declaration.derive(input.observed);
-  const diff = diffEntityPublication({ ...input, candidate });
+  const storedFields = Object.entries(entity.fields).filter(
+    ([, field]) => !isDerivedFieldDefinition(field) && !field.generatedBy,
+  );
+  const normalize = (row: TRow, current?: TRow): TRow => {
+    const normalized = { ...row };
+    for (const [name, field] of storedFields) {
+      const key = name as keyof TRow;
+      if (row[key] !== undefined) continue;
+      if (field.nullable) {
+        Object.assign(normalized, { [name]: null });
+      } else if (current?.[key] !== undefined) {
+        throw new Error(
+          `Replicated Entity ${entity.name} cannot clear non-nullable field ${name}.`,
+        );
+      }
+    }
+    return normalized;
+  };
   const previous = new Map(input.current.map(row => [row.id, row]));
+  const normalizedCandidate = candidate.map(row => normalize(row, previous.get(row.id)));
+  const diff = diffEntityPublication({
+    ...input,
+    candidate: normalizedCandidate,
+    equals: (current, next) => input.equals(normalize(current), next),
+  });
   const target = (row: TRow) => {
     const ref = createEntityIdentityRef(entity, row);
     if (!ref) throw new Error(`Replicated Entity ${entity.name} requires an identity locator.`);
