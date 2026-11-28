@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { createInMemoryDataGraphStorage, field } from '../../data-graph/index.js';
 
-import { entity, layer, ontahi } from './index.js';
 import {
   orderReplicatedEntityPublications,
   prepareReplicatedEntityPublication,
   readReplicatedEntityDependencies,
 } from './replicated-entity.js';
+
+import { entity, layer, ontahi } from './index.js';
 
 describe('orderReplicatedEntityPublications', () => {
   it('orders prepared publications from declared dependencies and allows external inputs', () => {

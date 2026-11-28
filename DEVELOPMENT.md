@@ -14,7 +14,7 @@ pnpm test:packages
 
 `pnpm install` also activates the repository Git hooks. The pre-commit hook formats staged files
 and stages the result; it refuses partially staged files so it cannot capture unrelated working
-copy edits. The pre-push hook runs the same repository-wide `format:check` as CI. Run
+copy edits. The pre-push hook runs the same repository-wide `format:check` and `lint` as CI. Run
 `pnpm hooks:install` to restore the hook configuration without reinstalling dependencies.
 
 Run lint, typechecking, and artifact verification before proposing broad package changes:
