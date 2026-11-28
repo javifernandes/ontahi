@@ -1,5 +1,17 @@
 # @ontahi/react
 
+## 1.0.0-alpha.27
+
+### Patch Changes
+
+- Updated dependencies [bee2bb8]
+- Updated dependencies [b3f3cd2]
+- Updated dependencies [1703d64]
+- Updated dependencies [3400963]
+- Updated dependencies [e413691]
+- Updated dependencies [a480842]
+  - @ontahi/core@1.0.0-alpha.27
+
 ## 1.0.0-alpha.26
 
 ### Patch Changes

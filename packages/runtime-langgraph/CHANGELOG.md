@@ -1,5 +1,27 @@
 # @ontahi/runtime-langgraph
 
+## 1.0.0-alpha.27
+
+### Patch Changes
+
+- 1703d64: Use atomic Task Storage admission for explicit LangGraph tasks. Retain the prepared checkpoint after ambiguous external effects so equivalent start requests return the original run with `reconciliation-required`.
+
+  Fence LangGraph execution writes with a Task Storage lease. A worker can recover an expired run from its Task checkpoint while late writes from the former owner are rejected.
+
+  Support active-run cancellation for LangGraph with conditional Task Storage. Revoking the lease prevents later execution writes and preserves ambiguous admission for reconciliation.
+
+  Renew the execution lease while a LangGraph invocation is active so long-running steps retain ownership.
+
+  Resume LangGraph Tasks from retained Events with a configured durable Event Runtime and conditional Task Storage. Use the atomic Task checkpoint claim to prevent competing hosts from consuming the wait twice.
+
+- Updated dependencies [bee2bb8]
+- Updated dependencies [b3f3cd2]
+- Updated dependencies [1703d64]
+- Updated dependencies [3400963]
+- Updated dependencies [e413691]
+- Updated dependencies [a480842]
+  - @ontahi/core@1.0.0-alpha.27
+
 ## 1.0.0-alpha.26
 
 ### Patch Changes

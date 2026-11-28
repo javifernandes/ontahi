@@ -1,5 +1,55 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.27
+
+### Minor Changes
+
+- 8e52aa5: Renew PostgreSQL Task worker leases during execution. A recovered run retains its checkpoint and expired or revoked workers cannot renew their old claims. The worker also provides an abortable polling loop with a configurable idle interval.
+
+### Patch Changes
+
+- 1703d64: Use atomic Task Storage admission for explicit LangGraph tasks. Retain the prepared checkpoint after ambiguous external effects so equivalent start requests return the original run with `reconciliation-required`.
+
+  Fence LangGraph execution writes with a Task Storage lease. A worker can recover an expired run from its Task checkpoint while late writes from the former owner are rejected.
+
+  Support active-run cancellation for LangGraph with conditional Task Storage. Revoking the lease prevents later execution writes and preserves ambiguous admission for reconciliation.
+
+  Renew the execution lease while a LangGraph invocation is active so long-running steps retain ownership.
+
+  Resume LangGraph Tasks from retained Events with a configured durable Event Runtime and conditional Task Storage. Use the atomic Task checkpoint claim to prevent competing hosts from consuming the wait twice.
+
+- 174439a: Keep PostgreSQL Task observations in numeric journal order when a poll spans sequence numbers with different digit counts.
+- 3400963: Propagate trusted webhook delivery identity and enforce atomic durable Task admission with in-memory and PostgreSQL storage. Add a provider-idempotent effect helper for explicit Task checkpoints. Apply the updated PostgreSQL Task schema before using the new storage adapter.
+
+  Explicit Task steps using `effect.reconcilable` can also reconcile a remote write by external reference and retry once after confirmed absence.
+
+  PostgreSQL can also run explicit Tasks in a separate polling worker and recover a checkpoint after the previous worker disconnects.
+
+  The PostgreSQL polling worker can persist an Event wait and later resume it once from retained delivery.
+
+  Durable Operation admission traces expose distinct run, delivery, request, and admission identities.
+
+  Deferred PostgreSQL Tasks publish committed snapshots to observers in other processes.
+
+  PostgreSQL Task workers can reclaim expired leases and cancel deferred runs while fencing stale worker writes.
+
+- a480842: Trace runtime reads, commands, transactions, and Units of Work with the configured telemetry
+  adapter. Report commits before post-commit work runs.
+
+  Trace model resource attempts with distinct admission rejection and attempt failure outcomes.
+
+  Link durable Task execution spans to the enqueue span and assign persisted execution ordinals
+  with built-in Task storage. Apply the updated PostgreSQL Task schema SQL before upgrading.
+
+- Updated dependencies [bee2bb8]
+- Updated dependencies [b3f3cd2]
+- Updated dependencies [1703d64]
+- Updated dependencies [3400963]
+- Updated dependencies [e413691]
+- Updated dependencies [a480842]
+  - @ontahi/core@1.0.0-alpha.27
+  - @ontahi/sql@1.0.0-alpha.27
+
 ## 1.0.0-alpha.26
 
 ### Minor Changes

@@ -1,5 +1,55 @@
 # @ontahi/core
 
+## 1.0.0-alpha.27
+
+### Minor Changes
+
+- b3f3cd2: Declare replicated sources and derived output on server Entities. Prepare a publication diff from the
+  declaration and apply it through Entity Mutation Commands inside the active Data Graph transaction so
+  existing mutation Reactions run after commit. Declared dependencies order publications within a group.
+  Declared dependencies also select the observed revisions that invalidate a derived checkpoint.
+- e413691: Add a deterministic Entity publication diff with scoped omission coverage and caller-defined row equality.
+
+  Apply publication diffs through the active Data Graph transaction with a portable revision claim and dependency order.
+
+### Patch Changes
+
+- bee2bb8: Export a reusable Durable Operation conformance harness and run it against the PostgreSQL Task worker.
+
+  Expose conditional Task Storage updates and trusted runtime cancellation for supported executors.
+
+- 1703d64: Use atomic Task Storage admission for explicit LangGraph tasks. Retain the prepared checkpoint after ambiguous external effects so equivalent start requests return the original run with `reconciliation-required`.
+
+  Fence LangGraph execution writes with a Task Storage lease. A worker can recover an expired run from its Task checkpoint while late writes from the former owner are rejected.
+
+  Support active-run cancellation for LangGraph with conditional Task Storage. Revoking the lease prevents later execution writes and preserves ambiguous admission for reconciliation.
+
+  Renew the execution lease while a LangGraph invocation is active so long-running steps retain ownership.
+
+  Resume LangGraph Tasks from retained Events with a configured durable Event Runtime and conditional Task Storage. Use the atomic Task checkpoint claim to prevent competing hosts from consuming the wait twice.
+
+- 3400963: Propagate trusted webhook delivery identity and enforce atomic durable Task admission with in-memory and PostgreSQL storage. Add a provider-idempotent effect helper for explicit Task checkpoints. Apply the updated PostgreSQL Task schema before using the new storage adapter.
+
+  Explicit Task steps using `effect.reconcilable` can also reconcile a remote write by external reference and retry once after confirmed absence.
+
+  PostgreSQL can also run explicit Tasks in a separate polling worker and recover a checkpoint after the previous worker disconnects.
+
+  The PostgreSQL polling worker can persist an Event wait and later resume it once from retained delivery.
+
+  Durable Operation admission traces expose distinct run, delivery, request, and admission identities.
+
+  Deferred PostgreSQL Tasks publish committed snapshots to observers in other processes.
+
+  PostgreSQL Task workers can reclaim expired leases and cancel deferred runs while fencing stale worker writes.
+
+- a480842: Trace runtime reads, commands, transactions, and Units of Work with the configured telemetry
+  adapter. Report commits before post-commit work runs.
+
+  Trace model resource attempts with distinct admission rejection and attempt failure outcomes.
+
+  Link durable Task execution spans to the enqueue span and assign persisted execution ordinals
+  with built-in Task storage. Apply the updated PostgreSQL Task schema SQL before upgrading.
+
 ## 1.0.0-alpha.26
 
 ### Major Changes
