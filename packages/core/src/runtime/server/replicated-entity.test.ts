@@ -1,8 +1,9 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { field } from '../../data-graph/index.js';
+import { createInMemoryDataGraphStorage, field } from '../../data-graph/index.js';
 
-import { entity } from './entity.js';
+import { entity, layer, ontahi } from './index.js';
 import {
   orderReplicatedEntityPublications,
   prepareReplicatedEntityPublication,
@@ -87,5 +88,55 @@ describe('readReplicatedEntityDependencies', () => {
     expect(() =>
       readReplicatedEntityDependencies(binding, new Map([['PullRequest', 'github-cursor']])),
     ).toThrow('Missing observed dependency Plan for replicated Entity Binding.');
+  });
+});
+
+describe('replicated Entity lifecycle', () => {
+  it('executes create, update, and delete as ordinary commands inside the application transaction', async () => {
+    const Reference = entity({
+      name: 'Reference',
+      fields: { id: field.id(), title: field.string() },
+      replicated: { source: (rows: readonly { id: string; title: string }[]) => rows },
+    });
+    const current = [
+      { id: 'removed', title: 'Gone' },
+      { id: 'updated', title: 'Before' },
+    ];
+    const observed = [
+      { id: 'created', title: 'New' },
+      { id: 'updated', title: 'After' },
+    ];
+    const base = createInMemoryDataGraphStorage({ dataset: { Reference: current } });
+    const app = ontahi({
+      entities: [Reference],
+      storage: {
+        ...base,
+        createRuntime: () => {
+          const runtime = base.createRuntime();
+          return Object.assign(runtime, {
+            transaction: <TValue, TError, TRequirements>(
+              work: (
+                scope: ReturnType<typeof base.createRuntime>,
+              ) => Effect.Effect<TValue, TError, TRequirements>,
+            ) => work(base.createRuntime()),
+          });
+        },
+      },
+    });
+    const publication = prepareReplicatedEntityPublication(Reference, {
+      current,
+      observed,
+      equals: (left, right) => left.title === right.title,
+      scopeOf: () => 'all',
+      completeScopes: new Map([['all', () => true]]),
+    });
+    const publish = layer('tests.replication.publication', {
+      concerns: [app.app.graph.withRuntime()],
+    }).effect('publish', () =>
+      app.app.graph.transaction(publication.remove.pipe(Effect.zipRight(publication.put))),
+    );
+    await publish();
+    expect(app.storage.dataset.Reference).toHaveLength(observed.length);
+    expect(app.storage.dataset.Reference).toEqual(expect.arrayContaining(observed));
   });
 });
