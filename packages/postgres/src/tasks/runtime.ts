@@ -105,9 +105,9 @@ const createStorage = (
           const readUpdates = Effect.tryPromise({
             try: async () => {
               const updates = await pool.query<{ sequence: string; snapshot: PostgresTaskRow }>(
-                `SELECT sequence::text, snapshot FROM ${observations}
-                 WHERE task_id = $1 AND run_id = $2 AND sequence > $3::bigint
-                 ORDER BY sequence LIMIT 64`,
+                `SELECT journal.sequence::text, journal.snapshot FROM ${observations} AS journal
+                 WHERE task_id = $1 AND run_id = $2 AND journal.sequence > $3::bigint
+                 ORDER BY journal.sequence LIMIT 64`,
                 [...parameters, cursor],
               );
               const last = updates.rows.at(-1);
