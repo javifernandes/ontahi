@@ -35,6 +35,12 @@ const indexPublicationRows = <TRow extends PublicationRow>(
   return index;
 };
 
+// IDs are opaque. Compare UTF-16 code units so host locale cannot affect mutation order.
+const comparePublicationIds = (left: string, right: string): number => {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+};
+
 /** Computes mutations in identity order. The caller supplies coverage and guards application. */
 export const diffEntityPublication = <
   TCurrent extends PublicationRow,
@@ -49,7 +55,7 @@ export const diffEntityPublication = <
   let compared = 0;
   let reused = 0;
 
-  for (const id of [...candidate.keys()].sort()) {
+  for (const id of [...candidate.keys()].sort(comparePublicationIds)) {
     const next = candidate.get(id)!;
     const previous = current.get(id);
     if (previous !== undefined) {
@@ -62,7 +68,7 @@ export const diffEntityPublication = <
     puts.push(next);
   }
 
-  for (const id of [...current.keys()].sort()) {
+  for (const id of [...current.keys()].sort(comparePublicationIds)) {
     if (candidate.has(id)) continue;
 
     const previous = current.get(id)!;
