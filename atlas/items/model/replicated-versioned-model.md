@@ -16,77 +16,99 @@ relatedPlans:
   - atlas://plans/156-adaptive-materialization-policy
 ---
 
-A Replicated Versioned Model is an identity-bearing representation maintained from one or more
-versioned source models. It records which exact source frontier and derivation implementation it
-incorporates, so consumers can distinguish current, stale, missing, rebuilding, invalid, and drifted
-representations without confusing successful delivery with correct derivation.
+A Replicated Versioned Model is a maintained representation of an authoritative source. It
+records **which source revision it incorporates** and **which version of the derivation produced
+it**. For example, Atlas reads GitHub pull requests and derives Evidence Bindings from their
+directives.
 
-“Replicated” includes the common one-way case: one authoritative source feeds a maintained derived
-representation. It does not imply equal writers, a multi-master topology, offline convergence, or a
-CRDT. Search indexes, translations, aggregates, denormalized read models, and Atlas Projection
-Revisions may all instantiate the concept while retaining different schemas, lifecycles, policies,
-and providers.
+## From source to Entities
 
-The portable runtime kernel owns derivation identity, source and accepted target frontiers,
-dependency/affected-set evidence, output compatibility, and atomic acceptance. Applications retain
-source observation, domain parsing and transformation, publication, authorization, and consistency
-policy.
+```mermaid
+flowchart LR
+  A["Authority · GitHub"] --> B["Observer · fetch and normalize"]
+  B -->|"put / remove + source frontier"| C["Acceptance runner"]
+  C --> D[("Accepted replica · records + frontier")]
+  D --> E["Materializer · domain transformation"]
+  E --> F["Publisher · diff and apply"]
+  F --> G[("Application Entities + published snapshot")]
+  G -->|"current Entity rows"| F
+```
 
-The first executable kernel treats source and accepted frontiers as opaque host-owned string tokens.
-Ontahí compares exact identity but does not invent ordering or causal meaning for them. An in-memory
-reference implementation retains a detached JSON snapshot and returns `accepted`,
-`rebuild-required`, or `rejected`: exact replay is idempotent; a missing baseline, source gap, or
-incremental Materializer version change requires rebuild; conflicting output identity or a failed
-derivation cannot advance accepted state. Persistence and publication ports remain outside this
-first slice.
+The accepted replica holds **source-shaped records**. The published snapshot and Entity rows
+hold **application-shaped output**. In Atlas, one normalized PR can produce several Evidence
+Bindings. Removing one directive can remove a binding while the PR stays in the replica.
 
-The first extension surface is a behavioral Materializer SPI. A Materializer is versioned behavior
-that consumes application input and derivation context, then returns artifacts, output changes,
-dependencies, and diagnostics. It may express one-to-one, one-to-many, many-to-one, cross-record,
-or externally materialized derivations. Missing dependency evidence, source gaps, or incompatible
-implementation versions require a full rebuild rather than guessed partial publication.
+An observation can contain a put for a changed PR and a removal for a PR that left the source
+scope. The put carries the normalized record. The removal carries only its stable source ID.
 
-The reference runner asks the Materializer for an affected-output set before incremental
-derivation. `known` evidence is passed into behavior; `unknown` requests a rebuild without invoking
-that behavior. Dependency evidence returned by a successful derivation replaces the retained index
-only after the kernel accepts the candidate, so rejected frontiers cannot corrupt later
-invalidation.
+```ts
+const changes = [
+  { kind: 'put', id: 'pr:42', record: { number: 42, body: updatedBody } },
+  { kind: 'remove', id: 'pr:17' },
+] as const;
+```
 
-A runner may begin with a caller-owned accepted snapshot and dependency index restored across a
-process boundary. Core detaches hydrated JSON and dependency values from caller mutation and checks
-derivation identity at construction. Before incremental behavior runs, it rejects a missing
-baseline, incompatible Materializer version, or Source frontier gap with an explicit rebuild
-request. Persistence technology, artifact storage, transaction scope, and publication remain host
-responsibilities; hydration does not turn Core into a storage runtime.
+## Implement one today
 
-The portable contract belongs to the Core model layer under `model/replication`; it is not itself a
-storage or server runtime. Core continues to expose it from the package root so physical module
-organization does not become a consumer migration.
+Use a provider adapter for observation and implement a versioned transformation. The two
+runner calls below use the current Core API. The adapter, Materializer, and publication
+functions are application code.
 
-Full rebuild, incremental update, validation, and repair are distinct operations over the same
-logical model. Full rebuild remains the recovery path and equivalence oracle after incremental
-maintenance becomes primary.
+```ts
+import {
+  createReplicatedCollectionAcceptanceRunner,
+  createReplicatedVersionedMaterializerRunner,
+} from '@ontahi/core';
 
-A provider-neutral Replicated Collection Observer precedes materialization when the source is an
-independently versioned collection. It observes from an accepted opaque frontier in `bootstrap`,
-`incremental`, `validation`, or `repair` mode and returns idempotent positive or negative record
-changes, a target frontier, diagnostics, and fetched work. The reference acceptance runner applies
-those changes to an isolated candidate, reports fetched, changed, reused, and resulting counts,
-and exposes only a detached complete snapshot after acceptance. Complete validation compares
-without mutation; a delayed writer cannot replace state advanced from the frontier it originally
-read.
+const replica = createReplicatedCollectionAcceptanceRunner(githubObserver, {
+  collectionId: 'github:owner/repo:pull-requests',
+  activeStorage: entityStorage,
+});
 
-Replica records are internal persisted records by default rather than implicitly addressable
-Entities. The acceptance runner persists them through a store-owned revision and atomic
-compare-and-swap port. Composition resolves that port from the application's active Entity storage
-by default while keeping replica namespaces and semantics distinct; the in-memory Entity storage
-provides the reference capability. A custom storage adapter is an escape hatch for stores that
-cannot provide the capability, not the default application setup.
+const model = createReplicatedVersionedMaterializerRunner(evidenceMaterializer);
 
-A future declarative Entity API may name recurring source/output identities, dependencies,
-versions, and consistency requirements after Atlas and BookOps prove their common shape. That
-declaration compiles to the behavioral SPI; it does not replace application-specific behavior.
+const observation = await replica.run((await replica.current()) ? 'incremental' : 'bootstrap');
+if (observation.status === 'accepted' && observation.snapshot) {
+  const { frontier, records } = observation.snapshot;
+  const derived = await model.run({
+    mode: 'rebuild',
+    sourceFrontier: frontier,
+    input: records,
+  });
 
-Cooling, eviction, storage tiers, and restore policy are optional physical policies over a
-reconstructible Replicated Versioned Model. They are not part of its semantic identity and are not
-prerequisites for incremental derivation.
+  if (derived.result.status === 'accepted' && derived.output) {
+    await publishEvidence(derived.output);
+  }
+}
+```
+
+This example uses a string frontier. It updates the **source replica incrementally** and derives
+the output from the **whole accepted replica**. The application can introduce incremental
+derivation separately. Atlas already uses the collection runner for GitHub evidence and owns
+its projection orchestration.
+
+| Piece        | What the application implements                                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Observer     | `observe(acceptedFrontier, mode)` fetches source changes and returns `changes`, `targetFrontier`, `fetched`, `completeness`, and diagnostics. GitHub pagination and `updated_at` rules live here.                            |
+| Materializer | Give it an `id` and `version`. `derive(input, context)` returns state, artifacts, changes, dependencies, and diagnostics. For incremental derivation, `affectedBy(delta, dependencies)` identifies the outputs to recompute. |
+| Publisher    | Map derived output to Entity rows and decide when to publish. The Entity publication diff and ordered transaction helpers are the [Plan 174 slice](../../../plans/current/174-incremental-entity-publication.md).            |
+
+## What gets accepted and persisted
+
+- **Replica.** The runner applies idempotent puts and removals to a candidate. Complete
+  observations can bootstrap or repair the replica. Validation compares without writing. A
+  store-owned revision fences late writers. The runner reports fetched, changed, reused, and
+  resulting counts. The application's active Entity store supplies the replica capability by
+  default. Records are internal to the collection. Use a custom adapter when the active store
+  lacks that capability.
+- **Derivation.** The reference runner keeps the accepted output, its source frontier,
+  Materializer version, and dependency index in memory. The application can persist and
+  hydrate that checkpoint. A missing baseline, frontier gap, changed Materializer version, or
+  unknown affected set requests a rebuild.
+- **Publication.** The application defines row equality and proves which omissions mean
+  deletion. Plan 174 protects rows with newer accepted positive events and applies the writes
+  and revision claim in the active Entity transaction. A failed write rolls back the batch and
+  its claim. A rebuild serves as the equivalence check.
+
+A declarative API that wires an Entity directly to a source remains design work. The current
+extension points are the Observer, Materializer, and application publication step.

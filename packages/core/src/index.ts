@@ -5,6 +5,7 @@ export * from './computation/stream.js';
 export * from './data-graph/index.js';
 export * from './model/validation.js';
 export * from './model/replication/collection-observer.js';
+export * from './model/replication/entity-publication-diff.js';
 export * from './model/replication/materializer.js';
 export * from './model/replication/versioned-model.js';
 export * from './value/array.js';

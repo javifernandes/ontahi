@@ -72,6 +72,7 @@ export * from './selection-ast.js';
 export * from './selection-assembly.js';
 export * from './storage.js';
 export * from './transaction.js';
+export * from './entity-publication-transaction.js';
 export * from './view.js';
 export * from './view-query.js';
 export type { BoundVariantSelection, BoundVariantQuery } from './variant-binding.js';
