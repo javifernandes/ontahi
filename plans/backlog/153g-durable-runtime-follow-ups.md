@@ -10,8 +10,6 @@ The current Durable Operation contract has executable evidence across PostgreSQL
 and LangGraph. Each follow-up needs its own host scenario and evidence in the
 [conformance matrix](../../docs/durable-operation-conformance.md).
 
-- Renew PostgreSQL worker leases during long-running steps. Prove renewal, expiry and takeover,
-  and fencing after cancellation with independent workers and database time.
 - Define distinct retry eligibility, backoff, and exhaustion for reads, idempotent commands,
   and non-idempotent effects. Specify how persisted Interaction responses and timer wake-ups
   consume or preserve an attempt budget across worker recovery. Extend the
@@ -25,6 +23,8 @@ and LangGraph. Each follow-up needs its own host scenario and evidence in the
   DBOS, Restate, and Temporal are engine candidates. RabbitMQ, Redis/BullMQ, and NATS JetStream
   are transport candidates. Any candidate must pass the shared contract for the guarantees it
   advertises. LangGraph hosts may also need a wake-up path independent of observation.
+
+PostgreSQL worker lease renewal, crash recovery, and polling loop shutdown are covered by the [worker integration suite](../../packages/postgres/src/tasks/postgres-task-storage.integration.test.ts).
 
 [132a](132a-durable-replacement-and-queueing.md) owns replacement and queue-after-current
 admission policies.

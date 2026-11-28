@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type { AnyEventDeclaration } from '@ontahi/core/runtime/server';
 import {
@@ -63,7 +64,7 @@ export const createPostgresTaskWorker = ({
   }
   const eligible = `((${runnableTaskCheckpointPredicate})
     ${events ? `OR (${waitingTaskEventPredicate})` : ''})`;
-  return {
+  const worker = {
     /** Trusted host cancellation for one deferred run. */
     cancel: async (ref: TaskRunIdentity): Promise<boolean> => {
       const client = await pool.connect();
@@ -149,24 +150,31 @@ export const createPostgresTaskWorker = ({
             );
             if (claimed.rowCount !== 1) continue;
             const storage = createLeasedPostgresTaskStorage({ pool: client, tables }, token);
+            let inEventTransaction = false;
             const runtime = createInProcessTaskRuntime({
               storage,
               deferExplicitExecution: true,
-              withEventWaitTransaction: (eventRef, work) =>
-                transaction(client, async () => {
-                  const lease = await client.query(
-                    `SELECT 1 FROM "${table}" WHERE task_id = $1 AND run_id = $2
+              withEventWaitTransaction: async (eventRef, work) => {
+                inEventTransaction = true;
+                try {
+                  return await transaction(client, async () => {
+                    const lease = await client.query(
+                      `SELECT 1 FROM "${table}" WHERE task_id = $1 AND run_id = $2
                      AND worker_token = $3 AND worker_lease_until > clock_timestamp() FOR UPDATE`,
-                    [eventRef.taskId, eventRef.runId, token],
-                  );
-                  if (!lease.rowCount) {
-                    throw {
-                      reason: 'task_worker_lease_lost',
-                      message: 'The Task worker no longer owns this run.',
-                    };
-                  }
-                  return work();
-                }),
+                      [eventRef.taskId, eventRef.runId, token],
+                    );
+                    if (!lease.rowCount) {
+                      throw {
+                        reason: 'task_worker_lease_lost',
+                        message: 'The Task worker no longer owns this run.',
+                      };
+                    }
+                    return work();
+                  });
+                } finally {
+                  inEventTransaction = false;
+                }
+              },
               createExecutionContext,
               ...(events
                 ? {
@@ -178,9 +186,49 @@ export const createPostgresTaskWorker = ({
                 : {}),
             });
             tasks.forEach(task => runtime.register?.(task));
+            const stopRenewal = new AbortController();
+            let lostByRenewal = false;
+            const renewal = async () => {
+              while (!stopRenewal.signal.aborted && !controller.signal.aborted) {
+                await delay(Math.max(1, Math.floor(leaseMs / 3)), undefined, {
+                  signal: stopRenewal.signal,
+                  ref: false,
+                });
+                if (stopRenewal.signal.aborted || controller.signal.aborted || inEventTransaction)
+                  continue;
+                // This uses the existing execution connection, before any subsequent BEGIN.
+                const result = await client.query(
+                  `UPDATE "${table}" SET
+                     worker_lease_until = clock_timestamp() + ($4::bigint * interval '1 millisecond')
+                   WHERE task_id = $1 AND run_id = $2 AND worker_token = $3
+                     AND worker_lease_until > clock_timestamp()`,
+                  [ref.taskId, ref.runId, token, leaseMs],
+                );
+                if (result.rowCount !== 1) {
+                  lostByRenewal = true;
+                  controller.abort();
+                  return;
+                }
+              }
+            };
+            const heartbeat = renewal().then(
+              () => ({ ok: true as const }),
+              (error: unknown) => {
+                if (
+                  stopRenewal.signal.aborted &&
+                  error instanceof Error &&
+                  error.name === 'AbortError'
+                ) {
+                  return { ok: true as const };
+                }
+                controller.abort();
+                return { ok: false as const, error };
+              },
+            );
             const execution = await Effect.runPromiseExit(runtime.runCheckpoint(ref), {
               signal: controller.signal,
-            });
+            }).finally(() => stopRenewal.abort());
+            const renewed = await heartbeat;
             const release = await Effect.runPromiseExit(
               Effect.tryPromise(() =>
                 client.query(
@@ -194,7 +242,8 @@ export const createPostgresTaskWorker = ({
               execution._tag === 'Failure' ? Cause.failureOption(execution.cause) : undefined;
             const lostLease =
               failure?._tag === 'Some' && failure.value.reason === 'task_worker_lease_lost';
-            if (execution._tag === 'Failure' && !lostLease) {
+            if (!renewed.ok) throw renewed.error;
+            if (execution._tag === 'Failure' && !lostLease && !lostByRenewal) {
               if (release._tag === 'Failure') {
                 // Preserve the execution failure. The enclosing catch discards the connection.
                 const error = new AggregateError(
@@ -221,5 +270,33 @@ export const createPostgresTaskWorker = ({
         client.release(discardConnection || controller.signal.aborted);
       }
     },
+    /** Runs one execution at a time, polling again after an idle interval. */
+    run: async ({
+      signal,
+      pollIntervalMs = 1000,
+    }: {
+      signal: AbortSignal;
+      pollIntervalMs?: number;
+    }): Promise<void> => {
+      if (
+        !Number.isSafeInteger(pollIntervalMs) ||
+        pollIntervalMs <= 0 ||
+        pollIntervalMs > 2_147_483_647
+      ) {
+        throw new RangeError(
+          'Task worker poll interval must be between 1 and 2147483647 milliseconds.',
+        );
+      }
+      while (!signal.aborted) {
+        if (await worker.runOnce(signal)) continue;
+        try {
+          await delay(pollIntervalMs, undefined, { signal });
+        } catch (error) {
+          if (signal.aborted && error instanceof Error && error.name === 'AbortError') return;
+          throw error;
+        }
+      }
+    },
   };
+  return worker;
 };
