@@ -48,11 +48,42 @@ const changes = [
 ] as const;
 ```
 
-## Implement one today
+## Declarative Entity publication
 
-Use a provider adapter for observation and implement a versioned transformation. The two
-runner calls below use the current Core API. The adapter, Materializer, and publication
-functions are application code.
+An Entity can colocate its mapping from observed data with its fields, commands, and reactions.
+A relationship represented by an Entity can also declare the inputs to its derivation.
+
+```ts
+const PullRequest = entity({
+  name: 'PullRequest',
+  fields: pullRequestFields,
+  replicated: { source: mapAcceptedPullRequests },
+});
+
+const EvidenceBinding = entity({
+  name: 'EvidenceBinding',
+  fields: evidenceBindingFields,
+  replicated: {
+    from: () => [PullRequest, Plan],
+    derive: mapResolvedEvidence,
+  },
+  reactions: evidenceBindingReactions,
+});
+```
+
+`prepareReplicatedEntityPublication` compares the declared output with current rows and prepares
+ordinary mutation commands. In Atlas, the Evidence Binding reactions emit an Event after commit.
+`from` orders writes within the publication group. Ontahí writes dependencies first and removes
+dependents first. The application supplies observed input, scope coverage, and the transaction
+that accepts publication. The Observer and Materializer runners remain the execution model
+underneath the declaration. When the host observes a new
+revision, a changed declared input invalidates the derived checkpoint. In Atlas, renaming a Plan
+can re-resolve a binding even when the accepted GitHub record and frontier stay the same.
+
+## How the runners compose
+
+The runners below show the flow behind the declaration. The example uses the current Core APIs
+with an application-owned adapter, Materializer, and publisher.
 
 ```ts
 import {
@@ -109,6 +140,3 @@ its projection orchestration.
   deletion. Plan 174 protects rows with newer accepted positive events and applies the writes
   and revision claim in the active Entity transaction. A failed write rolls back the batch and
   its claim. A rebuild serves as the equivalence check.
-
-A declarative API that wires an Entity directly to a source remains design work. The current
-extension points are the Observer, Materializer, and application publication step.

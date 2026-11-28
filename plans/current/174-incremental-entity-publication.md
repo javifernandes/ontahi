@@ -117,3 +117,14 @@ transactional compare-and-advance claim for the planned base revision and prepar
 dependency order. Core runs child removals before parent removals and parent puts before child
 puts. PostgreSQL verifies rollback after a failed dependent insert and one winner when two
 writers claim the same base revision.
+
+The declarative publication slice adds `replicated` to server Entity declarations. Atlas maps
+accepted GitHub records through `PullRequest.replicated.source` and shapes Evidence Binding
+rows through `from` and `derive`. Atlas supplies scope coverage and publication order. Core
+prepares ordinary mutation commands and runs them inside the active Data Graph transaction.
+The PostgreSQL proof covers creation, deletion, post-commit Events, replay, rebuild, and rollback.
+The runtime orders each publication group from its declared dependencies, rejects cycles and
+duplicate publications, and leaves external inputs to the host transaction. Atlas now reads
+the Evidence Binding inputs through `from` when comparing checkpoints. A Plan rename resolves
+an unchanged accepted GitHub directive to the renamed target and publishes the binding commands
+in the same transaction.

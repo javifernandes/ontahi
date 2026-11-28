@@ -47,6 +47,9 @@ export const getCurrentDataGraphRuntime = <TRuntime>(): TRuntime | undefined =>
     | TRuntime
     | undefined;
 
+export const hasDataGraphTransactionScope = (): boolean =>
+  getOperationRuntimeContext()?.resources.has(DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY) ?? false;
+
 export const getRequiredDataGraphRuntime = <TRuntime>(): TRuntime => {
   const runtime = getRequiredOperationRuntimeContext().resources.get(
     DATA_GRAPH_RUNTIME_RESOURCE_KEY,

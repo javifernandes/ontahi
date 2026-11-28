@@ -597,3 +597,10 @@ export {
   createModelGraphReadExposure,
   type ModelGraphReadExposureOptions,
 } from './model/read/exposure.js';
+
+export {
+  orderReplicatedEntityPublications,
+  prepareReplicatedEntityPublication,
+  readReplicatedEntityDependencies,
+  type ReplicatedEntityDeclaration,
+} from './replicated-entity.js';

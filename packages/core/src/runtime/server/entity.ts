@@ -55,6 +55,7 @@ import type { OntahiApplicationBuilder, OntahiBinderApp, OntahiCapabilities } fr
 import { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './operation/value-ref.js';
 import type { OperationInvocationResult } from './operation-result.js';
+import type { ReplicatedEntityDeclaration } from './replicated-entity.js';
 import type { TaskFailure, TaskRunRef } from './tasks.js';
 
 export { relationConstraint } from '../../data-graph/relation-constraint.js';
@@ -585,6 +586,7 @@ export type OntahiEntityConfig<
 > = {
   name: TName;
   fields: TFields;
+  replicated?: ReplicatedEntityDeclaration<any, any>;
   display?: EntityDisplayMetadata<TFields, EntityRelationDisplayPaths<TRelations>>;
   freshness?: EntityFreshnessMetadata<TFields>;
   locators?: TLocators;
@@ -1051,6 +1053,7 @@ const defineOntahiEntity = <
   const TCapabilities extends OntahiCapabilities = {},
   const TEntities extends OntahiEntityDependencies = {},
   const TSelections extends ContextualSelectionDeclarations = {},
+  const TReplicated extends ReplicatedEntityDeclaration<any, any> | undefined = undefined,
 >(
   config: OntahiEntityConfig<
     TName,
@@ -1062,12 +1065,12 @@ const defineOntahiEntity = <
     TCapabilities,
     TEntities,
     TSelections
-  >,
+  > & { replicated?: TReplicated },
 ): OntahiEntityDeclaration<
   EntityWithSelections<EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>, TSelections>,
   TOperations,
   TValues
-> => {
+> & { readonly replicated: TReplicated } => {
   const base = defineEntitySchema(config.name, config.fields);
   const withDisplay = config.display ? base.display(config.display) : base;
   const withFreshness = config.freshness ? withDisplay.freshness(config.freshness) : withDisplay;
@@ -1075,6 +1078,9 @@ const defineOntahiEntity = <
   const schema = (config.identity
     ? (withLocators.identity as (name: string) => typeof withLocators)(config.identity)
     : withLocators) as unknown as EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>;
+  if (config.replicated) {
+    Object.defineProperty(schema, 'replicated', { value: config.replicated });
+  }
   Object.defineProperty(schema, 'selection', {
     configurable: true,
     enumerable: false,
@@ -1346,7 +1352,7 @@ const defineOntahiEntity = <
     >,
     TOperations,
     TValues
-  >;
+  > & { readonly replicated: TReplicated };
 };
 
 export const entity = Object.assign(defineOntahiEntity, {
