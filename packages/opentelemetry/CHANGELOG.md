@@ -1,5 +1,25 @@
 # @ontahi/opentelemetry
 
+## 1.0.0-alpha.27
+
+### Patch Changes
+
+- a480842: Trace runtime reads, commands, transactions, and Units of Work with the configured telemetry
+  adapter. Report commits before post-commit work runs.
+
+  Trace model resource attempts with distinct admission rejection and attempt failure outcomes.
+
+  Link durable Task execution spans to the enqueue span and assign persisted execution ordinals
+  with built-in Task storage. Apply the updated PostgreSQL Task schema SQL before upgrading.
+
+- Updated dependencies [bee2bb8]
+- Updated dependencies [b3f3cd2]
+- Updated dependencies [1703d64]
+- Updated dependencies [3400963]
+- Updated dependencies [e413691]
+- Updated dependencies [a480842]
+  - @ontahi/core@1.0.0-alpha.27
+
 ## 1.0.0-alpha.26
 
 ### Patch Changes
