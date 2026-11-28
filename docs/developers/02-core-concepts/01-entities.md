@@ -249,3 +249,35 @@ future client may interpret.
 
 Identity, Refs and named criteria come next. Relations, selections, and operations then extend this same
 Entity rather than wrapping it in parallel models.
+
+## Publish a replicated Entity
+
+Server Entities can declare how observed input maps to rows. A derived Entity can declare its
+dependencies alongside its fields and Reactions. A relationship with its own identity and
+metadata, such as an evidence binding, can use the same declaration.
+
+```ts
+const PullRequest = entity({
+  name: 'PullRequest',
+  fields: { id: field.id(), title: field.string() },
+  replicated: {
+    source: (records: readonly { id: string; title: string }[]) => records,
+  },
+});
+```
+
+For derived rows, use `replicated: { from: () => [PullRequest, Plan], derive }`. The declared
+dependencies select the observed revisions used to invalidate the checkpoint. Within a
+publication group, Ontahí orders writes with dependencies first and removals with dependents
+first.
+
+The application observes its sources, provides the accepted input and deletion coverage, and
+opens a guarded Data Graph transaction. Inside it, `prepareReplicatedEntityPublication` from
+`@ontahi/core/runtime/server` compares the declared rows with the current rows.
+`orderReplicatedEntityPublications` orders the prepared batches before the application runs them.
+Publication uses ordinary Entity Mutation Commands. Reactions run after the transaction commits,
+and an identical replay produces no mutation. A nullable field omitted by the candidate is
+cleared with `null`. Omitting a stored non-nullable value rejects the publication.
+
+See the [Replicated Versioned Model](../../../atlas/items/model/replicated-versioned-model.md)
+for the observer, Materializer, and publication flow used by Atlas.
