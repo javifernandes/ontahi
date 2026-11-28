@@ -251,16 +251,18 @@ and migration generation remain outside this initial check.
 
 The application accepts runs with `inProcessTasks({ storage, deferExplicitExecution: true })`.
 Use PostgreSQL Task Storage on both sides. In the worker process, register the same explicit Task
-definitions and poll with `createPostgresTaskWorker({ pool, tasks }).runOnce(signal)`.
-`runOnce` returns the claimed run identity after a terminal state or a persisted wait, and returns
-`undefined` when it finds no work. The host controls polling delay and shutdown.
+definitions and call `createPostgresTaskWorker({ pool, tasks }).run({ signal })`. Each loop
+executes one run at a time and waits one second after an empty scan by default. Configure
+`pollIntervalMs` to change that delay. Abort the signal and await the loop before closing the
+pool. Polling or execution errors reject the loop so the host can supervise it. For custom
+scheduling, `runOnce(signal)` returns the claimed identity or `undefined` when idle.
 
 Use a direct or session-pooled PostgreSQL connection. The worker claims a run with a database
-lease and checks the lease before starting a step or writing a checkpoint. Another worker can
-recover the last checkpoint after the lease expires, even if the earlier session is still open.
-Set `leaseMs` to cover the longest execution from claim to its final checkpoint or wait write,
-including provider calls. The fixed deadline defaults to 60 seconds. External writes in flight
-still need provider idempotency or reconciliation if a worker loses its lease.
+lease and checks it before starting a step or writing a checkpoint. While executing, the worker
+renews the lease about every third of `leaseMs` using the database clock. The deadline defaults
+to 60 seconds. Choose a duration that gives the worker time to renew through expected database
+and event-loop delays. If renewal stops, another worker can recover the last checkpoint after
+expiry. A request already sent to an external provider still needs idempotency or reconciliation.
 
 A trusted host can call `worker.cancel(ref)` for a queued, waiting, or running deferred run.
 Cancelling a running run revokes its lease and preserves the checkpoint as a potentially

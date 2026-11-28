@@ -1,3 +1,6 @@
+import { fork } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
 import { graphSchema } from '@ontahi/core';
 import {
   createEventApplication,
@@ -38,14 +41,16 @@ const eventTables = {
 describe('PostgreSQL Task Storage', () => {
   let container: StartedPostgreSqlContainer | undefined;
   let pool: Pool;
+  let connectionString: string;
 
   beforeAll(async () => {
     const externalConnectionUri = process.env.ONTAHI_POSTGRES_TEST_URL;
-    if (externalConnectionUri) pool = new Pool({ connectionString: externalConnectionUri });
+    if (externalConnectionUri) connectionString = externalConnectionUri;
     else {
       container = await new PostgreSqlContainer('postgres:17-alpine').start();
-      pool = new Pool({ connectionString: container.getConnectionUri() });
+      connectionString = container.getConnectionUri();
     }
+    pool = new Pool({ connectionString });
     for (const statement of [
       ...createPostgresTaskSchemaSql(taskTables),
       ...createPostgresEventSchemaSql(eventTables),
@@ -231,6 +236,151 @@ describe('PostgreSQL Task Storage', () => {
             tasks: [task],
           }).runOnce(signal),
       }),
+  );
+
+  it('polls for new work after an empty scan and stops on shutdown', async () => {
+    const execute = vi.fn(() => Effect.succeed({ kind: 'complete' as const, result: 'saved' }));
+    const task = defineTask<undefined, string>({
+      id: 'Customer.poll',
+      execution: defineTaskExecution<undefined, { step: string }, string>({
+        initial: () => ({ step: 'work' }),
+        steps: { work: { run: execute } },
+      }),
+      run: () => Effect.dieMessage('Explicit execution required'),
+    });
+    const runtime = createInProcessTaskRuntime({
+      storage: storage(),
+      deferExplicitExecution: true,
+    });
+    const worker = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task] });
+    const runOnce = vi.spyOn(worker, 'runOnce');
+    const controller = new AbortController();
+    const running = worker.run({ signal: controller.signal, pollIntervalMs: 25 });
+    try {
+      await expect(runOnce.mock.results[0]?.value).resolves.toBeUndefined();
+      const first = await Effect.runPromise(runtime.start(task, undefined));
+      const second = await Effect.runPromise(runtime.start(task, undefined));
+      await vi.waitFor(async () => {
+        for (const ref of [first, second]) {
+          await expect(Effect.runPromise(runtime.getSnapshot(ref))).resolves.toMatchObject({
+            status: 'completed',
+            result: 'saved',
+          });
+        }
+      });
+      expect(execute).toHaveBeenCalledTimes(2);
+    } finally {
+      controller.abort();
+      await running;
+    }
+    const pollsAtShutdown = runOnce.mock.calls.length;
+    await expect(worker.run({ signal: controller.signal })).resolves.toBeUndefined();
+    expect(runOnce).toHaveBeenCalledTimes(pollsAtShutdown);
+  });
+
+  it.each(['completes', 'crashes'] as const)(
+    'renews a long step and preserves the run when the original worker %s',
+    async outcome => {
+      const leaseMs = 2400;
+      const prepare = vi.fn(() => Effect.dieMessage('The prepare checkpoint already ran'));
+      const resume = vi.fn(({ state }: { state: { step: string; marker?: string } }) =>
+        Effect.succeed({ kind: 'complete' as const, result: `recovered:${state.marker}` }),
+      );
+      const task = defineTask<undefined, string>({
+        id: 'Customer.long-step',
+        execution: defineTaskExecution<undefined, { step: string; marker?: string }, string>({
+          initial: () => ({ step: 'prepare' }),
+          steps: { prepare: { run: prepare }, work: { run: resume } },
+        }),
+        run: () => Effect.dieMessage('Explicit execution required'),
+      });
+      const store = storage();
+      const runtime = createInProcessTaskRuntime({ storage: store, deferExplicitExecution: true });
+      const ref = await Effect.runPromise(runtime.start(task, undefined));
+      const second = createPostgresTaskWorker({ pool, tables: taskTables, tasks: [task], leaseMs });
+      const child = fork(
+        fileURLToPath(new URL('../../test/fixtures/task-lease-worker.mjs', import.meta.url)),
+        [task.id, taskTables.runs, String(leaseMs)],
+        {
+          execArgv: [],
+          env: { ...process.env, ONTAHI_POSTGRES_TEST_URL: connectionString },
+          stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+        },
+      );
+      let diagnostics = '';
+      child.stderr?.setEncoding('utf8').on('data', data => {
+        diagnostics += data;
+      });
+      const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+        resolve => {
+          child.once('exit', (code, signal) => resolve({ code, signal }));
+          child.once('error', () => resolve({ code: null, signal: null }));
+        },
+      );
+      try {
+        await expect(
+          Promise.race([
+            new Promise(resolve => child.once('message', resolve)),
+            exited.then(() => {
+              throw new Error(`Worker exited before its checkpoint: ${diagnostics}`);
+            }),
+          ]),
+        ).resolves.toEqual({ marker: 'saved' });
+        const readLease = async () =>
+          (
+            await pool.query<{
+              worker_token: string;
+              worker_lease_until: Date;
+              current_time: Date;
+            }>(
+              `SELECT worker_token, worker_lease_until, clock_timestamp() AS current_time
+           FROM "${taskTables.runs}" WHERE task_id = $1 AND run_id = $2`,
+              [ref.taskId, ref.runId],
+            )
+          ).rows[0]!;
+        const original = await readLease();
+        await vi.waitFor(
+          async () => {
+            const current = await readLease();
+            expect(current.current_time.getTime()).toBeGreaterThan(
+              original.worker_lease_until.getTime(),
+            );
+            expect(current.worker_token).toBe(original.worker_token);
+            expect(current.worker_lease_until.getTime()).toBeGreaterThan(
+              current.current_time.getTime(),
+            );
+          },
+          { timeout: 10_000, interval: 50 },
+        );
+        await expect(second.runOnce()).resolves.toBeUndefined();
+        expect(resume).not.toHaveBeenCalled();
+
+        if (outcome === 'crashes') {
+          expect(child.kill('SIGKILL')).toBe(true);
+          await expect(exited).resolves.toMatchObject({ signal: 'SIGKILL' });
+          await vi.waitFor(
+            async () => {
+              expect(await second.runOnce()).toEqual({ taskId: ref.taskId, runId: ref.runId });
+            },
+            { timeout: 10_000, interval: 50 },
+          );
+          expect(resume).toHaveBeenCalledOnce();
+        } else {
+          child.send('finish');
+          await expect(exited, diagnostics).resolves.toMatchObject({ code: 0 });
+          expect(resume).not.toHaveBeenCalled();
+        }
+        expect(prepare).not.toHaveBeenCalled();
+        await expect(Effect.runPromise(store.getSnapshot(ref))).resolves.toMatchObject({
+          runId: ref.runId,
+          status: 'completed',
+          result: outcome === 'crashes' ? 'recovered:saved' : 'original',
+        });
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        await exited;
+      }
+    },
   );
 
   it('releases an approval wait and lets a worker resume the claimed response', async () => {

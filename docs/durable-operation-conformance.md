@@ -28,7 +28,9 @@ idempotency or reconciliation contract.
 
 The PostgreSQL Task integration suite is the first persistent reference. The in-memory fixture
 also exercises admission and approval through independent runtime instances sharing memory.
-The PostgreSQL worker uses a fixed lease. Renewal, scheduling, and other follow-ups are tracked in
+The PostgreSQL worker renews its lease during execution. Two independent processes verify that
+a long step stays exclusive beyond the original deadline and that a replacement worker resumes
+the same run after a real process kill. Scheduling and other follow-ups are tracked in
 [153g](../plans/backlog/153g-durable-runtime-follow-ups.md) and
 [132a](../plans/backlog/132a-durable-replacement-and-queueing.md).
 

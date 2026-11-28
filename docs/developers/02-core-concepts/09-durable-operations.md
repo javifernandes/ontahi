@@ -226,13 +226,14 @@ const worker = createPostgresTaskWorker({
   events: { declarations },
 });
 
-const claimedRun = await worker.runOnce(signal);
+await worker.run({ signal, pollIntervalMs: 1000 });
 ```
 
-Use a direct or session-pooled connection. The worker uses a fixed database-clock lease.
-Set `leaseMs` to cover the longest attempt through its next persisted wait or terminal state.
-Loop over `runOnce` in the worker host, back off when it returns `undefined`, and pass a shutdown
-signal. The [Todo export integration](../../../examples/todo-express/src/postgres-durable-export.integration.test.ts)
+Use a direct or session-pooled connection. The worker renews its lease at about a third of
+`leaseMs`, using the database clock. A worker that stops renewing loses its claim at expiry.
+Run the polling loop in the worker host. It waits after an empty scan and surfaces failures to
+the host. On shutdown, abort the signal and await the loop before closing the pool. Use
+`runOnce(signal)` for custom scheduling. The [Todo export integration](../../../examples/todo-express/src/postgres-durable-export.integration.test.ts)
 shows how to project a domain Operation into a worker Task definition.
 
 ### LangGraph
